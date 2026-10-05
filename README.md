@@ -72,4 +72,4 @@ CI: сборка Windows + Linux, static checks, сборка Docker-образ�
 
 ## Версии
 
-См. `CHANGELOG.md`, текущая — `VERSION` (`0.2.0`). Скриншоты станций — в `docs/screens/`.
+См. `CHANGELOG.md`, текущая — `VERSION` (`0.3.0`). Скриншоты станций — в `docs/screens/`.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 0.2.0 LANGUAGES CXX)
+project(astro-voyager VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,6 +12,7 @@ add_executable(astro-voyager
   src/Catalog.cpp
   src/Camera.cpp
   src/Geodesic.cpp
+  src/Interaction.cpp
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -27,6 +28,18 @@ if(MSVC)
   target_compile_options(astro-voyager PRIVATE /W4 /permissive-)
 else()
   target_compile_options(astro-voyager PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(test_interaction
+  tests/test_interaction.cpp
+  src/Interaction.cpp
+)
+target_include_directories(test_interaction PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+if(MSVC)
+  target_compile_options(test_interaction PRIVATE /W4 /permissive-)
+else()
+  target_compile_options(test_interaction PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 if(ASTROVOYAGER_ENABLE_GL)
@@ -93,3 +106,4 @@ if(ASTROVOYAGER_ENABLE_GL)
 endif()
 
 enable_testing()
+add_test(NAME test_interaction COMMAND test_interaction)

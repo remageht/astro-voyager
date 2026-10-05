@@ -12,13 +12,17 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include "Interaction.h"
+#include "Version.h"
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
 namespace astro {
 
 AppGL::AppGL(int width, int height, bool visible) {
-  m_window = std::make_unique<Window>(width, height, "astro-voyager v0.2.0", visible);
+  std::string title = std::string(kAppName) + " v" + kVersion;
+  m_window = std::make_unique<Window>(width, height, title.c_str(), visible);
   m_sceneManager = std::make_unique<SceneManager>();
 
   // Initialize camera for initial station
@@ -89,7 +93,7 @@ void AppGL::processInput(float deltaTime) {
   }
 
   ImGuiIO& io = ImGui::GetIO();
-  if (io.WantCaptureKeyboard) return;
+  if (!interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
 
   if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) {
     m_camera.moveForward(deltaTime, true);
@@ -116,10 +120,10 @@ void AppGL::processMouse() {
   ImGuiIO& io = ImGui::GetIO();
 
   const bool rightDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
-  const bool leftDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS &&
-                         !io.WantCaptureMouse);
+  const bool leftDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+  const bool rawMousePress = (rightDown || leftDown);
 
-  const bool isDragging = (rightDown || leftDown);
+  const bool isDragging = interaction::shouldCaptureMouseForCamera(rawMousePress, io.WantCaptureMouse);
 
   double mouseX = 0.0, mouseY = 0.0;
   glfwGetCursorPos(win, &mouseX, &mouseY);
@@ -154,7 +158,7 @@ void AppGL::processMouse() {
 
 void AppGL::drawImGui() {
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ImVec2(340.0f, 480.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
   ImGui::Begin("astro-voyager Navigator");
 
@@ -262,7 +266,9 @@ int AppGL::captureAllScreenshots(const std::string& outDir) {
   // Create AppGL (with window 1280x720)
   AppGL app(1280, 720, false);
 
-  const std::vector<std::string> targetStations = {"sgra", "ori", "qso-3c273"};
+  const std::vector<std::string> targetStations = {
+      "sgra", "qso-3c273", "ori", "uma", "m31", "m1"
+  };
 
   for (const auto& stId : targetStations) {
     app.m_sceneManager->teleportTo(stId, app.m_camera);

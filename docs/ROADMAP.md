@@ -12,7 +12,7 @@ CI Windows+Linux, Docker build, static checks.
 - ImGui: список станций, слайдеры `shell/step/maxSteps/FOV`, FPS.
 - Ручной прогон WASD + скриншоты в `docs/screens/`.
 
-## 0.3.0 traveler
+## 0.3.0 traveler — DONE
 
 - Все 6 станций, cubemap из HDR, `lines` для ori/uma.
 - `BlackHoleInteraction`-тесты как в blackHole.

@@ -11,6 +11,8 @@ SceneManager::SceneManager() {
   m_bhShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/bh.frag");
   m_quasarShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/quasar.frag");
   m_linesShader = std::make_unique<Shader>("shaders/lines.vert", "shaders/lines.frag");
+  m_galaxyShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/galaxy.frag");
+  m_nebulaShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/nebula.frag");
   m_skybox = std::make_unique<Cubemap>();
 
   initConstellationOrion();
@@ -31,16 +33,16 @@ SceneManager::SceneManager() {
 
 void SceneManager::initConstellationOrion() {
   const std::vector<glm::vec3> vertices = {
-      {-4.0f,  6.0f, -20.0f}, // 0: Betelgeuse (alpha)
-      { 4.0f,  5.0f, -20.0f}, // 1: Bellatrix (gamma)
-      { 0.0f,  9.0f, -20.0f}, // 2: Meissa (head, lambda)
-      {-2.0f,  0.0f, -20.0f}, // 3: Alnitak (belt left)
-      { 0.0f,  0.0f, -20.0f}, // 4: Alnilam (belt center)
-      { 2.0f,  0.0f, -20.0f}, // 5: Mintaka (belt right)
-      {-3.5f, -7.0f, -20.0f}, // 6: Saiph (kappa)
-      { 4.5f, -6.5f, -20.0f}, // 7: Rigel (beta)
-      { 0.0f, -2.5f, -20.0f}, // 8: M42 Nebula
-      { 0.0f, -4.0f, -20.0f}  // 9: Iota Ori
+      {-4.0f,  6.0f, 0.0f}, // 0: Betelgeuse (alpha)
+      { 4.0f,  5.0f, 0.0f}, // 1: Bellatrix (gamma)
+      { 0.0f,  9.0f, 0.0f}, // 2: Meissa (head, lambda)
+      {-2.0f,  0.0f, 0.0f}, // 3: Alnitak (belt left)
+      { 0.0f,  0.0f, 0.0f}, // 4: Alnilam (belt center)
+      { 2.0f,  0.0f, 0.0f}, // 5: Mintaka (belt right)
+      {-3.5f, -7.0f, 0.0f}, // 6: Saiph (kappa)
+      { 4.5f, -6.5f, 0.0f}, // 7: Rigel (beta)
+      { 0.0f, -2.5f, 0.0f}, // 8: M42 Nebula
+      { 0.0f, -4.0f, 0.0f}  // 9: Iota Ori
   };
 
   const std::vector<unsigned int> indices = {
@@ -58,13 +60,13 @@ void SceneManager::initConstellationOrion() {
 
 void SceneManager::initConstellationUma() {
   const std::vector<glm::vec3> vertices = {
-      {  5.0f, 5.0f, -20.0f}, // 0: Dubhe
-      {  5.0f, 0.0f, -20.0f}, // 1: Merak
-      {  0.0f, 0.0f, -20.0f}, // 2: Phecda
-      {  0.0f, 4.0f, -20.0f}, // 3: Megrez
-      { -4.0f, 5.5f, -20.0f}, // 4: Alioth
-      { -7.5f, 7.5f, -20.0f}, // 5: Mizar
-      {-11.0f, 7.0f, -20.0f}  // 6: Alkaid
+      { 7.0f,  1.5f, 0.0f}, // 0: Dubhe
+      { 7.0f, -3.5f, 0.0f}, // 1: Merak
+      { 2.0f, -3.5f, 0.0f}, // 2: Phecda
+      { 2.0f,  0.5f, 0.0f}, // 3: Megrez
+      {-2.0f,  2.0f, 0.0f}, // 4: Alioth
+      {-5.5f,  4.0f, 0.0f}, // 5: Mizar
+      {-9.0f,  3.5f, 0.0f}  // 6: Alkaid
   };
 
   const std::vector<unsigned int> indices = {
@@ -152,33 +154,36 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_linesShader->setUniformMat4f("u_MVP", mvp);
 
     if (m_currentStation->id == "ori") {
-      // Draw lines in bright cyan
+      // Orion: bright cyan lines + stars
       m_linesShader->setUniform3f("u_LineColor", 0.35f, 0.75f, 1.0f);
       m_orionMesh.drawLines();
 
-      // Draw star points in warm white
       m_linesShader->setUniform3f("u_LineColor", 1.0f, 0.95f, 0.85f);
       m_orionMesh.drawPoints();
     } else {
-      // Big Dipper
-      m_linesShader->setUniform3f("u_LineColor", 0.4f, 0.85f, 0.9f);
+      // Big Dipper: cyan-amber lines + stars
+      m_linesShader->setUniform3f("u_LineColor", 0.4f, 0.85f, 0.95f);
       m_umaMesh.drawLines();
-      m_linesShader->setUniform3f("u_LineColor", 1.0f, 1.0f, 0.9f);
+
+      m_linesShader->setUniform3f("u_LineColor", 1.0f, 1.0f, 0.88f);
       m_umaMesh.drawPoints();
     }
 
     m_linesShader->unbind();
-  } else {
-    // Galaxy / Nebula impostor
-    m_quasarShader->bind();
-    if (m_currentStation->id == "m31") {
-      m_quasarShader->setUniform3f("u_CoreColor", 0.9f, 0.8f, 1.0f); // Andromeda silver-blue
-    } else {
-      m_quasarShader->setUniform3f("u_CoreColor", 1.0f, 0.4f, 0.3f); // Crab nebula red-orange
-    }
-    m_quasarShader->setUniform1f("u_Time", time * 0.2f);
+  } else if (m_currentStation->type == StationType::Galaxy) {
+    // M31 Andromeda Galaxy impostor sprite
+    m_galaxyShader->bind();
+    m_galaxyShader->setUniform1f("u_Time", time);
+    m_galaxyShader->setUniform1f("u_Aspect", aspect);
     m_screenQuad->draw();
-    m_quasarShader->unbind();
+    m_galaxyShader->unbind();
+  } else if (m_currentStation->type == StationType::Nebula) {
+    // M1 Crab Nebula impostor sprite
+    m_nebulaShader->bind();
+    m_nebulaShader->setUniform1f("u_Time", time);
+    m_nebulaShader->setUniform1f("u_Aspect", aspect);
+    m_screenQuad->draw();
+    m_nebulaShader->unbind();
   }
 }
 

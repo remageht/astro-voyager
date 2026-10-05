@@ -1,8 +1,10 @@
 #include <iostream>
 #include <string>
+#include <cmath>
 #include "Catalog.h"
 #include "Camera.h"
 #include "Geodesic.h"
+#include "Interaction.h"
 #include "Version.h"
 
 #ifdef ASTROVOYAGER_ENABLE_GL
@@ -12,7 +14,7 @@
 namespace {
 void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
-               "--demo-geodesic | --version";
+               "--demo-geodesic | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --screenshot-all";
 #endif
@@ -72,6 +74,16 @@ int main(int argc, char** argv) {
     cam.clampNearHorizon(1.0);
     std::cout << "camera z=" << cam.position.z << "\n";
     return (cap && !cap2) ? 0 : 2;
+  }
+  if (arg == "--test-interaction") {
+    bool ok = blackhole::ShouldCaptureMouseForCamera(true, false) &&
+              !blackhole::ShouldCaptureMouseForCamera(false, false) &&
+              !blackhole::ShouldCaptureMouseForCamera(true, true) &&
+              blackhole::ShouldProcessKeyboardMovement(false) &&
+              !blackhole::ShouldProcessKeyboardMovement(true) &&
+              std::abs(blackhole::ClampCameraRadius(0.4f, 1.05f) - 1.05f) < 0.001f;
+    std::cout << "interaction: " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok ? 0 : 1;
   }
 
 #ifdef ASTROVOYAGER_ENABLE_GL
