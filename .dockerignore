@@ -1,0 +1,5 @@
+build/
+.vs/
+Dependencies/
+src/vendor/
+res/textures/

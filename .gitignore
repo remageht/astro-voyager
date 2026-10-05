@@ -1,0 +1,18 @@
+/build/
+/build-gl/
+/.vscode/
+.env
+# Local heavy assets (like blackHole): never commit HDR
+res/textures/*.hdr
+res/textures/*.exr
+# Local deps (like blackHole Dependencies + vendor)
+Dependencies/
+src/vendor/
+# Local agent instructions: never push to GitHub
+AGENTS.md
+*.obj
+*.pdb
+.vs/
+x64/
+Debug/
+Release/

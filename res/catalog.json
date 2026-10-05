@@ -1,0 +1,48 @@
+{
+  "version": "0.1.0",
+  "stations": [
+    {
+      "id": "sgra",
+      "type": "black_hole",
+      "name": "Sgr A*",
+      "description": "Galactic center black hole. Schwarzschild lensing, Rs=1.0.",
+      "spawnDistanceRs": 10.0,
+      "params": { "rs": 1.0, "shellRadius": 30.0, "step": 0.05, "maxSteps": 600 }
+    },
+    {
+      "id": "qso-3c273",
+      "type": "quasar",
+      "name": "3C 273",
+      "description": "Bright quasar: disk + jets + glow billboard.",
+      "spawnDistanceRs": 25.0
+    },
+    {
+      "id": "ori",
+      "type": "constellation",
+      "name": "Orion",
+      "description": "Orion lines (Betelgeuse-Rigel belt).",
+      "spawnDistanceRs": 50.0
+    },
+    {
+      "id": "uma",
+      "type": "constellation",
+      "name": "Ursa Major",
+      "description": "Big Dipper lines.",
+      "spawnDistanceRs": 50.0
+    },
+    {
+      "id": "m31",
+      "type": "galaxy",
+      "name": "Andromeda (M31)",
+      "description": "Spiral galaxy impostor sprite.",
+      "spawnDistanceRs": 80.0
+    },
+    {
+      "id": "m1",
+      "type": "nebula",
+      "name": "Crab Nebula (M1)",
+      "description": "Supernova remnant impostor sprite.",
+      "spawnDistanceRs": 60.0
+    }
+  ]
+}
