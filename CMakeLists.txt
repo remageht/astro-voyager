@@ -30,16 +30,18 @@ else()
   target_compile_options(astro-voyager PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-add_executable(test_interaction
-  tests/test_interaction.cpp
-  src/Interaction.cpp
-)
-target_include_directories(test_interaction PRIVATE "${CMAKE_SOURCE_DIR}/src")
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_interaction.cpp")
+  add_executable(test_interaction
+    tests/test_interaction.cpp
+    src/Interaction.cpp
+  )
+  target_include_directories(test_interaction PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
-if(MSVC)
-  target_compile_options(test_interaction PRIVATE /W4 /permissive-)
-else()
-  target_compile_options(test_interaction PRIVATE -Wall -Wextra -Wpedantic)
+  if(MSVC)
+    target_compile_options(test_interaction PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_interaction PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
 endif()
 
 if(ASTROVOYAGER_ENABLE_GL)
@@ -106,4 +108,6 @@ if(ASTROVOYAGER_ENABLE_GL)
 endif()
 
 enable_testing()
-add_test(NAME test_interaction COMMAND test_interaction)
+if(TARGET test_interaction)
+  add_test(NAME test_interaction COMMAND test_interaction)
+endif()
