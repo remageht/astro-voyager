@@ -21,7 +21,13 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
       - name: Smoke CLI
-        run: ./build/astro-voyager --demo-geodesic
+        shell: pwsh
+        run: |
+          if (Test-Path ./build/Release/astro-voyager.exe) {
+            ./build/Release/astro-voyager.exe --demo-geodesic
+          } else {
+            ./build/astro-voyager --demo-geodesic
+          }
       - name: Static checks
         shell: pwsh
         run: ./tests/test_static_checks.ps1
