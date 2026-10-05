@@ -47,6 +47,8 @@ class SceneManager {
   std::unique_ptr<Shader> m_bhShader;
   std::unique_ptr<Shader> m_quasarShader;
   std::unique_ptr<Shader> m_linesShader;
+  std::unique_ptr<Shader> m_galaxyShader;
+  std::unique_ptr<Shader> m_nebulaShader;
   std::unique_ptr<Cubemap> m_skybox;
 
   LineMesh m_orionMesh;

@@ -1,4 +1,4 @@
-# Static checks for astro-voyager v0.1.0 (ASCII only).
+# Static checks for astro-voyager v0.3.0 (ASCII only).
 # Run: powershell -ExecutionPolicy Bypass -File tests/test_static_checks.ps1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -32,8 +32,10 @@ Check 'cmake cxx17' ($cmake -match 'CMAKE_CXX_STANDARD 17')
 Check 'cmake lists Catalog.cpp' ($cmake -match 'src/Catalog\.cpp')
 Check 'cmake lists Camera.cpp' ($cmake -match 'src/Camera\.cpp')
 Check 'cmake lists Geodesic.cpp' ($cmake -match 'src/Geodesic\.cpp')
+Check 'cmake lists Interaction.cpp' ($cmake -match 'src/Interaction\.cpp')
+Check 'cmake lists test_interaction' ($cmake -match 'test_interaction')
 Check 'cmake gl option' ($cmake -match 'ASTROVOYAGER_ENABLE_GL')
-Check 'version header' ((Read-File 'src/Version.h') -match '0\.[12]\.0')
+Check 'version header' ((Read-File 'src/Version.h') -match '0\.[123]\.0')
 
 Check 'catalog has sgra' ($catalogCpp -match 'sgra')
 Check 'catalog has 3c273' ($catalogCpp -match 'qso-3c273')
@@ -49,9 +51,18 @@ Check 'geodesic accel' ($geoCpp -match 'geodesicAcceleration')
 Check 'geodesic rk4' ($geoCpp -match 'rk4Step')
 Check 'geodesic trace' ($geoH -match 'traceRay')
 
+Check 'interaction header exists' (Test-Path (Join-Path $root 'src/Interaction.h'))
+Check 'interaction source exists' (Test-Path (Join-Path $root 'src/Interaction.cpp'))
+Check 'interaction test source exists' (Test-Path (Join-Path $root 'tests/test_interaction.cpp'))
+$interH = Read-File 'src/Interaction.h'
+Check 'interaction mouse capture' ($interH -match 'shouldCaptureMouseForCamera')
+Check 'interaction kb movement' ($interH -match 'shouldProcessKeyboardMovement')
+Check 'interaction clamp radius' ($interH -match 'clampCameraRadius')
+
 Check 'cli list' ($main -match '--list')
 Check 'cli info' ($main -match '--info')
 Check 'cli demo-geodesic' ($main -match 'demo-geodesic')
+Check 'cli test-interaction' ($main -match 'test-interaction')
 
 Check 'json has stations' ($catalogJson -match '"stations"')
 Check 'json sgra params' ($catalogJson -match 'shellRadius')
@@ -59,6 +70,8 @@ Check 'json sgra params' ($catalogJson -match 'shellRadius')
 Check 'bh shader has RK4' ($bh -match 'rk4')
 Check 'bh shader capture' ($bh -match '1\.001')
 Check 'bh shader shell' ($bh -match 'u_ShellRadius')
+Check 'galaxy shader exists' (Test-Path (Join-Path $root 'shaders/galaxy.frag'))
+Check 'nebula shader exists' (Test-Path (Join-Path $root 'shaders/nebula.frag'))
 
 Check 'readme name' ($readme -match 'astro-voyager')
 Check 'readme quickstart' ($readme -match 'cmake -S')

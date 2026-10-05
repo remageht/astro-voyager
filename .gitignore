@@ -17,3 +17,5 @@ x64/
 Debug/
 Release/
 imgui.ini
+*.zip
+/dist/

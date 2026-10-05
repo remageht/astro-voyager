@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 0.3.0 — 2026-10-05
+
+- Доведены до ума все 6 станций каталога:
+  - `sgra`: Schwarzschild raytracing с численным решением RK4 в метрике Шварцшильда.
+  - `qso-3c273`: квазар с аккреционным диском, релятивистскими джетами и динамическим свечением.
+  - `ori`: созвездие Ориона (линии связей и звезды Hipparcos).
+  - `uma`: созвездие Большой Медведицы (ковш и ручка с центрированной проекцией).
+  - `m31`: спиральная галактика Андромеда (`shaders/galaxy.frag`) с наклоном диска, спиральными рукавами и пылевыми полосами.
+  - `m1`: Крабовидная туманность (`shaders/nebula.frag`) с пульсаром, синхротронным ядром и турбулентными волокнами.
+- Портированы тесты `BlackHoleInteraction` (`src/Interaction.h`, `src/Interaction.cpp`, `tests/test_interaction.cpp`, CLI `--test-interaction`).
+- Обновлена документация `docs/BUILD.md`: руководство по процедурному Cubemap и опциональной загрузке `res/textures/starmap_2020_4k_gal.hdr` (HDR строго исключен из git).
+- Расширены статические проверки в `tests/test_static_checks.ps1` (47 проверок).
+- Полный набор скриншотов в `docs/screens/` (`sgra.png`, `qso-3c273.png`, `ori.png`, `uma.png`, `m31.png`, `m1.png`, `gui.png`).
+- Сформирован релизный архив `dist/astro-voyager-v0.3.0-windows-x64.zip` (exe + shaders + catalog.json без HDR и vendor).
+
 ## 0.2.0 — 2026-10-05
 
 - OpenGL 3.3 Core рендерер под опцией `ASTROVOYAGER_ENABLE_GL=ON` (core остается без внешних зависимостей при `OFF`).
