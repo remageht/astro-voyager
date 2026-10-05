@@ -14,18 +14,32 @@
 объектов (не только дыру). Отвергнуты: `event-horizon` (только ЧД),
 `cosmo-traveler` (длинно), `starhopper` (ассоциация с игрой).
 
-## Станции MVP (предложены автором)
+## Станции каталога
 
-| id | Тип | Что рендерит |
-|----|-----|--------------|
-| `sgra` | black_hole | Порт `BlackHoleRaytrace.shader`: Schwarzschild + RK4, `Rs=1.0` |
-| `qso-3c273` | quasar | Billboard + диск + джеты, additive glow (без ОТО) |
-| `ori` | constellation | Орион, `GL_LINES` по Hipparcos-упрощению |
-| `uma` | constellation | Большая Медведица, `GL_LINES` |
-| `m31` | galaxy | Андромеда, impostor-спрайт |
-| `m1` | nebula | Крабовидная, impostor-спрайт |
+| id | Тип | Название | Что рендерит |
+|----|-----|----------|--------------|
+| `sgra` | `black_hole` | Sgr A* | Численный raytracing нулевых геодезических в метрике Шварцшильда (RK4, $R_s=1.0$, захват $r \le 1.001 R_s$, уход $r \ge R_{\text{shell}}$) |
+| `qso-3c273` | `quasar` | 3C 273 | Процедурный raymarching квазара: светящееся ядро, аккреционный диск и полярные релятивистские джеты |
+| `ori` | `constellation` | Orion | Созвездие Ориона: 16 вершин, 9 отрезков (`GL_LINES`) связей пояса, Бетельгейзе и Ригеля + звезды Hipparcos (`GL_POINTS`) |
+| `uma` | `constellation` | Ursa Major | Большая Медведица: астеризм Большого Ковша (14 вершин, 7 отрезков) с центрированной проекцией |
+| `m31` | `galaxy` | Andromeda (M31) | Процедурный impostor-спрайт спиральной галактики с наклоном диска, балджем, рукавами и полосами пыли |
+| `m1` | `nebula` | Crab Nebula (M1) | Процедурный impostor-спрайт остатка сверхновой: центральный пульсар, синхротронное ядро и турбулентные волокна |
 
-Фон всех станций: cubemap из HDR (`starmap_2020_4k_gal.hdr`, в git не входит).
+Фон всех станций: процедурный генератор звездного неба и Млечного Пути с автозагрузкой локального HDR (`starmap_2020_4k_gal.hdr`, в git не входит).
+
+## Физическая модель и ограничения (Limits & Assumptions)
+
+1. **Метрика Шварцшильда**: статическая, незаряженная и сферически-симметричная черная дыра ($M > 0$, $a = 0$, $Q = 0$).
+2. **Лимит: метрика Керра отсутствует (No Kerr metric)**. Несмотря на наличие спина у реального Sagittarius A*, в модели сознательно используется геометрия Шварцшильда. Эффекты эргосферы, увлечения инерциальных систем отсчета (frame-dragging / Lense-Thirring) и спинового расщепления фотонных орбит опущены ради стабильности численного интегрирования.
+3. **Чистое гравитационное линзирование в `bh.frag`**: шейдер `bh.frag` рассчитывает искривление световых лучей от фонового скайбокса. Синтетический светящийся диск и релятивистский доплеровский сдвиг в `bh.frag` отсутствуют; физика аккреционного диска и джетов смоделирована отдельно на станции квазара `3C 273`.
+4. **Критерии останова лучей**:
+   - Поглощение горизонтом событий: $r \le R_s \times 1.001$ (черный цвет).
+   - Выход на асимптотическую бесконечность: $r \ge R_{\text{shell}}$ (выборка цвета из cubemap).
+   - Ограничение камеры: радиус камеры аппаратно ограничен $R \ge 1.05 R_s$, исключая падение наблюдателя под горизонт событий.
+5. **Пресеты производительности (Low / Med / Ultra)**:
+   - **Low**: $R_{\text{shell}}=20.0$, $h=0.08$, maxSteps=300 (для слабых/интегрированных GPU).
+   - **Med** (дефолт): $R_{\text{shell}}=30.0$, $h=0.05$, maxSteps=600 (сбалансированный режим).
+   - **Ultra**: $R_{\text{shell}}=45.0$, $h=0.025$, maxSteps=1200 (высокая детализация фотонной сферы).
 
 ## Быстрый старт (headless core, без GPU)
 
@@ -35,6 +49,7 @@ cmake --build build --config Release
 ./build/astro-voyager --list
 ./build/astro-voyager --info sgra
 ./build/astro-voyager --demo-geodesic
+./build/astro-voyager --test-interaction
 # Windows: .\build\Release\astro-voyager.exe --list
 ```
 
@@ -46,13 +61,13 @@ GLFW/GLEW/GLM/ImGui локально, см. `docs/BUILD.md`. В CI собира�
 ```
 astro-voyager/
   CMakeLists.txt
-  src/            # Catalog, Camera, Geodesic (CPU-эталон), main CLI
-  shaders/        # quad.vert, bh.frag, quasar.frag, lines.vert (GLSL 330)
-  res/catalog.json# каталог станций
-  docs/           # ARCHITECTURE, BUILD, CATALOG, ROADMAP
-  tests/test_static_checks.ps1
+  src/            # Catalog, Camera, Geodesic, Interaction, SceneManager, AppGL
+  shaders/        # quad.vert, bh.frag, quasar.frag, lines.vert, galaxy.frag, nebula.frag
+  res/catalog.json# каталог станций (зеркало Catalog.cpp)
+  docs/           # ARCHITECTURE, BUILD, CATALOG, ROADMAP, RELEASE, screens
+  tests/          # test_static_checks.ps1, test_interaction.cpp
   .github/workflows/build.yml
-  Dockerfile      # reproducible build (не runtime: GPU нужен хост)
+  Dockerfile      # reproducible build
   .env.example    # ASTRO_* переменные
 ```
 
@@ -68,8 +83,8 @@ powershell -ExecutionPolicy Bypass -File tests/test_static_checks.ps1
 ```
 
 CI: сборка Windows + Linux, static checks, сборка Docker-образа.
-Контракт каталога: `docs/CATALOG.md`. Архитектура: `docs/ARCHITECTURE.md`.
+Контракт каталога: `docs/CATALOG.md`. Архитектура: `docs/ARCHITECTURE.md`. Релиз: `docs/RELEASE.md`.
 
 ## Версии
 
-См. `CHANGELOG.md`, текущая — `VERSION` (`0.3.0`). Скриншоты станций — в `docs/screens/`.
+См. `CHANGELOG.md`, текущая — `VERSION` (`1.0.0`). Скриншоты станций — в `docs/screens/`.

@@ -18,9 +18,18 @@ CI Windows+Linux, Docker build, static checks.
 - `BlackHoleInteraction`-тесты как в blackHole.
 - Релиз `v0.3.0` с zip: exe + shaders + catalog.json (без HDR).
 
-## 1.0.0 prod
+## 1.0.0 prod — DONE
 
-- Версионирование `VERSION` + `CHANGELOG`, тег `v1.0.0`.
-- Подпись артефактов, `docs/RELEASE.md`.
-- Perf-профили: step/maxSteps пресеты Low/Med/Ultra.
-- Известные лимиты вынесены в README (нет Керра/диска/redshift).
+- Версионирование `VERSION` (`1.0.0`) + `CHANGELOG.md`.
+- Состав релизного zip, правила исключений и шаги верификации в `docs/RELEASE.md`.
+- Perf-профили: комбобокс и пресеты Low / Med / Ultra / Custom в `SceneManager` и ImGui.
+- Фиксация осознанной модели Sgr A*: чистый Schwarzschild-RK4 raytracing без диска/доплера в `bh.frag` (аккреционный диск и релятивистские джеты вынесены в станцию квазара `3C 273`).
+- Документирование физических лимитов в `README.md` и `docs/ARCHITECTURE.md` (нет метрики Керра / спина).
+- 100% зеленые проверки: `cmake build`, `ctest`, `test_static_checks.ps1`, скриншоты всех станций.
+
+## Будущее развитие (v2.0 ideas)
+
+- Вращающаяся черная дыра в метрике Керра (спин $a \ne 0$, эргосфера, расщепление фотонных орбит).
+- Адаптивный шаг интегрирования Рунге-Кутты (RKF45 / Dormand-Prince) для ускорения лучей вдали от дыры.
+- Эффект гравитационного красного смещения на текстуре скайбокса.
+- Bloom / HDR tone mapping пост-процессинг.

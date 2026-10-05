@@ -1,4 +1,4 @@
-# Static checks for astro-voyager v0.3.0 (ASCII only).
+# Static checks for astro-voyager v1.0.0 (ASCII only).
 # Run: powershell -ExecutionPolicy Bypass -File tests/test_static_checks.ps1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -35,7 +35,7 @@ Check 'cmake lists Geodesic.cpp' ($cmake -match 'src/Geodesic\.cpp')
 Check 'cmake lists Interaction.cpp' ($cmake -match 'src/Interaction\.cpp')
 Check 'cmake lists test_interaction' ($cmake -match 'test_interaction')
 Check 'cmake gl option' ($cmake -match 'ASTROVOYAGER_ENABLE_GL')
-Check 'version header' ((Read-File 'src/Version.h') -match '0\.[123]\.0')
+Check 'version header' ((Read-File 'src/Version.h') -match '1\.0\.0')
 
 Check 'catalog has sgra' ($catalogCpp -match 'sgra')
 Check 'catalog has 3c273' ($catalogCpp -match 'qso-3c273')
@@ -84,6 +84,8 @@ Check 'catalog doc exists' (Test-Path (Join-Path $root 'docs/CATALOG.md'))
 Check 'arch doc exists' (Test-Path (Join-Path $root 'docs/ARCHITECTURE.md'))
 Check 'build doc exists' (Test-Path (Join-Path $root 'docs/BUILD.md'))
 Check 'roadmap exists' (Test-Path (Join-Path $root 'docs/ROADMAP.md'))
+Check 'release doc exists' (Test-Path (Join-Path $root 'docs/RELEASE.md'))
+Check 'presets defined' ((Read-File 'src/SceneManager.h') -match 'PerfPreset')
 Check 'env example no secret' ((Read-File '.env.example') -notmatch 'sk-|secret123|password')
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }

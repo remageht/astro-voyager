@@ -23,12 +23,21 @@ SceneManager::SceneManager() {
     m_currentStation = &builtinCatalog()[0];
   }
 
-  if (m_currentStation) {
-    m_settings.rs = static_cast<float>(m_currentStation->params.rs);
-    m_settings.shellRadius = static_cast<float>(m_currentStation->params.shellRadius);
-    m_settings.stepSize = static_cast<float>(m_currentStation->params.step);
-    m_settings.maxSteps = m_currentStation->params.maxSteps;
+  applyPreset(PerfPreset::Med);
+}
+
+void SceneManager::applyPreset(PerfPreset preset) {
+  if (preset == PerfPreset::Custom) {
+    m_preset = PerfPreset::Custom;
+    return;
   }
+  m_preset = preset;
+  RenderSettings p = getPresetSettings(preset);
+  m_settings.rs = p.rs;
+  m_settings.shellRadius = p.shellRadius;
+  m_settings.stepSize = p.stepSize;
+  m_settings.maxSteps = p.maxSteps;
+  m_settings.fovDegrees = p.fovDegrees;
 }
 
 void SceneManager::initConstellationOrion() {
@@ -92,9 +101,9 @@ void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
 
   if (st->type == StationType::BlackHole) {
     m_settings.rs = static_cast<float>(st->params.rs);
-    m_settings.shellRadius = static_cast<float>(st->params.shellRadius);
-    m_settings.stepSize = static_cast<float>(st->params.step);
-    m_settings.maxSteps = st->params.maxSteps;
+    if (m_preset != PerfPreset::Custom) {
+      applyPreset(m_preset);
+    }
     camera.clampNearHorizon(m_settings.rs);
   }
 }
