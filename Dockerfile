@@ -9,6 +9,7 @@ RUN apt-get update \
 WORKDIR /src
 COPY CMakeLists.txt ./
 COPY src ./src
+COPY tests ./tests
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j"$(nproc)" \
     && ./build/astro-voyager --demo-geodesic
