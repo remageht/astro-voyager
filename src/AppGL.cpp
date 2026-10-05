@@ -189,13 +189,30 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
+  ImGui::Text("Quality Preset:");
+
+  const char* presetNames[] = {"Low", "Med", "Ultra", "Custom"};
+  int currentPreset = static_cast<int>(m_sceneManager->getPreset());
+  if (ImGui::Combo("Preset", &currentPreset, presetNames, 4)) {
+    if (currentPreset >= 0 && currentPreset <= 2) {
+      m_sceneManager->applyPreset(static_cast<PerfPreset>(currentPreset));
+    } else {
+      m_sceneManager->setPreset(PerfPreset::Custom);
+    }
+  }
+
   ImGui::Text("Parameters:");
 
   RenderSettings& settings = m_sceneManager->getSettings();
-  ImGui::SliderFloat("Shell radius", &settings.shellRadius, 5.0f, 80.0f, "%.1f Rs");
-  ImGui::SliderFloat("Step size", &settings.stepSize, 0.005f, 0.1f, "%.4f");
-  ImGui::SliderInt("Max steps", &settings.maxSteps, 50, 2000);
-  ImGui::SliderFloat("FOV", &settings.fovDegrees, 30.0f, 110.0f, "%.1f deg");
+  bool sliderChanged = false;
+  sliderChanged |= ImGui::SliderFloat("Shell radius", &settings.shellRadius, 5.0f, 80.0f, "%.1f Rs");
+  sliderChanged |= ImGui::SliderFloat("Step size", &settings.stepSize, 0.005f, 0.1f, "%.4f");
+  sliderChanged |= ImGui::SliderInt("Max steps", &settings.maxSteps, 50, 2000);
+  sliderChanged |= ImGui::SliderFloat("FOV", &settings.fovDegrees, 30.0f, 110.0f, "%.1f deg");
+
+  if (sliderChanged) {
+    m_sceneManager->setPreset(PerfPreset::Custom);
+  }
 
   ImGui::Separator();
   ImGui::Text("Camera & Performance:");

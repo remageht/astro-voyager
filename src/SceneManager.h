@@ -21,6 +21,42 @@ struct RenderSettings {
   float fovDegrees = 60.0f;
 };
 
+enum class PerfPreset {
+  Low = 0,
+  Med = 1,
+  Ultra = 2,
+  Custom = 3
+};
+
+inline RenderSettings getPresetSettings(PerfPreset preset) {
+  RenderSettings s;
+  switch (preset) {
+    case PerfPreset::Low:
+      s.rs = 1.0f;
+      s.shellRadius = 20.0f;
+      s.stepSize = 0.08f;
+      s.maxSteps = 300;
+      s.fovDegrees = 60.0f;
+      break;
+    case PerfPreset::Med:
+    default:
+      s.rs = 1.0f;
+      s.shellRadius = 30.0f;
+      s.stepSize = 0.05f;
+      s.maxSteps = 600;
+      s.fovDegrees = 60.0f;
+      break;
+    case PerfPreset::Ultra:
+      s.rs = 1.0f;
+      s.shellRadius = 45.0f;
+      s.stepSize = 0.025f;
+      s.maxSteps = 1200;
+      s.fovDegrees = 60.0f;
+      break;
+  }
+  return s;
+}
+
 class SceneManager {
  public:
   SceneManager();
@@ -36,12 +72,17 @@ class SceneManager {
   RenderSettings& getSettings() { return m_settings; }
   const RenderSettings& getSettings() const { return m_settings; }
 
+  PerfPreset getPreset() const { return m_preset; }
+  void applyPreset(PerfPreset preset);
+  void setPreset(PerfPreset preset) { m_preset = preset; }
+
  private:
   void initConstellationOrion();
   void initConstellationUma();
 
   const Station* m_currentStation = nullptr;
   RenderSettings m_settings;
+  PerfPreset m_preset = PerfPreset::Med;
 
   std::unique_ptr<ScreenQuad> m_screenQuad;
   std::unique_ptr<Shader> m_bhShader;
