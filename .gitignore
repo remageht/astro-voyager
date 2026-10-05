@@ -16,3 +16,4 @@ AGENTS.md
 x64/
 Debug/
 Release/
+imgui.ini

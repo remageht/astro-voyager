@@ -5,7 +5,7 @@
 CLI, каталог 6 станций, CPU-эталон геодезики, шейдеры портированы,
 CI Windows+Linux, Docker build, static checks.
 
-## 0.2.0 gl-window
+## 0.2.0 gl-window — DONE
 
 - `Window` (GLFW) + `Shader` лоадер + fullscreen quad.
 - `SceneManager`: телепорт `sgra/ori/qso-3c273`.

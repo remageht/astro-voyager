@@ -5,10 +5,18 @@
 #include "Geodesic.h"
 #include "Version.h"
 
+#ifdef ASTROVOYAGER_ENABLE_GL
+#include "AppGL.h"
+#endif
+
 namespace {
 void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
-               "--demo-geodesic | --version]\n";
+               "--demo-geodesic | --version";
+#ifdef ASTROVOYAGER_ENABLE_GL
+  std::cout << " | --gl | --screenshot-all";
+#endif
+  std::cout << "]\n";
 }
 }  // namespace
 
@@ -65,6 +73,22 @@ int main(int argc, char** argv) {
     std::cout << "camera z=" << cam.position.z << "\n";
     return (cap && !cap2) ? 0 : 2;
   }
+
+#ifdef ASTROVOYAGER_ENABLE_GL
+  if (arg == "--screenshot-all") {
+    return astro::AppGL::captureAllScreenshots("docs/screens");
+  }
+  if (arg == "--gl" || arg.empty()) {
+    try {
+      astro::AppGL app;
+      return app.run();
+    } catch (const std::exception& e) {
+      std::cerr << "GL Error: " << e.what() << "\n";
+      return 1;
+    }
+  }
+#endif
+
   printUsage();
   return arg.empty() ? 0 : 1;
 }

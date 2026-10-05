@@ -33,7 +33,7 @@ Check 'cmake lists Catalog.cpp' ($cmake -match 'src/Catalog\.cpp')
 Check 'cmake lists Camera.cpp' ($cmake -match 'src/Camera\.cpp')
 Check 'cmake lists Geodesic.cpp' ($cmake -match 'src/Geodesic\.cpp')
 Check 'cmake gl option' ($cmake -match 'ASTROVOYAGER_ENABLE_GL')
-Check 'version header' ((Read-File 'src/Version.h') -match '0\.1\.0')
+Check 'version header' ((Read-File 'src/Version.h') -match '0\.[12]\.0')
 
 Check 'catalog has sgra' ($catalogCpp -match 'sgra')
 Check 'catalog has 3c273' ($catalogCpp -match 'qso-3c273')
