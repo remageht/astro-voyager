@@ -35,6 +35,12 @@ class AppGL {
   bool m_firstMouse = true;
   bool m_mouseDragging = false;
   std::string m_lastScreenshotStatus;
+
+  // Auto-performance benchmarking
+  bool m_benchmarking = true;
+  bool m_userOverrodePreset = false;
+  float m_benchmarkTimer = 0.0f;
+  int m_benchmarkFrames = 0;
 };
 
 }  // namespace astro
