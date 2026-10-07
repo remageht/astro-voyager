@@ -54,6 +54,23 @@ int AppGL::run() {
     float deltaTime = currentTime - lastTime;
     lastTime = currentTime;
 
+    // Auto-performance benchmark: 2-second FPS measurement on scene start
+    if (m_benchmarking && !m_userOverrodePreset) {
+      m_benchmarkTimer += deltaTime;
+      m_benchmarkFrames++;
+      if (m_benchmarkTimer >= 2.0f) {
+        float avgFps = static_cast<float>(m_benchmarkFrames) / m_benchmarkTimer;
+        if (avgFps >= 55.0f) {
+          m_sceneManager->applyPreset(PerfPreset::Ultra);
+        } else if (avgFps >= 30.0f) {
+          m_sceneManager->applyPreset(PerfPreset::Med);
+        } else {
+          m_sceneManager->applyPreset(PerfPreset::Low);
+        }
+        m_benchmarking = false;
+      }
+    }
+
     m_window->pollEvents();
 
     processInput(deltaTime);
@@ -206,10 +223,16 @@ void AppGL::drawImGui() {
 
   ImGui::Separator();
   ImGui::Text("Quality Preset:");
+  if (m_benchmarking && !m_userOverrodePreset) {
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[Auto-calibrating 2s...]");
+  }
 
   const char* presetNames[] = {"Low", "Med", "Ultra", "Custom"};
   int currentPreset = static_cast<int>(m_sceneManager->getPreset());
   if (ImGui::Combo("Preset", &currentPreset, presetNames, 4)) {
+    m_userOverrodePreset = true;
+    m_benchmarking = false;
     if (currentPreset >= 0 && currentPreset <= 2) {
       m_sceneManager->applyPreset(static_cast<PerfPreset>(currentPreset));
     } else {
@@ -227,10 +250,12 @@ void AppGL::drawImGui() {
   sliderChanged |= ImGui::SliderFloat("FOV", &settings.fovDegrees, 30.0f, 110.0f, "%.1f deg");
 
   if (curSt && curSt->type == StationType::BlackHole) {
-    ImGui::Checkbox("Disk", &settings.diskOn);
+    sliderChanged |= ImGui::Checkbox("Disk", &settings.diskOn);
   }
 
   if (sliderChanged) {
+    m_userOverrodePreset = true;
+    m_benchmarking = false;
     m_sceneManager->setPreset(PerfPreset::Custom);
   }
 
