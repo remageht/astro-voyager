@@ -16,6 +16,7 @@ uniform float u_Rs;
 uniform float u_ShellRadius;
 uniform float u_StepSize;
 uniform int u_MaxSteps;
+uniform int u_DiskOn;
 const float PI = 3.141592653589793;
 const int ABSOLUTE_MAX_STEPS = 8000;
 float safeSin(float a) {
@@ -86,17 +87,81 @@ void main() {
   vec4 p = cartToSchwarzschild(u_CameraPosition);
   vec4 dp = cartDirToVel(p, dir);
   vec3 fb = dir;
+  vec3 accumColor = vec3(0.0);
+  float accumAlpha = 0.0;
+
   for (int i = 0; i < ABSOLUTE_MAX_STEPS; i++) {
     if (i >= u_MaxSteps) break;
+    vec4 pPrev = p;
     rk4(u_StepSize, p, dp);
     if (any(isnan(p)) || any(isnan(dp))) {
       FragColor = vec4(0.02, 0.015, 0.025, 1.0); return;
     }
     fb = normalize(velToCart(p, dp));
-    if (p.y <= u_Rs * 1.001) { FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+
+    if (u_DiskOn == 1) {
+      float yPrev = cos(pPrev.z);
+      float yCurr = cos(p.z);
+      if (yPrev * yCurr <= 0.0 && abs(yPrev - yCurr) > 1e-6) {
+        float tDisk = clamp(abs(yPrev) / (abs(yPrev) + abs(yCurr)), 0.0, 1.0);
+        float rDisk = mix(pPrev.y, p.y, tDisk);
+        float phiDisk = mix(pPrev.w, p.w, tDisk);
+        float rIn = u_Rs * 2.6;
+        float rOut = u_Rs * 10.0;
+        if (rDisk >= rIn && rDisk <= rOut) {
+          float v = sqrt(clamp(0.5 * u_Rs / rDisk, 0.0, 0.49));
+          vec3 vDir = vec3(-sin(phiDisk), 0.0, cos(phiDisk));
+          vec3 vDisk = v * vDir;
+          vec3 rayDir = normalize(velToCart(p, dp));
+          float betaPar = clamp(dot(vDisk, -rayDir), -0.85, 0.85);
+          float gamma = 1.0 / sqrt(max(1.0 - v * v, 0.01));
+          float doppler = 1.0 / (gamma * (1.0 - betaPar));
+          float gravRedshift = sqrt(max(1.0 - u_Rs / rDisk, 0.01));
+          float g = clamp(doppler * gravRedshift, 0.1, 3.5);
+
+          float tProfile = pow(rIn / rDisk, 1.25) * sqrt(max(1.0 - sqrt(rIn / rDisk), 0.0));
+          float ringMod = 0.8 + 0.2 * sin(16.0 * (rDisk / u_Rs) + 2.0 * phiDisk);
+          float brightness = tProfile * ringMod * pow(g, 3.5);
+
+          vec3 coolCol = vec3(1.0, 0.35, 0.08) * 0.9;
+          vec3 hotCol = vec3(1.0, 0.95, 0.8) + vec3(-0.15, 0.1, 0.4) * (g - 1.0);
+          vec3 emitCol = mix(coolCol, hotCol, smoothstep(0.7, 1.3, g));
+
+          vec3 diskRgb = emitCol * brightness * 4.0;
+          float diskAlpha = clamp(brightness * 2.2, 0.0, 0.95);
+
+          accumColor += (1.0 - accumAlpha) * diskRgb;
+          accumAlpha += (1.0 - accumAlpha) * diskAlpha;
+
+          if (accumAlpha >= 0.98) {
+            FragColor = vec4(accumColor, 1.0);
+            return;
+          }
+        }
+      }
+    }
+
+    if (p.y <= u_Rs * 1.001) {
+      if (u_DiskOn == 1) {
+        FragColor = vec4(accumColor, 1.0);
+      } else {
+        FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+      }
+      return;
+    }
     if (p.y >= u_ShellRadius) {
-      FragColor = vec4(texture(u_Skybox, fb).rgb, 1.0); return;
+      if (u_DiskOn == 1) {
+        FragColor = vec4(accumColor + (1.0 - accumAlpha) * texture(u_Skybox, fb).rgb, 1.0);
+      } else {
+        FragColor = vec4(texture(u_Skybox, fb).rgb, 1.0);
+      }
+      return;
     }
   }
-  FragColor = vec4(texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22), 1.0);
+
+  if (u_DiskOn == 1) {
+    FragColor = vec4(accumColor + (1.0 - accumAlpha) * texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22), 1.0);
+  } else {
+    FragColor = vec4(texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22), 1.0);
+  }
 }

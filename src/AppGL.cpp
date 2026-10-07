@@ -210,6 +210,10 @@ void AppGL::drawImGui() {
   sliderChanged |= ImGui::SliderInt("Max steps", &settings.maxSteps, 50, 2000);
   sliderChanged |= ImGui::SliderFloat("FOV", &settings.fovDegrees, 30.0f, 110.0f, "%.1f deg");
 
+  if (curSt && curSt->type == StationType::BlackHole) {
+    ImGui::Checkbox("Disk", &settings.diskOn);
+  }
+
   if (sliderChanged) {
     m_sceneManager->setPreset(PerfPreset::Custom);
   }
