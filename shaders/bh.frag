@@ -113,6 +113,13 @@ vec3 blackBodyColor(float tKelvin) {
   }
   return vec3(r, g, b) / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.001);
 }
+// Observer-side shift of the final radiance: sqrt(fCam) dimming plus a
+// reddening power stretch pow(color, vec3(1/max(sqrt(fCam), 0.2))).
+vec3 applyObserverShift(vec3 color, float fCamSqrt, vec3 camRedden) {
+  float b = max(fCamSqrt, 0.0);
+  vec3 c = max(color, vec3(0.0));
+  return b * pow(c, camRedden);
+}
 void main() {
   vec2 ndc = v_TexCoord * 2.0 - 1.0;
   ndc.x *= u_Aspect;
@@ -124,6 +131,14 @@ void main() {
   vec3 fb = dir;
   vec3 accumColor = vec3(0.0);
   float accumAlpha = 0.0;
+
+  // Gravitational redshift of the static observer: light arriving from a
+  // far source is dimmed by sqrt(fCam) and its spectrum is stretched towards
+  // red. There is no full darkness at the clamp (fCam = 0 remains visible).
+  float rCam = max(length(u_CameraPosition), u_Rs * 1.001);
+  float fCam = max(1.0 - u_Rs / rCam, 0.0);
+  float fCamSqrt = max(sqrt(fCam), 0.0);
+  vec3 camRedden = vec3(1.0 / max(fCamSqrt, 0.2));
 
   for (int i = 0; i < ABSOLUTE_MAX_STEPS; i++) {
     if (i >= u_MaxSteps) break;
@@ -187,7 +202,8 @@ void main() {
           accumAlpha += (1.0 - accumAlpha) * diskAlpha;
 
           if (accumAlpha >= 0.98) {
-            FragColor = vec4(accumColor, 1.0);
+            FragColor = vec4(applyObserverShift(accumColor, fCamSqrt, camRedden),
+                             1.0);
             return;
           }
         }
@@ -196,25 +212,23 @@ void main() {
 
     if (p.y <= u_Rs * 1.001) {
       if (u_DiskOn == 1) {
-        FragColor = vec4(accumColor, 1.0);
+        FragColor = vec4(applyObserverShift(accumColor, fCamSqrt, camRedden), 1.0);
       } else {
         FragColor = vec4(0.0, 0.0, 0.0, 1.0);
       }
       return;
     }
     if (p.y >= u_ShellRadius) {
-      if (u_DiskOn == 1) {
-        FragColor = vec4(accumColor + (1.0 - accumAlpha) * texture(u_Skybox, fb).rgb, 1.0);
-      } else {
-        FragColor = vec4(texture(u_Skybox, fb).rgb, 1.0);
-      }
+      vec3 sky = texture(u_Skybox, fb).rgb;
+      vec3 col = (u_DiskOn == 1) ? accumColor + (1.0 - accumAlpha) * sky : sky;
+      FragColor = vec4(applyObserverShift(col, fCamSqrt, camRedden), 1.0);
       return;
     }
   }
 
-  if (u_DiskOn == 1) {
-    FragColor = vec4(accumColor + (1.0 - accumAlpha) * texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22), 1.0);
-  } else {
-    FragColor = vec4(texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22), 1.0);
-  }
+  vec3 skyFallback = texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22);
+  vec3 colFallback = (u_DiskOn == 1)
+                         ? accumColor + (1.0 - accumAlpha) * skyFallback
+                         : skyFallback;
+  FragColor = vec4(applyObserverShift(colFallback, fCamSqrt, camRedden), 1.0);
 }
