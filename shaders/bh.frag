@@ -19,6 +19,7 @@ uniform int u_MaxSteps;
 uniform int u_DiskOn;
 const float PI = 3.141592653589793;
 const int ABSOLUTE_MAX_STEPS = 8000;
+const float T_DISK = 10000.0;  // reference inner-disk temperature, Kelvin
 float safeSin(float a) {
   float v = sin(a);
   if (abs(v) < 0.0001) return v < 0.0 ? -0.0001 : 0.0001;
@@ -91,6 +92,27 @@ void rk4(float h, inout vec4 p, inout vec4 dp) {
   dp += (h / 6.0) * (aD + 2.0 * bD + 2.0 * cD + dD);
   p.z = clamp(p.z, 0.0001, PI - 0.0001);
 }
+// Planckian-locus colour ramp (Tanner Helland approximation of black-body
+// colour), normalized to unit luminance so it can be scaled by radiance.
+vec3 blackBodyColor(float tKelvin) {
+  float t = clamp(tKelvin, 1000.0, 40000.0) / 100.0;
+  float r, g, b;
+  if (t <= 66.0) {
+    r = 1.0;
+    g = clamp(0.39008157876 * log(t) - 0.63184144378, 0.0, 1.0);
+  } else {
+    r = clamp(1.29293618606 * pow(t - 60.0, -0.1332047592), 0.0, 1.0);
+    g = clamp(1.12989086089 * pow(t - 60.0, -0.0755148492), 0.0, 1.0);
+  }
+  if (t >= 66.0) {
+    b = 1.0;
+  } else if (t <= 19.0) {
+    b = 0.0;
+  } else {
+    b = clamp(0.54320678911 * log(t - 10.0) - 1.19625408914, 0.0, 1.0);
+  }
+  return vec3(r, g, b) / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.001);
+}
 void main() {
   vec2 ndc = v_TexCoord * 2.0 - 1.0;
   ndc.x *= u_Aspect;
@@ -124,29 +146,42 @@ void main() {
         float tDisk = clamp(abs(yPrev) / (abs(yPrev) + abs(yCurr)), 0.0, 1.0);
         float rDisk = mix(pPrev.y, p.y, tDisk);
         float phiDisk = mix(pPrev.w, p.w, tDisk);
-        float rIn = u_Rs * 2.6;
+        float rIn = u_Rs * 3.0;   // ISCO: r = 6M = 3 Rs (2.6 Rs was inside it)
         float rOut = u_Rs * 10.0;
         if (rDisk >= rIn && rDisk <= rOut) {
-          float v = sqrt(clamp(0.5 * u_Rs / rDisk, 0.0, 0.49));
+          float fDisk = max(1.0 - u_Rs / rDisk, 0.0001);
+
+          // Circular-orbit speed in the local static frame:
+          // beta = sqrt(M/r) / sqrt(1 - Rs/r), gamma = 1 / sqrt(1 - beta^2).
+          float beta = sqrt(max(0.5 * u_Rs / rDisk, 0.0) / fDisk);
+          float gamma = 1.0 / sqrt(max(1.0 - beta * beta, 0.0001));
           vec3 vDir = vec3(-sin(phiDisk), 0.0, cos(phiDisk));
-          vec3 vDisk = v * vDir;
-          vec3 rayDir = normalize(velToCart(p, dp));
-          float betaPar = clamp(dot(vDisk, -rayDir), -0.85, 0.85);
-          float gamma = 1.0 / sqrt(max(1.0 - v * v, 0.01));
-          float doppler = 1.0 / (gamma * (1.0 - betaPar));
-          float gravRedshift = sqrt(max(1.0 - u_Rs / rDisk, 0.01));
-          float g = clamp(doppler * gravRedshift, 0.1, 3.5);
 
-          float tProfile = pow(rIn / rDisk, 1.25) * sqrt(max(1.0 - sqrt(rIn / rDisk), 0.0));
-          float ringMod = 0.8 + 0.2 * sin(16.0 * (rDisk / u_Rs) + 2.0 * phiDisk);
-          float brightness = tProfile * ringMod * pow(g, 3.5);
+          // Photon direction in the local static frame (metric normalization):
+          // proper radial length dr/sqrt(f), tangential r dTheta, r sin(Theta) dPhi.
+          vec3 eR, eT, eP; sphericalBasis(p, eR, eT, eP);
+          vec3 dLoc = dp.y * eR / sqrt(fDisk) + p.y * dp.z * eT +
+                      p.y * safeSin(p.z) * dp.w * eP;
+          vec3 dHat = normalize(dLoc);
+          float cosAlpha = dot(dHat, vDir);
 
-          vec3 coolCol = vec3(1.0, 0.35, 0.08) * 0.9;
-          vec3 hotCol = vec3(1.0, 0.95, 0.8) + vec3(-0.15, 0.1, 0.4) * (g - 1.0);
-          vec3 emitCol = mix(coolCol, hotCol, smoothstep(0.7, 1.3, g));
+          // Bardeen g-factor: g = sqrt(1 - Rs/r) / (gamma (1 - beta cosAlpha)).
+          float g = clamp(sqrt(fDisk) / (gamma * (1.0 - beta * cosAlpha)),
+                          0.05, 5.0);
 
-          vec3 diskRgb = emitCol * brightness * 4.0;
-          float diskAlpha = clamp(brightness * 2.2, 0.0, 0.95);
+          // Novikov-Thorne flux F ~ r^-3 (1 - sqrt(rIn/r)), T ~ F^0.25.
+          float shape = pow(rIn / rDisk, 3.0) * max(1.0 - sqrt(rIn / rDisk), 0.0);
+          float tProf = pow(shape, 0.25);
+          float tObs = pow(max(g, 0.001), 0.25);
+
+          // Bolometric brightness ~ F g^4 (g^4 beaming), clamped for no blowout.
+          float t4 = tProf * tProf * tProf * tProf;
+          float g4 = g * g * g * g;
+          float brightness = t4 * g4;
+
+          vec3 diskRgb = blackBodyColor(T_DISK * tProf * tObs) *
+                         clamp(brightness * 3.0, 0.0, 4.0);
+          float diskAlpha = clamp(brightness * 0.9, 0.0, 0.9);
 
           accumColor += (1.0 - accumAlpha) * diskRgb;
           accumAlpha += (1.0 - accumAlpha) * diskAlpha;
