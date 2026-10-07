@@ -1,0 +1,81 @@
+{
+  "version": "2.0.0",
+  "constellations": [
+    {
+      "id": "ori",
+      "name": "Orion",
+      "stars": [
+        { "name": "Betelgeuse", "bayer": "alpha Ori", "hip": 27989, "ra": 88.79, "dec": 7.41, "mag": 0.42 },
+        { "name": "Rigel", "bayer": "beta Ori", "hip": 24436, "ra": 78.63, "dec": -8.20, "mag": 0.18 },
+        { "name": "Bellatrix", "bayer": "gamma Ori", "hip": 25336, "ra": 81.28, "dec": 6.35, "mag": 1.64 },
+        { "name": "Mintaka", "bayer": "delta Ori", "hip": 25930, "ra": 83.00, "dec": -0.30, "mag": 2.23 },
+        { "name": "Alnilam", "bayer": "epsilon Ori", "hip": 26311, "ra": 84.05, "dec": -1.20, "mag": 1.69 },
+        { "name": "Alnitak", "bayer": "zeta Ori", "hip": 26727, "ra": 85.19, "dec": -1.94, "mag": 1.74 },
+        { "name": "Saiph", "bayer": "kappa Ori", "hip": 27366, "ra": 86.94, "dec": -9.67, "mag": 2.07 },
+        { "name": "Meissa", "bayer": "lambda Ori", "hip": 26207, "ra": 83.78, "dec": 9.93, "mag": 3.39 },
+        { "name": "Hatsya", "bayer": "iota Ori", "hip": 26241, "ra": 83.86, "dec": -5.91, "mag": 2.75 },
+        { "name": "Theta Ori", "bayer": "theta1 Ori", "hip": 26221, "ra": 83.82, "dec": -5.39, "mag": 3.70 },
+        { "name": "Tabit", "bayer": "pi3 Ori", "hip": 23875, "ra": 73.66, "dec": 6.96, "mag": 3.16 },
+        { "name": "pi4 Ori", "bayer": "pi4 Ori", "hip": 24197, "ra": 74.75, "dec": 5.61, "mag": 3.69 },
+        { "name": "pi5 Ori", "bayer": "pi5 Ori", "hip": 24483, "ra": 75.76, "dec": 2.44, "mag": 3.72 },
+        { "name": "pi1 Ori", "bayer": "pi1 Ori", "hip": 23123, "ra": 71.30, "dec": 10.15, "mag": 4.66 },
+        { "name": "pi2 Ori", "bayer": "pi2 Ori", "hip": 23416, "ra": 72.19, "dec": 8.90, "mag": 4.36 },
+        { "name": "pi6 Ori", "bayer": "pi6 Ori", "hip": 24674, "ra": 76.47, "dec": 1.71, "mag": 4.47 },
+        { "name": "Saif al Jabbar", "bayer": "eta Ori", "hip": 25281, "ra": 81.08, "dec": -2.39, "mag": 3.38 },
+        { "name": "tau Ori", "bayer": "tau Ori", "hip": 25028, "ra": 80.26, "dec": -6.84, "mag": 3.59 },
+        { "name": "sigma Ori", "bayer": "sigma Ori", "hip": 26549, "ra": 84.69, "dec": -2.60, "mag": 3.77 },
+        { "name": "29 Ori", "bayer": "e Ori", "hip": 27364, "ra": 86.93, "dec": -7.81, "mag": 4.13 },
+        { "name": "nu Ori", "bayer": "nu Ori", "hip": 29426, "ra": 91.95, "dec": 14.77, "mag": 4.42 },
+        { "name": "xi Ori", "bayer": "xi Ori", "hip": 29038, "ra": 90.66, "dec": 14.21, "mag": 4.45 },
+        { "name": "chi1 Ori", "bayer": "chi1 Ori", "hip": 27913, "ra": 88.54, "dec": 20.28, "mag": 4.39 },
+        { "name": "chi2 Ori", "bayer": "chi2 Ori", "hip": 28716, "ra": 89.65, "dec": 20.14, "mag": 4.64 }
+      ],
+      "segments": [
+        [0, 2],
+        [0, 7],
+        [2, 7],
+        [0, 5],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+        [5, 6],
+        [3, 1]
+      ]
+    },
+    {
+      "id": "uma",
+      "name": "Ursa Major",
+      "stars": [
+        { "name": "Dubhe", "bayer": "alpha UMa", "hip": 54061, "ra": 165.93, "dec": 61.75, "mag": 1.79 },
+        { "name": "Merak", "bayer": "beta UMa", "hip": 53910, "ra": 165.46, "dec": 56.38, "mag": 2.37 },
+        { "name": "Phecda", "bayer": "gamma UMa", "hip": 58001, "ra": 178.46, "dec": 53.69, "mag": 2.44 },
+        { "name": "Megrez", "bayer": "delta UMa", "hip": 59774, "ra": 183.86, "dec": 57.03, "mag": 3.31 },
+        { "name": "Alioth", "bayer": "epsilon UMa", "hip": 62956, "ra": 193.51, "dec": 55.96, "mag": 1.77 },
+        { "name": "Mizar", "bayer": "zeta UMa", "hip": 65378, "ra": 200.98, "dec": 54.92, "mag": 2.23 },
+        { "name": "Alkaid", "bayer": "eta UMa", "hip": 67301, "ra": 206.88, "dec": 49.31, "mag": 1.86 },
+        { "name": "Alcor", "bayer": "80 UMa", "hip": 65477, "ra": 201.30, "dec": 54.99, "mag": 3.99 },
+        { "name": "Muscida", "bayer": "omicron UMa", "hip": 41704, "ra": 127.56, "dec": 60.72, "mag": 3.35 },
+        { "name": "Talitha", "bayer": "iota UMa", "hip": 44127, "ra": 134.87, "dec": 48.04, "mag": 3.14 },
+        { "name": "Tania Borealis", "bayer": "lambda UMa", "hip": 50372, "ra": 154.27, "dec": 42.91, "mag": 3.45 },
+        { "name": "Tania Australis", "bayer": "mu UMa", "hip": 50583, "ra": 155.08, "dec": 41.50, "mag": 3.06 },
+        { "name": "Alula Borealis", "bayer": "nu UMa", "hip": 55203, "ra": 169.55, "dec": 33.09, "mag": 3.49 },
+        { "name": "Alula Australis", "bayer": "xi UMa", "hip": 55219, "ra": 169.61, "dec": 31.53, "mag": 3.79 },
+        { "name": "theta UMa", "bayer": "theta UMa", "hip": 46853, "ra": 143.25, "dec": 51.68, "mag": 3.17 },
+        { "name": "psi UMa", "bayer": "psi UMa", "hip": 54682, "ra": 167.75, "dec": 44.50, "mag": 3.01 },
+        { "name": "chi UMa", "bayer": "chi UMa", "hip": 57926, "ra": 178.13, "dec": 47.78, "mag": 3.71 },
+        { "name": "23 UMa", "bayer": "23 UMa", "hip": 47854, "ra": 146.40, "dec": 63.06, "mag": 3.65 },
+        { "name": "upsilon UMa", "bayer": "upsilon UMa", "hip": 48202, "ra": 147.50, "dec": 59.04, "mag": 3.78 },
+        { "name": "phi UMa", "bayer": "phi UMa", "hip": 48402, "ra": 148.16, "dec": 54.06, "mag": 4.56 }
+      ],
+      "segments": [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 0],
+        [3, 4],
+        [4, 5],
+        [5, 6]
+      ]
+    }
+  ]
+}

@@ -13,6 +13,7 @@ add_executable(astro-voyager
   src/Camera.cpp
   src/Geodesic.cpp
   src/Interaction.cpp
+  src/Constellation.cpp
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")

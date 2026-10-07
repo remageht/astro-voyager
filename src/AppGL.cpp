@@ -12,6 +12,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include "Constellation.h"
 #include "Interaction.h"
 #include "Version.h"
 
@@ -168,6 +169,21 @@ void AppGL::drawImGui() {
   ImGui::Text("Active Station: %s", curSt ? curSt->name.c_str() : "None");
   ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s",
                      curSt ? curSt->description.c_str() : "");
+
+  if (curSt && curSt->type == StationType::Constellation) {
+    const ConstellationInfo* cInfo = findConstellation(curSt->id);
+    if (cInfo) {
+      ImGui::Text("Constellation Stars (%zu Hipparcos):", cInfo->stars.size());
+      if (ImGui::BeginChild("StarList", ImVec2(0.0f, 95.0f), true)) {
+        for (const auto& s : cInfo->stars) {
+          ImGui::BulletText("%s (%s, mag %.2f, HIP %d)",
+                            s.name.c_str(), s.bayer.c_str(), s.mag, s.hip);
+        }
+        ImGui::EndChild();
+      }
+    }
+  }
+
   ImGui::Separator();
 
   // Teleport Station List
