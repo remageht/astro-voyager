@@ -1,4 +1,5 @@
 #include "SceneManager.h"
+#include "Constellation.h"
 
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -41,48 +42,41 @@ void SceneManager::applyPreset(PerfPreset preset) {
 }
 
 void SceneManager::initConstellationOrion() {
-  const std::vector<glm::vec3> vertices = {
-      {-4.0f,  6.0f, 0.0f}, // 0: Betelgeuse (alpha)
-      { 4.0f,  5.0f, 0.0f}, // 1: Bellatrix (gamma)
-      { 0.0f,  9.0f, 0.0f}, // 2: Meissa (head, lambda)
-      {-2.0f,  0.0f, 0.0f}, // 3: Alnitak (belt left)
-      { 0.0f,  0.0f, 0.0f}, // 4: Alnilam (belt center)
-      { 2.0f,  0.0f, 0.0f}, // 5: Mintaka (belt right)
-      {-3.5f, -7.0f, 0.0f}, // 6: Saiph (kappa)
-      { 4.5f, -6.5f, 0.0f}, // 7: Rigel (beta)
-      { 0.0f, -2.5f, 0.0f}, // 8: M42 Nebula
-      { 0.0f, -4.0f, 0.0f}  // 9: Iota Ori
-  };
+  const ConstellationInfo* info = findConstellation("ori");
+  if (!info) return;
 
-  const std::vector<unsigned int> indices = {
-      2, 0,  2, 1,          // Head to shoulders
-      0, 1,                 // Shoulders
-      0, 3,  1, 5,          // Shoulders to belt
-      3, 4,  4, 5,          // Belt
-      3, 6,  5, 7,          // Belt to feet
-      6, 7,                 // Feet connection
-      4, 8,  8, 9           // Sword
-  };
+  std::vector<glm::vec3> vertices;
+  vertices.reserve(info->stars.size());
+  for (const auto& s : info->stars) {
+    vertices.emplace_back(s.x, s.y, s.z);
+  }
+
+  std::vector<unsigned int> indices;
+  indices.reserve(info->segments.size() * 2);
+  for (const auto& seg : info->segments) {
+    indices.push_back(seg.first);
+    indices.push_back(seg.second);
+  }
 
   m_orionMesh.setGeometry(vertices, indices);
 }
 
 void SceneManager::initConstellationUma() {
-  const std::vector<glm::vec3> vertices = {
-      { 7.0f,  1.5f, 0.0f}, // 0: Dubhe
-      { 7.0f, -3.5f, 0.0f}, // 1: Merak
-      { 2.0f, -3.5f, 0.0f}, // 2: Phecda
-      { 2.0f,  0.5f, 0.0f}, // 3: Megrez
-      {-2.0f,  2.0f, 0.0f}, // 4: Alioth
-      {-5.5f,  4.0f, 0.0f}, // 5: Mizar
-      {-9.0f,  3.5f, 0.0f}  // 6: Alkaid
-  };
+  const ConstellationInfo* info = findConstellation("uma");
+  if (!info) return;
 
-  const std::vector<unsigned int> indices = {
-      0, 1,  1, 2,  2, 3,  3, 0, // Bowl
-      3, 4,                      // Bowl to handle
-      4, 5,  5, 6                // Handle
-  };
+  std::vector<glm::vec3> vertices;
+  vertices.reserve(info->stars.size());
+  for (const auto& s : info->stars) {
+    vertices.emplace_back(s.x, s.y, s.z);
+  }
+
+  std::vector<unsigned int> indices;
+  indices.reserve(info->segments.size() * 2);
+  for (const auto& seg : info->segments) {
+    indices.push_back(seg.first);
+    indices.push_back(seg.second);
+  }
 
   m_umaMesh.setGeometry(vertices, indices);
 }
