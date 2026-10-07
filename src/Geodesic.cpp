@@ -86,7 +86,7 @@ void rk4Step(double h, SchwState& s, double rs) {
 
 namespace {
 inline double smoothstep(double edge0, double edge1, double x) {
-  if (edge0 == edge1) return 0.0;
+  if (edge0 >= edge1) return 0.0;
   double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
   return t * t * (3.0 - 2.0 * t);
 }
@@ -98,7 +98,7 @@ int traceRay(SchwState s, double rs, double shell, double step, int maxSteps,
   const double hNear = step;
   const double hFar = step * 2.5;
   for (int i = 0; i < maxSteps; ++i) {
-    const double smoothFactor = smoothstep(8.0 * rs, 3.0 * rs, s.r);
+    const double smoothFactor = 1.0 - smoothstep(3.0 * rs, 8.0 * rs, s.r);
     const double h = hFar + (hNear - hFar) * smoothFactor;
     rk4Step(h, s, rs);
     if (s.r <= rs * 1.001) {

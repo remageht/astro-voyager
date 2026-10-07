@@ -93,7 +93,7 @@ void main() {
   for (int i = 0; i < ABSOLUTE_MAX_STEPS; i++) {
     if (i >= u_MaxSteps) break;
     vec4 pPrev = p;
-    float smoothFactor = smoothstep(8.0 * u_Rs, 3.0 * u_Rs, p.y);
+    float smoothFactor = 1.0 - smoothstep(3.0 * u_Rs, 8.0 * u_Rs, p.y);
     float hNear = u_StepSize;
     float hFar = u_StepSize * 2.5;
     float hAdapt = mix(hFar, hNear, smoothFactor);
