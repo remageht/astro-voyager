@@ -15,6 +15,13 @@ struct SchwAccel {
 };
 
 SchwAccel geodesicAcceleration(const SchwState& s, double rs);
+
+// Re-project dt/dLambda so the geodesic stays null (ds2 = 0):
+// f = 1 - Rs/r; spatial = dr^2/f + r^2 dTheta^2 + r^2 sin^2(Theta) dPhi^2;
+// dt = sqrt(spatial / f). Bit-for-bit mirror of renormalizeTime() in
+// shaders/bh.frag; called at the end of rk4Step().
+void renormalizeTime(SchwState& s, double rs);
+
 void rk4Step(double h, SchwState& s, double rs);
 
 // Returns steps until capture (r<=rs) or escape (r>=shell), or maxSteps.

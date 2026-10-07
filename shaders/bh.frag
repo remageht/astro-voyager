@@ -45,6 +45,19 @@ vec4 cartDirToVel(vec4 p, vec3 d) {
   float sp = (dR * dR) / f + r * r * dT * dT + r * r * sT * sT * dP * dP;
   return vec4(sqrt(max(sp / f, 0.0)), dR, dT, dP);
 }
+// Re-project dt/dLambda after an RK4 step so the geodesic stays null (ds2 = 0):
+// f = 1 - Rs/r; spatial = dR^2/f + r^2 dTheta^2 + r^2 sin^2(Theta) dPhi^2;
+// dt = sqrt(spatial / f). Mirrored bit-for-bit by renormalizeTime() in
+// src/Geodesic.cpp; keep both versions in sync.
+void renormalizeTime(inout vec4 p, inout vec4 dp) {
+  float r = max(p.y, u_Rs + 0.001);
+  float th = clamp(p.z, 0.0001, PI - 0.0001);
+  float sT = safeSin(th);
+  float f = max(1.0 - u_Rs / r, 0.0001);
+  float spatial = (dp.y * dp.y) / f + r * r * dp.z * dp.z +
+                  r * r * sT * sT * dp.w * dp.w;
+  dp.x = sqrt(max(spatial / f, 0.0));
+}
 vec3 velToCart(vec4 p, vec4 dp) {
   vec3 eR, eT, eP; sphericalBasis(p, eR, eT, eP);
   float r = max(p.y, u_Rs + 0.001);
@@ -98,6 +111,7 @@ void main() {
     float hFar = u_StepSize * 2.5;
     float hAdapt = mix(hFar, hNear, smoothFactor);
     rk4(hAdapt, p, dp);
+    renormalizeTime(p, dp);
     if (any(isnan(p)) || any(isnan(dp))) {
       FragColor = vec4(0.02, 0.015, 0.025, 1.0); return;
     }

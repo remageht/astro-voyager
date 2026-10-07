@@ -27,6 +27,18 @@ SchwAccel geodesicAcceleration(const SchwState& s, double rs) {
   return a;
 }
 
+void renormalizeTime(SchwState& s, double rs) {
+  const double kPi = 3.141592653589793;
+  const double radius = std::max(s.r, rs + 0.001);
+  const double theta = std::min(std::max(s.theta, 0.0001), kPi - 0.0001);
+  const double sinT = std::sin(theta);
+  const double safeSin = std::abs(sinT) < 1e-4 ? 1e-4 : sinT;
+  const double f = std::max(1.0 - rs / radius, 1e-4);
+  const double spatial = (s.dr * s.dr) / f + radius * radius * s.dtheta * s.dtheta +
+                         radius * radius * safeSin * safeSin * s.dphi * s.dphi;
+  s.dt = std::sqrt(std::max(spatial / f, 0.0));
+}
+
 void rk4Step(double h, SchwState& s, double rs) {
   const double kPi = 3.141592653589793;
   auto deriv = [&](const SchwState& st, SchwState& dP, SchwAccel& dDp) {
@@ -82,6 +94,7 @@ void rk4Step(double h, SchwState& s, double rs) {
   s.dphi +=
       (h / 6.0) * (k1D.ddphi + 2 * k2D.ddphi + 2 * k3D.ddphi + k4D.ddphi);
   s.theta = std::min(std::max(s.theta, 0.0001), kPi - 0.0001);
+  renormalizeTime(s, rs);
 }
 
 namespace {
