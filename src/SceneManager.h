@@ -19,6 +19,7 @@ struct RenderSettings {
   float stepSize = 0.05f;
   int maxSteps = 600;
   float fovDegrees = 60.0f;
+  bool diskOn = false;
 };
 
 enum class PerfPreset {
