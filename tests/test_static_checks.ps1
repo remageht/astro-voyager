@@ -109,6 +109,8 @@ Check 'roadmap exists' (Test-Path (Join-Path $root 'docs/ROADMAP.md'))
 Check 'release doc exists' (Test-Path (Join-Path $root 'docs/RELEASE.md'))
 Check 'presets defined' ((Read-File 'src/SceneManager.h') -match 'PerfPreset')
 Check 'env example no secret' ((Read-File '.env.example') -notmatch 'sk-|secret123|password')
+Check 'cli disk flag' ($main -match '--disk')
+Check 'test_doppler_side exists' (Test-Path (Join-Path $root 'tests/test_doppler_side.ps1'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

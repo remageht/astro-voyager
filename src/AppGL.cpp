@@ -322,7 +322,7 @@ bool AppGL::saveScreenshot(const std::string& filepath) {
   return (success != 0);
 }
 
-int AppGL::captureAllScreenshots(const std::string& outDir) {
+int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   std::filesystem::create_directories(outDir);
 
   // Create AppGL (with window 1280x720)
@@ -334,6 +334,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir) {
 
   for (const auto& stId : targetStations) {
     app.m_sceneManager->teleportTo(stId, app.m_camera);
+    app.m_sceneManager->getSettings().diskOn = diskOn;
 
     // Warm-up and render
     int fbWidth = 1280, fbHeight = 720;

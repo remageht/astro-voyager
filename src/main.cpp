@@ -39,7 +39,7 @@ void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
                "--demo-geodesic | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
-  std::cout << " | --gl | --screenshot-all";
+  std::cout << " | --gl | --screenshot-all [--disk]";
 #endif
   std::cout << "]\n";
 }
@@ -146,7 +146,9 @@ int main(int argc, char** argv) {
 
 #ifdef ASTROVOYAGER_ENABLE_GL
   if (arg == "--screenshot-all") {
-    return astro::AppGL::captureAllScreenshots("docs/screens");
+    bool diskOn = (argc > 2 && std::string(argv[2]) == "--disk");
+    std::string outDir = diskOn ? "docs/screens/disk" : "docs/screens";
+    return astro::AppGL::captureAllScreenshots(outDir, diskOn);
   }
   if (arg == "--gl" || arg.empty()) {
     try {

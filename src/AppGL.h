@@ -19,7 +19,7 @@ class AppGL {
 
   int run();
   bool saveScreenshot(const std::string& filepath);
-  static int captureAllScreenshots(const std::string& outDir = "docs/screens");
+  static int captureAllScreenshots(const std::string& outDir = "docs/screens", bool diskOn = false);
 
  private:
   void processInput(float deltaTime);
