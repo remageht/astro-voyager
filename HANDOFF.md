@@ -2,8 +2,11 @@
 
 ## Состояние: v2.1.1 RELEASED (2026-10-08)
 
-- Репо `https://github.com/remageht/astro-voyager`, `main` = `6942189`, CI зелёный
+- Репо `https://github.com/remageht/astro-voyager`, `main` = `383f011`, CI зелёный
   (в т.ч. валидация шейдеров glslang на Ubuntu).
+- Уравнение Бине СДЕЛАНО (коммит `383f011`): модуль `src/Binet.h/.cpp` (вывод u''+u = 3Mu²
+  в хеддере), кросс-тест `--demo-binet` (Binet vs 4D-RK4: rel err ≤ 1.3e-5, сценарии и
+  b_crit±0.005 совпадают), гейт входит в релизный чек-лист.
 - Теги: `v0.1.0, v0.2.0, v0.3.0, v1.0.0, v2.1.0, v2.1.1`. GitHub Releases: v1.0.0, v2.1.0, v2.1.1.
 - Вехи DONE: core → gl-window → traveler (6 станций) → prod → физика (renormalizeTime + b_crit,
   Новиков-Торн + Барден + g⁴, redshift наблюдателя) → **fix знака доплеровского биминга**.
@@ -23,7 +26,7 @@
 
 ## Открытые пункты
 
-1. Идеи из `docs/ROADMAP.md` (v2.0 ideas): уравнение Бине u(φ), Керр, Linux AppImage.
+1. Идеи из `docs/ROADMAP.md`: Керр (спин a≠0), Linux AppImage.
 
 ## Промпт для следующего ИИ (копировать)
 
@@ -38,7 +41,7 @@ res/catalog.json и res/constellations.json синхронны с src/Catalog.cp
 smoothstep edge0<edge1, ISCO rIn=3*Rs, g^4, знак биминга (1.0 + beta*cosAlpha), ringMod запрещён);
 HDR/Dependencies/src/vendor/dist/AGENTS.md/docs/screens/disk/ в git не коммить.
 Проверка: cmake build (core+gl) + ctest + tests/test_static_checks.ps1 + --demo-geodesic
-+ --screenshot-all (7 PNG) + tests/test_doppler_side.ps1 (PASS, ratio 2.3-3.6).
++ --demo-binet + --screenshot-all (7 PNG) + tests/test_doppler_side.ps1 (PASS, ratio 2.3-3.6).
 Коммиты, теги, релизы — делает владелец (см. ниже), ИИ только готовит и верифицирует.
 Используй доступные skills / plugins / MCP (билд, git, docs): сначала проверь окружение ими, потом код.
 Перед правками: git status + git log -5 — убедись, что работаешь от актуального HEAD.
