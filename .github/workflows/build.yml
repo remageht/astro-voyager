@@ -31,6 +31,14 @@ jobs:
       - name: Static checks
         shell: pwsh
         run: ./tests/test_static_checks.ps1
+      - name: Validate shaders (glslang)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y --no-install-recommends glslang-tools
+          for f in shaders/*.vert shaders/*.frag; do
+            echo "== $f"
+            glslangValidator "$f"
+          done
 
   docker:
     runs-on: ubuntu-latest

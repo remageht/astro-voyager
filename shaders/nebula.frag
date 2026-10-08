@@ -11,7 +11,7 @@ float hash2(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
 
-float noise2(vec2 p) {
+float valueNoise(vec2 p) {
   vec2 i = floor(p);
   vec2 f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
@@ -27,7 +27,7 @@ float fbm(vec2 p) {
   float a = 0.5;
   mat2 rot = mat2(0.8, -0.6, 0.6, 0.8);
   for (int i = 0; i < 4; ++i) {
-    v += a * noise2(p);
+    v += a * valueNoise(p);
     p = rot * p * 2.0;
     a *= 0.5;
   }
