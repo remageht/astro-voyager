@@ -56,6 +56,13 @@ if(ASTROVOYAGER_ENABLE_GL)
     set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+    if(UNIX AND NOT APPLE)
+      # Linux distribution builds (AppImage) ship X11 only: the Wayland backend
+      # would add libwayland/libdecor/libxkbcommon runtime dependencies that are
+      # not present on X11-only hosts (XWayland covers Wayland desktops).
+      set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
+      set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
+    endif()
     add_subdirectory(Dependencies/GLFW)
     target_link_libraries(astro-voyager PRIVATE glfw)
   else()
