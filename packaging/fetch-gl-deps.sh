@@ -11,7 +11,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-glfw_version="3.4.0"
+glfw_version="3.4"      # release tag; its source asset is glfw-3.4.zip
 glm_version="1.0.1"
 imgui_version="1.91.8"
 stb_commit="2c980bb59875b0d32144a71867fbdebb2f77cd20"
@@ -25,12 +25,11 @@ mkdir -p "${repo_root}/Dependencies" "${repo_root}/src/vendor"
 
 if [ ! -f "${repo_root}/Dependencies/GLFW/CMakeLists.txt" ]; then
   log "fetching GLFW ${glfw_version}"
-  curl -fsSL -o "${workdir}/glfw.tar.gz" \
-    "https://github.com/glfw/glfw/archive/refs/tags/${glfw_version}.tar.gz"
-  mkdir -p "${workdir}/glfw"
-  tar -xzf "${workdir}/glfw.tar.gz" -C "${workdir}/glfw" --strip-components=1
+  curl -fsSL -o "${workdir}/glfw.zip" \
+    "https://github.com/glfw/glfw/releases/download/${glfw_version}/glfw-${glfw_version}.zip"
+  unzip -q "${workdir}/glfw.zip" -d "${workdir}/glfw"
   mkdir -p "${repo_root}/Dependencies/GLFW"
-  cp -a "${workdir}/glfw/." "${repo_root}/Dependencies/GLFW/"
+  cp -a "${workdir}/glfw/glfw-${glfw_version}/." "${repo_root}/Dependencies/GLFW/"
 fi
 
 if [ ! -f "${repo_root}/src/vendor/glm/CMakeLists.txt" ] && \
