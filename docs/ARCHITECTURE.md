@@ -19,8 +19,10 @@
 - `Geodesic` — CPU-эталон формул из `shaders/bh.frag`:
   `geodesicAcceleration`, `rk4Step`, `traceRay`.
   Используется в `--demo-geodesic` и unit-тестах.
+- `Binet` — решение уравнения Бине $d^2u/d\varphi^2 + u = 3M u^2$ ($u = 1/r, M = R_s/2$) для фотонных орбит Шварцшильда.
+  Служит независимым аналитико-численным эталоном для кросс-валидации 4D-интегратора `Geodesic.cpp` (сравнение $u(\varphi)$ с погрешностью $< 10^{-4}$ и проверка критического захвата $b_{\text{crit}} = \frac{3\sqrt{3}}{2} R_s$ через `--demo-binet`).
 - `Interaction` — логика захвата курсора, блокировки ввода при фокусе ImGui и clamp камеры у горизонта событий.
-- `main` — CLI: `--list`, `--info <id>`, `--demo-geodesic`, `--test-interaction`, `--version`.
+- `main` — CLI: `--list`, `--info <id>`, `--demo-geodesic`, `--demo-binet`, `--test-interaction`, `--version`.
 
 ### OpenGL Renderer (`ASTROVOYAGER_ENABLE_GL=ON`)
 - `Window` — обертка GLFW: создание окна, контекст OpenGL 3.3 Core, VSync.
