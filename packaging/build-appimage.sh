@@ -83,8 +83,13 @@ log "AppRun wrapper uses the bundled assets"
 cat > "${appdir}/AppRun" <<'APPRUN'
 #!/bin/sh
 # Run astro-voyager from the mounted AppDir so that shaders/ and res/ resolve.
-self="$(readlink -f "$0")"
-here="$(dirname "$self")"
+# Note: linuxdeploy deploys AppRun as a symlink to usr/bin/astro-voyager, so the
+# AppDir root must be resolved without following that last symlink.
+self="$0"
+here="$(cd "$(dirname "${self}")" && pwd)"
+if [ -n "${APPDIR:-}" ] && [ -d "${APPDIR}/usr/bin" ]; then
+  here="${APPDIR}"
+fi
 if [ -d "${here}/usr/share/astro-voyager" ]; then
   cd "${here}/usr/share/astro-voyager"
 fi
