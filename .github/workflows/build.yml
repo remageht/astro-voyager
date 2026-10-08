@@ -84,10 +84,19 @@ jobs:
           appimage="$(ls dist/astro-voyager-v*-x86_64.AppImage)"
           echo "AppImage: ${appimage}"
           ./"${appimage}" --appimage-extract >/dev/null
-          ls -l squashfs-root/AppRun
-          ./squashfs-root/AppRun --version
-          ./squashfs-root/AppRun --demo-geodesic
-          ./squashfs-root/AppRun --demo-binet
+          echo "== AppDir root =="
+          ls -la squashfs-root | head -20
+          echo "== usr/bin (linuxdeploy may wrap the binary) =="
+          ls -l squashfs-root/usr/bin
+          file squashfs-root/usr/bin/astro-voyager || true
+          echo "== AppRun =="
+          cat squashfs-root/AppRun 2>/dev/null || true
+          echo "== usr/bin/astro-voyager (head) =="
+          head -30 squashfs-root/usr/bin/astro-voyager 2>/dev/null || true
+          appdir="$PWD/squashfs-root"
+          "${appdir}/AppRun" --version
+          "${appdir}/AppRun" --demo-geodesic
+          "${appdir}/AppRun" --demo-binet
           # --version must report the version from VERSION
           reported="$(./squashfs-root/AppRun --version | awk '{print $2}')"
           expected="$(tr -d '[:space:]' < VERSION)"

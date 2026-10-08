@@ -79,12 +79,33 @@ log "linuxdeploy: bundling runtime libraries"
   --icon-file "${appdir}/usr/share/icons/hicolor/256x256/apps/${app}.png" \
   --executable "${appdir}/usr/bin/${app}"
 
-log "AppRun wrapper uses the bundled assets"
+# linuxdeploy wraps usr/bin/<app> in a shell script that re-resolves its own
+# directory with `readlink -f "$0"`, and deploys AppRun as a symlink to that
+# wrapper. Through the symlink $0 resolves to the wrapper itself and linuxdeploy
+# doubles the path (AppDir/usr/bin/usr/bin/<app>). Replace the wrapper body with
+# a resolution that works both for the mounted AppImage (APPDIR) and for an
+# --appimage-extract'ed AppDir.
+elf="${appdir}/usr/bin/${app}"
+if head -1 "${elf}" | grep -q '^#!/bin/sh'; then
+  log "rewriting the linuxdeploy exec wrapper (${app})"
+  dest="${workdir}/wrapper.${app}"
+  {
+    printf '#!/bin/sh\n'
+    printf '# written by packaging/build-appimage.sh: linuxdeploy wrapper, path-safe\n'
+    printf 'here="${APPDIR:-}"\n'
+    printf '[ -n "$here" ] || here="$(cd "$(dirname -- "$0")" && pwd)"\n'
+    printf 'exec "$here/usr/bin/%s" "$@"\n' "${app}"
+  } > "${dest}"
+  cat "${dest}" > "${elf}"
+  chmod +x "${elf}"
+fi
+
+# Replace the AppRun symlink with a real script: the runtime exports APPDIR and
+# the CLI must run with the working directory set to the bundled assets.
+rm -f "${appdir}/AppRun"
 cat > "${appdir}/AppRun" <<'APPRUN'
 #!/bin/sh
 # Run astro-voyager from the mounted AppDir so that shaders/ and res/ resolve.
-# Note: linuxdeploy deploys AppRun as a symlink to usr/bin/astro-voyager, so the
-# AppDir root must be resolved without following that last symlink.
 self="$0"
 here="$(cd "$(dirname "${self}")" && pwd)"
 if [ -n "${APPDIR:-}" ] && [ -d "${APPDIR}/usr/bin" ]; then
