@@ -19,7 +19,7 @@
 - **Валидация шейдеров glslang в CI**:
   - Job ubuntu в `.github/workflows/build.yml` теперь устанавливает `glslang-tools` и прогоняет `glslangValidator` по всем `shaders/*.vert` и `shaders/*.frag`.
   - `shaders/nebula.frag`: функция `noise2` переименована в `valueNoise` — имя конфликтовало с built-in GLSL `genType noise2(genType)` и роняло строгие компиляторы (glslang: "overloaded functions must have the same return type"); на потребительских драйверах конфликт маскировался.
-- **Документация**: `INTERNAL.md` обновлён (v2.1.1, харнесс доплера, гейты), `docs/ARCHITECTURE.md` и `docs/ROADMAP.md` описывают модуль Binet и его статус DONE.
+- **Документация**: `docs/ARCHITECTURE.md` и `docs/ROADMAP.md` описывают модуль Binet и его статус DONE.
 
 ## 2.1.1 - 2026-10-08
 - **Fix: знак доплеровского биминга диска** — cosAlpha считался вдоль направления трассировки (камера→сцена), тогда как фотон летит сцена→камера; приближающаяся сторона диска Sgr A* затемнялась вместо свечения (зеркальность подтверждена численно: ratio 1.386 в неверную сторону). Фактор Бардена исправлен на g = √f / (γ(1 + β cosα)).
