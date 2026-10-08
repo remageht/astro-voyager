@@ -66,9 +66,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake g++ make curl file \
+            cmake g++ make curl unzip file \
             libgl1-mesa-dev libglew-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            libwayland-dev wayland-protocols
       - name: Fetch GL sources (GLFW/GLM/ImGui/stb)
         run: bash packaging/fetch-gl-deps.sh
       - name: Configure and build (GL)
