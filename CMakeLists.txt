@@ -13,6 +13,7 @@ add_executable(astro-voyager
   src/Camera.cpp
   src/Geodesic.cpp
   src/Binet.cpp
+  src/Kerr.cpp
   src/Interaction.cpp
   src/Constellation.cpp
 )

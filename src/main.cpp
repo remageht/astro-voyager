@@ -5,6 +5,7 @@
 #include "Camera.h"
 #include "Geodesic.h"
 #include "Binet.h"
+#include "Kerr.h"
 #include "Interaction.h"
 #include "Version.h"
 
@@ -38,7 +39,7 @@ astro::SchwState makeInwardRay(double r0, double b, double rs) {
 
 void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
-               "--demo-geodesic | --demo-binet | --test-interaction | --version";
+               "--demo-geodesic | --demo-binet | --demo-kerr | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --screenshot-all [--disk]";
 #endif
@@ -244,6 +245,210 @@ int main(int argc, char** argv) {
 
     std::cout << "\nBinet validation result: " << (allPassed ? "ALL PASS" : "FAIL") << "\n";
     return allPassed ? 0 : 1;
+  }
+  if (arg == "--demo-kerr") {
+    // Validation of Kerr null geodesics module (Kerr.cpp):
+    // (A) Limit a -> 0 matches Schwarzschild (Geodesic.cpp RK4).
+    // (B) Asymmetry direction: b_crit(prograde) < 3*sqrt(3)/2 Rs < b_crit(retrograde) at a = 0.9M.
+    // (C) Verification against literature analytics (Bardeen 1972/1973, Chandrasekhar 1983).
+    const double rs = 1.0;
+    const double M = 0.5 * rs;
+    const double r0 = 10.0;
+    const double bCritSchw = 1.5 * std::sqrt(3.0) * rs;  // ~ 2.598076211 Rs
+    std::cout << "=== Kerr null geodesics validation (Rs=" << rs << ", M=" << M
+              << ", b_crit(Schw)=" << bCritSchw << ") ===\n\n";
+
+    bool passA = true;
+    bool passB = true;
+    bool passC = true;
+
+    // ------------------------------------------------------------------------
+    // (A) Limit a -> 0: Compare Kerr orbit (a = 0) vs Schwarzschild RK4
+    // ------------------------------------------------------------------------
+    std::cout << "--- (A) Schwarzschild limit (a -> 0) ---\n";
+    const double testBs[] = {1.5, 2.0, 3.0, 5.0};
+    const double kMaxRelErrThreshold = 1e-4;
+
+    for (double b : testBs) {
+      astro::KerrOrbitResult kerrRes =
+          astro::kerrPhotonOrbit(b, 0.0, rs, r0, 0.002, 8000, 30.0);
+
+      astro::SchwState ray = makeInwardRay(r0, b, rs);
+      const double h = 0.002;
+      double maxRelErr = 0.0;
+      double maxAbsErr = 0.0;
+      int comparedPoints = 0;
+
+      for (int step = 0; step < 8000; ++step) {
+        astro::rk4Step(h, ray, rs);
+        if (ray.r <= rs * 1.001 || ray.r >= 30.0) break;
+
+        if (static_cast<size_t>(step + 1) < kerrRes.points.size()) {
+          double rKerr = kerrRes.points[step + 1].r;
+          double absErr = std::abs(ray.r - rKerr);
+          double relErr = absErr / ray.r;
+          if (absErr > maxAbsErr) maxAbsErr = absErr;
+          if (relErr > maxRelErr) maxRelErr = relErr;
+          ++comparedPoints;
+        }
+      }
+
+      bool passErr = (comparedPoints > 20) && (maxRelErr < kMaxRelErrThreshold);
+      if (!passErr) passA = false;
+
+      std::cout << "b=" << b << " Rs: compared=" << comparedPoints
+                << " max_abs_err=" << maxAbsErr
+                << " max_rel_err=" << maxRelErr
+                << " (< 1e-4 -> " << (passErr ? "PASS" : "FAIL") << ")\n";
+    }
+
+    // Capture/escape scenario match in a -> 0 limit
+    for (double b : {2.5, 2.7}) {
+      astro::KerrOrbitResult kerrRes =
+          astro::kerrPhotonOrbit(b, 0.0, rs, r0, 0.005, 5000, 30.0);
+      bool rk4Cap = false;
+      astro::traceRay(makeInwardRay(r0, b, rs), rs, 30.0, 0.01, 3000, rk4Cap);
+
+      bool match = (kerrRes.captured == rk4Cap);
+      if (!match) passA = false;
+      std::cout << "scenario b=" << b << " Rs: Kerr="
+                << (kerrRes.captured ? "capture" : "escape")
+                << " Schw=" << (rk4Cap ? "capture" : "escape")
+                << " -> " << (match ? "PASS" : "FAIL") << "\n";
+    }
+    std::cout << "Part (A) Result: " << (passA ? "PASS" : "FAIL") << "\n\n";
+
+    // ------------------------------------------------------------------------
+    // (B) Direction of asymmetry at a = 0.9 M:
+    //     b_crit(prograde) < 3*sqrt(3)/2 Rs < b_crit(retrograde)
+    // ------------------------------------------------------------------------
+    std::cout << "--- (B) Asymmetry direction (a = 0.9 M = " << (0.9 * M) << ") ---\n";
+    const double aTest = 0.9 * M;
+    const double bCritProg = astro::kerrBCrit(aTest, rs, true);
+    const double bCritRetro = astro::kerrBCrit(aTest, rs, false);
+
+    std::cout << "b_crit(prograde)   = " << bCritProg << " Rs ("
+              << (bCritProg / M) << " M)\n";
+    std::cout << "b_crit(Schw)       = " << bCritSchw << " Rs ("
+              << (bCritSchw / M) << " M)\n";
+    std::cout << "b_crit(retrograde) = " << bCritRetro << " Rs ("
+              << (bCritRetro / M) << " M)\n";
+
+    bool strictInequality = (bCritProg < bCritSchw) && (bCritSchw < bCritRetro);
+    if (!strictInequality) passB = false;
+    std::cout << "Strict inequality b_crit(prog) < b_crit(Schw) < b_crit(retro): "
+              << (strictInequality ? "PASS" : "FAIL") << "\n";
+
+    // Numerical trajectory verification near critical thresholds:
+    // Prograde: b = 1.40 Rs (< bCritProg ~ 1.422 Rs -> capture),
+    //           b = 1.45 Rs (> bCritProg -> escape)
+    astro::KerrOrbitResult progCap =
+        astro::kerrPhotonOrbit(1.40, aTest, rs, r0, 0.005, 5000, 30.0);
+    astro::KerrOrbitResult progEsc =
+        astro::kerrPhotonOrbit(1.45, aTest, rs, r0, 0.005, 5000, 30.0);
+    bool progDynOk = progCap.captured && progEsc.escaped;
+    if (!progDynOk) passB = false;
+    std::cout << "Prograde dynamic threshold (b=1.40 capture=" << progCap.captured
+              << ", b=1.45 escape=" << progEsc.escaped
+              << "): " << (progDynOk ? "PASS" : "FAIL") << "\n";
+
+    // Retrograde: b = -3.40 Rs (|b| < bCritRetro ~ 3.416 Rs -> capture),
+    //             b = -3.45 Rs (|b| > bCritRetro -> escape)
+    astro::KerrOrbitResult retroCap =
+        astro::kerrPhotonOrbit(-3.40, aTest, rs, r0, 0.005, 5000, 30.0);
+    astro::KerrOrbitResult retroEsc =
+        astro::kerrPhotonOrbit(-3.45, aTest, rs, r0, 0.005, 5000, 30.0);
+    bool retroDynOk = retroCap.captured && retroEsc.escaped;
+    if (!retroDynOk) passB = false;
+    std::cout << "Retrograde dynamic threshold (b=-3.40 capture=" << retroCap.captured
+              << ", b=-3.45 escape=" << retroEsc.escaped
+              << "): " << (retroDynOk ? "PASS" : "FAIL") << "\n";
+    std::cout << "Part (B) Result: " << (passB ? "PASS" : "FAIL") << "\n\n";
+
+    // ------------------------------------------------------------------------
+    // (C) Literature verification (Bardeen 1972/1973, Chandrasekhar 1983):
+    //
+    // Citations & Analytical formulas:
+    //   1. Bardeen, Press, Teukolsky (1972) ApJ 178, 347 (Eq. 2.18):
+    //      r_ph(prograde)   = 2M [ 1 + cos( (2/3) arccos( -a / M ) ) ]
+    //      r_ph(retrograde) = 2M [ 1 + cos( (2/3) arccos(  a / M ) ) ]
+    //   2. Bardeen (1973) in "Black Holes" (DeWitt & DeWitt eds.), Gordon and Breach:
+    //      xi_c = - (r_ph^3 - 3M r_ph^2 + a^2 r_ph + M a^2) / (a (r_ph - M))
+    //      |b_crit| = |xi_c|
+    //   3. Known exact values:
+    //      a = 0:               b_crit = 3*sqrt(3)*M  ~ 5.1961524 M (2.598076 Rs)
+    //      a -> M (prograde):   r_ph -> 1.0 M, b_crit -> 2.0 M       (1.0 Rs)
+    //      a -> M (retrograde): r_ph -> 4.0 M, b_crit -> 7.0 M       (3.5 Rs)
+    // ------------------------------------------------------------------------
+    std::cout << "--- (C) Literature verification (Bardeen 1972/1973, Chandrasekhar 1983) ---\n";
+    // Check 1: a = 0 against 3*sqrt(3)*M
+    const double b0 = astro::kerrBCrit(0.0, rs, true);
+    const double b0_expected = 3.0 * std::sqrt(3.0) * M;
+    const double err0 = std::abs(b0 - b0_expected);
+    bool ok0 = (err0 < 1e-12);
+    if (!ok0) passC = false;
+    std::cout << "a = 0: b_crit=" << b0 << " expected=" << b0_expected
+              << " err=" << err0 << " -> " << (ok0 ? "PASS" : "FAIL") << "\n";
+
+    // Check 2: a -> M (a = 0.999999 M)
+    const double aExtremal = 0.999999 * M;
+    const double bProgExt = astro::kerrBCrit(aExtremal, rs, true);
+    const double bRetroExt = astro::kerrBCrit(aExtremal, rs, false);
+
+    // Expected limits: prograde -> 2.0 M = 1.0 Rs, retrograde -> 7.0 M = 3.5 Rs
+    const double errProgExt = std::abs(bProgExt - 2.0 * M);
+    const double errRetroExt = std::abs(bRetroExt - 7.0 * M);
+    bool okProgExt = (errProgExt < 5e-3);
+    bool okRetroExt = (errRetroExt < 5e-3);
+    if (!okProgExt || !okRetroExt) passC = false;
+    std::cout << "a -> M (prograde limit):   b_crit=" << (bProgExt / M)
+              << " M expected=2.000000 M err=" << (errProgExt / M)
+              << " -> " << (okProgExt ? "PASS" : "FAIL") << "\n";
+    std::cout << "a -> M (retrograde limit): b_crit=" << (bRetroExt / M)
+              << " M expected=7.000000 M err=" << (errRetroExt / M)
+              << " -> " << (okRetroExt ? "PASS" : "FAIL") << "\n";
+
+    // Check 3: numerical bisect of dynamic threshold vs analytic b_crit at a = 0.9 M
+    // Analytical: bCritProg ~ 2.84442 M (1.42221 Rs), bCritRetro ~ 6.83232 M (3.41616 Rs)
+    auto bisectThreshold = [&](double aVal, bool prograde) {
+      double low = prograde ? 1.0 * rs : -4.0 * rs;
+      double high = prograde ? 2.0 * rs : -3.0 * rs;
+      for (int it = 0; it < 20; ++it) {
+        double mid = 0.5 * (low + high);
+        astro::KerrOrbitResult orRes =
+            astro::kerrPhotonOrbit(mid, aVal, rs, r0, 0.005, 5000, 30.0);
+        if (prograde) {
+          if (orRes.captured) low = mid;
+          else high = mid;
+        } else {
+          // Retrograde: mid is negative, smaller magnitude means capture
+          if (orRes.captured) high = mid;
+          else low = mid;
+        }
+      }
+      return std::abs(0.5 * (low + high));
+    };
+
+    const double bNumProg = bisectThreshold(aTest, true);
+    const double bNumRetro = bisectThreshold(aTest, false);
+    const double diffProg = std::abs(bNumProg - bCritProg);
+    const double diffRetro = std::abs(bNumRetro - bCritRetro);
+    // Numerical bisect tolerance < 1e-2 Rs
+    bool okNumProg = (diffProg < 0.01);
+    bool okNumRetro = (diffRetro < 0.01);
+    if (!okNumProg || !okNumRetro) passC = false;
+    std::cout << "a = 0.9M prograde:   numerical_b_crit=" << bNumProg
+              << " analytic=" << bCritProg << " diff=" << diffProg
+              << " (< 0.01 -> " << (okNumProg ? "PASS" : "FAIL") << ")\n";
+    std::cout << "a = 0.9M retrograde: numerical_b_crit=" << bNumRetro
+              << " analytic=" << bCritRetro << " diff=" << diffRetro
+              << " (< 0.01 -> " << (okNumRetro ? "PASS" : "FAIL") << ")\n";
+
+    std::cout << "Part (C) Result: " << (passC ? "PASS" : "FAIL") << "\n\n";
+
+    bool allKerrOk = passA && passB && passC;
+    std::cout << "Kerr validation result: " << (allKerrOk ? "ALL PASS" : "FAIL") << "\n";
+    return allKerrOk ? 0 : 1;
   }
   if (arg == "--test-interaction") {
     bool ok = blackhole::ShouldCaptureMouseForCamera(true, false) &&
