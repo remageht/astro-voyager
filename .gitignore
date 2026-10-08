@@ -19,3 +19,5 @@ Release/
 imgui.ini
 *.zip
 /dist/
+
+docs/screens/disk/
