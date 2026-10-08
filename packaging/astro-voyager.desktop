@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=astro-voyager
+GenericName=Black hole explorer
+Comment=Schwarzschild black hole raytracer with OpenGL UI and headless CLI
+Exec=astro-voyager
+Icon=astro-voyager
+Terminal=false
+Categories=Science;Education;Graphics;
+Keywords=astronomy;black hole;raytracing;Schwarzschild;OpenGL;

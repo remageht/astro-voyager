@@ -1,0 +1,3 @@
+# Packaging scripts run on Linux (CI AppImage job): keep LF in the repository
+# and in the working tree on every platform.
+*.sh text eol=lf
