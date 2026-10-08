@@ -2,7 +2,8 @@
 
 ## Состояние: v2.1.1 RELEASED (2026-10-08)
 
-- Репо `https://github.com/remageht/astro-voyager`, `main` = `aa3b9a9`, CI зелёный.
+- Репо `https://github.com/remageht/astro-voyager`, `main` = `6942189`, CI зелёный
+  (в т.ч. валидация шейдеров glslang на Ubuntu).
 - Теги: `v0.1.0, v0.2.0, v0.3.0, v1.0.0, v2.1.0, v2.1.1`. GitHub Releases: v1.0.0, v2.1.0, v2.1.1.
 - Вехи DONE: core → gl-window → traveler (6 станций) → prod → физика (renormalizeTime + b_crit,
   Новиков-Торн + Барден + g⁴, redshift наблюдателя) → **fix знака доплеровского биминга**.
@@ -13,15 +14,16 @@
   Y 45–95%) — сырое окно не годилось, небо лево-яркое и гасило сигнал. Ожидаемый ratio 2.3–3.6,
   сейчас 2.445. Скриншоты с диском: `--screenshot-all --disk` → `docs/screens/disk/` (gitignored).
   Disk-off кадр `docs/screens/sgra.png` детерминирован (байт-в-байт) — на него опирается вычитание.
+- Шейдеры валидируются glslang в CI (job ubuntu, шаг `Validate shaders`), локально:
+  `glslangValidator shaders/*.vert shaders/*.frag`. В nebula.frag `noise2` переименован в
+  `valueNoise` (конфликт с built-in `genType noise2`) — пункта "nebula не проходит" больше нет.
 - Гейты (все зелёные): `tests/test_static_checks.ps1` (70+ проверок), `ctest`, `--demo-geodesic`,
-  `--test-interaction`, `--screenshot-all` (7 PNG), `test_doppler_side.ps1` PASS.
+  `--test-interaction`, `--screenshot-all` (7 PNG), `test_doppler_side.ps1` PASS, CI glslang.
 - Локальный cmake: `C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin` в PATH.
 
 ## Открытые пункты
 
-1. `shaders/nebula.frag` не проходит glslang (предсуществующий баг `noise2`,
-   перегрузки с разным типом возврата) — не трогали.
-2. Идеи из `docs/ROADMAP.md` (v2.0 ideas): уравнение Бине u(φ), Керр, Linux AppImage.
+1. Идеи из `docs/ROADMAP.md` (v2.0 ideas): уравнение Бине u(φ), Керр, Linux AppImage.
 
 ## Промпт для следующего ИИ (копировать)
 
