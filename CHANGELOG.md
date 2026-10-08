@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2.3.0 - 2026-10-08
+
+- **Linux AppImage (x86_64)**:
+  - Полноценный Linux-дистрибутив: GL-сборка (ASTROVOYAGER_ENABLE_GL=ON) + AppDir + type-2 AppImage с бандлингом GLEW/X11-библиотек через linuxdeploy; системные libGL/libGLX и libc/libstdc++ сознательно не бандлятся (excludelist — не ломают GL-стек хоста).
+  - Новый CI-job `build-appimage` в `.github/workflows/build.yml`: сборка, упаковка, headless-смоук внутри AppImage (--version / --demo-geodesic / --demo-binet + сверка версии с VERSION и контракт payload), upload-artifact, а на тегах `v*` — автоматический ассет `astro-voyager-vX.Y.Z-x86_64.AppImage` в GitHub Release.
+  - `packaging/`: `build-appimage.sh` (AppDir + appimagetool), `fetch-gl-deps.sh` (pinned-выкачка GLFW 3.4 / GLM 1.0.1 / ImGui 1.91.8 / stb, т.к. Dependencies/ и src/vendor/ в gitignored), `astro-voyager.desktop`, `icon.png` 256×256.
+  - CMake (Linux-ветка GL): GLFW 3.4 собирается X11-only (`GLFW_BUILD_WAYLAND=OFF`, `GLFW_BUILD_X11=ON`) — без wayland-scanner/xkbcommon/libdecor в рантайме, Wayland покрывается XWayland. Windows/macOS не затронуты.
+  - `.gitattributes`: `*.sh text eol=lf` — bash-скрипты не ломаются на CRLF.
+  - Static checks +20 проверок упаковки (итого 90): файлы packaging, ключи .desktop, шаги CI-job.
+
 ## 2.2.0 - 2026-10-08
 
 - **Уравнение Бине u(φ) — аналитическая кросс-валидация интегратора**:
