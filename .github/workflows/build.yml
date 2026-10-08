@@ -84,8 +84,10 @@ jobs:
           appimage="$(ls dist/astro-voyager-v*-x86_64.AppImage)"
           echo "AppImage: ${appimage}"
           ./"${appimage}" --appimage-extract >/dev/null
+          ls -l squashfs-root/AppRun
           ./squashfs-root/AppRun --version
           ./squashfs-root/AppRun --demo-geodesic
+          ./squashfs-root/AppRun --demo-binet
           # --version must report the version from VERSION
           reported="$(./squashfs-root/AppRun --version | awk '{print $2}')"
           expected="$(tr -d '[:space:]' < VERSION)"
