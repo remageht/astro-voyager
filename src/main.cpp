@@ -4,6 +4,7 @@
 #include "Catalog.h"
 #include "Camera.h"
 #include "Geodesic.h"
+#include "Binet.h"
 #include "Interaction.h"
 #include "Version.h"
 
@@ -37,7 +38,7 @@ astro::SchwState makeInwardRay(double r0, double b, double rs) {
 
 void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
-               "--demo-geodesic | --test-interaction | --version";
+               "--demo-geodesic | --demo-binet | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --screenshot-all [--disk]";
 #endif
@@ -132,6 +133,117 @@ int main(int argc, char** argv) {
     cam.clampNearHorizon(1.0);
     std::cout << "camera z=" << cam.position.z << "\n";
     return (cap && !cap2 && okCrit && okDrift) ? 0 : 2;
+  }
+  if (arg == "--demo-binet") {
+    // Cross-validation of CPU geodesic integrator (Geodesic.cpp RK4)
+    // against Schwarzschild Binet orbit equation d^2u/dphi^2 + u = 3M u^2.
+    const double rs = 1.0;
+    const double r0 = 10.0;
+    const double bCrit = 1.5 * std::sqrt(3.0) * rs;  // ~ 2.598076211 Rs
+    std::cout << "=== Binet u(phi) cross-validation (Rs=" << rs << ", r0=" << r0
+              << ", b_crit=" << bCrit << ") ===\n";
+
+    bool allPassed = true;
+
+    // 1. Pointwise error comparison on common phi range for various impact parameters
+    const double testBs[] = {1.5, 2.0, 3.0, 5.0};
+    const double kMaxRelErrThreshold = 1e-4;
+
+    for (double b : testBs) {
+      // Binet orbit
+      astro::BinetOrbitResult binetRes = astro::binetPhotonOrbit(b, rs, r0, 0.0005, 25.0, 30.0);
+
+      // CPU geodesic raytrace via rk4Step with small step for precision reference
+      astro::SchwState ray = makeInwardRay(r0, b, rs);
+      const double h = 0.002;
+      double maxRelErr = 0.0;
+      double maxAbsErr = 0.0;
+      int comparedPoints = 0;
+
+      size_t binetIdx = 0;
+      for (int step = 0; step < 8000; ++step) {
+        astro::rk4Step(h, ray, rs);
+
+        // Stop if ray hit horizon or escaped
+        if (ray.r <= rs * 1.001 || ray.r >= 30.0) break;
+
+        const double phiRay = ray.phi;
+        // Advance Binet index to find closest phi
+        while (binetIdx + 1 < binetRes.points.size() &&
+               binetRes.points[binetIdx + 1].phi <= phiRay) {
+          ++binetIdx;
+        }
+
+        if (binetIdx + 1 < binetRes.points.size()) {
+          // Linear interpolation of u_Binet at phiRay
+          const auto& p0 = binetRes.points[binetIdx];
+          const auto& p1 = binetRes.points[binetIdx + 1];
+          double frac = (phiRay - p0.phi) / (p1.phi - p0.phi);
+          double uInterp = p0.u + frac * (p1.u - p0.u);
+
+          double uRK4 = 1.0 / ray.r;
+          double absErr = std::abs(uRK4 - uInterp);
+          double relErr = absErr / uInterp;
+
+          if (absErr > maxAbsErr) maxAbsErr = absErr;
+          if (relErr > maxRelErr) maxRelErr = relErr;
+          ++comparedPoints;
+        }
+      }
+
+      bool passErr = (comparedPoints > 20) && (maxRelErr < kMaxRelErrThreshold);
+      if (!passErr) allPassed = false;
+
+      std::cout << "b=" << b << " Rs: compared=" << comparedPoints
+                << " max_abs_err=" << maxAbsErr
+                << " max_rel_err=" << maxRelErr
+                << " (< 1e-4 -> " << (passErr ? "PASS" : "FAIL") << ")\n";
+    }
+
+    // 2. Scenario match: capture vs escape for b < b_crit and b > b_crit
+    std::cout << "\nScenario matching:\n";
+    const double scenarioBs[] = {1.5, 2.0, 2.5, 2.7, 3.0, 5.0};
+    for (double b : scenarioBs) {
+      bool binetCap = astro::binetIsCaptured(b, rs);
+      astro::BinetOrbitResult binetRes = astro::binetPhotonOrbit(b, rs, r0, 0.001, 25.0, 30.0);
+
+      bool rk4Cap = false;
+      astro::traceRay(makeInwardRay(r0, b, rs), rs, 30.0, 0.01, 3000, rk4Cap);
+
+      bool match = (binetCap == rk4Cap) && (binetRes.captured == rk4Cap);
+      if (!match) allPassed = false;
+
+      std::cout << "b=" << b << " Rs: Binet_theory=" << (binetCap ? "capture" : "escape")
+                << " Binet_RK4=" << (binetRes.captured ? "capture" : "escape")
+                << " Raytrace_RK4=" << (rk4Cap ? "capture" : "escape")
+                << " -> " << (match ? "PASS" : "FAIL") << "\n";
+    }
+
+    // 3. Near-critical boundary test: b = 2.598 +/- 0.005
+    std::cout << "\nCritical boundary sensitivity (b_crit +/- 0.005 Rs):\n";
+    const double bUnder = 2.598 - 0.005;  // 2.593 < b_crit -> capture
+    const double bOver = 2.598 + 0.005;   // 2.603 > b_crit -> escape
+
+    bool underBinet = astro::binetIsCaptured(bUnder, rs);
+    bool underRK4 = false;
+    astro::traceRay(makeInwardRay(r0, bUnder, rs), rs, 30.0, 0.01, 4000, underRK4);
+    bool underMatch = (underBinet && underRK4);
+    if (!underMatch) allPassed = false;
+    std::cout << "b=" << bUnder << " (< b_crit): Binet=" << (underBinet ? "capture" : "escape")
+              << " RK4=" << (underRK4 ? "capture" : "escape")
+              << " -> " << (underMatch ? "PASS" : "FAIL") << "\n";
+
+    bool overBinet = astro::binetIsCaptured(bOver, rs);
+    bool overRK4 = false;
+    astro::traceRay(makeInwardRay(r0, bOver, rs), rs, 30.0, 0.01, 4000, overRK4);
+    bool overMatch = (!overBinet && !overRK4);
+    if (!overMatch) allPassed = false;
+    std::cout << "b=" << bOver << " (> b_crit): Binet=" << (overBinet ? "capture" : "escape")
+              << " RK4=" << (overRK4 ? "capture" : "escape")
+              << " -> " << (overMatch ? "PASS" : "FAIL") << "\n";
+
+    std::cout << "\nBinet validation result: " << (allPassed ? "ALL PASS" : "FAIL") << "\n";
+    return allPassed ? 0 : 1;
   }
   if (arg == "--test-interaction") {
     bool ok = blackhole::ShouldCaptureMouseForCamera(true, false) &&
