@@ -3,7 +3,11 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -47,3 +51,68 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image (no push)
         run: docker build -t astro-voyager:ci .
+
+  # Linux AppImage distribution: full OpenGL build (GLFW/ImGui/GLM/stb fetched
+  # from upstream releases because Dependencies/ and src/vendor/ are gitignored),
+  # AppDir + appimagetool type-2 packaging, headless smoke tests inside the
+  # AppImage, then the artifact (and, on tags, a Release asset).
+  build-appimage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GL build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ make curl file \
+            libgl1-mesa-dev libglew-dev \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+      - name: Configure (GL)
+        run: cmake -S . -B build-gl -DCMAKE_BUILD_TYPE=Release -DASTROVOYAGER_ENABLE_GL=ON
+      - name: Build (GL)
+        run: cmake --build build-gl -j"$(nproc)"
+      - name: Build AppImage
+        run: bash packaging/build-appimage.sh "$PWD/dist"
+      - name: Smoke test inside AppImage (headless CLI)
+        run: |
+          set -euo pipefail
+          appimage="$(ls dist/astro-voyager-v*-x86_64.AppImage)"
+          echo "AppImage: ${appimage}"
+          ./"${appimage}" --appimage-extract >/dev/null
+          ./squashfs-root/AppRun --version
+          ./squashfs-root/AppRun --demo-geodesic
+          # --version must report the version from VERSION
+          reported="$(./squashfs-root/AppRun --version | awk '{print $2}')"
+          expected="$(tr -d '[:space:]' < VERSION)"
+          test "${reported}" = "${expected}"
+          # the payload required by the distribution contract is present
+          test -x squashfs-root/usr/bin/astro-voyager
+          test -f squashfs-root/usr/share/astro-voyager/shaders/bh.frag
+          test -f squashfs-root/usr/share/astro-voyager/res/catalog.json
+          test -f squashfs-root/usr/share/astro-voyager/README.md
+          test -f squashfs-root/usr/share/astro-voyager/LICENSE
+          test -f squashfs-root/astro-voyager.desktop
+          test -f squashfs-root/usr/share/icons/hicolor/256x256/apps/astro-voyager.png
+          # bundled runtime libraries (linuxdeploy) and their GL dependencies
+          echo "== bundled .so =="
+          find squashfs-root/usr/lib -name '*.so*' -printf '%f\n' | sort
+          echo "== ldd of the bundled binary =="
+          ldd squashfs-root/usr/bin/astro-voyager | sed 's/^/  /'
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: astro-voyager-appimage-x86_64
+          path: dist/astro-voyager-v*-x86_64.AppImage
+          if-no-files-found: error
+          retention-days: 14
+      - name: Attach AppImage to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          appimage="$(ls dist/astro-voyager-v*-x86_64.AppImage)"
+          gh release upload "${GITHUB_REF_NAME}" "${appimage}" --clobber
+          gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name'
