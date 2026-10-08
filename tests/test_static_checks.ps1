@@ -26,6 +26,7 @@ $catalogJson = Read-File 'res/catalog.json'
 $bh = Read-File 'shaders/bh.frag'
 $ci = Read-File '.github/workflows/build.yml'
 $dockerfile = Read-File 'Dockerfile'
+$ver = (Read-File 'VERSION').Trim()
 
 Check 'cmake project astro-voyager' ($cmake -match 'project\(astro-voyager')
 Check 'cmake cxx17' ($cmake -match 'CMAKE_CXX_STANDARD 17')
@@ -36,7 +37,9 @@ Check 'cmake lists Interaction.cpp' ($cmake -match 'src/Interaction\.cpp')
 Check 'cmake lists Constellation.cpp' ($cmake -match 'src/Constellation\.cpp')
 Check 'cmake lists test_interaction' ($cmake -match 'test_interaction')
 Check 'cmake gl option' ($cmake -match 'ASTROVOYAGER_ENABLE_GL')
-Check 'version header' ((Read-File 'src/Version.h') -match '1\.0\.0')
+Check 'version header matches VERSION' ((Read-File 'src/Version.h') -match ('kVersion = "' + [regex]::Escape($ver) + '"'))
+Check 'cmake project version matches VERSION' ($cmake -match ('project\(astro-voyager VERSION ' + [regex]::Escape($ver)))
+Check 'catalog version matches VERSION' ($catalogJson -match ('"version": "' + [regex]::Escape($ver) + '"'))
 Check 'constellations json exists' (Test-Path (Join-Path $root 'res/constellations.json'))
 Check 'constellation header exists' (Test-Path (Join-Path $root 'src/Constellation.h'))
 Check 'constellation source exists' (Test-Path (Join-Path $root 'src/Constellation.cpp'))
