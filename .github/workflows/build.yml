@@ -69,10 +69,12 @@ jobs:
             cmake g++ make curl file \
             libgl1-mesa-dev libglew-dev \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
-      - name: Configure (GL)
-        run: cmake -S . -B build-gl -DCMAKE_BUILD_TYPE=Release -DASTROVOYAGER_ENABLE_GL=ON
-      - name: Build (GL)
-        run: cmake --build build-gl -j"$(nproc)"
+      - name: Fetch GL sources (GLFW/GLM/ImGui/stb)
+        run: bash packaging/fetch-gl-deps.sh
+      - name: Configure and build (GL)
+        run: |
+          cmake -S . -B build-gl -DCMAKE_BUILD_TYPE=Release -DASTROVOYAGER_ENABLE_GL=ON
+          cmake --build build-gl -j"$(nproc)"
       - name: Build AppImage
         run: bash packaging/build-appimage.sh "$PWD/dist"
       - name: Smoke test inside AppImage (headless CLI)
