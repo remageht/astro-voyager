@@ -68,19 +68,16 @@ chmod +x "${workdir}/appimagetool"
 export APPIMAGE_EXTRACT_AND_RUN=1
 export ARCH=x86_64
 export VERSION="${version}"
+# Keep the host GL stack out of the bundle (official AppImage guidance);
+# linuxdeploy reads this semicolon-separated glob list.
+export LINUXDEPLOY_EXCLUDED_LIBRARIES='libGL.so*;libEGL.so*;libGLX.so*;libdrm.so*;libgbm.so*'
 
 log "linuxdeploy: bundling runtime libraries"
 "${workdir}/linuxdeploy" \
   --appdir "${appdir}" \
   --desktop-file "${appdir}/usr/share/applications/${app}.desktop" \
   --icon-file "${appdir}/usr/share/icons/hicolor/256x256/apps/${app}.png" \
-  --executable "${appdir}/usr/bin/${app}" \
-  --exclude-library 'libGL.so*' \
-  --exclude-library 'libEGL.so*' \
-  --exclude-library 'libGLX.so*' \
-  --exclude-library 'libdrm.so*' \
-  --exclude-library 'libgbm.so*' \
-  --no-appstream
+  --executable "${appdir}/usr/bin/${app}"
 
 log "AppRun wrapper uses the bundled assets"
 cat > "${appdir}/AppRun" <<'APPRUN'
@@ -97,7 +94,7 @@ chmod +x "${appdir}/AppRun"
 
 mkdir -p "${outdir}"
 log "appimagetool: packing ${appimage_name}"
-"${workdir}/appimagetool" --no-appstream "${appdir}" "${outdir}/${appimage_name}"
+"${workdir}/appimagetool" "${appdir}" "${outdir}/${appimage_name}"
 
 log "result"
 ls -l "${outdir}/${appimage_name}"
