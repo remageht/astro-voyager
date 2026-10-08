@@ -180,8 +180,11 @@ void main() {
           vec3 dHat = normalize(dLoc);
           float cosAlpha = dot(dHat, vDir);
 
-          // Bardeen g-factor: g = sqrt(1 - Rs/r) / (gamma (1 - beta cosAlpha)).
-          float g = clamp(sqrt(fDisk) / (gamma * (1.0 - beta * cosAlpha)),
+          // Bardeen g-factor: g = sqrt(1 - Rs/r) / (gamma (1 + beta cosAlpha)).
+          // cosAlpha is measured along the tracing direction (camera -> scene);
+          // the photon travels scene -> camera, hence the sign: an approaching
+          // disk element must brighten (blue-shift), not dim.
+          float g = clamp(sqrt(fDisk) / (gamma * (1.0 + beta * cosAlpha)),
                           0.05, 5.0);
 
           // Novikov-Thorne flux F ~ r^-3 (1 - sqrt(rIn/r)), T ~ F^0.25.
