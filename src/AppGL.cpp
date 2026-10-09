@@ -10,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -19,6 +20,7 @@
 
 #include "Constellation.h"
 #include "Interaction.h"
+#include "Journey.h"
 #include "Version.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -51,6 +53,7 @@ AppGL::AppGL(int width, int height, bool visible) {
   // Initialize camera for initial station
   if (m_sceneManager->getCurrentStation()) {
     m_camera.position = Vec3(0.0, 0.0, m_sceneManager->getCurrentStation()->spawnDistanceRs);
+    m_route.push_back(m_sceneManager->getCurrentStation()->id);
   }
 
   // Setup Dear ImGui
@@ -140,6 +143,18 @@ void AppGL::processInput(float deltaTime) {
     m_searchFocusRequest = true;
   }
   m_prevSlashPressed = slashDown;
+
+  const bool f5Down = (glfwGetKey(win, GLFW_KEY_F5) == GLFW_PRESS);
+  if (f5Down && !m_prevF5Pressed && !io.WantCaptureKeyboard) {
+    exportJourney();
+  }
+  m_prevF5Pressed = f5Down;
+
+  const bool f6Down = (glfwGetKey(win, GLFW_KEY_F6) == GLFW_PRESS);
+  if (f6Down && !m_prevF6Pressed && !io.WantCaptureKeyboard) {
+    importJourney();
+  }
+  m_prevF6Pressed = f6Down;
 
   if (!interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
 
@@ -267,7 +282,7 @@ void AppGL::drawImGui() {
   }
 
   if (enterPressed && !query.empty() && !matchedStations.empty()) {
-    m_sceneManager->teleportTo(matchedStations[0]->id, m_camera);
+    teleportToStation(matchedStations[0]->id);
     m_searchBuf[0] = '\0';
   }
 
@@ -289,7 +304,7 @@ void AppGL::drawImGui() {
       }
 
       if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f))) {
-        m_sceneManager->teleportTo(station.id, m_camera);
+        teleportToStation(station.id);
       }
 
       if (isCurrent) {
@@ -356,6 +371,51 @@ void AppGL::drawImGui() {
     }
   }
 
+  ImGui::Separator();
+  ImGui::Text("Journey Route:");
+
+  std::string routeText;
+  if (m_route.empty()) {
+    routeText = "(empty)";
+  } else if (m_route.size() <= 8) {
+    for (size_t i = 0; i < m_route.size(); ++i) {
+      if (i > 0) routeText += " > ";
+      routeText += m_route[i];
+    }
+  } else {
+    for (size_t i = 0; i < 4; ++i) {
+      if (i > 0) routeText += " > ";
+      routeText += m_route[i];
+    }
+    routeText += " > ... > ";
+    for (size_t i = m_route.size() - 3; i < m_route.size(); ++i) {
+      if (i > m_route.size() - 3) routeText += " > ";
+      routeText += m_route[i];
+    }
+  }
+  ImGui::TextWrapped("%s", routeText.c_str());
+
+  float exportBtnWidth = 60.0f;
+  float routeInputWidth = ImGui::GetContentRegionAvail().x - exportBtnWidth - ImGui::GetStyle().ItemSpacing.x;
+  ImGui::SetNextItemWidth(routeInputWidth);
+  ImGui::InputTextWithHint("##routefile", "File name (without .json)", m_routeFileBuf, sizeof(m_routeFileBuf));
+  ImGui::SameLine();
+  if (ImGui::Button("Export", ImVec2(exportBtnWidth, 0.0f))) {
+    exportJourney();
+  }
+  if (ImGui::Button("Import", ImVec2(-1.0f, 0.0f))) {
+    importJourney();
+  }
+
+  if (!m_journeyStatus.empty()) {
+    if (m_journeyStatus.rfind("OK", 0) == 0) {
+      ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "%s", m_journeyStatus.c_str());
+    } else {
+      ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_journeyStatus.c_str());
+    }
+  }
+
+  ImGui::Separator();
   if (ImGui::Button("Save Screenshot (F12)", ImVec2(-1.0f, 0.0f))) {
     std::filesystem::create_directories("docs/screens");
     std::string path = "docs/screens/" + (curSt ? curSt->id : "screen") + ".png";
@@ -372,6 +432,66 @@ void AppGL::drawImGui() {
   }
 
   ImGui::End();
+}
+
+void AppGL::teleportToStation(const std::string& id) {
+  m_sceneManager->teleportTo(id, m_camera);
+  if (m_route.empty() || m_route.back() != id) {
+    m_route.push_back(id);
+  }
+}
+
+void AppGL::exportJourney() {
+  std::filesystem::create_directories("routes");
+  std::string sanitized = journeySanitizeFileName(m_routeFileBuf);
+  std::string path = "routes/" + sanitized + ".json";
+  std::ofstream out(path);
+  if (!out.is_open()) {
+    m_journeyStatus = "Error: cannot write " + path;
+    return;
+  }
+  out << journeySerialize(m_route);
+  if (!out.good()) {
+    m_journeyStatus = "Error: cannot write " + path;
+    return;
+  }
+  m_journeyStatus = "OK: exported " + std::to_string(m_route.size()) + " stations to " + path;
+}
+
+void AppGL::importJourney() {
+  std::string sanitized = journeySanitizeFileName(m_routeFileBuf);
+  std::string path = "routes/" + sanitized + ".json";
+  std::ifstream in(path);
+  if (!in.is_open()) {
+    m_journeyStatus = "Error: file not found: " + path;
+    return;
+  }
+  std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  std::vector<std::string> rawStations;
+  std::string outError;
+  if (!journeyDeserialize(text, rawStations, outError)) {
+    m_journeyStatus = "Error: " + outError;
+    return;
+  }
+  std::vector<std::string> validStations;
+  size_t skipped = 0;
+  for (const auto& sid : rawStations) {
+    if (findStation(sid) != nullptr) {
+      validStations.push_back(sid);
+    } else {
+      ++skipped;
+    }
+  }
+  if (validStations.empty()) {
+    m_journeyStatus = "Error: no known stations in file";
+    return;
+  }
+  m_route = validStations;
+  teleportToStation(validStations.back());
+  m_journeyStatus = "OK: imported " + std::to_string(validStations.size()) + " stations";
+  if (skipped > 0) {
+    m_journeyStatus += " (skipped " + std::to_string(skipped) + " unknown)";
+  }
 }
 
 void AppGL::drawWorldLabels() {

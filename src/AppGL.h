@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "Camera.h"
 #include "SceneManager.h"
@@ -26,6 +27,9 @@ class AppGL {
   void processMouse();
   void drawImGui();
   void drawWorldLabels();
+  void teleportToStation(const std::string& id);
+  void exportJourney();
+  void importJourney();
 
   std::unique_ptr<Window> m_window;
   std::unique_ptr<SceneManager> m_sceneManager;
@@ -47,6 +51,13 @@ class AppGL {
   char m_searchBuf[64] = {};
   bool m_searchFocusRequest = false;
   bool m_prevSlashPressed = false;
+
+  // Journey route history
+  std::vector<std::string> m_route;
+  char m_routeFileBuf[64] = "journey";
+  std::string m_journeyStatus;
+  bool m_prevF5Pressed = false;
+  bool m_prevF6Pressed = false;
 };
 
 }  // namespace astro

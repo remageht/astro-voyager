@@ -16,6 +16,7 @@ add_executable(astro-voyager
   src/Kerr.cpp
   src/Interaction.cpp
   src/Constellation.cpp
+  src/Journey.cpp
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -44,6 +45,20 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_interaction.cpp")
     target_compile_options(test_interaction PRIVATE /W4 /permissive-)
   else()
     target_compile_options(test_interaction PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_journey.cpp")
+  add_executable(test_journey
+    tests/test_journey.cpp
+    src/Journey.cpp
+  )
+  target_include_directories(test_journey PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+  if(MSVC)
+    target_compile_options(test_journey PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_journey PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
 
@@ -120,4 +135,7 @@ endif()
 enable_testing()
 if(TARGET test_interaction)
   add_test(NAME test_interaction COMMAND test_interaction)
+endif()
+if(TARGET test_journey)
+  add_test(NAME test_journey COMMAND test_journey)
 endif()
