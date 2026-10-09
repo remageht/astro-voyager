@@ -25,6 +25,7 @@ class AppGL {
   void processInput(float deltaTime);
   void processMouse();
   void drawImGui();
+  void drawWorldLabels();
 
   std::unique_ptr<Window> m_window;
   std::unique_ptr<SceneManager> m_sceneManager;

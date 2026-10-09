@@ -6,10 +6,19 @@ in vec2 v_TexCoord;
 
 uniform float u_Time;
 uniform float u_Aspect;
+uniform float u_Zoom;
+
+// Hash for procedural star resolution
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
 
 void main() {
   vec2 uv = v_TexCoord * 2.0 - 1.0;
   uv.x *= u_Aspect;
+  uv /= max(u_Zoom, 0.001);
 
   // Rotate slightly and tilt for Andromeda's 77 degree inclination
   float angle = 0.55 + 0.005 * sin(u_Time * 0.2);
@@ -45,6 +54,19 @@ void main() {
 
   vec3 col = core * coreColor + (disk + armMask * 0.8) * armColor + halo * vec3(0.5, 0.6, 0.8);
   col = mix(col, dustColor, dustLane * smoothstep(0.15, 0.6, r));
+
+  // Progressive detail layer: resolve individual star clouds upon closer approach
+  float resolve = smoothstep(1.4, 3.0, u_Zoom);
+  if (resolve > 0.0) {
+    vec2 gridP = p * 60.0;
+    vec2 id = floor(gridP);
+    vec2 f = fract(gridP) - 0.5;
+    float h = hash21(id);
+    float starHit = step(0.995, h);
+    float glow = exp(-dot(f, f) * 18.0);
+    vec3 starColor = vec3(0.9, 0.95, 1.0);
+    col += starHit * glow * armMask * resolve * starColor;
+  }
 
   FragColor = vec4(col, 1.0);
 }

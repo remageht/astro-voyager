@@ -7,6 +7,10 @@
 #include <filesystem>
 #include <iostream>
 #include <vector>
+#include <algorithm>
+#include <cstdio>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -94,6 +98,7 @@ int AppGL::run() {
     ImGui::NewFrame();
 
     drawImGui();
+    drawWorldLabels();
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -297,6 +302,168 @@ void AppGL::drawImGui() {
   ImGui::End();
 }
 
+void AppGL::drawWorldLabels() {
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  if (!curSt) return;
+
+  ImDrawList* drawList = ImGui::GetForegroundDrawList();
+  if (!drawList) return;
+
+  ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+  if (displaySize.x <= 0.0f || displaySize.y <= 0.0f) return;
+
+  ImFont* font = ImGui::GetFont();
+  if (!font) return;
+
+  if (curSt->type == StationType::Constellation) {
+    const ConstellationInfo* cInfo = findConstellation(curSt->id);
+    if (!cInfo) return;
+
+    float aspect = displaySize.x / displaySize.y;
+    float fov = m_sceneManager->getSettings().fovDegrees;
+    glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
+
+    Vec3 cp = m_camera.position;
+    Vec3 cf = m_camera.forward();
+    Vec3 cu = m_camera.up();
+
+    glm::vec3 eye(cp.x, cp.y, cp.z);
+    glm::vec3 fwd(cf.x, cf.y, cf.z);
+    glm::vec3 up(cu.x, cu.y, cu.z);
+    glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
+    glm::mat4 mvp = proj * view;
+
+    for (const auto& s : cInfo->stars) {
+      glm::vec4 clip = mvp * glm::vec4(s.x, s.y, s.z, 1.0f);
+      if (clip.w <= 0.001f) continue;
+
+      glm::vec3 ndc = glm::vec3(clip) / clip.w;
+      if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) continue;
+
+      // Distance from camera to star
+      double dx = cp.x - static_cast<double>(s.x);
+      double dy = cp.y - static_cast<double>(s.y);
+      double dz = cp.z - static_cast<double>(s.z);
+      double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+      // Threshold 1: d <= 45
+      if (dist > 45.0) continue;
+
+      // Screen coordinates (displaySize)
+      float sx = (ndc.x * 0.5f + 0.5f) * displaySize.x;
+      float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * displaySize.y;
+
+      // Closeness factor t in [0, 1] (0 at dist=45, 1 at dist<=6)
+      float t = static_cast<float>(std::clamp((45.0 - dist) / (45.0 - 6.0), 0.0, 1.0));
+
+      // Font size: 13 -> 17
+      float nameFontSize = 13.0f + t * 4.0f;
+      // Circle radius: 3 -> 13
+      float circleRadius = 3.0f + t * 10.0f;
+      // Alpha: 0.35 -> 0.9
+      float alpha = 0.35f + t * 0.55f;
+      int alphaByte = static_cast<int>(std::clamp(alpha * 255.0f, 0.0f, 255.0f));
+
+      // Warm white circle: RGB (255, 245, 225)
+      ImU32 circleColor = IM_COL32(255, 245, 225, alphaByte);
+      drawList->AddCircle(ImVec2(sx, sy), circleRadius, circleColor, 16, 1.5f);
+
+      // Name text
+      ImVec2 textPos(sx + circleRadius + 5.0f, sy - nameFontSize * 0.55f);
+      ImU32 nameColor = IM_COL32(255, 255, 255, alphaByte);
+      drawList->AddText(font, nameFontSize, textPos, nameColor, s.name.c_str());
+
+      float currentY = textPos.y + nameFontSize + 2.0f;
+
+      // Threshold 2: d <= 15
+      if (dist <= 15.0) {
+        char detailBuf[128];
+        std::snprintf(detailBuf, sizeof(detailBuf), "%s - mag %.2f - HIP %d",
+                      s.bayer.c_str(), s.mag, s.hip);
+        // Gray-blue color: RGB (170, 200, 230)
+        ImU32 detailColor = IM_COL32(170, 200, 230, alphaByte);
+        drawList->AddText(font, 12.0f, ImVec2(textPos.x, currentY), detailColor, detailBuf);
+        currentY += 14.0f;
+      }
+
+      // Threshold 3: d <= 6
+      if (dist <= 6.0) {
+        char distBuf[64];
+        std::snprintf(distBuf, sizeof(distBuf), "distance: %.1f units", dist);
+        // Green color: RGB (100, 230, 120)
+        ImU32 distColor = IM_COL32(100, 230, 120, alphaByte);
+        drawList->AddText(font, 12.0f, ImVec2(textPos.x, currentY), distColor, distBuf);
+      }
+    }
+  } else if (curSt->type == StationType::Galaxy) {
+    Vec3 cp = m_camera.position;
+    double dist = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+    double spawn = curSt->spawnDistanceRs > 0.0 ? curSt->spawnDistanceRs : 80.0;
+    double ratio = dist / spawn;
+
+    // Card lines
+    struct CardLine {
+      std::string text;
+      float size;
+      ImU32 color;
+    };
+    std::vector<CardLine> lines;
+
+    // Always: Station name (20px, white) + subtitle (13.5px, gray-blue)
+    lines.push_back({curSt->name, 20.0f, IM_COL32(255, 255, 255, 255)});
+    lines.push_back({"Spiral galaxy - type SA(s)b", 13.5f, IM_COL32(170, 200, 230, 230)});
+
+    // ratio <= 0.65
+    if (ratio <= 0.65) {
+      lines.push_back({"Distance 2.54 Mly - diameter ~220,000 ly", 13.0f, IM_COL32(210, 225, 245, 240)});
+    }
+
+    // ratio <= 0.35
+    if (ratio <= 0.35) {
+      lines.push_back({"Mass ~1.5e12 solar masses - approaching at ~300 km/s", 12.5f, IM_COL32(200, 220, 240, 240)});
+      // Amber: RGB (255, 190, 70)
+      lines.push_back({"Individual star clouds resolving in the disk", 12.5f, IM_COL32(255, 190, 70, 255)});
+    }
+
+    // Compute dimensions
+    float padX = 24.0f;
+    float padY = 14.0f;
+    float lineSpacing = 4.0f;
+    float maxLineWidth = 0.0f;
+    float totalTextHeight = 0.0f;
+
+    for (size_t i = 0; i < lines.size(); ++i) {
+      ImVec2 sz = font->CalcTextSizeA(lines[i].size, FLT_MAX, 0.0f, lines[i].text.c_str());
+      if (sz.x > maxLineWidth) maxLineWidth = sz.x;
+      totalTextHeight += sz.y;
+      if (i + 1 < lines.size()) totalTextHeight += lineSpacing;
+    }
+
+    float cardWidth = maxLineWidth + padX * 2.0f;
+    float cardHeight = totalTextHeight + padY * 2.0f;
+
+    float cardX = (displaySize.x - cardWidth) * 0.5f;
+    float cardY = 20.0f;
+
+    ImVec2 minPos(cardX, cardY);
+    ImVec2 maxPos(cardX + cardWidth, cardY + cardHeight);
+
+    // Background: semi-transparent dark rounded rectangle
+    ImU32 bgCol = IM_COL32(10, 15, 25, 200);
+    ImU32 borderCol = IM_COL32(80, 120, 170, 120);
+    drawList->AddRectFilled(minPos, maxPos, bgCol, 8.0f);
+    drawList->AddRect(minPos, maxPos, borderCol, 8.0f, 0, 1.0f);
+
+    float curY = cardY + padY;
+    for (const auto& l : lines) {
+      ImVec2 sz = font->CalcTextSizeA(l.size, FLT_MAX, 0.0f, l.text.c_str());
+      float textX = cardX + (cardWidth - sz.x) * 0.5f;
+      drawList->AddText(font, l.size, ImVec2(textX, curY), l.color, l.text.c_str());
+      curY += sz.y + lineSpacing;
+    }
+  }
+}
+
 bool AppGL::saveScreenshot(const std::string& filepath) {
   int width = 0, height = 0;
   m_window->getFramebufferSize(width, height);
@@ -367,6 +534,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     app.drawImGui();
+    app.drawWorldLabels();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     app.m_window->swapBuffers();
@@ -375,6 +543,47 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   std::string guiFile = outDir + "/gui.png";
   if (app.saveScreenshot(guiFile)) {
     std::cout << "Captured screenshot: " << guiFile << "\n";
+  }
+
+  // Capture close-up progressive detail shots:
+  // 1. M31 Andromeda Galaxy close-up (z = 28)
+  app.m_sceneManager->teleportTo("m31", app.m_camera);
+  app.m_camera.position.z = 28.0;
+  for (int frame = 0; frame < 5; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawImGui();
+    app.drawWorldLabels();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string m31CloseFile = outDir + "/m31_close.png";
+  if (app.saveScreenshot(m31CloseFile)) {
+    std::cout << "Captured screenshot: " << m31CloseFile << "\n";
+  }
+
+  // 2. Orion Constellation close-up (z = 4.5)
+  app.m_sceneManager->teleportTo("ori", app.m_camera);
+  app.m_camera.position.z = 4.5;
+  for (int frame = 0; frame < 5; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawImGui();
+    app.drawWorldLabels();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string oriCloseFile = outDir + "/ori_close.png";
+  if (app.saveScreenshot(oriCloseFile)) {
+    std::cout << "Captured screenshot: " << oriCloseFile << "\n";
   }
 
   return 0;

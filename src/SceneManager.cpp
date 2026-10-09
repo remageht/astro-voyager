@@ -4,6 +4,8 @@
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
+#include <cmath>
+#include <algorithm>
 
 namespace astro {
 
@@ -179,6 +181,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_galaxyShader->bind();
     m_galaxyShader->setUniform1f("u_Time", time);
     m_galaxyShader->setUniform1f("u_Aspect", aspect);
+
+    double dist = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+    double spawn = m_currentStation->spawnDistanceRs;
+    float zoom = static_cast<float>(std::clamp(spawn / std::max(dist, 1e-3), 0.2, 4.0));
+    m_galaxyShader->setUniform1f("u_Zoom", zoom);
+
     m_screenQuad->draw();
     m_galaxyShader->unbind();
   } else if (m_currentStation->type == StationType::Nebula) {
