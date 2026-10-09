@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include <cmath>
+#include <cctype>
 #include <filesystem>
 #include <iostream>
 #include <vector>
@@ -22,6 +23,23 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+namespace {
+static bool fuzzyMatch(const std::string& text, const std::string& query) {
+  if (query.empty()) return true;
+  size_t tIdx = 0;
+  size_t qIdx = 0;
+  while (tIdx < text.size() && qIdx < query.size()) {
+    char cText = static_cast<char>(std::tolower(static_cast<unsigned char>(text[tIdx])));
+    char cQuery = static_cast<char>(std::tolower(static_cast<unsigned char>(query[qIdx])));
+    if (cText == cQuery) {
+      ++qIdx;
+    }
+    ++tIdx;
+  }
+  return qIdx == query.size();
+}
+}  // namespace
 
 namespace astro {
 
@@ -116,6 +134,13 @@ void AppGL::processInput(float deltaTime) {
   }
 
   ImGuiIO& io = ImGui::GetIO();
+
+  const bool slashDown = (glfwGetKey(win, GLFW_KEY_SLASH) == GLFW_PRESS);
+  if (slashDown && !m_prevSlashPressed && !io.WantCaptureKeyboard) {
+    m_searchFocusRequest = true;
+  }
+  m_prevSlashPressed = slashDown;
+
   if (!interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
 
   if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) {
@@ -192,6 +217,30 @@ void AppGL::drawImGui() {
   ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s",
                      curSt ? curSt->description.c_str() : "");
 
+  // Station search box with hotkey '/' focus
+  if (m_searchFocusRequest) {
+    ImGui::SetKeyboardFocusHere();
+  }
+  float clearBtnWidth = 28.0f;
+  float inputWidth = ImGui::GetContentRegionAvail().x - clearBtnWidth - ImGui::GetStyle().ItemSpacing.x;
+  ImGui::SetNextItemWidth(inputWidth);
+  bool enterPressed = ImGui::InputTextWithHint("##stationSearch", "Search stations... (press / to focus)",
+                                               m_searchBuf, sizeof(m_searchBuf),
+                                               ImGuiInputTextFlags_EnterReturnsTrue);
+  m_searchFocusRequest = false;
+
+  ImGui::SameLine();
+  bool hasSearchText = (m_searchBuf[0] != '\0');
+  if (!hasSearchText) {
+    ImGui::BeginDisabled();
+  }
+  if (ImGui::Button("X", ImVec2(clearBtnWidth, 0.0f))) {
+    m_searchBuf[0] = '\0';
+  }
+  if (!hasSearchText) {
+    ImGui::EndDisabled();
+  }
+
   if (curSt && curSt->type == StationType::Constellation) {
     const ConstellationInfo* cInfo = findConstellation(curSt->id);
     if (cInfo) {
@@ -208,21 +257,44 @@ void AppGL::drawImGui() {
 
   ImGui::Separator();
 
-  // Teleport Station List
-  ImGui::Text("Teleport Stations:");
+  // Teleport Station List (fuzzy-filtered)
+  std::string query = m_searchBuf;
+  std::vector<const Station*> matchedStations;
   for (const auto& station : builtinCatalog()) {
-    bool isCurrent = (station.id == curId);
-    std::string label = station.name + " (" + station.id + ")";
-    if (isCurrent) {
-      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.3f, 1.0f));
+    if (fuzzyMatch(station.name, query) || fuzzyMatch(station.id, query)) {
+      matchedStations.push_back(&station);
     }
+  }
 
-    if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f))) {
-      m_sceneManager->teleportTo(station.id, m_camera);
-    }
+  if (enterPressed && !query.empty() && !matchedStations.empty()) {
+    m_sceneManager->teleportTo(matchedStations[0]->id, m_camera);
+    m_searchBuf[0] = '\0';
+  }
 
-    if (isCurrent) {
-      ImGui::PopStyleColor();
+  ImGui::Text("Teleport Stations:");
+  if (!query.empty()) {
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(%zu station(s) matched)", matchedStations.size());
+  }
+
+  if (matchedStations.empty()) {
+    ImGui::TextColored(ImVec4(0.7f, 0.5f, 0.5f, 1.0f), "No matches");
+  } else {
+    for (const auto* stPtr : matchedStations) {
+      const auto& station = *stPtr;
+      bool isCurrent = (station.id == curId);
+      std::string label = station.name + " (" + station.id + ")";
+      if (isCurrent) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.3f, 1.0f));
+      }
+
+      if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f))) {
+        m_sceneManager->teleportTo(station.id, m_camera);
+      }
+
+      if (isCurrent) {
+        ImGui::PopStyleColor();
+      }
     }
   }
 

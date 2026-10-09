@@ -42,6 +42,11 @@ class AppGL {
   bool m_userOverrodePreset = false;
   float m_benchmarkTimer = 0.0f;
   int m_benchmarkFrames = 0;
+
+  // Station fuzzy search
+  char m_searchBuf[64] = {};
+  bool m_searchFocusRequest = false;
+  bool m_prevSlashPressed = false;
 };
 
 }  // namespace astro
