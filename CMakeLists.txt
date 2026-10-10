@@ -17,6 +17,7 @@ add_executable(astro-voyager
   src/Interaction.cpp
   src/Constellation.cpp
   src/Journey.cpp
+  src/Achievements.cpp
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -59,6 +60,20 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_journey.cpp")
     target_compile_options(test_journey PRIVATE /W4 /permissive-)
   else()
     target_compile_options(test_journey PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_achievements.cpp")
+  add_executable(test_achievements
+    tests/test_achievements.cpp
+    src/Achievements.cpp
+  )
+  target_include_directories(test_achievements PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+  if(MSVC)
+    target_compile_options(test_achievements PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_achievements PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
 
@@ -138,4 +153,7 @@ if(TARGET test_interaction)
 endif()
 if(TARGET test_journey)
   add_test(NAME test_journey COMMAND test_journey)
+endif()
+if(TARGET test_achievements)
+  add_test(NAME test_achievements COMMAND test_achievements)
 endif()

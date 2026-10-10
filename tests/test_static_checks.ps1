@@ -136,6 +136,10 @@ Check 'cmake lists Journey.cpp' ($cmake -match 'src/Journey\.cpp')
 Check 'cmake lists test_journey' ($cmake -match 'test_journey')
 Check 'journey header exists' (Test-Path (Join-Path $root 'src/Journey.h'))
 Check 'journey source exists' (Test-Path (Join-Path $root 'src/Journey.cpp'))
+Check 'cmake lists Achievements.cpp' ($cmake -match 'src/Achievements\.cpp')
+Check 'cmake lists test_achievements' ($cmake -match 'test_achievements')
+Check 'achievements header exists' (Test-Path (Join-Path $root 'src/Achievements.h'))
+Check 'achievements source exists' (Test-Path (Join-Path $root 'src/Achievements.cpp'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

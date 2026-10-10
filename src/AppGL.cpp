@@ -21,6 +21,7 @@
 #include "Constellation.h"
 #include "Interaction.h"
 #include "Journey.h"
+#include "Achievements.h"
 #include "Version.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -54,7 +55,9 @@ AppGL::AppGL(int width, int height, bool visible) {
   if (m_sceneManager->getCurrentStation()) {
     m_camera.position = Vec3(0.0, 0.0, m_sceneManager->getCurrentStation()->spawnDistanceRs);
     m_route.push_back(m_sceneManager->getCurrentStation()->id);
+    m_visited.push_back(m_sceneManager->getCurrentStation()->id);
   }
+  checkAchievements();
 
   // Setup Dear ImGui
   IMGUI_CHECKVERSION();
@@ -104,7 +107,14 @@ int AppGL::run() {
     if (m_sceneManager->getCurrentStation() &&
         m_sceneManager->getCurrentStation()->type == StationType::BlackHole) {
       m_camera.clampNearHorizon(m_sceneManager->getSettings().rs);
+      double d = std::sqrt(m_camera.position.x * m_camera.position.x +
+                           m_camera.position.y * m_camera.position.y +
+                           m_camera.position.z * m_camera.position.z);
+      if (d < m_minBhDistance) {
+        m_minBhDistance = d;
+      }
     }
+    checkAchievements();
 
     int fbWidth = 0, fbHeight = 0;
     m_window->getFramebufferSize(fbWidth, fbHeight);
@@ -416,6 +426,21 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
+  ImGui::Text("Achievements: %d/7", static_cast<int>(m_unlockedIds.size()));
+  for (const auto& achId : allAchievementIds()) {
+    bool unlocked = (m_unlockedIds.find(achId) != m_unlockedIds.end());
+    const char* title = achievementTitle(achId);
+    const char* desc = achievementDescription(achId);
+    if (unlocked) {
+      ImGui::TextColored(ImVec4(120.0f / 255.0f, 230.0f / 255.0f, 140.0f / 255.0f, 1.0f), "%s", title);
+      ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", desc);
+    } else {
+      ImGui::TextColored(ImVec4(0.45f, 0.45f, 0.45f, 1.0f), "%s", title);
+      ImGui::TextColored(ImVec4(0.45f, 0.45f, 0.45f, 1.0f), "%s", desc);
+    }
+  }
+
+  ImGui::Separator();
   if (ImGui::Button("Save Screenshot (F12)", ImVec2(-1.0f, 0.0f))) {
     std::filesystem::create_directories("docs/screens");
     std::string path = "docs/screens/" + (curSt ? curSt->id : "screen") + ".png";
@@ -439,6 +464,10 @@ void AppGL::teleportToStation(const std::string& id) {
   if (m_route.empty() || m_route.back() != id) {
     m_route.push_back(id);
   }
+  if (std::find(m_visited.begin(), m_visited.end(), id) == m_visited.end()) {
+    m_visited.push_back(id);
+  }
+  checkAchievements();
 }
 
 void AppGL::exportJourney() {
@@ -455,7 +484,9 @@ void AppGL::exportJourney() {
     m_journeyStatus = "Error: cannot write " + path;
     return;
   }
+  m_journeyExported = true;
   m_journeyStatus = "OK: exported " + std::to_string(m_route.size()) + " stations to " + path;
+  checkAchievements();
 }
 
 void AppGL::importJourney() {
@@ -488,9 +519,33 @@ void AppGL::importJourney() {
   }
   m_route = validStations;
   teleportToStation(validStations.back());
+  m_journeyImported = true;
   m_journeyStatus = "OK: imported " + std::to_string(validStations.size()) + " stations";
   if (skipped > 0) {
     m_journeyStatus += " (skipped " + std::to_string(skipped) + " unknown)";
+  }
+  checkAchievements();
+}
+
+void AppGL::checkAchievements() {
+  AchievementState st;
+  st.visited = m_visited;
+  st.routeSize = m_route.size();
+  st.minBhDistance = m_minBhDistance;
+  st.exported = m_journeyExported;
+  st.imported = m_journeyImported;
+
+  std::vector<std::string> unlocked = achievementsCheck(st);
+  float now = static_cast<float>(glfwGetTime());
+  for (const auto& id : unlocked) {
+    if (m_unlockedIds.find(id) == m_unlockedIds.end()) {
+      m_unlockedIds.insert(id);
+      Toast t;
+      t.title = achievementTitle(id);
+      t.desc = achievementDescription(id);
+      t.time = now;
+      m_toasts.push_back(t);
+    }
   }
 }
 
@@ -653,6 +708,52 @@ void AppGL::drawWorldLabels() {
       drawList->AddText(font, l.size, ImVec2(textX, curY), l.color, l.text.c_str());
       curY += sz.y + lineSpacing;
     }
+  }
+
+  // Draw toasts in bottom-right corner, max 3 at a time, growing bottom-to-top with 8px gap
+  float now = static_cast<float>(glfwGetTime());
+  m_toasts.erase(
+      std::remove_if(m_toasts.begin(), m_toasts.end(),
+                     [now](const Toast& t) { return (now - t.time) >= 4.0f; }),
+      m_toasts.end());
+
+  size_t toastCount = std::min<size_t>(m_toasts.size(), 3);
+  float curToastBottomY = displaySize.y - 16.0f;
+  for (size_t i = 0; i < toastCount; ++i) {
+    const auto& t = m_toasts[i];
+    float age = now - t.time;
+    if (age < 0.0f) age = 0.0f;
+    float alphaRatio = (age > 3.0f) ? (4.0f - age) : 1.0f;
+    alphaRatio = std::clamp(alphaRatio, 0.0f, 1.0f);
+
+    std::string line1 = "Achievement: " + t.title;
+    std::string line2 = t.desc;
+
+    ImVec2 sz1 = font->CalcTextSizeA(14.0f, FLT_MAX, 0.0f, line1.c_str());
+    ImVec2 sz2 = font->CalcTextSizeA(12.0f, FLT_MAX, 0.0f, line2.c_str());
+
+    float padX = 14.0f;
+    float padY = 8.0f;
+    float lineSpacing = 3.0f;
+
+    float toastW = std::max(sz1.x, sz2.x) + padX * 2.0f;
+    float toastH = sz1.y + lineSpacing + sz2.y + padY * 2.0f;
+
+    float toastX = displaySize.x - toastW - 16.0f;
+    float toastY = curToastBottomY - toastH;
+
+    ImU32 bgCol = IM_COL32(10, 15, 25, static_cast<int>(220.0f * alphaRatio));
+    ImU32 borderCol = IM_COL32(255, 190, 70, static_cast<int>(160.0f * alphaRatio));
+    ImU32 titleCol = IM_COL32(255, 255, 255, static_cast<int>(255.0f * alphaRatio));
+    ImU32 descCol = IM_COL32(180, 180, 180, static_cast<int>(200.0f * alphaRatio));
+
+    drawList->AddRectFilled(ImVec2(toastX, toastY), ImVec2(toastX + toastW, toastY + toastH), bgCol, 6.0f);
+    drawList->AddRect(ImVec2(toastX, toastY), ImVec2(toastX + toastW, toastY + toastH), borderCol, 6.0f, 0, 1.0f);
+
+    drawList->AddText(font, 14.0f, ImVec2(toastX + padX, toastY + padY), titleCol, line1.c_str());
+    drawList->AddText(font, 12.0f, ImVec2(toastX + padX, toastY + padY + sz1.y + lineSpacing), descCol, line2.c_str());
+
+    curToastBottomY = toastY - 8.0f;
   }
 }
 

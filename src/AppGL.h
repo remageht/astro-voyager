@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -9,6 +10,12 @@
 #include "Window.h"
 
 namespace astro {
+
+struct Toast {
+  std::string title;
+  std::string desc;
+  float time = 0.0f;
+};
 
 class AppGL {
  public:
@@ -30,6 +37,7 @@ class AppGL {
   void teleportToStation(const std::string& id);
   void exportJourney();
   void importJourney();
+  void checkAchievements();
 
   std::unique_ptr<Window> m_window;
   std::unique_ptr<SceneManager> m_sceneManager;
@@ -58,6 +66,14 @@ class AppGL {
   std::string m_journeyStatus;
   bool m_prevF5Pressed = false;
   bool m_prevF6Pressed = false;
+
+  // Achievements
+  std::vector<std::string> m_visited;
+  std::set<std::string> m_unlockedIds;
+  double m_minBhDistance = 1e9;
+  bool m_journeyExported = false;
+  bool m_journeyImported = false;
+  std::vector<Toast> m_toasts;
 };
 
 }  // namespace astro
