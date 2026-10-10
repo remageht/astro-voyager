@@ -115,7 +115,7 @@ jobs:
           echo "== ldd of the bundled binary =="
           ldd squashfs-root/usr/bin/astro-voyager | sed 's/^/  /'
       - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: astro-voyager-appimage-x86_64
           path: dist/astro-voyager-v*-x86_64.AppImage
