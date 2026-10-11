@@ -14,10 +14,18 @@ namespace astro {
 
 namespace {
 
-// Simple hash for pseudo-random star generation
-float hash3(const glm::vec3& p) {
-  float h = glm::dot(p, glm::vec3(127.1f, 311.7f, 74.7f));
-  return std::abs(std::sin(h) * 43758.5453123f - std::floor(std::sin(h) * 43758.5453123f));
+// Integer cell hash (fast, deterministic, no trig). Salt selects an
+// independent stream for presence / jitter / brightness / color.
+static unsigned hashCellI(int x, int y, int z, unsigned salt) {
+  unsigned h = static_cast<unsigned>(x) * 374761393u +
+               static_cast<unsigned>(y) * 668265263u +
+               static_cast<unsigned>(z) * 1440662683u + salt * 2654435761u;
+  h = (h ^ (h >> 13)) * 1274126177u;
+  h ^= h >> 16;
+  return h;
+}
+static float hashCell01(int x, int y, int z, unsigned salt) {
+  return static_cast<float>(hashCellI(x, y, z, salt)) / 4294967295.0f;
 }
 
 glm::vec3 getDirectionForFace(int face, float u, float v) {
@@ -141,37 +149,78 @@ void Cubemap::generateProceduralSkybox() {
         float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(faceSize) * 2.0f - 1.0f;
         glm::vec3 dir = getDirectionForFace(face, u, v);
 
-        // Background space dust / nebula
-        float mw = std::exp(-std::abs(dir.y) * 4.0f) * 0.35f;
-        float r = 0.02f + mw * 0.7f;
-        float g = 0.025f + mw * 0.5f;
-        float b = 0.04f + mw * 0.9f;
+        // Neutral deep-space base plus subtle warm-grey Milky-Way band.
+        float az = std::atan2(dir.z, dir.x);
+        float lenMod = 0.75f + 0.25f * std::sin(2.0f * az + 1.3f);
+        float mw = std::exp(-std::abs(dir.y) * 5.0f) * 0.10f * lenMod;
+        float r = 0.008f + mw * 0.22f;
+        float g = 0.009f + mw * 0.21f;
+        float b = 0.014f + mw * 0.20f;
 
-        // Discrete star field
-        glm::vec3 quantized = glm::floor(dir * 240.0f);
-        float rnd = hash3(quantized);
-        if (rnd > 0.985f) {
-          float intensity = std::pow((rnd - 0.985f) / 0.015f, 3.0f) * 2.5f;
-          float starColorVar = hash3(quantized + glm::vec3(1.0f, 2.0f, 3.0f));
-          if (starColorVar > 0.6f) {
-            r += intensity * 0.8f;
-            g += intensity * 0.9f;
-            b += intensity * 1.2f; // blue star
-          } else if (starColorVar > 0.3f) {
-            r += intensity * 1.2f;
-            g += intensity * 1.1f;
-            b += intensity * 0.8f; // yellow star
-          } else {
-            r += intensity * 1.3f;
-            g += intensity * 0.7f;
-            b += intensity * 0.6f; // reddish star
+        // Discrete star field, dense fine grid, HDR power-law brightness.
+        // Stars sit at JITTERED sub-cell positions (not cell centers): a
+        // coarse grid would lens into regularly dotted columns near the
+        // photon ring. Neighbor search + Gaussian points give Poisson-like
+        // randomness while staying fully deterministic run to run.
+        const float kStarInv = 1.0f / 350.0f;
+        const float kStarSig = 0.45f * kStarInv;
+        const float kStarSig2 = kStarSig * kStarSig;
+        int ccx = static_cast<int>(std::floor(dir.x * 350.0f));
+        int ccy = static_cast<int>(std::floor(dir.y * 350.0f));
+        int ccz = static_cast<int>(std::floor(dir.z * 350.0f));
+        for (int ox = -1; ox <= 1; ++ox) {
+          for (int oy = -1; oy <= 1; ++oy) {
+            for (int oz = -1; oz <= 1; ++oz) {
+              int nx = ccx + ox, ny = ccy + oy, nz = ccz + oz;
+              if (hashCell01(nx, ny, nz, 0u) <= 0.97f) continue;
+              float jx = hashCell01(nx, ny, nz, 1u);
+              float jy = hashCell01(nx, ny, nz, 2u);
+              float jz = hashCell01(nx, ny, nz, 3u);
+              float px = (static_cast<float>(nx) + 0.05f + 0.9f * jx) * kStarInv;
+              float py = (static_cast<float>(ny) + 0.05f + 0.9f * jy) * kStarInv;
+              float pz = (static_cast<float>(nz) + 0.05f + 0.9f * jz) * kStarInv;
+              float dx = dir.x - px, dy = dir.y - py, dz = dir.z - pz;
+              float d2 = dx * dx + dy * dy + dz * dz;
+              if (d2 > 9.0f * kStarSig2) continue;
+              float w = std::exp(-d2 / (2.0f * kStarSig2));
+              float bhash = hashCell01(nx, ny, nz, 4u);
+              float intensity = std::pow(bhash, 9.0f) * 8.0f * w;
+              float starColorVar = hashCell01(nx, ny, nz, 5u);
+              float sr = 1.0f;
+              float sg = 1.0f;
+              float sb = 1.0f;
+              if (starColorVar > 0.88f) {
+                sr = 0.68f;
+                sg = 0.80f;
+                sb = 1.0f;  // blue-white, 12%
+              } else if (starColorVar > 0.73f) {
+                sr = 0.95f;
+                sg = 0.96f;
+                sb = 1.0f;  // white, 15%
+              } else if (starColorVar > 0.53f) {
+                sr = 1.0f;
+                sg = 0.88f;
+                sb = 0.70f;  // yellow, 20%
+              } else if (starColorVar > 0.28f) {
+                sr = 1.0f;
+                sg = 0.68f;
+                sb = 0.42f;  // orange, 25%
+              } else {
+                sr = 1.0f;
+                sg = 0.48f;
+                sb = 0.28f;  // red, 28%
+              }
+              r += intensity * sr;
+              g += intensity * sg;
+              b += intensity * sb;
+            }
           }
         }
 
-        // Galactic core glow towards (1, 0, 0)
+        // Galactic core glow towards (1, 0, 0), softened.
         float coreAngle = glm::dot(dir, glm::vec3(1.0f, 0.0f, 0.0f));
         if (coreAngle > 0.0f) {
-          float coreGlow = std::pow(coreAngle, 8.0f) * 0.6f;
+          float coreGlow = std::pow(coreAngle, 8.0f) * 0.35f;
           r += coreGlow * 1.1f;
           g += coreGlow * 0.8f;
           b += coreGlow * 0.6f;

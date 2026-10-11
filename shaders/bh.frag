@@ -17,6 +17,7 @@ uniform float u_ShellRadius;
 uniform float u_StepSize;
 uniform int u_MaxSteps;
 uniform int u_DiskOn;
+uniform float u_Time;
 const float PI = 3.141592653589793;
 const int ABSOLUTE_MAX_STEPS = 8000;
 const float T_DISK = 10000.0;  // reference inner-disk temperature, Kelvin
@@ -42,6 +43,12 @@ vec4 cartDirToVel(vec4 p, vec3 d) {
   float dR = dot(d, eR);
   float dT = dot(d, eT) / r;
   float dP = dot(d, eP) / (r * sT);
+  // Pole-singularity fix: freeze phi contribution when sinTheta < 1e-3.
+  // Near poles 1/sin blows up and RK4 goes unstable (dotted line artifact),
+  // so zero the dPhi term for this step. CPU side untouched.
+  if (abs(sin(p.z)) < 1e-3) {
+    dP = 0.0;
+  }
   float f = max(1.0 - u_Rs / r, 0.0001);
   float sp = (dR * dR) / f + r * r * dT * dT + r * r * sT * sT * dP * dP;
   return vec4(sqrt(max(sp / f, 0.0)), dR, dT, dP);
@@ -71,12 +78,23 @@ vec4 geoAccel(vec4 p, vec4 dp) {
   float sT = sin(th), cT = cos(th);
   float cot = cT / safeSin(th);
   float dT = dp.x, dR = dp.y, dTh = dp.z, dP = dp.w;
+  // Wide pole band: ignore phi velocity locally. Near poles phi = atan2 is
+  // noise-dominated and cot amplifies it into dp.w DURING rk4 substeps
+  // (post-step zeroing is too late) -> random whirl counts -> dotted column
+  // of max-step fallback pixels. Freezing dP here keeps transits smooth.
+  if (abs(sT) < 0.05) { dP = 0.0; }
   float ddT = -(dR * u_Rs * dT) / (r * rRs);
   float ddR = rRs * (pow(dP * sT, 2.0) + dTh * dTh -
               (u_Rs * dT * dT) / (2.0 * r * r * r)) +
               (u_Rs * dR * dR) / (2.0 * r * rRs);
   float ddTh = dP * dP * sT * cT - (2.0 * dR * dTh) / r;
   float ddP = -2.0 * dP * dTh * cot - (2.0 * dR * dP) / r;
+  // Pole-singularity fix: drop cot-dependent ddPhi term when sinTheta < 1e-3.
+  // cot can reach 1e4 near poles and destabilizes RK4, so keep only the
+  // regular radial part for this step.
+  if (abs(sT) < 1e-3) {
+    ddP = -(2.0 * dR * dP) / r;
+  }
   return vec4(ddT, ddR, ddTh, ddP);
 }
 void deriv(vec4 p, vec4 dp, out vec4 dP, out vec4 dDp) {
@@ -120,6 +138,49 @@ vec3 applyObserverShift(vec3 color, float fCamSqrt, vec3 camRedden) {
   vec3 c = max(color, vec3(0.0));
   return b * pow(c, camRedden);
 }
+// Value-noise helpers for disk turbulence (ASCII only, 5 octaves).
+float diskHash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+float diskNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = diskHash(i);
+  float b = diskHash(i + vec2(1.0, 0.0));
+  float c = diskHash(i + vec2(0.0, 1.0));
+  float d = diskHash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float diskFbm(vec2 p) {
+  float v = 0.0;
+  float amp = 0.5;
+  for (int k = 0; k < 5; k++) {
+    v += amp * diskNoise(p);
+    p *= 2.03;
+    amp *= 0.5;
+  }
+  return v;
+}
+// ACES filmic (Narkowicz fit) + gamma + vignette + animated grain.
+// Applied to the final combined color, grain runs AFTER tonemap.
+vec3 acesTonemap(vec3 x) {
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
+float finishHash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+vec3 applyFinish(vec3 col, vec2 uv) {
+  col *= 1.1;
+  col = acesTonemap(col);
+  col = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
+  float d = distance(uv, vec2(0.5));
+  float vig = 1.0 - 0.3 * smoothstep(0.2, 0.8, d);
+  col *= vig;
+  float gr = finishHash(gl_FragCoord.xy + fract(u_Time) * 100.0);
+  col += (gr - 0.5) * 0.012;
+  return col;
+}
 void main() {
   vec2 ndc = v_TexCoord * 2.0 - 1.0;
   ndc.x *= u_Aspect;
@@ -149,6 +210,10 @@ void main() {
     float hAdapt = mix(hFar, hNear, smoothFactor);
     rk4(hAdapt, p, dp);
     renormalizeTime(p, dp);
+    // Wide pole band: hard-freeze phi velocity. Near the poles phi = atan2
+    // is noise-dominated and 1/sin amplifies it into dp.w BEFORE the 1e-3
+    // guards engage; zeroing dp.w every step keeps the transit smooth.
+    if (abs(sin(p.z)) < 0.05) { dp.w = 0.0; }
     if (any(isnan(p)) || any(isnan(dp))) {
       FragColor = vec4(0.02, 0.015, 0.025, 1.0); return;
     }
@@ -162,7 +227,7 @@ void main() {
         float rDisk = mix(pPrev.y, p.y, tDisk);
         float phiDisk = mix(pPrev.w, p.w, tDisk);
         float rIn = u_Rs * 3.0;   // ISCO: r = 6M = 3 Rs (2.6 Rs was inside it)
-        float rOut = u_Rs * 10.0;
+        float rOut = u_Rs * 7.0;   // compact ring: camera at 10 Rs stays outside
         if (rDisk >= rIn && rDisk <= rOut) {
           float fDisk = max(1.0 - u_Rs / rDisk, 0.0001);
 
@@ -197,15 +262,37 @@ void main() {
           float g4 = g * g * g * g;
           float brightness = t4 * g4;
 
-          vec3 diskRgb = blackBodyColor(T_DISK * tProf * tObs) *
-                         clamp(brightness * 3.0, 0.0, 4.0);
+          // Novikov-Thorne normalized temperature:
+          // Tn = (x^3 * (1 - sqrt(x)) * 2.11)^0.25, x = rIn / r.
+          float x = rIn / rDisk;
+          float Tn = pow(x * x * x * (1.0 - sqrt(x)) * 2.11, 0.25);
+          // 3-stop gradient: outer -> mid -> inner white.
+          vec3 c1 = vec3(0.40, 0.06, 0.015);
+          vec3 c2 = vec3(1.00, 0.48, 0.12);
+          vec3 c3 = vec3(1.00, 0.97, 0.90);
+          vec3 dcol = mix(c1, c2, smoothstep(0.05, 0.5, Tn));
+          dcol = mix(dcol, c3, smoothstep(0.5, 0.95, Tn));
+          // Concentrated toward ISCO (high beaming contrast), dim floor outside.
+          vec3 emis = dcol * (0.03 + 3.5 * Tn * Tn * Tn) * (0.15 + 0.85 * x * x);
+          // Keplerian turbulence: fbm in (log(r)*2.5, phi*1.5 - t*omega),
+          // omega = 2.0 * pow(r, -1.5), single domain-warp, advected by u_Time.
+          float omega = 2.0 * pow(rDisk, -1.5);
+          vec2 tuv = vec2(log(max(rDisk, 0.001)) * 2.5, phiDisk * 1.5 - u_Time * omega);
+          float warp = diskFbm(tuv + vec2(0.31, 0.17));
+          float n = diskFbm(tuv + warp * 0.8);
+          float turb = 0.55 + 0.9 * n;
+          emis *= turb;
+          // Uniform exposure; beaming geometry untouched:
+          // g4 and (1.0 + beta * cosAlpha) kept.
+          vec3 diskRgb = emis * g4 * 1.0;
+          diskRgb = clamp(diskRgb, 0.0, 12.0);
           float diskAlpha = clamp(brightness * 0.9, 0.0, 0.9);
 
           accumColor += (1.0 - accumAlpha) * diskRgb;
           accumAlpha += (1.0 - accumAlpha) * diskAlpha;
 
           if (accumAlpha >= 0.98) {
-            FragColor = vec4(applyObserverShift(accumColor, fCamSqrt, camRedden),
+            FragColor = vec4(applyFinish(applyObserverShift(accumColor, fCamSqrt, camRedden), v_TexCoord),
                              1.0);
             return;
           }
@@ -215,7 +302,7 @@ void main() {
 
     if (p.y <= u_Rs * 1.001) {
       if (u_DiskOn == 1) {
-        FragColor = vec4(applyObserverShift(accumColor, fCamSqrt, camRedden), 1.0);
+        FragColor = vec4(applyFinish(applyObserverShift(accumColor, fCamSqrt, camRedden), v_TexCoord), 1.0);
       } else {
         FragColor = vec4(0.0, 0.0, 0.0, 1.0);
       }
@@ -224,7 +311,7 @@ void main() {
     if (p.y >= u_ShellRadius) {
       vec3 sky = texture(u_Skybox, fb).rgb;
       vec3 col = (u_DiskOn == 1) ? accumColor + (1.0 - accumAlpha) * sky : sky;
-      FragColor = vec4(applyObserverShift(col, fCamSqrt, camRedden), 1.0);
+      FragColor = vec4(applyFinish(applyObserverShift(col, fCamSqrt, camRedden), v_TexCoord), 1.0);
       return;
     }
   }
@@ -233,5 +320,5 @@ void main() {
   vec3 colFallback = (u_DiskOn == 1)
                          ? accumColor + (1.0 - accumAlpha) * skyFallback
                          : skyFallback;
-  FragColor = vec4(applyObserverShift(colFallback, fCamSqrt, camRedden), 1.0);
+  FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCamSqrt, camRedden), v_TexCoord), 1.0);
 }
