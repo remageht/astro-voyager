@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "vendor/glm/glm/glm.hpp"
+#include <glm/glm.hpp>
 
 namespace astro {
 
