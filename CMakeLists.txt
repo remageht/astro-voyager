@@ -16,6 +16,7 @@ add_executable(astro-voyager
   src/Kerr.cpp
   src/Interaction.cpp
   src/Constellation.cpp
+  src/SolarSystem.cpp
   src/Journey.cpp
   src/Achievements.cpp
 )

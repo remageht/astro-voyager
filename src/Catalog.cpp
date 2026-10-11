@@ -17,6 +17,8 @@ const std::vector<Station>& builtinCatalog() {
        "Spiral galaxy impostor sprite.", 80.0, {}},
       {"m1", StationType::Nebula, "Crab Nebula (M1)",
        "Supernova remnant impostor sprite.", 60.0, {}},
+      {"sol", StationType::SolarSystem, "Solar System",
+       "Sun + 8 planets + Moon, rings, belt.", 70.0, {}},
   };
   return kStations;
 }
@@ -35,6 +37,7 @@ std::string typeToString(StationType t) {
     case StationType::Constellation: return "constellation";
     case StationType::Galaxy: return "galaxy";
     case StationType::Nebula: return "nebula";
+    case StationType::SolarSystem: return "solar_system";
   }
   return "unknown";
 }

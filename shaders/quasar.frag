@@ -64,7 +64,7 @@ void main() {
 
   // Thin blue jet along x axis, one side longer (+x).
   float d = abs(uv.y + 0.12 * uv.x);
-  float width = smoothstep(0.012, 0.004, d);
+  float width = 1.0 - smoothstep(0.004, 0.012, d);
   float s = uv.x;
   float n = noise1D(s * 8.0 + 1.7);
   float knots = pow(n, 8.0) * 0.5;
@@ -73,10 +73,27 @@ void main() {
   float envN = exp(-max(-s, 0.0) * 5.5);
   float env = mix(envN, envP, step(0.0, s));
   float axial = smoothstep(0.008, 0.03, abs(s));
-  float jetMask = width * env * axial * smoothstep(0.9, 0.2, r);
+  float jetMask = width * env * axial * (1.0 - smoothstep(0.2, 0.9, r));
   vec3 jetCol = vec3(0.60, 0.72, 1.0) * jetBright;
   jetMask *= 0.9 + 0.1 * sin(u_Time * 1.5 + s * 20.0);
   col += jetMask * jetCol;
+
+  // Faint receding counter-jet (-x), de-beamed: mirrored s, wider, shorter, dimmer.
+  float sC = -s;
+  float nC = noise1D(sC * 8.0 + 1.7);
+  float knotsC = pow(nC, 8.0) * 0.5;
+  float jetBrightC = (0.08 + knotsC * 0.34) * 0.15;
+  float envCP = exp(-max(sC, 0.0) * 2.2);
+  float envCN = exp(-max(-sC, 0.0) * 5.5);
+  float envC = mix(envCN, envCP, step(0.0, sC));
+  float widthC = min(width * 1.6, 1.0);
+  float axialC = smoothstep(0.008, 0.03, abs(sC));
+  float cjShort = 1.0 - smoothstep(0.30, 0.54, abs(sC));
+  float sideC = 1.0 - step(0.0, s);
+  float jetMaskC = widthC * envC * axialC * cjShort * sideC * (1.0 - smoothstep(0.2, 0.9, r));
+  vec3 jetColC = vec3(0.60, 0.72, 1.0) * jetBrightC;
+  jetMaskC *= 0.9 + 0.1 * sin(u_Time * 1.5 + sC * 20.0);
+  col += jetMaskC * jetColC;
 
   // HDR core with tight falloff, 2-3 px feel. No cross spikes.
   float coreFall = 1.0 / (1.0 + r * r * 4000.0);

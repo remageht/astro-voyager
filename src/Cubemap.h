@@ -18,8 +18,11 @@ class Cubemap {
 
   unsigned int getId() const { return m_textureId; }
 
+  void regenerate(float starThreshold, float mwStrength, unsigned seed);
+
  private:
-  void generateProceduralSkybox();
+  void generateProceduralSkybox(float starThreshold = 0.97f, float mwStrength = 0.10f,
+                                unsigned seed = 0u);
   bool loadHdrSkybox(const std::string& path);
 
   unsigned int m_textureId = 0;

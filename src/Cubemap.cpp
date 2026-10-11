@@ -135,12 +135,22 @@ bool Cubemap::loadHdrSkybox(const std::string& path) {
   return true;
 }
 
-void Cubemap::generateProceduralSkybox() {
+void Cubemap::generateProceduralSkybox(float starThreshold, float mwStrength, unsigned seed) {
+  regenerate(starThreshold, mwStrength, seed);
+}
+
+void Cubemap::regenerate(float starThreshold, float mwStrength, unsigned seed) {
+  if (m_textureId != 0) {
+    glDeleteTextures(1, &m_textureId);
+    m_textureId = 0;
+  }
   const int faceSize = 512;
   glGenTextures(1, &m_textureId);
   glBindTexture(GL_TEXTURE_CUBE_MAP, m_textureId);
 
   std::vector<float> facePixels(faceSize * faceSize * 3);
+
+  unsigned int seedOff = seed * 7u;
 
   for (int face = 0; face < 6; ++face) {
     for (int y = 0; y < faceSize; ++y) {
@@ -152,7 +162,7 @@ void Cubemap::generateProceduralSkybox() {
         // Neutral deep-space base plus subtle warm-grey Milky-Way band.
         float az = std::atan2(dir.z, dir.x);
         float lenMod = 0.75f + 0.25f * std::sin(2.0f * az + 1.3f);
-        float mw = std::exp(-std::abs(dir.y) * 5.0f) * 0.10f * lenMod;
+        float mw = std::exp(-std::abs(dir.y) * 5.0f) * mwStrength * lenMod;
         float r = 0.008f + mw * 0.22f;
         float g = 0.009f + mw * 0.21f;
         float b = 0.014f + mw * 0.20f;
@@ -172,10 +182,10 @@ void Cubemap::generateProceduralSkybox() {
           for (int oy = -1; oy <= 1; ++oy) {
             for (int oz = -1; oz <= 1; ++oz) {
               int nx = ccx + ox, ny = ccy + oy, nz = ccz + oz;
-              if (hashCell01(nx, ny, nz, 0u) <= 0.97f) continue;
-              float jx = hashCell01(nx, ny, nz, 1u);
-              float jy = hashCell01(nx, ny, nz, 2u);
-              float jz = hashCell01(nx, ny, nz, 3u);
+              if (hashCell01(nx, ny, nz, 0u + seedOff) <= starThreshold) continue;
+              float jx = hashCell01(nx, ny, nz, 1u + seedOff);
+              float jy = hashCell01(nx, ny, nz, 2u + seedOff);
+              float jz = hashCell01(nx, ny, nz, 3u + seedOff);
               float px = (static_cast<float>(nx) + 0.05f + 0.9f * jx) * kStarInv;
               float py = (static_cast<float>(ny) + 0.05f + 0.9f * jy) * kStarInv;
               float pz = (static_cast<float>(nz) + 0.05f + 0.9f * jz) * kStarInv;
@@ -183,9 +193,9 @@ void Cubemap::generateProceduralSkybox() {
               float d2 = dx * dx + dy * dy + dz * dz;
               if (d2 > 9.0f * kStarSig2) continue;
               float w = std::exp(-d2 / (2.0f * kStarSig2));
-              float bhash = hashCell01(nx, ny, nz, 4u);
+              float bhash = hashCell01(nx, ny, nz, 4u + seedOff);
               float intensity = std::pow(bhash, 9.0f) * 8.0f * w;
-              float starColorVar = hashCell01(nx, ny, nz, 5u);
+              float starColorVar = hashCell01(nx, ny, nz, 5u + seedOff);
               float sr = 1.0f;
               float sg = 1.0f;
               float sb = 1.0f;

@@ -76,10 +76,10 @@ void main() {
 
   // Red-orange filaments, ridged fbm 4 octaves.
   float fil = ridgedFbm(p * 5.0 + vec2(u_Time * 0.015, 0.0));
-  float radialFalloff = smoothstep(0.9, 0.15, r);
+  float radialFalloff = 1.0 - smoothstep(0.15, 0.9, r);
   float filMask = smoothstep(0.45, 0.75, fil) * radialFalloff;
   float fil2 = ridgedFbm(p * 9.0 + vec2(0.0, u_Time * 0.01));
-  float fiberMask = smoothstep(0.5, 0.8, fil2) * smoothstep(0.85, 0.2, r);
+  float fiberMask = smoothstep(0.5, 0.8, fil2) * (1.0 - smoothstep(0.2, 0.85, r));
   vec3 filamentCol = vec3(0.82, 0.22, 0.10) * 0.9;
   vec3 diffuse = filMask * filamentCol + fiberMask * filamentCol * 0.6;
 
@@ -88,6 +88,14 @@ void main() {
   float syncAmp = mix(1.2, 0.5, clamp(r / 0.8, 0.0, 1.0));
   vec3 syncCol = vec3(0.42, 0.62, 1.0) * (syncFall * syncAmp);
   diffuse += syncCol;
+
+  // Outer wispy envelope outside main body: low-freq 2-octave fbm shell.
+  // Outer wisps: same ridged filaments, larger scale, thin shell outside body.
+  float envLow = ridgedFbm(p * 2.2 + vec2(u_Time * 0.008, 0.0));
+  float envShell = smoothstep(0.7, 0.95, r) * (1.0 - smoothstep(1.0, 1.3, r));
+  float envMask = smoothstep(0.35, 0.75, envLow) * envShell;
+  vec3 envelopeCol = filamentCol * 0.25 + vec3(0.42, 0.62, 1.0) * 0.2;
+  diffuse += envelopeCol * envMask * 0.25;
 
   // Keep diffuse dim, no white clip.
   diffuse = min(diffuse, vec3(2.0));

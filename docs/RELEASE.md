@@ -69,3 +69,46 @@ powershell -ExecutionPolicy Bypass -File tests/test_static_checks.ps1
 ctest --test-dir build -C Release --output-on-failure
 ```
 *Критерий:* 100% тестов успешно пройдены.
+
+## 4. Двуязычные описания коммитов и релизов (EN + RU)
+
+Описания — короткие и читаемые: буллеты вместо стен текста, без формул
+(формулы живут в коде/docs, в описании — ссылка). Каждое описание —
+на двух языках: сначала English, затем Russian.
+
+### 4.1. Формат коммита
+```
+<type>(<scope>): short English subject (conventional commits)
+
+EN: 2-4 bullet lines, plain words, what changed and why.
+- bullet per user-visible change
+- key numbers (gates, versions) as a last line if any
+
+RU: то же самое по-русски, 2-4 строки буллетами.
+- буллет на каждое видимое изменение
+```
+Пример:
+```
+feat(sol): Solar System station with detailed planets
+
+EN: New "sol" station: Sun + 8 planets + Moon, Saturn rings,
+asteroid belt, procedural surfaces, fly-to labels.
+- Gates: ctest 3/3, static checks 100, doppler 3.29 PASS.
+
+RU: Новая станция "sol": Солнце + 8 планет + Луна, кольца Сатурна,
+пояс астероидов, процедурные поверхности, подписи при подлёте.
+- Гейты: ctest 3/3, static checks 100, доплер 3.29 PASS.
+```
+
+### 4.2. Формат релиза (GitHub release notes + блок CHANGELOG.md)
+```markdown
+## What's new / Что нового
+- EN bullet (one line per change)
+- ...
+- RU буллет (по строке на изменение)
+- ...
+Gates / Гейты: ctest 3/3, checks 100, doppler 3.29 PASS.
+```
+Заголовок релиза двуязычный: `vX.Y.Z — English title / Русский заголовок`.
+Старые релизы (до v2.4.0 включительно) остаются как есть — формат
+применяется начиная со следующего релиза.

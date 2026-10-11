@@ -166,6 +166,15 @@ void AppGL::processInput(float deltaTime) {
   }
   m_prevF6Pressed = f6Down;
 
+  // Smooth fly-to flight update (runs every frame).
+  if (m_flying) {
+    updateFlight(deltaTime);
+    if (m_flying) {
+      return;
+    }
+    // If flight just finished or was cancelled, fall through to normal input.
+  }
+
   if (!interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
 
   if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) {
@@ -201,6 +210,24 @@ void AppGL::processMouse() {
   double mouseX = 0.0, mouseY = 0.0;
   glfwGetCursorPos(win, &mouseX, &mouseY);
 
+  // Double-click detection on left-button press edges.
+  if (leftDown && !m_prevLeftDown) {
+    double now = glfwGetTime();
+    if (!io.WantCaptureMouse) {
+      double dx = mouseX - m_lastPressX;
+      double dy = mouseY - m_lastPressY;
+      double moved = std::sqrt(dx * dx + dy * dy);
+      if ((now - m_lastPressTime) < 0.45 && moved < 8.0) {
+        flyToObjectAt(mouseX, mouseY);
+      } else {
+        m_lastPressTime = now;
+        m_lastPressX = mouseX;
+        m_lastPressY = mouseY;
+      }
+    }
+  }
+  m_prevLeftDown = leftDown;
+
   if (!isDragging) {
     m_firstMouse = true;
     m_mouseDragging = false;
@@ -227,6 +254,283 @@ void AppGL::processMouse() {
   const float maxPitch = 1.55f;
   if (m_camera.pitch > maxPitch) m_camera.pitch = maxPitch;
   if (m_camera.pitch < -maxPitch) m_camera.pitch = -maxPitch;
+}
+
+void AppGL::computeLookYawPitch(const Vec3& fromPos, const Vec3& target,
+                                double& outYaw, double& outPitch) {
+  double dx = target.x - fromPos.x;
+  double dy = target.y - fromPos.y;
+  double dz = target.z - fromPos.z;
+  double len = std::sqrt(dx * dx + dy * dy + dz * dz);
+  if (len < 1e-9) {
+    outYaw = m_camera.yaw;
+    outPitch = m_camera.pitch;
+    return;
+  }
+  dx /= len;
+  dy /= len;
+  dz /= len;
+  // Inverse of Camera::forward():
+  // forward = (-sin(yaw)*cos(pitch), sin(pitch), -cos(yaw)*cos(pitch)).
+  // So pitch = asin(dy), yaw = atan2(-dx, -dz).
+  double horiz = std::sqrt(dx * dx + dz * dz);
+  if (horiz < 1e-6) {
+    outYaw = m_camera.yaw;
+  } else {
+    outYaw = std::atan2(-dx, -dz);
+  }
+  if (dy > 1.0) dy = 1.0;
+  if (dy < -1.0) dy = -1.0;
+  outPitch = std::asin(dy);
+  const double kMaxPitch = 1.55;
+  if (outPitch > kMaxPitch) outPitch = kMaxPitch;
+  if (outPitch < -kMaxPitch) outPitch = -kMaxPitch;
+}
+
+void AppGL::startObjectFlight(const Vec3& objPos, double viewDist,
+                              const std::string& name,
+                              const Vec3& lookTarget) {
+  Vec3 cp = m_camera.position;
+  double dx = cp.x - objPos.x;
+  double dy = cp.y - objPos.y;
+  double dz = cp.z - objPos.z;
+  double len = std::sqrt(dx * dx + dy * dy + dz * dz);
+  double nx = 0.0, ny = 0.0, nz = 1.0;
+  if (len < 1e-9) {
+    nx = 0.0;
+    ny = 0.0;
+    nz = 1.0;
+  } else {
+    nx = dx / len;
+    ny = dy / len;
+    nz = dz / len;
+  }
+  if (viewDist < 0.5) viewDist = 0.5;
+  Vec3 to;
+  to.x = objPos.x + nx * viewDist;
+  to.y = objPos.y + ny * viewDist + viewDist * 0.25;
+  to.z = objPos.z + nz * viewDist;
+  m_flyFrom = cp;
+  m_flyTo = to;
+  m_yawFrom = m_camera.yaw;
+  m_pitchFrom = m_camera.pitch;
+  computeLookYawPitch(to, lookTarget, m_yawTo, m_pitchTo);
+  m_flyT = 0.0f;
+  m_flyDur = 1.2f;
+  m_flying = true;
+  m_flyTargetName = name;
+}
+
+void AppGL::startDollyFlight() {
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  Vec3 cp = m_camera.position;
+  double r = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+  Vec3 to;
+  if (curSt && curSt->type == StationType::BlackHole) {
+    double rs = static_cast<double>(m_sceneManager->getSettings().rs);
+    if (rs < 0.1) rs = 1.0;
+    double want = r * 0.62;
+    double minR = 6.5 * rs;
+    if (want < minR) want = minR;
+    if (r < 1e-9) {
+      to = Vec3(0.0, 0.0, want);
+    } else {
+      double k = want / r;
+      to = Vec3(cp.x * k, cp.y * k, cp.z * k);
+    }
+  } else {
+    to = Vec3(cp.x * 0.62, cp.y * 0.62, cp.z * 0.62);
+  }
+  m_flyFrom = cp;
+  m_flyTo = to;
+  m_yawFrom = m_camera.yaw;
+  m_pitchFrom = m_camera.pitch;
+  Vec3 origin(0.0, 0.0, 0.0);
+  computeLookYawPitch(to, origin, m_yawTo, m_pitchTo);
+  m_flyT = 0.0f;
+  m_flyDur = 1.2f;
+  m_flying = true;
+  m_flyTargetName.clear();
+}
+
+void AppGL::updateFlight(float deltaTime) {
+  if (!m_flying) return;
+  GLFWwindow* win = m_window->getNativeWindow();
+  ImGuiIO& io = ImGui::GetIO();
+  if (!io.WantCaptureKeyboard) {
+    bool wDown = (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS);
+    bool aDown = (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS);
+    bool sDown = (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS);
+    bool dDown = (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS);
+    if (wDown || aDown || sDown || dDown) {
+      m_flying = false;
+      return;
+    }
+  }
+  m_flyT += deltaTime / m_flyDur;
+  float t = m_flyT;
+  if (t < 0.0f) t = 0.0f;
+  if (t > 1.0f) t = 1.0f;
+  float e = t * t * (3.0f - 2.0f * t);
+  const double kPi = 3.14159265358979323846;
+  double yawDelta = m_yawTo - m_yawFrom;
+  while (yawDelta > kPi) yawDelta -= 2.0 * kPi;
+  while (yawDelta < -kPi) yawDelta += 2.0 * kPi;
+  m_camera.position.x = m_flyFrom.x + (m_flyTo.x - m_flyFrom.x) * e;
+  m_camera.position.y = m_flyFrom.y + (m_flyTo.y - m_flyFrom.y) * e;
+  m_camera.position.z = m_flyFrom.z + (m_flyTo.z - m_flyFrom.z) * e;
+  m_camera.yaw = m_yawFrom + yawDelta * e;
+  m_camera.pitch = m_pitchFrom + (m_pitchTo - m_pitchFrom) * e;
+  if (m_flyT >= 1.0f) {
+    m_flying = false;
+  }
+}
+
+void AppGL::flyToObjectAt(double px, double py) {
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  if (!curSt) return;
+  int fbW = 0, fbH = 0;
+  m_window->getFramebufferSize(fbW, fbH);
+  if (fbW <= 0 || fbH <= 0) return;
+  GLFWwindow* win = m_window->getNativeWindow();
+  int winW = 0, winH = 0;
+  glfwGetWindowSize(win, &winW, &winH);
+  double fpx = px;
+  double fpy = py;
+  if (winW > 0 && winH > 0) {
+    fpx = px * static_cast<double>(fbW) / static_cast<double>(winW);
+    fpy = py * static_cast<double>(fbH) / static_cast<double>(winH);
+  }
+
+  float fov = m_sceneManager->getSettings().fovDegrees;
+  float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
+  glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
+  Vec3 cp = m_camera.position;
+  Vec3 cf = m_camera.forward();
+  Vec3 cu = m_camera.up();
+  glm::vec3 eye(static_cast<float>(cp.x), static_cast<float>(cp.y),
+                static_cast<float>(cp.z));
+  glm::vec3 fwd(static_cast<float>(cf.x), static_cast<float>(cf.y),
+                static_cast<float>(cf.z));
+  glm::vec3 up(static_cast<float>(cu.x), static_cast<float>(cu.y),
+               static_cast<float>(cu.z));
+  glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
+  glm::mat4 mvp = proj * view;
+
+  const double kPi = 3.14159265358979323846;
+  double halfFovRad = static_cast<double>(fov) * 0.5 * kPi / 180.0;
+  double tanHalf = std::tan(halfFovRad);
+  if (tanHalf < 1e-6) tanHalf = 1e-6;
+  double focal = static_cast<double>(fbH) / (2.0 * tanHalf);
+
+  if (curSt->type == StationType::SolarSystem) {
+    const std::vector<BodyState>& bodies = m_sceneManager->getBodies();
+    bool haveHit = false;
+    double bestScreen = 1e30;
+    Vec3 bestPos;
+    double bestRadius = 1.0;
+    std::string bestName;
+    for (const auto& body : bodies) {
+      if (!body.def) continue;
+      glm::vec3 pos = body.pos;
+      glm::vec4 clip = mvp * glm::vec4(pos, 1.0f);
+      if (clip.w <= 0.001f) continue;
+      glm::vec3 ndc = glm::vec3(clip) / clip.w;
+      if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) continue;
+      float sx = (ndc.x * 0.5f + 0.5f) * static_cast<float>(fbW);
+      float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * static_cast<float>(fbH);
+      double dx = cp.x - static_cast<double>(pos.x);
+      double dy = cp.y - static_cast<double>(pos.y);
+      double dz = cp.z - static_cast<double>(pos.z);
+      double distToCam = std::sqrt(dx * dx + dy * dy + dz * dz);
+      if (distToCam < 1e-6) distToCam = 1e-6;
+      double radius = static_cast<double>(body.def->radius);
+      if (radius < 0.05) radius = 0.05;
+      double projR = radius * focal / distToCam;
+      double hitR = projR + 10.0;
+      if (hitR < 24.0) hitR = 24.0;
+      double sdx = static_cast<double>(sx) - fpx;
+      double sdy = static_cast<double>(sy) - fpy;
+      double screenDist = std::sqrt(sdx * sdx + sdy * sdy);
+      if (screenDist < hitR && screenDist < bestScreen) {
+        haveHit = true;
+        bestScreen = screenDist;
+        bestPos = Vec3(static_cast<double>(pos.x), static_cast<double>(pos.y),
+                       static_cast<double>(pos.z));
+        bestRadius = radius;
+        bestName = body.def->name;
+      }
+    }
+    if (haveHit) {
+      startObjectFlight(bestPos, bestRadius * 6.0, bestName, bestPos);
+      return;
+    }
+    startDollyFlight();
+    return;
+  }
+
+  if (curSt->type == StationType::Constellation) {
+    const ConstellationInfo* cInfo = findConstellation(curSt->id);
+    if (cInfo) {
+      bool haveHit = false;
+      double bestScreen = 1e30;
+      Vec3 bestPos;
+      std::string bestName;
+      for (const auto& s : cInfo->stars) {
+        glm::vec4 clip = mvp * glm::vec4(s.x, s.y, s.z, 1.0f);
+        if (clip.w <= 0.001f) continue;
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) continue;
+        float sx = (ndc.x * 0.5f + 0.5f) * static_cast<float>(fbW);
+        float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * static_cast<float>(fbH);
+        double sdx = static_cast<double>(sx) - fpx;
+        double sdy = static_cast<double>(sy) - fpy;
+        double screenDist = std::sqrt(sdx * sdx + sdy * sdy);
+        if (screenDist < 24.0 && screenDist < bestScreen) {
+          haveHit = true;
+          bestScreen = screenDist;
+          bestPos = Vec3(static_cast<double>(s.x), static_cast<double>(s.y),
+                         static_cast<double>(s.z));
+          bestName = s.name;
+        }
+      }
+      if (haveHit) {
+        startObjectFlight(bestPos, 3.0, bestName, bestPos);
+        return;
+      }
+    }
+    startDollyFlight();
+    return;
+  }
+
+  if (curSt->type == StationType::BlackHole) {
+    glm::vec4 clip = mvp * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    if (clip.w > 0.001f) {
+      glm::vec3 ndc = glm::vec3(clip) / clip.w;
+      if (ndc.x >= -1.02f && ndc.x <= 1.02f && ndc.y >= -1.02f && ndc.y <= 1.02f) {
+        float sx = (ndc.x * 0.5f + 0.5f) * static_cast<float>(fbW);
+        float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * static_cast<float>(fbH);
+        double rs = static_cast<double>(m_sceneManager->getSettings().rs);
+        if (rs < 0.1) rs = 1.0;
+        double distCam = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+        if (distCam < 1e-6) distCam = 1e-6;
+        double projRs = rs * focal / distCam;
+        double hitR = projRs * 3.0 + 12.0;
+        double sdx = static_cast<double>(sx) - fpx;
+        double sdy = static_cast<double>(sy) - fpy;
+        double screenDist = std::sqrt(sdx * sdx + sdy * sdy);
+        if (screenDist < hitR) {
+          Vec3 origin(0.0, 0.0, 0.0);
+          startObjectFlight(origin, rs * 6.5, curSt->name, origin);
+          return;
+        }
+      }
+    }
+    startDollyFlight();
+    return;
+  }
+
+  startDollyFlight();
 }
 
 void AppGL::drawImGui() {
@@ -322,6 +626,8 @@ void AppGL::drawImGui() {
       }
     }
   }
+  ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+                     "(Double-click an object to fly to it)");
 
   ImGui::Separator();
   ImGui::Text("Quality Preset:");
@@ -371,6 +677,14 @@ void AppGL::drawImGui() {
               m_camera.position.z);
   ImGui::Text("FPS: %.1f (%.2f ms)", ImGui::GetIO().Framerate,
               1000.0f / (ImGui::GetIO().Framerate > 0 ? ImGui::GetIO().Framerate : 1.0f));
+  if (m_flying) {
+    if (m_flyTargetName.empty()) {
+      ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "Closing in...");
+    } else {
+      ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "Flying to %s...",
+                         m_flyTargetName.c_str());
+    }
+  }
 
   ImGui::Separator();
   if (ImGui::Button("Reset Camera", ImVec2(-1.0f, 0.0f))) {
@@ -378,6 +692,7 @@ void AppGL::drawImGui() {
       m_camera.position = Vec3(0.0, 0.0, curSt->spawnDistanceRs);
       m_camera.yaw = 0.0;
       m_camera.pitch = 0.0;
+      m_flying = false;
     }
   }
 
@@ -461,6 +776,7 @@ void AppGL::drawImGui() {
 
 void AppGL::teleportToStation(const std::string& id) {
   m_sceneManager->teleportTo(id, m_camera);
+  m_flying = false;
   if (m_route.empty() || m_route.back() != id) {
     m_route.push_back(id);
   }
@@ -642,6 +958,64 @@ void AppGL::drawWorldLabels() {
         drawList->AddText(font, 12.0f, ImVec2(textPos.x, currentY), distColor, distBuf);
       }
     }
+  } else if (curSt->type == StationType::SolarSystem) {
+    const std::vector<BodyState>& bodies = m_sceneManager->getBodies();
+    if (!bodies.empty()) {
+      float aspect = displaySize.x / displaySize.y;
+      float fov = m_sceneManager->getSettings().fovDegrees;
+      glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
+
+      Vec3 cp = m_camera.position;
+      Vec3 cf = m_camera.forward();
+      Vec3 cu = m_camera.up();
+
+      glm::vec3 eye(cp.x, cp.y, cp.z);
+      glm::vec3 fwd(cf.x, cf.y, cf.z);
+      glm::vec3 up(cu.x, cu.y, cu.z);
+      glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
+      glm::mat4 mvp = proj * view;
+
+      for (const auto& body : bodies) {
+        if (!body.def) continue;
+        glm::vec3 pos = body.pos;
+        glm::vec4 clip = mvp * glm::vec4(pos, 1.0f);
+        if (clip.w <= 0.001f) continue;
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) continue;
+
+        double dx = cp.x - static_cast<double>(pos.x);
+        double dy = cp.y - static_cast<double>(pos.y);
+        double dz = cp.z - static_cast<double>(pos.z);
+        double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+        float sx = (ndc.x * 0.5f + 0.5f) * displaySize.x;
+        float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * displaySize.y;
+
+        float circleRadius = 4.0f;
+        ImU32 circleColor = IM_COL32(255, 245, 225, 220);
+        drawList->AddCircle(ImVec2(sx, sy), circleRadius, circleColor, 16, 1.5f);
+
+        float nameFontSize = 13.0f;
+        ImVec2 textPos(sx + circleRadius + 5.0f, sy - nameFontSize * 0.55f);
+        ImU32 nameColor = IM_COL32(255, 255, 255, 255);
+        drawList->AddText(font, nameFontSize, textPos, nameColor, body.def->name.c_str());
+
+        float currentY = textPos.y + nameFontSize + 2.0f;
+        if (dist < 30.0) {
+          ImU32 detailColor = IM_COL32(170, 200, 230, 230);
+          for (const auto& fact : body.def->facts) {
+            drawList->AddText(font, 12.0f, ImVec2(textPos.x, currentY), detailColor, fact.c_str());
+            currentY += 14.0f;
+          }
+        }
+        if (dist < 12.0) {
+          char distBuf[64];
+          std::snprintf(distBuf, sizeof(distBuf), "distance: %.1f units", dist);
+          ImU32 distColor = IM_COL32(100, 230, 120, 255);
+          drawList->AddText(font, 12.0f, ImVec2(textPos.x, currentY), distColor, distBuf);
+        }
+      }
+    }
   } else if (curSt->type == StationType::Galaxy) {
     Vec3 cp = m_camera.position;
     double dist = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
@@ -789,7 +1163,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   AppGL app(1280, 720, false);
 
   const std::vector<std::string> targetStations = {
-      "sgra", "qso-3c273", "ori", "uma", "m31", "m1"
+      "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol"
   };
 
   for (const auto& stId : targetStations) {

@@ -75,6 +75,40 @@ void main() {
   // HDR linear base
   vec3 col = bgC + haloTerm + bulgeTerm + diskArm;
 
+  // Companion galaxies M32/M110: small fuzzy elliptical dots in galaxy plane.
+  // Fixed p coords so they zoom with the scene; disk-like falloff, no resolve gate.
+  vec3 compC = vec3(0.85, 0.72, 0.55);
+  float cd1 = length(p - vec2(0.55, 0.28));
+  float cd2 = length(p - vec2(-0.62, -0.30));
+  col += compC * exp(-cd1 * cd1 * 900.0) * 0.5;
+  col += compC * exp(-cd2 * cd2 * 900.0) * 0.35;
+
+  // HII regions: pink star-forming knots sitting ON the arms.
+  // Dense grid in galaxy plane (p space, zooms with scene).
+  vec2 hiiGrid = p * 90.0;
+  vec2 hiiId = floor(hiiGrid);
+  vec2 hiiF = fract(hiiGrid) - 0.5;
+  float hiiH = hash21(hiiId);
+  float knot = step(0.994, hiiH);
+  vec2 knotOff = vec2(hash21(hiiId + 7.13), hash21(hiiId + 3.71)) - 0.5;
+  knotOff *= 0.8;
+  vec2 knotD = hiiF - knotOff;
+  float pointProfile = 1.0 / (1.0 + dot(knotD, knotD) * 900.0);
+  col += vec3(1.0, 0.38, 0.50) * knot * pointProfile * armMask * (1.0 - smoothstep(0.8, 1.2, r)) * 1.6;
+
+  // Globular clusters: dim barely-visible swarm in halo.
+  // Coarse grid in galaxy plane (p space, zooms with scene).
+  vec2 gcGrid = p * 14.0;
+  vec2 gcId = floor(gcGrid);
+  vec2 gcF = fract(gcGrid) - 0.5;
+  float gcH = hash21(gcId + 7.0);
+  float gcHit = step(0.96, gcH);
+  vec2 gcOff = vec2(hash21(gcId + 7.0 + 7.13), hash21(gcId + 7.0 + 3.71)) - 0.5;
+  gcOff *= 0.8;
+  vec2 gcD = gcF - gcOff;
+  float gcProf = exp(-dot(gcD, gcD) * 90.0);
+  col += vec3(0.9, 0.82, 0.68) * gcHit * gcProf * 0.25 * exp(-r * 2.0);
+
   // Background starfield in screen space (stable under zoom)
   // Sparse subpixel points: 1/(1+d*d*1e6), power-law brightness
   vec2 bq = vec2((v_TexCoord.x * 2.0 - 1.0) * u_Aspect, v_TexCoord.y * 2.0 - 1.0);
@@ -98,18 +132,28 @@ void main() {
 
   // Progressive detail layer: resolve individual star clouds upon closer approach
   // Adapted to new palette: denser threshold, blue-to-warm mix, mask rescaled
-  float resolve = smoothstep(1.4, 3.0, u_Zoom);
+  float resolve = smoothstep(1.2, 2.2, u_Zoom);
   if (resolve > 0.0) {
     vec2 gridP = p * 60.0;
     vec2 id = floor(gridP);
     vec2 f = fract(gridP) - 0.5;
     float h = hash21(id);
     float h2 = hash21(id + 4.7);
-    float starHit = step(0.97, h);
+    float starHit = step(0.985, h);
     float glow = exp(-dot(f, f) * 18.0);
     vec3 rcol = mix(armC * 2.5 + vec3(0.15), vec3(1.0, 0.85, 0.65), step(0.75, h2));
     float cloudMask = clamp(armMask * 1.5, 0.0, 1.0);
-    col += starHit * glow * cloudMask * resolve * rcol * 1.2;
+    col += starHit * glow * cloudMask * resolve * rcol * 1.8;
+    // Second sparse bright foreground-star layer (nearer galaxy stars).
+    // Same point profile, coarser grid, masked to disk/arms.
+    vec2 gridP2 = p * 23.0;
+    vec2 id2 = floor(gridP2);
+    vec2 f2 = fract(gridP2) - 0.5;
+    float hb = hash21(id2 + 9.1);
+    float starHit2 = step(0.993, hb);
+    float glow2 = exp(-dot(f2, f2) * 18.0);
+    vec3 fcol = vec3(1.0, 0.93, 0.80) * 2.0;
+    col += starHit2 * glow2 * cloudMask * resolve * fcol;
   }
 
   // ACES filmic tonemap with exposure 1.0, then gamma 1/2.2

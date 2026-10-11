@@ -43,6 +43,13 @@
       "name": "Crab Nebula (M1)",
       "description": "Supernova remnant impostor sprite.",
       "spawnDistanceRs": 60.0
+    },
+    {
+      "id": "sol",
+      "type": "solar_system",
+      "name": "Solar System",
+      "description": "Sun + 8 planets + Moon, rings, belt.",
+      "spawnDistanceRs": 70.0
     }
   ]
 }

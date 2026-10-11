@@ -274,6 +274,9 @@ void main() {
           dcol = mix(dcol, c3, smoothstep(0.5, 0.95, Tn));
           // Concentrated toward ISCO (high beaming contrast), dim floor outside.
           vec3 emis = dcol * (0.03 + 3.5 * Tn * Tn * Tn) * (0.15 + 0.85 * x * x);
+          // White-hot inner rim: uniform boost, beaming untouched.
+          float rim = 1.0 + 2.2 * (1.0 - smoothstep(rIn, rIn * 1.18, rDisk));
+          emis *= rim;
           // Keplerian turbulence: fbm in (log(r)*2.5, phi*1.5 - t*omega),
           // omega = 2.0 * pow(r, -1.5), single domain-warp, advected by u_Time.
           float omega = 2.0 * pow(rDisk, -1.5);

@@ -10,6 +10,7 @@
 #include "Cubemap.h"
 #include "Mesh.h"
 #include "Shader.h"
+#include "SolarSystem.h"
 
 namespace astro {
 
@@ -70,6 +71,7 @@ class SceneManager {
   void render(const Camera& camera, int fbWidth, int fbHeight, float time);
 
   const Station* getCurrentStation() const { return m_currentStation; }
+  const std::vector<BodyState>& getBodies() const { return m_lastBodies; }
   RenderSettings& getSettings() { return m_settings; }
   const RenderSettings& getSettings() const { return m_settings; }
 
@@ -89,12 +91,28 @@ class SceneManager {
   std::unique_ptr<Shader> m_bhShader;
   std::unique_ptr<Shader> m_quasarShader;
   std::unique_ptr<Shader> m_linesShader;
+  std::unique_ptr<Shader> m_starShader;
   std::unique_ptr<Shader> m_galaxyShader;
   std::unique_ptr<Shader> m_nebulaShader;
-  std::unique_ptr<Cubemap> m_skybox;
+  std::unique_ptr<Shader> m_planetShader;
+  std::unique_ptr<Shader> m_ringShader;
+  std::unique_ptr<Shader> m_cometShader;
+  std::unique_ptr<Shader> m_skyShader;
+  std::unique_ptr<Cubemap> m_skyboxDeep;
+  std::unique_ptr<Cubemap> m_skyboxLocal;
 
   LineMesh m_orionMesh;
   LineMesh m_umaMesh;
+  StarPoints m_orionStars;
+  StarPoints m_umaStars;
+  StarPoints m_bgStars;
+
+  SolarSystem m_sol;
+  SphereMesh m_sphere;
+  RingMesh m_saturnRing;
+  BeltPoints m_belt;
+  LineMesh m_orbits;
+  std::vector<BodyState> m_lastBodies;
 };
 
 }  // namespace astro
