@@ -67,11 +67,13 @@ SceneManager::SceneManager() {
     for (const auto& d : defs) {
       if (d.orbitRadius <= 0.0f) continue;
       if (!d.parentId.empty()) continue;
-      std::vector<glm::vec3> pts = m_sol.orbitCircle(d.orbitRadius, 128);
+      std::vector<Vec3> pts = m_sol.orbitCircle(d.orbitRadius, 128);
       if (pts.empty()) continue;
       unsigned int base = static_cast<unsigned int>(orbitVerts.size());
       for (const auto& p : pts) {
-        orbitVerts.push_back(p);
+        orbitVerts.emplace_back(static_cast<float>(p.x),
+                                static_cast<float>(p.y),
+                                static_cast<float>(p.z));
       }
       unsigned int n = static_cast<unsigned int>(pts.size());
       for (unsigned int i = 0; i < n; ++i) {
@@ -343,20 +345,27 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     for (const auto& body : m_lastBodies) {
       const PlanetDef* def = body.def;
       if (!def) continue;
-      glm::mat4 model = glm::translate(glm::mat4(1.0f), body.pos) *
+      glm::vec3 bpos(static_cast<float>(body.pos.x),
+                     static_cast<float>(body.pos.y),
+                     static_cast<float>(body.pos.z));
+      glm::mat4 model = glm::translate(glm::mat4(1.0f), bpos) *
                         glm::scale(glm::mat4(1.0f), glm::vec3(def->radius));
       m_planetShader->setUniformMat4f("u_Model", model);
       m_planetShader->setUniform1i("u_Type", def->type);
       m_planetShader->setUniform1f("u_Seed", def->seed);
-      m_planetShader->setUniform3f("u_ColA", def->colA);
-      m_planetShader->setUniform3f("u_ColB", def->colB);
+      m_planetShader->setUniform3f("u_ColA", static_cast<float>(def->colA.x),
+                                   static_cast<float>(def->colA.y),
+                                   static_cast<float>(def->colA.z));
+      m_planetShader->setUniform3f("u_ColB", static_cast<float>(def->colB.x),
+                                   static_cast<float>(def->colB.y),
+                                   static_cast<float>(def->colB.z));
       m_planetShader->setUniform1i("u_Spot", (def->id == "jupiter" ? 1 : 0));
       m_planetShader->setUniform1i("u_Clouds", (def->id == "earth" ? 1 : 0));
       m_sphere.draw();
       if (def->hasRing) {
         m_ringShader->bind();
         m_ringShader->setUniformMat4f("u_MVP", mvp);
-        glm::mat4 ringModel = glm::translate(glm::mat4(1.0f), body.pos) *
+        glm::mat4 ringModel = glm::translate(glm::mat4(1.0f), bpos) *
                               glm::rotate(glm::mat4(1.0f), 0.45f, glm::vec3(1.0f, 0.0f, 0.0f));
         m_ringShader->setUniformMat4f("u_Model", ringModel);
         m_ringShader->setUniform1f("u_Seed", def->seed);
@@ -376,7 +385,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       const PlanetDef* cometDef = nullptr;
       for (const auto& body : m_lastBodies) {
         if (body.def && body.def->id == "halley") {
-          cometPos = body.pos;
+          cometPos = glm::vec3(static_cast<float>(body.pos.x),
+                               static_cast<float>(body.pos.y),
+                               static_cast<float>(body.pos.z));
           cometDef = body.def;
           break;
         }

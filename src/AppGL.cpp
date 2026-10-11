@@ -432,7 +432,9 @@ void AppGL::flyToObjectAt(double px, double py) {
     std::string bestName;
     for (const auto& body : bodies) {
       if (!body.def) continue;
-      glm::vec3 pos = body.pos;
+        glm::vec3 pos(static_cast<float>(body.pos.x),
+                          static_cast<float>(body.pos.y),
+                          static_cast<float>(body.pos.z));
       glm::vec4 clip = mvp * glm::vec4(pos, 1.0f);
       if (clip.w <= 0.001f) continue;
       glm::vec3 ndc = glm::vec3(clip) / clip.w;
@@ -977,7 +979,9 @@ void AppGL::drawWorldLabels() {
 
       for (const auto& body : bodies) {
         if (!body.def) continue;
-        glm::vec3 pos = body.pos;
+      glm::vec3 pos(static_cast<float>(body.pos.x),
+                        static_cast<float>(body.pos.y),
+                        static_cast<float>(body.pos.z));
         glm::vec4 clip = mvp * glm::vec4(pos, 1.0f);
         if (clip.w <= 0.001f) continue;
         glm::vec3 ndc = glm::vec3(clip) / clip.w;

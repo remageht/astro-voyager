@@ -3,11 +3,11 @@
 #include <string>
 #include <vector>
 
-#include <glm/glm.hpp>
+#include "Camera.h"
 
 namespace astro {
 
-// Planet definition: pure data, no GL.
+// Planet definition: pure data, no GL, no GLM (core-safe, like Camera).
 // type: 0 sun, 1 gas giant, 2 rocky, 3 ice giant, 4 coma ball.
 struct PlanetDef {
   std::string id;
@@ -18,8 +18,8 @@ struct PlanetDef {
   float angle0 = 0.0f;
   int type = 2;
   float seed = 1.0f;
-  glm::vec3 colA{1.0f, 1.0f, 1.0f};
-  glm::vec3 colB{1.0f, 1.0f, 1.0f};
+  Vec3 colA{1.0, 1.0, 1.0};
+  Vec3 colB{1.0, 1.0, 1.0};
   bool hasRing = false;
   float ringInner = 0.0f;
   float ringOuter = 0.0f;
@@ -31,7 +31,7 @@ struct PlanetDef {
 
 struct BodyState {
   const PlanetDef* def = nullptr;
-  glm::vec3 pos{0.0f, 0.0f, 0.0f};
+  Vec3 pos;
 };
 
 class SolarSystem {
@@ -40,7 +40,7 @@ class SolarSystem {
   void update(float timeSec);  // angle = angle0 + angleSpeed*timeSec
   const std::vector<PlanetDef>& defs() const;
   std::vector<BodyState> bodies() const;  // world positions (parent-relative composed)
-  std::vector<glm::vec3> orbitCircle(float radius, int segments = 128) const;
+  std::vector<Vec3> orbitCircle(float radius, int segments = 128) const;
 
  private:
   std::vector<PlanetDef> m_defs;
