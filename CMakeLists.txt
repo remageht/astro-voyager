@@ -157,3 +157,13 @@ endif()
 if(TARGET test_achievements)
   add_test(NAME test_achievements COMMAND test_achievements)
 endif()
+
+# Runtime resources next to the binary (double-click launch support):
+# the app loads shaders/ and res/ via relative paths, so they must sit
+# beside the exe, not only in the source tree.
+add_custom_command(TARGET astro-voyager POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:astro-voyager>/shaders"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/res" "$<TARGET_FILE_DIR:astro-voyager>/res"
+)
