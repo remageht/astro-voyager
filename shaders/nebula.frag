@@ -6,6 +6,7 @@ in vec2 v_TexCoord;
 
 uniform float u_Time;
 uniform float u_Aspect;
+uniform float u_Exposure;
 
 float hash2(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -75,13 +76,17 @@ void main() {
   col += starLayer(starUV + vec2(13.1), 190.0, 0.985, 0.55);
 
   // Red-orange filaments, ridged fbm 4 octaves.
-  float fil = ridgedFbm(p * 5.0 + vec2(u_Time * 0.015, 0.0));
+  vec2 q = p * (1.0 + 0.9 * exp(-max(r, 1e-3) * 1.5));
+  float fil = ridgedFbm(q * 5.0 + vec2(u_Time * 0.015, 0.0));
+  fil = pow(fil, 3.0);
   float radialFalloff = 1.0 - smoothstep(0.15, 0.9, r);
   float filMask = smoothstep(0.45, 0.75, fil) * radialFalloff;
-  float fil2 = ridgedFbm(p * 9.0 + vec2(0.0, u_Time * 0.01));
+  float fil2 = ridgedFbm(q * 9.0 + vec2(0.0, u_Time * 0.01));
   float fiberMask = smoothstep(0.5, 0.8, fil2) * (1.0 - smoothstep(0.2, 0.85, r));
   vec3 filamentCol = vec3(0.82, 0.22, 0.10) * 0.9;
-  vec3 diffuse = filMask * filamentCol + fiberMask * filamentCol * 0.6;
+  float thread = pow(fil2, 12.0);
+  vec3 diffuse = filMask * filamentCol + fiberMask * filamentCol * 0.6 + thread * filamentCol *
+                  0.5 * radialFalloff;
 
   // Synchrotron blue center with exp falloff.
   float syncFall = exp(-r / 0.4);
@@ -133,7 +138,7 @@ void main() {
   col *= vig;
 
   // ACES filmic, exposure 1.3, then gamma.
-  col *= 1.3;
+  col *= 1.3 * u_Exposure;
   col = acesNarkowicz(col);
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
 

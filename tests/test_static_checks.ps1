@@ -153,6 +153,9 @@ $sceneH = Read-File 'src/SceneManager.h'
 $sceneCpp = Read-File 'src/SceneManager.cpp'
 $appCpp = Read-File 'src/AppGL.cpp'
 Check 'editor spawn' (($sceneH -match 'spawnRockAt') -and ($sceneCpp -match 'spawnRockAt'))
+Check 'menu state' (((Read-File 'src/AppGL.h') -match 'm_inMenu') -and ($appCpp -match 'm_inMenu'))
+Check 'settings exposure' (($sceneH -match 'm_exposure') -and ($appCpp -match 'getExposure'))
+Check 'help overlay' (((Read-File 'src/AppGL.h') -match 'm_helpOverlay') -and ($appCpp -match 'm_helpOverlay'))
 Check 'custom body struct' ($sceneH -match 'CustomBody')
 Check 'star clamp' (($interH -match 'pushOutOfSphere') -and ($appCpp -match 'pushOutOfSphere'))
 

@@ -18,6 +18,7 @@ uniform float u_StepSize;
 uniform int u_MaxSteps;
 uniform int u_DiskOn;
 uniform float u_Time;
+uniform float u_Exposure;
 const float PI = 3.141592653589793;
 const int ABSOLUTE_MAX_STEPS = 8000;
 const float T_DISK = 10000.0;  // reference inner-disk temperature, Kelvin
@@ -171,7 +172,7 @@ float finishHash(vec2 p) {
   return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 vec3 applyFinish(vec3 col, vec2 uv) {
-  col *= 1.1;
+  col *= 1.1 * u_Exposure;
   col = acesTonemap(col);
   col = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
   float d = distance(uv, vec2(0.5));
@@ -271,12 +272,14 @@ void main() {
           // Tn = (x^3 * (1 - sqrt(x)) * 2.11)^0.25, x = rIn / r.
           float x = rIn / rDisk;
           float Tn = pow(x * x * x * (1.0 - sqrt(x)) * 2.11, 0.25);
-          // 3-stop gradient: outer -> mid -> inner white.
-          vec3 c1 = vec3(0.40, 0.06, 0.015);
-          vec3 c2 = vec3(1.00, 0.48, 0.12);
-          vec3 c3 = vec3(1.00, 0.97, 0.90);
-          vec3 dcol = mix(c1, c2, smoothstep(0.05, 0.5, Tn));
-          dcol = mix(dcol, c3, smoothstep(0.5, 0.95, Tn));
+          // 4-stop ramp: deep -> orange -> amber -> hot.
+          vec3 c1 = vec3(0.95, 0.18, 0.02);
+          vec3 c2 = vec3(1.00, 0.45, 0.08);
+          vec3 c3 = vec3(1.00, 0.72, 0.30);
+          vec3 c4 = vec3(0.88, 0.90, 1.00);
+          vec3 dcol = mix(c1, c2, smoothstep(0.0, 0.3, Tn));
+          dcol = mix(dcol, c3, smoothstep(0.3, 0.65, Tn));
+          dcol = mix(dcol, c4, smoothstep(0.65, 1.0, Tn));
           // Concentrated toward ISCO (high beaming contrast), dim floor outside.
           vec3 emis = dcol * (0.06 + 3.5 * Tn * Tn * Tn) * (0.30 + 0.70 * x);
           // White-hot inner rim: uniform boost, beaming untouched.
@@ -300,7 +303,11 @@ void main() {
           accumAlpha += (1.0 - accumAlpha) * diskAlpha;
 
           if (accumAlpha >= 0.98) {
-            FragColor = vec4(applyFinish(applyObserverShift(accumColor, fCamSqrt, camRedden), v_TexCoord),
+            vec3 glowCol = accumColor;
+            float glowLuma = dot(glowCol, vec3(0.299, 0.587, 0.114));
+            float glowF = smoothstep(0.2, 0.8, glowLuma);
+            glowCol += mix(mix(glowCol, vec3(1.0), 0.3), vec3(1.0), 0.5) * glowF * 0.35;
+            FragColor = vec4(applyFinish(applyObserverShift(glowCol, fCamSqrt, camRedden), v_TexCoord),
                              1.0);
             return;
           }
@@ -323,6 +330,11 @@ void main() {
       col += vec3(1.0, 0.85, 0.6) * ring * 2.5;
       float eglow = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
       col += vec3(1.0, 0.55, 0.25) * eglow * 0.5;
+      if (u_DiskOn == 1) {
+        float glowLuma = dot(col, vec3(0.299, 0.587, 0.114));
+        float glowF = smoothstep(0.2, 0.8, glowLuma);
+        col += mix(mix(col, vec3(1.0), 0.3), vec3(1.0), 0.5) * glowF * 0.35;
+      }
       FragColor = vec4(applyFinish(applyObserverShift(col, fCamSqrt, camRedden), v_TexCoord), 1.0);
       return;
     }
@@ -336,5 +348,10 @@ void main() {
   colFallback += vec3(1.0, 0.85, 0.6) * ringFb * 2.5;
   float eglowFb = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
   colFallback += vec3(1.0, 0.55, 0.25) * eglowFb * 0.5;
+  if (u_DiskOn == 1) {
+    float glowLumaFb = dot(colFallback, vec3(0.299, 0.587, 0.114));
+    float glowFFb = smoothstep(0.2, 0.8, glowLumaFb);
+    colFallback += mix(mix(colFallback, vec3(1.0), 0.3), vec3(1.0), 0.5) * glowFFb * 0.35;
+  }
   FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCamSqrt, camRedden), v_TexCoord), 1.0);
 }

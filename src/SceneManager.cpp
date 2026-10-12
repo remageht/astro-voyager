@@ -301,6 +301,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1i("u_MaxSteps", m_settings.maxSteps);
     m_bhShader->setUniform1i("u_DiskOn", m_settings.diskOn ? 1 : 0);
     m_bhShader->setUniform1f("u_Time", time);
+    m_bhShader->setUniform1f("u_Exposure", m_exposure);
     m_bhShader->setUniform1i("u_Skybox", 0);
 
     m_skyboxDeep->bind(0);
@@ -311,6 +312,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_quasarShader->bind();
     m_quasarShader->setUniform3f("u_CoreColor", 1.0f, 0.85f, 0.65f);
     m_quasarShader->setUniform1f("u_Time", time);
+    m_quasarShader->setUniform1f("u_Exposure", m_exposure);
 
     m_screenQuad->draw();
     m_quasarShader->unbind();
@@ -373,6 +375,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     double spawn = m_currentStation->spawnDistanceRs;
     float zoom = static_cast<float>(std::clamp(spawn / std::max(dist, 1e-3), 0.2, 4.0));
     m_galaxyShader->setUniform1f("u_Zoom", zoom);
+    m_galaxyShader->setUniform1f("u_Exposure", m_exposure);
 
     m_screenQuad->draw();
     m_galaxyShader->unbind();
@@ -381,6 +384,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_nebulaShader->bind();
     m_nebulaShader->setUniform1f("u_Time", time);
     m_nebulaShader->setUniform1f("u_Aspect", aspect);
+    m_nebulaShader->setUniform1f("u_Exposure", m_exposure);
     m_screenQuad->draw();
     m_nebulaShader->unbind();
   } else if (m_currentStation->type == StationType::SolarSystem) {
@@ -414,6 +418,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_skyShader->setUniform1f("u_Aspect", aspect);
     m_skyShader->setUniform1f("u_FovY", glm::radians(m_settings.fovDegrees));
     m_skyShader->setUniform1i("u_Sky", 0);
+    m_skyShader->setUniform1f("u_Exposure", m_exposure);
     m_skyboxLocal->bind(0);
     glDepthMask(GL_FALSE);
     m_screenQuad->draw();
@@ -424,20 +429,25 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_linesShader->setUniformMat4f("u_MVP", mvp);
     m_linesShader->setUniformMat4f("u_Model", glm::mat4(1.0f));
     m_linesShader->setUniform3f("u_LineColor", 0.45f, 0.55f, 0.75f);
-    m_orbits.drawLines();
+    if (m_showOrbits) {
+      m_orbits.drawLines();
+    }
 
-    m_linesShader->setUniformMat4f("u_Model", glm::rotate(glm::mat4(1.0f), time * 0.02f,
-                                                          glm::vec3(0.0f, 1.0f, 0.0f)));
-    m_linesShader->setUniform3f("u_LineColor", 0.45f, 0.38f, 0.30f);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE);
-    m_belt.draw();
-    glDisable(GL_BLEND);
+    if (m_showBelt) {
+      m_linesShader->setUniformMat4f("u_Model", glm::rotate(glm::mat4(1.0f), time * 0.02f,
+                                                            glm::vec3(0.0f, 1.0f, 0.0f)));
+      m_linesShader->setUniform3f("u_LineColor", 0.45f, 0.38f, 0.30f);
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_ONE, GL_ONE);
+      m_belt.draw();
+      glDisable(GL_BLEND);
+    }
     m_linesShader->unbind();
 
     m_planetShader->bind();
     m_planetShader->setUniformMat4f("u_MVP", mvp);
     m_planetShader->setUniform1f("u_Time", time);
+    m_planetShader->setUniform1f("u_Exposure", m_exposure);
     m_planetShader->setUniform3f("u_CamPos", static_cast<float>(cp.x),
                                  static_cast<float>(cp.y), static_cast<float>(cp.z));
     for (const auto& body : m_lastBodies) {
@@ -535,6 +545,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_cometShader->setUniformMat4f("u_Model", tailModel);
         m_cometShader->setUniform1f("u_Seed", cometDef->seed);
         m_cometShader->setUniform3f("u_ColA", 0.55f, 0.75f, 1.0f);
+        m_cometShader->setUniform1f("u_Exposure", m_exposure);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         m_sphere.draw();

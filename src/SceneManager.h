@@ -90,6 +90,13 @@ class SceneManager {
   void applyPreset(PerfPreset preset);
   void setPreset(PerfPreset preset) { m_preset = preset; }
 
+  void setExposure(float e) { m_exposure = e; }
+  float getExposure() const { return m_exposure; }
+  void setShowOrbits(bool on) { m_showOrbits = on; }
+  bool showOrbits() const { return m_showOrbits; }
+  void setShowBelt(bool on) { m_showBelt = on; }
+  bool showBelt() const { return m_showBelt; }
+
   void togglePause() { m_paused = !m_paused; }
   bool isPaused() const { return m_paused; }
   void setTimeScale(float s) {
@@ -115,6 +122,9 @@ class SceneManager {
   const Station* m_currentStation = nullptr;
   RenderSettings m_settings;
   PerfPreset m_preset = PerfPreset::Med;
+  float m_exposure = 1.0f;
+  bool m_showOrbits = true;
+  bool m_showBelt = true;
 
   // Simulation clock for animated stations (solar system orbits).
   // Advanced from wall time inside render(); harness passes constant

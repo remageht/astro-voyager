@@ -10,6 +10,7 @@ in vec2 v_TexCoord;
 uniform float u_Time;
 uniform float u_Aspect;
 uniform float u_Zoom;
+uniform float u_Exposure;
 
 // Hash for procedural stars and grain
 float hash21(vec2 p) {
@@ -182,7 +183,7 @@ void main() {
 
   // ACES filmic tonemap with exposure 1.0, then gamma 1/2.2
   float exposure = 1.0;
-  col *= exposure;
+  col *= exposure * u_Exposure;
   col = acesNarkowicz(col);
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
 

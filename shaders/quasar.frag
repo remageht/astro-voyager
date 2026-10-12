@@ -5,6 +5,7 @@ out vec4 FragColor;
 in vec2 v_TexCoord;
 uniform vec3 u_CoreColor;
 uniform float u_Time;
+uniform float u_Exposure;
 
 float hash21(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -58,7 +59,7 @@ void main() {
   // Faint elliptical host galaxy under the core.
   vec2 euv = vec2(uv.x, uv.y * 1.6);
   float re = length(euv);
-  vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.07 * exp(-pow(re / 0.2, 0.25));
+  vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.045 * exp(-pow(re / 0.2, 0.25));
   hostCol *= 1.0 - smoothstep(0.3, 1.0, re);
   col += hostCol;
 
@@ -77,7 +78,8 @@ void main() {
   float s = uv.x;
   float sAdv = s - u_Time * 0.15;
   float n = noise1D(sAdv * 8.0 + 1.7);
-  float knots = pow(n, 8.0) * 0.5;
+  float knots = pow(n, 8.0) * 0.8;
+  knots *= exp(-abs(s) * 2.0) + 0.25;
   float jetBright = 0.08 + knots * 0.34;
   float envP = exp(-max(s, 0.0) * 2.2);
   float envN = exp(-max(-s, 0.0) * 5.5);
@@ -92,7 +94,8 @@ void main() {
   float sC = -s;
   float sCAdv = sC - u_Time * 0.15;
   float nC = noise1D(sCAdv * 8.0 + 1.7);
-  float knotsC = pow(nC, 8.0) * 0.5;
+  float knotsC = pow(nC, 8.0) * 0.8;
+  knotsC *= exp(-abs(sC) * 2.0) + 0.25;
   float jetBrightC = (0.08 + knotsC * 0.34) * 0.15;
   float envCP = exp(-max(sC, 0.0) * 2.2);
   float envCN = exp(-max(-sC, 0.0) * 5.5);
@@ -119,7 +122,7 @@ void main() {
   col *= vig;
 
   // ACES filmic, exposure 1.0, then gamma.
-  col *= 1.0;
+  col *= u_Exposure;
   col = acesNarkowicz(col);
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
 

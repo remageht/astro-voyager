@@ -76,11 +76,53 @@ AppGL::~AppGL() {
 
 int AppGL::run() {
   float lastTime = static_cast<float>(glfwGetTime());
+  static float menuAngle = 0.0f;
 
   while (!m_window->shouldClose()) {
     float currentTime = static_cast<float>(glfwGetTime());
     float deltaTime = currentTime - lastTime;
     lastTime = currentTime;
+
+    if (m_inMenu) {
+      // Main menu: showcase orbit around the current station, world renders behind.
+      // ESC in menu does nothing (consume the edge only).
+      GLFWwindow* menuWin = m_window->getNativeWindow();
+      bool menuEscDown = (glfwGetKey(menuWin, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+      m_prevEscPressed = menuEscDown;
+
+      m_window->pollEvents();
+
+      const Station* menuSt = m_sceneManager->getCurrentStation();
+      double menuSpawn = (menuSt ? menuSt->spawnDistanceRs : 20.0);
+      float menuRadius = static_cast<float>(menuSpawn * 1.25 + 4.0);
+      menuAngle += deltaTime * 0.05f;
+      m_camera.position = Vec3(static_cast<double>(std::cos(menuAngle)) * menuRadius,
+                               static_cast<double>(menuRadius) * 0.35,
+                               static_cast<double>(std::sin(menuAngle)) * menuRadius);
+      Vec3 menuOrigin(0.0, 0.0, 0.0);
+      computeLookYawPitch(m_camera.position, menuOrigin, m_camera.yaw, m_camera.pitch);
+
+      int menuFbW = 0, menuFbH = 0;
+      m_window->getFramebufferSize(menuFbW, menuFbH);
+      glViewport(0, 0, menuFbW, menuFbH);
+
+      // Render active scene
+      m_sceneManager->render(m_camera, menuFbW, menuFbH, currentTime);
+
+      // Render ImGui UI
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+
+      drawMenu();
+      drawWorldLabels();
+
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+      m_window->swapBuffers();
+      continue;
+    }
 
     // Auto-performance benchmark: 2-second FPS measurement on scene start
     if (m_benchmarking && !m_userOverrodePreset) {
@@ -149,7 +191,12 @@ int AppGL::run() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    drawImGui();
+    if (!m_hideUI) {
+      drawImGui();
+    }
+    if (m_helpOverlay) {
+      drawHelpOverlay();
+    }
     drawWorldLabels();
 
     ImGui::Render();
@@ -163,11 +210,13 @@ int AppGL::run() {
 
 void AppGL::processInput(float deltaTime) {
   GLFWwindow* win = m_window->getNativeWindow();
-  if (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-    glfwSetWindowShouldClose(win, GLFW_TRUE);
-  }
-
   ImGuiIO& io = ImGui::GetIO();
+
+  const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard) {
+    m_inMenu = true;
+  }
+  m_prevEscPressed = escDown;
 
   const bool slashDown = (glfwGetKey(win, GLFW_KEY_SLASH) == GLFW_PRESS);
   if (slashDown && !m_prevSlashPressed && !io.WantCaptureKeyboard) {
@@ -198,6 +247,18 @@ void AppGL::processInput(float deltaTime) {
     m_sceneManager->deleteSelected();
   }
   m_prevDeletePressed = delDown;
+
+  const bool hDown = (glfwGetKey(win, GLFW_KEY_H) == GLFW_PRESS);
+  if (hDown && !m_prevHPressed && !io.WantCaptureKeyboard) {
+    m_hideUI = !m_hideUI;
+  }
+  m_prevHPressed = hDown;
+
+  const bool f1Down = (glfwGetKey(win, GLFW_KEY_F1) == GLFW_PRESS);
+  if (f1Down && !m_prevF1Pressed && !io.WantCaptureKeyboard) {
+    m_helpOverlay = !m_helpOverlay;
+  }
+  m_prevF1Pressed = f1Down;
 
   // Smooth fly-to flight update (runs every frame).
   if (m_flying) {
@@ -712,6 +773,9 @@ void AppGL::drawImGui() {
       if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f))) {
         teleportToStation(station.id);
       }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", station.description.c_str());
+      }
 
       if (isCurrent) {
         ImGui::PopStyleColor();
@@ -1018,7 +1082,164 @@ void AppGL::checkAchievements() {
   }
 }
 
+void AppGL::drawHelpContent() {
+  ImGui::BulletText("WASD move, Space / Shift up / down");
+  ImGui::BulletText("Drag mouse to look around");
+  ImGui::BulletText("/ focus station search");
+  ImGui::BulletText("F5 export journey, F6 import journey");
+  ImGui::BulletText("P pause / resume time");
+  ImGui::BulletText("Double-click an object to fly to it");
+  ImGui::BulletText("Del delete selected rock");
+  ImGui::BulletText("H hide / show UI");
+  ImGui::BulletText("F1 toggle this help");
+  ImGui::BulletText("ESC back to menu");
+}
+
+void AppGL::drawHelpOverlay() {
+  ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_FirstUseEver);
+  ImGui::Begin("Help (F1 to close)");
+  drawHelpContent();
+  ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Press F1 or Close to hide");
+  if (ImGui::Button("Close", ImVec2(-1.0f, 0.0f))) {
+    m_helpOverlay = false;
+  }
+  ImGui::End();
+}
+
+void AppGL::drawMenu() {
+  ImGuiIO& io = ImGui::GetIO();
+  ImVec2 menuCenter(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+  ImGui::SetNextWindowPos(menuCenter, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f), ImGuiCond_Always);
+  ImGuiWindowFlags menuFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+  ImGui::Begin("MainMenu", nullptr, menuFlags);
+
+  if (m_menuPage == 0) {
+    ImGui::SetWindowFontScale(1.6f);
+    ImGui::Text("ASTRO-VOYAGER");
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::Text("Version %s", kVersion);
+
+    if (ImGui::Button("Play", ImVec2(-1.0f, 40.0f))) {
+      m_inMenu = false;
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Resume your journey");
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Destinations:");
+    for (const auto& station : builtinCatalog()) {
+      std::string destLabel = station.name + " (" + station.id + ")";
+      if (ImGui::Button(destLabel.c_str(), ImVec2(-1.0f, 0.0f))) {
+        teleportToStation(station.id);
+        m_inMenu = false;
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", station.description.c_str());
+      }
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Recent:");
+    const Station* menuCur = m_sceneManager->getCurrentStation();
+    std::string menuCurId = menuCur ? menuCur->id : "";
+    std::vector<std::string> recentIds;
+    std::set<std::string> recentSeen;
+    for (size_t i = m_route.size(); i-- > 0;) {
+      const std::string& rid = m_route[i];
+      if (rid == menuCurId) continue;
+      if (!findStation(rid)) continue;
+      if (recentSeen.find(rid) != recentSeen.end()) continue;
+      recentSeen.insert(rid);
+      recentIds.push_back(rid);
+      if (recentIds.size() >= 5) break;
+    }
+    if (recentIds.empty()) {
+      ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(empty)");
+    } else {
+      for (const auto& rid : recentIds) {
+        const Station* rst = findStation(rid);
+        std::string recentLabel = rst ? (rst->name + " (" + rst->id + ")") : rid;
+        if (ImGui::Button(recentLabel.c_str(), ImVec2(-1.0f, 0.0f))) {
+          teleportToStation(rid);
+          m_inMenu = false;
+        }
+        if (rst && ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("%s", rst->description.c_str());
+        }
+      }
+    }
+
+    ImGui::Separator();
+    float menuAvail = ImGui::GetContentRegionAvail().x;
+    float menuBtnW = (menuAvail - 2.0f * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
+    if (ImGui::Button("Settings", ImVec2(menuBtnW, 0.0f))) {
+      m_menuPage = 1;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Help", ImVec2(menuBtnW, 0.0f))) {
+      m_menuPage = 2;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Exit", ImVec2(menuBtnW, 0.0f))) {
+      glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
+    }
+  } else if (m_menuPage == 1) {
+    ImGui::Text("Settings");
+    const char* presetNames[] = {"Low", "Med", "Ultra", "Custom"};
+    int menuPreset = static_cast<int>(m_sceneManager->getPreset());
+    if (ImGui::Combo("Preset", &menuPreset, presetNames, 4)) {
+      m_userOverrodePreset = true;
+      m_benchmarking = false;
+      if (menuPreset >= 0 && menuPreset <= 2) {
+        m_sceneManager->applyPreset(static_cast<PerfPreset>(menuPreset));
+      } else {
+        m_sceneManager->setPreset(PerfPreset::Custom);
+      }
+    }
+    RenderSettings& menuSettings = m_sceneManager->getSettings();
+    bool menuChanged = false;
+    menuChanged |= ImGui::SliderFloat("FOV", &menuSettings.fovDegrees, 30.0f, 110.0f, "%.1f deg");
+    float menuExposure = m_sceneManager->getExposure();
+    if (ImGui::SliderFloat("Exposure", &menuExposure, 0.3f, 2.0f, "%.2f")) {
+      m_sceneManager->setExposure(menuExposure);
+      menuChanged = true;
+    }
+    menuChanged |= ImGui::Checkbox("Disk", &menuSettings.diskOn);
+    menuChanged |= ImGui::Checkbox("Labels", &m_showLabels);
+    bool menuOrbits = m_sceneManager->showOrbits();
+    if (ImGui::Checkbox("Orbits", &menuOrbits)) {
+      m_sceneManager->setShowOrbits(menuOrbits);
+      menuChanged = true;
+    }
+    bool menuBelt = m_sceneManager->showBelt();
+    if (ImGui::Checkbox("Belt", &menuBelt)) {
+      m_sceneManager->setShowBelt(menuBelt);
+      menuChanged = true;
+    }
+    if (menuChanged) {
+      m_userOverrodePreset = true;
+      m_benchmarking = false;
+      m_sceneManager->setPreset(PerfPreset::Custom);
+    }
+    if (ImGui::Button("Back", ImVec2(-1.0f, 0.0f))) {
+      m_menuPage = 0;
+    }
+  } else {
+    ImGui::Text("Help - Controls");
+    drawHelpContent();
+    if (ImGui::Button("Back", ImVec2(-1.0f, 0.0f))) {
+      m_menuPage = 0;
+    }
+  }
+
+  ImGui::End();
+}
+
 void AppGL::drawWorldLabels() {
+  if (!m_showLabels) return;
   const Station* curSt = m_sceneManager->getCurrentStation();
   if (!curSt) return;
 

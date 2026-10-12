@@ -12,6 +12,7 @@ uniform float u_Time;
 uniform vec3 u_CamPos;
 uniform float u_Spot;
 uniform float u_Clouds;
+uniform float u_Exposure;
 float hash11(float p) {
   return fract(sin(p) * 43758.5453);
 }
@@ -120,6 +121,8 @@ void main() {
       float rim = smoothstep(0.28, 0.35, sd) * (1.0 - smoothstep(0.35, 0.47, sd));
       albedo *= 1.0 - rim * 0.25;
     }
+    float pol = smoothstep(0.55, 0.9, abs(ln.y));
+    albedo = mix(albedo, albedo * vec3(0.75, 0.8, 0.95), pol * 0.5);
   } else if (u_Type == 2) {
     float continents = fbm4(v_Local * 3.0 + u_Seed) * 0.9677 + 0.0323 * vnoise3((v_Local * 3.0 + u_Seed) * 16.9818);
     land = smoothstep(0.48, 0.56, continents);
@@ -153,12 +156,26 @@ void main() {
     float sp = step(0.985, hash13(vec3(floor(v_Local.xz * 40.0), u_Seed))) * 0.6;
     col += vec3(1.0) * sp * diff;
   }
+  if (u_Type == 1 || u_Type == 2 || u_Type == 3) {
+    vec3 rimColor = vec3(0.45, 0.65, 1.0);
+    if (u_Type == 1) {
+      rimColor = vec3(0.9, 0.85, 0.75) * 0.7;
+    } else if (u_Type == 3) {
+      rimColor = vec3(0.5, 0.85, 1.0);
+    }
+    float atmRim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
+    col += rimColor * atmRim * (0.25 + diff);
+    float fwdAmt = pow(max(dot(-viewDir, sunDir), 0.0), 16.0);
+    col += rimColor * fwdAmt * atmRim * 1.5;
+    float limbRed = pow(1.0 - max(dot(n, viewDir), 0.0), 2.0) * 0.35 * diff;
+    col = mix(col, col * vec3(1.05, 0.85, 0.7), limbRed);
+  }
   if (u_Type == 4) {
     vec3 comaColor = vec3(0.75, 1.0, 0.85) * 3.0;
     float ndotl = max(dot(normalize(v_Normal), normalize(u_CamPos - v_WorldPos)), 0.0);
     col = comaColor * (0.25 + 2.75 * pow(ndotl, 1.5));
   }
-  col *= 1.1;
+  col *= 1.1 * u_Exposure;
   col = acesNarkowicz(col);
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
   FragColor = vec4(col, 1.0);

@@ -33,6 +33,9 @@ class AppGL {
   void processInput(float deltaTime);
   void processMouse();
   void drawImGui();
+  void drawMenu();
+  void drawHelpContent();
+  void drawHelpOverlay();
   void drawWorldLabels();
   void teleportToStation(const std::string& id);
   void flyToObjectAt(double px, double py);
@@ -90,6 +93,16 @@ class AppGL {
   double m_lastPressY = 0.0;
   bool m_prevLeftDown = false;
   bool m_prevDeletePressed = false;
+
+  // Main menu / overlay state
+  bool m_inMenu = true;
+  int m_menuPage = 0;  // 0 main, 1 settings, 2 help
+  bool m_hideUI = false;
+  bool m_helpOverlay = false;
+  bool m_showLabels = true;
+  bool m_prevEscPressed = false;
+  bool m_prevHPressed = false;
+  bool m_prevF1Pressed = false;
 
   // Smooth fly-to flight state
   bool m_flying = false;
