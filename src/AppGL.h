@@ -36,6 +36,7 @@ class AppGL {
   void drawWorldLabels();
   void teleportToStation(const std::string& id);
   void flyToObjectAt(double px, double py);
+  std::string pickCustomAt(double px, double py);
   void startObjectFlight(const Vec3& objPos, double viewDist,
                          const std::string& name, const Vec3& lookTarget);
   void startDollyFlight();
@@ -66,6 +67,7 @@ class AppGL {
   char m_searchBuf[64] = {};
   bool m_searchFocusRequest = false;
   bool m_prevSlashPressed = false;
+  bool m_prevPPressed = false;
 
   // Journey route history
   std::vector<std::string> m_route;
@@ -87,6 +89,7 @@ class AppGL {
   double m_lastPressX = 0.0;
   double m_lastPressY = 0.0;
   bool m_prevLeftDown = false;
+  bool m_prevDeletePressed = false;
 
   // Smooth fly-to flight state
   bool m_flying = false;

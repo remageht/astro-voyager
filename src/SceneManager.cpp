@@ -5,8 +5,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <algorithm>
+#include <string>
 
 namespace astro {
 
@@ -90,6 +92,96 @@ SceneManager::SceneManager() {
   }
 
   applyPreset(PerfPreset::Med);
+}
+
+void SceneManager::spawnRockAt(const Vec3& p, const Vec3& v) {
+  ++m_customSeq;
+  CustomBody b;
+  b.id = "rock-" + std::to_string(m_customSeq);
+  b.name = "Rock " + std::to_string(m_customSeq);
+  b.pos = p;
+  b.vel = v;
+  b.radius = 0.3f;
+  b.color = Vec3(0.62, 0.58, 0.52);
+  b.seed = static_cast<float>(m_customSeq);
+  m_custom.push_back(b);
+}
+
+void SceneManager::deleteSelected() {
+  if (m_selectedId.empty()) return;
+  for (size_t i = 0; i < m_custom.size(); ++i) {
+    if (m_custom[i].id == m_selectedId) {
+      m_custom.erase(m_custom.begin() + static_cast<std::ptrdiff_t>(i));
+      break;
+    }
+  }
+  m_selectedId.clear();
+}
+
+void SceneManager::clearCustom() {
+  m_custom.clear();
+  m_selectedId.clear();
+}
+
+void SceneManager::updateCustom(float dt) {
+  if (dt != 0.0f) {
+    for (auto& b : m_custom) {
+      b.pos.x += b.vel.x * dt;
+      b.pos.y += b.vel.y * dt;
+      b.pos.z += b.vel.z * dt;
+    }
+  }
+  if (!m_collisions) return;
+  // Pairwise merge in index order (deterministic): bigger absorbs smaller,
+  // volume adds up (radius = cbrt(ra^3 + rb^3)), survivor keeps the bigger
+  // body's color/name/id/seed/vel at the earlier index.
+  for (size_t i = 0; i < m_custom.size(); ++i) {
+    for (size_t j = i + 1; j < m_custom.size();) {
+      double dx = m_custom[i].pos.x - m_custom[j].pos.x;
+      double dy = m_custom[i].pos.y - m_custom[j].pos.y;
+      double dz = m_custom[i].pos.z - m_custom[j].pos.z;
+      double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+      double touch = static_cast<double>(m_custom[i].radius) +
+                     static_cast<double>(m_custom[j].radius);
+      if (dist >= touch) {
+        ++j;
+        continue;
+      }
+      size_t big = (m_custom[i].radius >= m_custom[j].radius) ? i : j;
+      double ra = static_cast<double>(m_custom[i].radius);
+      double rb = static_cast<double>(m_custom[j].radius);
+      float merged = static_cast<float>(std::cbrt(ra * ra * ra + rb * rb * rb));
+      std::string survivorId = m_custom[big].id;
+      std::string erasedId = m_custom[j].id;
+      CustomBody survivor = m_custom[big];
+      survivor.radius = merged;
+      m_custom[i] = survivor;
+      m_custom.erase(m_custom.begin() + static_cast<std::ptrdiff_t>(j));
+      if (m_selectedId == erasedId) m_selectedId = survivorId;
+      // Do not advance j: a new body shifted into slot j, retest it.
+    }
+  }
+  // Absorption by sun/planets: custom inside bodyRadius + customR is erased.
+  for (size_t i = m_custom.size(); i-- > 0;) {
+    bool absorbed = false;
+    for (const auto& body : m_lastBodies) {
+      if (!body.def) continue;
+      double dx = m_custom[i].pos.x - body.pos.x;
+      double dy = m_custom[i].pos.y - body.pos.y;
+      double dz = m_custom[i].pos.z - body.pos.z;
+      double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+      double touch = static_cast<double>(body.def->radius) +
+                     static_cast<double>(m_custom[i].radius);
+      if (dist < touch) {
+        absorbed = true;
+        break;
+      }
+    }
+    if (absorbed) {
+      if (m_custom[i].id == m_selectedId) m_selectedId.clear();
+      m_custom.erase(m_custom.begin() + static_cast<std::ptrdiff_t>(i));
+    }
+  }
 }
 
 void SceneManager::applyPreset(PerfPreset preset) {
@@ -292,8 +384,14 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_screenQuad->draw();
     m_nebulaShader->unbind();
   } else if (m_currentStation->type == StationType::SolarSystem) {
-    m_sol.update(time);
+    float dt = (m_lastTime < 0.0f) ? 0.0f : (time - m_lastTime);
+    m_lastTime = time;
+    if (dt < 0.0f) dt = 0.0f;
+    if (dt > 0.5f) dt = 0.5f;
+    if (!m_paused) m_simTime += dt * m_timeScale;
+    m_sol.update(m_simTime);
     m_lastBodies = m_sol.bodies();
+    if (!m_paused && dt > 0.0f) updateCustom(dt * m_timeScale);
 
     glm::mat4 proj = glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1000.0f);
     glm::vec3 eye(cp.x, cp.y, cp.z);
@@ -376,6 +474,25 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glDisable(GL_BLEND);
         m_planetShader->bind();
       }
+    }
+    for (const auto& custom : m_custom) {
+      glm::vec3 cpos(static_cast<float>(custom.pos.x),
+                     static_cast<float>(custom.pos.y),
+                     static_cast<float>(custom.pos.z));
+      glm::mat4 model = glm::translate(glm::mat4(1.0f), cpos) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(custom.radius));
+      m_planetShader->setUniformMat4f("u_Model", model);
+      m_planetShader->setUniform1i("u_Type", 2);
+      m_planetShader->setUniform1f("u_Seed", custom.seed);
+      m_planetShader->setUniform3f("u_ColA", static_cast<float>(custom.color.x),
+                                   static_cast<float>(custom.color.y),
+                                   static_cast<float>(custom.color.z));
+      m_planetShader->setUniform3f("u_ColB", static_cast<float>(custom.color.x) * 0.6f,
+                                   static_cast<float>(custom.color.y) * 0.6f,
+                                   static_cast<float>(custom.color.z) * 0.6f);
+      m_planetShader->setUniform1i("u_Spot", 0);
+      m_planetShader->setUniform1i("u_Clouds", 0);
+      m_sphere.draw();
     }
     m_planetShader->unbind();
 

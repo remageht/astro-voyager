@@ -62,11 +62,21 @@ void main() {
   hostCol *= 1.0 - smoothstep(0.3, 1.0, re);
   col += hostCol;
 
+  // Rotating accretion disk swirl, face-on spiral, rigid rotation.
+  float baseAngle = atan(uv.y, uv.x);
+  float patternAngle = baseAngle - u_Time * 0.25;
+  float diskR = length(uv * vec2(1.0, 2.2));
+  float spiral = sin(patternAngle * 3.0 + diskR * 18.0);
+  float diskMask = smoothstep(0.004, 0.015, diskR) * (1.0 - smoothstep(0.015, 0.12, diskR));
+  float diskBright = (0.5 + 0.5 * spiral) * diskMask * exp(-diskR * 6.0);
+  col += vec3(0.65, 0.75, 1.0) * diskBright * 0.6;
+
   // Thin blue jet along x axis, one side longer (+x).
-  float d = abs(uv.y + 0.12 * uv.x);
+  float d = abs(uv.y + 0.12 * uv.x + sin(u_Time * 0.3) * 0.008);
   float width = 1.0 - smoothstep(0.004, 0.012, d);
   float s = uv.x;
-  float n = noise1D(s * 8.0 + 1.7);
+  float sAdv = s - u_Time * 0.15;
+  float n = noise1D(sAdv * 8.0 + 1.7);
   float knots = pow(n, 8.0) * 0.5;
   float jetBright = 0.08 + knots * 0.34;
   float envP = exp(-max(s, 0.0) * 2.2);
@@ -80,13 +90,15 @@ void main() {
 
   // Faint receding counter-jet (-x), de-beamed: mirrored s, wider, shorter, dimmer.
   float sC = -s;
-  float nC = noise1D(sC * 8.0 + 1.7);
+  float sCAdv = sC - u_Time * 0.15;
+  float nC = noise1D(sCAdv * 8.0 + 1.7);
   float knotsC = pow(nC, 8.0) * 0.5;
   float jetBrightC = (0.08 + knotsC * 0.34) * 0.15;
   float envCP = exp(-max(sC, 0.0) * 2.2);
   float envCN = exp(-max(-sC, 0.0) * 5.5);
   float envC = mix(envCN, envCP, step(0.0, sC));
-  float widthC = min(width * 1.6, 1.0);
+  float dC = abs(uv.y + 0.12 * uv.x + sin(u_Time * 0.3) * 0.008);
+  float widthC = min((1.0 - smoothstep(0.004, 0.012, dC)) * 1.6, 1.0);
   float axialC = smoothstep(0.008, 0.03, abs(sC));
   float cjShort = 1.0 - smoothstep(0.30, 0.54, abs(sC));
   float sideC = 1.0 - step(0.0, s);

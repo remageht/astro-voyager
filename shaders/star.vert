@@ -8,6 +8,7 @@ uniform float u_PixelScale;
 uniform float u_SizeK;
 out float v_Mag;
 out float v_Bright;
+out float v_Size;
 void main() {
   vec4 mv = u_MV * vec4(position, 1.0);
   float dist = max(-mv.z, 0.001);
@@ -16,4 +17,5 @@ void main() {
   gl_Position = u_MVP * vec4(position, 1.0);
   v_Mag = a_Mag;
   v_Bright = pow(2.0, -0.4 * (a_Mag - 1.0));
+  v_Size = gl_PointSize;
 }

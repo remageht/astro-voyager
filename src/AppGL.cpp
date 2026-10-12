@@ -114,6 +114,27 @@ int AppGL::run() {
         m_minBhDistance = d;
       }
     }
+    if (m_sceneManager->getCurrentStation() &&
+        m_sceneManager->getCurrentStation()->type == StationType::Constellation) {
+      const ConstellationInfo* cInfo =
+          findConstellation(m_sceneManager->getCurrentStation()->id);
+      if (cInfo) {
+        for (const auto& s : cInfo->stars) {
+          m_camera.position = interaction::pushOutOfSphere(
+              m_camera.position, s.x, s.y, s.z, 2.0);
+        }
+      }
+    }
+    if (m_sceneManager->getCurrentStation() &&
+        m_sceneManager->getCurrentStation()->type == StationType::SolarSystem) {
+      for (const auto& body : m_sceneManager->getBodies()) {
+        if (!body.def) continue;
+        double minDist = static_cast<double>(body.def->radius) * 1.3;
+        if (minDist < 0.8) minDist = 0.8;
+        m_camera.position = interaction::pushOutOfSphere(
+            m_camera.position, body.pos.x, body.pos.y, body.pos.z, minDist);
+      }
+    }
     checkAchievements();
 
     int fbWidth = 0, fbHeight = 0;
@@ -165,6 +186,18 @@ void AppGL::processInput(float deltaTime) {
     importJourney();
   }
   m_prevF6Pressed = f6Down;
+
+  const bool pDown = (glfwGetKey(win, GLFW_KEY_P) == GLFW_PRESS);
+  if (pDown && !m_prevPPressed && !io.WantCaptureKeyboard) {
+    m_sceneManager->togglePause();
+  }
+  m_prevPPressed = pDown;
+
+  const bool delDown = (glfwGetKey(win, GLFW_KEY_DELETE) == GLFW_PRESS);
+  if (delDown && !m_prevDeletePressed && !io.WantCaptureKeyboard) {
+    m_sceneManager->deleteSelected();
+  }
+  m_prevDeletePressed = delDown;
 
   // Smooth fly-to flight update (runs every frame).
   if (m_flying) {
@@ -223,6 +256,10 @@ void AppGL::processMouse() {
         m_lastPressTime = now;
         m_lastPressX = mouseX;
         m_lastPressY = mouseY;
+        const Station* pressSt = m_sceneManager->getCurrentStation();
+        if (pressSt && pressSt->type == StationType::SolarSystem) {
+          m_sceneManager->setSelected(pickCustomAt(mouseX, mouseY));
+        }
       }
     }
   }
@@ -384,6 +421,59 @@ void AppGL::updateFlight(float deltaTime) {
   if (m_flyT >= 1.0f) {
     m_flying = false;
   }
+}
+
+std::string AppGL::pickCustomAt(double px, double py) {
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  if (!curSt || curSt->type != StationType::SolarSystem) return "";
+  const std::vector<CustomBody>& customs = m_sceneManager->getCustoms();
+  if (customs.empty()) return "";
+  int fbW = 0, fbH = 0;
+  m_window->getFramebufferSize(fbW, fbH);
+  if (fbW <= 0 || fbH <= 0) return "";
+  GLFWwindow* win = m_window->getNativeWindow();
+  int winW = 0, winH = 0;
+  glfwGetWindowSize(win, &winW, &winH);
+  double fpx = px;
+  double fpy = py;
+  if (winW > 0 && winH > 0) {
+    fpx = px * static_cast<double>(fbW) / static_cast<double>(winW);
+    fpy = py * static_cast<double>(fbH) / static_cast<double>(winH);
+  }
+  float fov = m_sceneManager->getSettings().fovDegrees;
+  float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
+  glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
+  Vec3 cp = m_camera.position;
+  Vec3 cf = m_camera.forward();
+  Vec3 cu = m_camera.up();
+  glm::vec3 eye(static_cast<float>(cp.x), static_cast<float>(cp.y),
+                static_cast<float>(cp.z));
+  glm::vec3 fwd(static_cast<float>(cf.x), static_cast<float>(cf.y),
+                static_cast<float>(cf.z));
+  glm::vec3 up(static_cast<float>(cu.x), static_cast<float>(cu.y),
+               static_cast<float>(cu.z));
+  glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
+  glm::mat4 mvp = proj * view;
+  std::string bestId;
+  double bestScreen = 20.0;
+  for (const auto& c : customs) {
+    glm::vec4 clip = mvp * glm::vec4(static_cast<float>(c.pos.x),
+                                     static_cast<float>(c.pos.y),
+                                     static_cast<float>(c.pos.z), 1.0f);
+    if (clip.w <= 0.001f) continue;
+    glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) continue;
+    float sx = (ndc.x * 0.5f + 0.5f) * static_cast<float>(fbW);
+    float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * static_cast<float>(fbH);
+    double sdx = static_cast<double>(sx) - fpx;
+    double sdy = static_cast<double>(sy) - fpy;
+    double screenDist = std::sqrt(sdx * sdx + sdy * sdy);
+    if (screenDist < bestScreen) {
+      bestScreen = screenDist;
+      bestId = c.id;
+    }
+  }
+  return bestId;
 }
 
 void AppGL::flyToObjectAt(double px, double py) {
@@ -689,6 +779,19 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
+  ImGui::Text("Time:");
+  bool paused = m_sceneManager->isPaused();
+  if (ImGui::Button(paused ? "Resume (P)" : "Pause (P)", ImVec2(110.0f, 0.0f))) {
+    m_sceneManager->togglePause();
+  }
+  ImGui::SameLine();
+  float timeScale = m_sceneManager->getTimeScale();
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+  if (ImGui::SliderFloat("Speed", &timeScale, 0.0f, 8.0f, "%.1fx")) {
+    m_sceneManager->setTimeScale(timeScale);
+  }
+
+  ImGui::Separator();
   if (ImGui::Button("Reset Camera", ImVec2(-1.0f, 0.0f))) {
     if (curSt) {
       m_camera.position = Vec3(0.0, 0.0, curSt->spawnDistanceRs);
@@ -740,6 +843,54 @@ void AppGL::drawImGui() {
     } else {
       ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_journeyStatus.c_str());
     }
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Editor:");
+  if (ImGui::Button("Add rock here")) {
+    Vec3 f = m_camera.forward();
+    Vec3 u = m_camera.up();
+    Vec3 p(m_camera.position.x + f.x * 15.0,
+            m_camera.position.y + f.y * 15.0,
+            m_camera.position.z + f.z * 15.0);
+    Vec3 v(f.x * 2.0 + u.x * 0.5,
+            f.y * 2.0 + u.y * 0.5,
+            f.z * 2.0 + u.z * 0.5);
+    m_sceneManager->spawnRockAt(p, v);
+  }
+  ImGui::SameLine();
+  bool hasSel = !m_sceneManager->getSelected().empty();
+  if (!hasSel) {
+    ImGui::BeginDisabled();
+  }
+  if (ImGui::Button("Delete selected")) {
+    m_sceneManager->deleteSelected();
+  }
+  if (!hasSel) {
+    ImGui::EndDisabled();
+  }
+  bool collOn = m_sceneManager->collisionsOn();
+  if (ImGui::Checkbox("Collisions", &collOn)) {
+    m_sceneManager->setCollisions(collOn);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Clear")) {
+    m_sceneManager->clearCustom();
+  }
+  {
+    size_t nCustom = m_sceneManager->getCustoms().size();
+    std::string selName = "(none)";
+    const std::string& selId = m_sceneManager->getSelected();
+    if (!selId.empty()) {
+      selName = selId;
+      for (const auto& c : m_sceneManager->getCustoms()) {
+        if (c.id == selId) {
+          selName = c.name;
+          break;
+        }
+      }
+    }
+    ImGui::Text("Rocks: %zu, selected: %s", nCustom, selName.c_str());
   }
 
   ImGui::Separator();
@@ -1019,6 +1170,29 @@ void AppGL::drawWorldLabels() {
           drawList->AddText(font, 12.0f, ImVec2(textPos.x, currentY), distColor, distBuf);
         }
       }
+      const std::string& selId = m_sceneManager->getSelected();
+      if (!selId.empty()) {
+        for (const auto& custom : m_sceneManager->getCustoms()) {
+          if (custom.id != selId) continue;
+          glm::vec3 cpos(static_cast<float>(custom.pos.x),
+                         static_cast<float>(custom.pos.y),
+                         static_cast<float>(custom.pos.z));
+          glm::vec4 clip = mvp * glm::vec4(cpos, 1.0f);
+          if (clip.w <= 0.001f) break;
+          glm::vec3 ndc = glm::vec3(clip) / clip.w;
+          if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) break;
+          float sx = (ndc.x * 0.5f + 0.5f) * displaySize.x;
+          float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * displaySize.y;
+          ImU32 amber = IM_COL32(255, 190, 70, 255);
+          ImU32 amberDim = IM_COL32(255, 190, 70, 140);
+          drawList->AddCircle(ImVec2(sx, sy), 10.0f, amber, 24, 2.0f);
+          drawList->AddCircle(ImVec2(sx, sy), 13.0f, amberDim, 24, 1.0f);
+          ImVec2 textPos(sx + 13.0f + 5.0f, sy - 13.0f * 0.55f);
+          ImU32 nameColor = IM_COL32(255, 255, 255, 255);
+          drawList->AddText(font, 13.0f, textPos, nameColor, custom.name.c_str());
+          break;
+        }
+      }
     }
   } else if (curSt->type == StationType::Galaxy) {
     Vec3 cp = m_camera.position;
@@ -1085,6 +1259,42 @@ void AppGL::drawWorldLabels() {
       float textX = cardX + (cardWidth - sz.x) * 0.5f;
       drawList->AddText(font, l.size, ImVec2(textX, curY), l.color, l.text.c_str());
       curY += sz.y + lineSpacing;
+    }
+
+    // M31 cluster labels: fixed features, base offsets measured at zoom == 1
+    // (fractions of screen center scaling). px = cx + bx*zoom*W*0.25.
+    struct ClusterLabel {
+      const char* name;
+      const char* fact;
+      float bx;
+      float by;
+    };
+    const ClusterLabel kClusters[] = {
+        {"G1", "Mayall II, brightest globular of M31", -0.18f, -0.12f},
+        {"NGC 206", "Giant star cloud in spiral arm", 0.14f, 0.10f},
+        {"M32", "Compact elliptical companion", 0.20f, -0.14f},
+        {"M110", "Elliptical satellite galaxy", -0.24f, 0.16f},
+    };
+    double zoom = spawn / std::max(dist, 1e-3);
+    float cx = displaySize.x * 0.5f;
+    float cy = displaySize.y * 0.5f;
+    for (const auto& cl : kClusters) {
+      float clx = cx + cl.bx * static_cast<float>(zoom) * displaySize.x * 0.25f;
+      float cly = cy + cl.by * static_cast<float>(zoom) * displaySize.y * 0.25f;
+      if (clx < 24.0f || cly < 24.0f) continue;
+      if (clx > displaySize.x - 24.0f || cly > displaySize.y - 24.0f) continue;
+      if (ratio > 0.65) continue;
+      float ringR = 5.0f;
+      ImU32 ringCol = IM_COL32(255, 245, 225, 220);
+      drawList->AddCircle(ImVec2(clx, cly), ringR, ringCol, 16, 1.5f);
+      ImVec2 namePos(clx + ringR + 5.0f, cly - 13.0f * 0.55f);
+      ImU32 nameCol = IM_COL32(255, 255, 255, 255);
+      drawList->AddText(font, 13.0f, namePos, nameCol, cl.name);
+      if (ratio <= 0.35) {
+        ImU32 factCol = IM_COL32(170, 200, 230, 230);
+        drawList->AddText(font, 12.0f, ImVec2(namePos.x, namePos.y + 13.0f + 2.0f),
+                          factCol, cl.fact);
+      }
     }
   }
 

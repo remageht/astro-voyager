@@ -201,6 +201,10 @@ void main() {
   float fCamSqrt = max(sqrt(fCam), 0.0);
   vec3 camRedden = vec3(1.0 / max(fCamSqrt, 0.2));
 
+  // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - the glow
+  // below is a stylized photon-ring visualization at the photon sphere.
+  float minR = 1e30;
+
   for (int i = 0; i < ABSOLUTE_MAX_STEPS; i++) {
     if (i >= u_MaxSteps) break;
     vec4 pPrev = p;
@@ -210,6 +214,7 @@ void main() {
     float hAdapt = mix(hFar, hNear, smoothFactor);
     rk4(hAdapt, p, dp);
     renormalizeTime(p, dp);
+    if (p.y < minR) minR = p.y;
     // Wide pole band: hard-freeze phi velocity. Near the poles phi = atan2
     // is noise-dominated and 1/sin amplifies it into dp.w BEFORE the 1e-3
     // guards engage; zeroing dp.w every step keeps the transit smooth.
@@ -278,8 +283,8 @@ void main() {
           float rim = 1.0 + 2.2 * (1.0 - smoothstep(rIn, rIn * 1.18, rDisk));
           emis *= rim;
           // Keplerian turbulence: fbm in (log(r)*2.5, phi*1.5 - t*omega),
-          // omega = 2.0 * pow(r, -1.5), single domain-warp, advected by u_Time.
-          float omega = 2.0 * pow(rDisk, -1.5);
+          // omega = 4.0 * pow(r, -1.5), single domain-warp, advected by u_Time.
+          float omega = 4.0 * pow(rDisk, -1.5);
           vec2 tuv = vec2(log(max(rDisk, 0.001)) * 2.5, phiDisk * 1.5 - u_Time * omega);
           float warp = diskFbm(tuv + vec2(0.31, 0.17));
           float n = diskFbm(tuv + warp * 0.8);
@@ -314,6 +319,10 @@ void main() {
     if (p.y >= u_ShellRadius) {
       vec3 sky = texture(u_Skybox, fb).rgb;
       vec3 col = (u_DiskOn == 1) ? accumColor + (1.0 - accumAlpha) * sky : sky;
+      float ring = exp(-pow((minR - 1.5 * u_Rs) / (0.08 * u_Rs), 2.0));
+      col += vec3(1.0, 0.85, 0.6) * ring * 2.5;
+      float eglow = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
+      col += vec3(1.0, 0.55, 0.25) * eglow * 0.5;
       FragColor = vec4(applyFinish(applyObserverShift(col, fCamSqrt, camRedden), v_TexCoord), 1.0);
       return;
     }
@@ -323,5 +332,9 @@ void main() {
   vec3 colFallback = (u_DiskOn == 1)
                          ? accumColor + (1.0 - accumAlpha) * skyFallback
                          : skyFallback;
+  float ringFb = exp(-pow((minR - 1.5 * u_Rs) / (0.08 * u_Rs), 2.0));
+  colFallback += vec3(1.0, 0.85, 0.6) * ringFb * 2.5;
+  float eglowFb = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
+  colFallback += vec3(1.0, 0.55, 0.25) * eglowFb * 0.5;
   FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCamSqrt, camRedden), v_TexCoord), 1.0);
 }

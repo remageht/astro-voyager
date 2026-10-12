@@ -105,6 +105,29 @@ void main() {
   float psr = exp(-r * r * 60000.0) * 3.0;
   col += vec3(1.0) * psr;
 
+  // Filament knots: bright approachable objects on filaments.
+  vec2 knotGrid = p * 26.0;
+  vec2 knotId = floor(knotGrid);
+  vec2 knotF = fract(knotGrid) - 0.5;
+  float knotH = hash21(knotId);
+  float knotHit = step(0.978, knotH);
+  vec2 knotOff = vec2(hash21(knotId + 7.13), hash21(knotId + 3.71)) - 0.5;
+  knotOff *= 0.8;
+  vec2 knotD = knotF - knotOff;
+  float knotProf = exp(-dot(knotD, knotD) * 60.0);
+  float ringGate = smoothstep(0.25, 0.4, r) * (1.0 - smoothstep(0.8, 1.0, r));
+  vec3 knotCol = vec3(1.0, 0.62, 0.3) * 2.0;
+  col += knotHit * knotProf * filMask * ringGate * knotCol;
+
+  // Pulsar lighthouse beams: two thin opposite rotating beams.
+  float beamAng = u_Time * 2.0;
+  float ang = atan(p.y, p.x);
+  float rel = mod(ang - beamAng, 3.14159265);
+  float angDiff = min(rel, 3.14159265 - rel);
+  float beam = exp(-pow(angDiff * 8.0, 2.0)) * exp(-r * 3.0);
+  beam *= 1.0 - smoothstep(0.2, 0.35, r);
+  col += vec3(0.7, 0.85, 1.0) * beam * 0.25;
+
   // Vignette about 0.3 in screen space.
   float vig = 1.0 - 0.3 * clamp(dot(starUV * 0.7, starUV * 0.7), 0.0, 1.0);
   col *= vig;

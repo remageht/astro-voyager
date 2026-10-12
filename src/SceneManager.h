@@ -23,6 +23,17 @@ struct RenderSettings {
   bool diskOn = false;
 };
 
+// User-spawned rock (object editor, Universe-Sandbox-style v1).
+struct CustomBody {
+  std::string id;
+  std::string name;
+  Vec3 pos;
+  Vec3 vel;
+  float radius = 0.3f;
+  Vec3 color{0.62, 0.58, 0.52};
+  float seed = 1.0f;
+};
+
 enum class PerfPreset {
   Low = 0,
   Med = 1,
@@ -79,6 +90,24 @@ class SceneManager {
   void applyPreset(PerfPreset preset);
   void setPreset(PerfPreset preset) { m_preset = preset; }
 
+  void togglePause() { m_paused = !m_paused; }
+  bool isPaused() const { return m_paused; }
+  void setTimeScale(float s) {
+    m_timeScale = (s < 0.0f) ? 0.0f : (s > 8.0f ? 8.0f : s);
+  }
+  float getTimeScale() const { return m_timeScale; }
+
+  // Object editor (custom rocks, sol station only).
+  void spawnRockAt(const Vec3& p, const Vec3& v);
+  void deleteSelected();
+  void clearCustom();
+  void setCollisions(bool on) { m_collisions = on; }
+  bool collisionsOn() const { return m_collisions; }
+  void updateCustom(float dt);
+  void setSelected(const std::string& id) { m_selectedId = id; }
+  const std::string& getSelected() const { return m_selectedId; }
+  const std::vector<CustomBody>& getCustoms() const { return m_custom; }
+
  private:
   void initConstellationOrion();
   void initConstellationUma();
@@ -86,6 +115,14 @@ class SceneManager {
   const Station* m_currentStation = nullptr;
   RenderSettings m_settings;
   PerfPreset m_preset = PerfPreset::Med;
+
+  // Simulation clock for animated stations (solar system orbits).
+  // Advanced from wall time inside render(); harness passes constant
+  // time so screenshots stay deterministic.
+  float m_simTime = 0.0f;
+  float m_lastTime = -1.0f;
+  float m_timeScale = 1.0f;
+  bool m_paused = false;
 
   std::unique_ptr<ScreenQuad> m_screenQuad;
   std::unique_ptr<Shader> m_bhShader;
@@ -113,6 +150,12 @@ class SceneManager {
   BeltPoints m_belt;
   LineMesh m_orbits;
   std::vector<BodyState> m_lastBodies;
+
+  // Object editor state (empty at spawn, only UI spawns).
+  std::vector<CustomBody> m_custom;
+  bool m_collisions = true;
+  int m_customSeq = 0;
+  std::string m_selectedId;
 };
 
 }  // namespace astro

@@ -100,6 +100,7 @@ Check 'bh shader shell' ($bh -match 'u_ShellRadius')
 Check 'galaxy shader exists' (Test-Path (Join-Path $root 'shaders/galaxy.frag'))
 Check 'nebula shader exists' (Test-Path (Join-Path $root 'shaders/nebula.frag'))
 Check 'comet frag exists' (Test-Path (Join-Path $root 'shaders/comet.frag'))
+Check 'time controls' ((Read-File 'src/SceneManager.cpp') -match 'm_timeScale')
 Check 'star vert exists' (Test-Path (Join-Path $root 'shaders/star.vert'))
 Check 'star frag exists' (Test-Path (Join-Path $root 'shaders/star.frag'))
 $badSmooth = @(Get-ChildItem (Join-Path $root 'shaders') -Include *.vert,*.frag -Recurse | Select-String -Pattern 'smoothstep\(\s*([0-9.]+)\s*,\s*([0-9.]+)' | Where-Object { [double]$_.Matches[0].Groups[1].Value -gt [double]$_.Matches[0].Groups[2].Value })
@@ -147,6 +148,13 @@ Check 'cmake lists Achievements.cpp' ($cmake -match 'src/Achievements\.cpp')
 Check 'cmake lists test_achievements' ($cmake -match 'test_achievements')
 Check 'achievements header exists' (Test-Path (Join-Path $root 'src/Achievements.h'))
 Check 'achievements source exists' (Test-Path (Join-Path $root 'src/Achievements.cpp'))
+
+$sceneH = Read-File 'src/SceneManager.h'
+$sceneCpp = Read-File 'src/SceneManager.cpp'
+$appCpp = Read-File 'src/AppGL.cpp'
+Check 'editor spawn' (($sceneH -match 'spawnRockAt') -and ($sceneCpp -match 'spawnRockAt'))
+Check 'custom body struct' ($sceneH -match 'CustomBody')
+Check 'star clamp' (($interH -match 'pushOutOfSphere') -and ($appCpp -match 'pushOutOfSphere'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
