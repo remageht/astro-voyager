@@ -695,7 +695,9 @@ void AppGL::drawImGui() {
   const Station* curSt = m_sceneManager->getCurrentStation();
   std::string curId = curSt ? curSt->id : "";
 
-  ImGui::Text("Active Station: %s", curSt ? curSt->name.c_str() : "None");
+  ImGui::Text("Active Station:");
+  ImGui::SameLine();
+  ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s", curSt ? curSt->name.c_str() : "None");
   ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s",
                      curSt ? curSt->description.c_str() : "");
 
@@ -753,7 +755,7 @@ void AppGL::drawImGui() {
     m_searchBuf[0] = '\0';
   }
 
-  ImGui::Text("Teleport Stations:");
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Teleport Stations:");
   if (!query.empty()) {
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(%zu station(s) matched)", matchedStations.size());
@@ -786,7 +788,7 @@ void AppGL::drawImGui() {
                      "(Double-click an object to fly to it)");
 
   ImGui::Separator();
-  ImGui::Text("Quality Preset:");
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Quality Preset:");
   if (m_benchmarking && !m_userOverrodePreset) {
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[Auto-calibrating 2s...]");
@@ -804,7 +806,7 @@ void AppGL::drawImGui() {
     }
   }
 
-  ImGui::Text("Parameters:");
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Parameters:");
 
   RenderSettings& settings = m_sceneManager->getSettings();
   bool sliderChanged = false;
@@ -824,7 +826,7 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
-  ImGui::Text("Camera & Performance:");
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Camera & Performance:");
   const double dist = std::sqrt(m_camera.position.x * m_camera.position.x +
                                 m_camera.position.y * m_camera.position.y +
                                 m_camera.position.z * m_camera.position.z);
@@ -866,7 +868,7 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
-  ImGui::Text("Journey Route:");
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Journey Route:");
 
   std::string routeText;
   if (m_route.empty()) {
@@ -910,7 +912,7 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
-  ImGui::Text("Editor:");
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Editor:");
   if (ImGui::Button("Add rock here")) {
     Vec3 f = m_camera.forward();
     Vec3 u = m_camera.up();
@@ -958,7 +960,7 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
-  ImGui::Text("Achievements: %d/7", static_cast<int>(m_unlockedIds.size()));
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Achievements: %d/7", static_cast<int>(m_unlockedIds.size()));
   for (const auto& achId : allAchievementIds()) {
     bool unlocked = (m_unlockedIds.find(achId) != m_unlockedIds.end());
     const char* title = achievementTitle(achId);
@@ -1116,10 +1118,12 @@ void AppGL::drawMenu() {
   ImGui::Begin("MainMenu", nullptr, menuFlags);
 
   if (m_menuPage == 0) {
-    ImGui::SetWindowFontScale(1.6f);
-    ImGui::Text("ASTRO-VOYAGER");
+    ImGui::SetWindowFontScale(2.0f);
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "ASTRO-VOYAGER");
     ImGui::SetWindowFontScale(1.0f);
-    ImGui::Text("Version %s", kVersion);
+    ImGui::SetWindowFontScale(0.85f);
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "A journey through curved spacetime");
+    ImGui::SetWindowFontScale(1.0f);
 
     if (ImGui::Button("Play", ImVec2(-1.0f, 40.0f))) {
       m_inMenu = false;
@@ -1129,7 +1133,7 @@ void AppGL::drawMenu() {
     }
 
     ImGui::Separator();
-    ImGui::Text("Destinations:");
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Destinations:");
     for (const auto& station : builtinCatalog()) {
       std::string destLabel = station.name + " (" + station.id + ")";
       if (ImGui::Button(destLabel.c_str(), ImVec2(-1.0f, 0.0f))) {
@@ -1142,7 +1146,7 @@ void AppGL::drawMenu() {
     }
 
     ImGui::Separator();
-    ImGui::Text("Recent:");
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Recent:");
     const Station* menuCur = m_sceneManager->getCurrentStation();
     std::string menuCurId = menuCur ? menuCur->id : "";
     std::vector<std::string> recentIds;
@@ -1186,6 +1190,13 @@ void AppGL::drawMenu() {
     if (ImGui::Button("Exit", ImVec2(menuBtnW, 0.0f))) {
       glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
     }
+
+    ImGui::Separator();
+    ImGui::SetWindowFontScale(0.85f);
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "WASD fly | drag look | / search | dbl-click go");
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "P time | F1 help | H hide UI | ESC menu");
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Version %s", kVersion);
+    ImGui::SetWindowFontScale(1.0f);
   } else if (m_menuPage == 1) {
     ImGui::Text("Settings");
     const char* presetNames[] = {"Low", "Med", "Ultra", "Custom"};
@@ -1598,7 +1609,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   AppGL app(1280, 720, false);
 
   const std::vector<std::string> targetStations = {
-      "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol"
+      "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87"
   };
 
   for (const auto& stId : targetStations) {

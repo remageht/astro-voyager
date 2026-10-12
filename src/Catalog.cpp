@@ -19,6 +19,9 @@ const std::vector<Station>& builtinCatalog() {
        "Supernova remnant impostor sprite.", 60.0, {}},
       {"sol", StationType::SolarSystem, "Solar System",
        "Sun + 8 planets + Moon, rings, belt.", 70.0, {}},
+      {"m87", StationType::BlackHole, "M87*",
+       "Supermassive black hole with relativistic jet.", 14.0,
+       {1.5, 30.0, 0.05, 600}},
   };
   return kStations;
 }

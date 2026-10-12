@@ -17,6 +17,7 @@ uniform float u_ShellRadius;
 uniform float u_StepSize;
 uniform int u_MaxSteps;
 uniform int u_DiskOn;
+uniform int u_JetOn;
 uniform float u_Time;
 uniform float u_Exposure;
 const float PI = 3.141592653589793;
@@ -315,6 +316,20 @@ void main() {
       }
     }
 
+    // M87* relativistic jet: polar cones along +-Y, additive glow, no alpha.
+    // Independent of u_DiskOn so it shows with disk on or off.
+    if (u_JetOn == 1) {
+      float stJet = abs(sin(p.z));
+      if (stJet < 0.12 && p.y >= 2.0 && p.y <= 25.0) {
+        float streaks = diskFbm(vec2(p.y * 1.5 - u_Time * 0.4, p.w * 2.0));
+        float knots = pow(max(streaks, 0.0), 3.0);
+        // Tuned: volumetric emission integrates over many in-cone steps;
+        // 0.008 was invisible, 0.1+ saturates white; 0.03 reads as a jet.
+        vec3 jcol = vec3(0.60, 0.75, 1.0) * knots * exp(-(p.y - 2.0) * 0.12) * 0.03;
+        accumColor += (1.0 - accumAlpha) * jcol * float(u_JetOn);
+      }
+    }
+
     if (p.y <= u_Rs * 1.001) {
       if (u_DiskOn == 1) {
         FragColor = vec4(applyFinish(applyObserverShift(accumColor, fCamSqrt, camRedden), v_TexCoord), 1.0);
@@ -325,8 +340,16 @@ void main() {
     }
     if (p.y >= u_ShellRadius) {
       vec3 sky = texture(u_Skybox, fb).rgb;
-      vec3 col = (u_DiskOn == 1) ? accumColor + (1.0 - accumAlpha) * sky : sky;
+      // Jet glow lives in accumColor with no alpha; add it even with disk off
+      // (sgra accumulates nothing, so its disk-off frame is unchanged).
+      // Capture branch above stays black: the hole absorbs light.
+      vec3 col = (u_DiskOn == 1) ? accumColor + (1.0 - accumAlpha) * sky : sky + accumColor;
       float ring = exp(-pow((minR - 1.5 * u_Rs) / (0.08 * u_Rs), 2.0));
+      // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - stylized
+      // photon-ring visualization; shimmer uses current exit phi p.w as honest
+      // approximation (no azimuth stored at minR).
+      float shimmer = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
+      ring *= shimmer;
       col += vec3(1.0, 0.85, 0.6) * ring * 2.5;
       float eglow = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
       col += vec3(1.0, 0.55, 0.25) * eglow * 0.5;
@@ -341,10 +364,16 @@ void main() {
   }
 
   vec3 skyFallback = texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22);
+  // Same jet-glow rule as the escape branch: visible with disk off too.
   vec3 colFallback = (u_DiskOn == 1)
                          ? accumColor + (1.0 - accumAlpha) * skyFallback
-                         : skyFallback;
+                         : skyFallback + accumColor;
   float ringFb = exp(-pow((minR - 1.5 * u_Rs) / (0.08 * u_Rs), 2.0));
+  // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - stylized
+  // photon-ring visualization; shimmer uses current exit phi p.w as honest
+  // approximation (no azimuth stored at minR).
+  float shimmerFb = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
+  ringFb *= shimmerFb;
   colFallback += vec3(1.0, 0.85, 0.6) * ringFb * 2.5;
   float eglowFb = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
   colFallback += vec3(1.0, 0.55, 0.25) * eglowFb * 0.5;

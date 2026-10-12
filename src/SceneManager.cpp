@@ -300,6 +300,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_StepSize", m_settings.stepSize);
     m_bhShader->setUniform1i("u_MaxSteps", m_settings.maxSteps);
     m_bhShader->setUniform1i("u_DiskOn", m_settings.diskOn ? 1 : 0);
+    m_bhShader->setUniform1i("u_JetOn", (m_currentStation->id == "m87" ? 1 : 0));
     m_bhShader->setUniform1f("u_Time", time);
     m_bhShader->setUniform1f("u_Exposure", m_exposure);
     m_bhShader->setUniform1i("u_Skybox", 0);

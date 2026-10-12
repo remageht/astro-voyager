@@ -54,6 +54,7 @@ Check 'catalog has uma' ($catalogCpp -match '"uma"')
 Check 'catalog has m31' ($catalogCpp -match '"m31"')
 Check 'catalog has m1' ($catalogCpp -match '"m1"')
 Check 'catalog has sol' ($catalogCpp -match '"sol"')
+Check 'catalog has m87' ($catalogCpp -match '"m87"')
 Check 'catalog types' ($catalogH -match 'BlackHole')
 
 Check 'camera clamp' ($cameraCpp -match 'clampNearHorizon')

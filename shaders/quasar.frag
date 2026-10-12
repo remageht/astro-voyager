@@ -111,11 +111,19 @@ void main() {
   col += jetMaskC * jetColC;
 
   // HDR core with tight falloff, 2-3 px feel. No cross spikes.
+  // Central black-hole shadow absorbs core light inside r < 0.018.
   float coreFall = 1.0 / (1.0 + r * r * 4000.0);
   vec3 coreBase = vec3(1.0, 0.98, 0.94) * 10.0;
   vec3 tint = u_CoreColor / vec3(1.0, 0.85, 0.65);
   float flick = 0.97 + 0.03 * sin(u_Time * 2.0);
-  col += coreBase * tint * coreFall * flick;
+  float shadow = smoothstep(0.008, 0.018, r);
+  col += coreBase * tint * coreFall * flick * shadow;
+
+  // Rotating ergosphere-style glow ring hugging the shadow.
+  float ringBright = exp(-pow((r - 0.033) * 90.0, 2.0));
+  float ang = atan(uv.y, uv.x) - u_Time * 1.5;
+  float asym = 0.55 + 0.45 * sin(ang * 2.0);
+  col += vec3(1.0, 0.8, 0.55) * ringBright * asym * 3.0;
 
   // Vignette about 0.3.
   float vig = 1.0 - 0.3 * clamp(dot(uv * 0.7, uv * 0.7), 0.0, 1.0);

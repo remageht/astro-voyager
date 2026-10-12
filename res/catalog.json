@@ -50,6 +50,14 @@
       "name": "Solar System",
       "description": "Sun + 8 planets + Moon, rings, belt.",
       "spawnDistanceRs": 70.0
+    },
+    {
+      "id": "m87",
+      "type": "black_hole",
+      "name": "M87*",
+      "description": "Supermassive black hole with relativistic jet.",
+      "spawnDistanceRs": 14.0,
+      "params": { "rs": 1.5, "shellRadius": 30.0, "step": 0.05, "maxSteps": 600 }
     }
   ]
 }
