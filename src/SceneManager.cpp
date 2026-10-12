@@ -18,6 +18,7 @@ SceneManager::SceneManager() {
   m_quasarShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/quasar.frag");
   m_linesShader = std::make_unique<Shader>("shaders/lines.vert", "shaders/lines.frag");
   m_starShader = std::make_unique<Shader>("shaders/star.vert", "shaders/star.frag");
+  m_m31StarShader = std::make_unique<Shader>("shaders/m31star.vert", "shaders/m31star.frag");
   m_galaxyShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/galaxy.frag");
   m_nebulaShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/nebula.frag");
   m_planetShader = std::make_unique<Shader>("shaders/planet.vert", "shaders/planet.frag");
@@ -30,6 +31,7 @@ SceneManager::SceneManager() {
 
   initConstellationOrion();
   initConstellationUma();
+  initM31Disk();
 
   {
     const int kBgCount = 1500;
@@ -246,6 +248,112 @@ void SceneManager::initConstellationUma() {
   m_umaStars.setStars(vertices, mags);
 }
 
+void SceneManager::initSStars() {
+  // Deterministic LCG swarm (stable run to run): 250 stars, r 0.8-2.5,
+  // random orbit planes, Kepler-ish angular speed (inner stars move visibly
+  // within seconds), white-blue mags 1.0-2.0 for 2-3 px billboards.
+  const int kCount = 250;
+  const float kPi = 3.14159265358979323846f;
+  uint32_t state = 0x59A11u;
+  auto next01 = [&state]() -> float {
+    state = state * 1664525u + 1013904223u;
+    return static_cast<float>(state >> 8) * (1.0f / 16777216.0f);
+  };
+  m_sStarParams.clear();
+  m_sStarParams.reserve(static_cast<size_t>(kCount));
+  for (int i = 0; i < kCount; ++i) {
+    float uR = next01();
+    float uY = next01();
+    float uPhi = next01();
+    float uDir = next01();
+    float uPhase = next01();
+    float uMag = next01();
+    float r = 0.8f + 1.7f * uR;
+    float y = 1.0f - 2.0f * uY;
+    float phi = 2.0f * kPi * uPhi;
+    float rr = std::sqrt(std::max(0.0f, 1.0f - y * y));
+    glm::vec3 n(rr * std::cos(phi), y, rr * std::sin(phi));
+    glm::vec3 ref(0.0f, 1.0f, 0.0f);
+    if (std::abs(glm::dot(n, ref)) > 0.99f) {
+      ref = glm::vec3(1.0f, 0.0f, 0.0f);
+    }
+    glm::vec3 uu = glm::normalize(glm::cross(ref, n));
+    glm::vec3 vv = glm::cross(n, uu);
+    float dir = (uDir < 0.5f) ? -1.0f : 1.0f;
+    SStarParam s;
+    s.r = r;
+    s.phase = 2.0f * kPi * uPhase;
+    s.omega = dir * 0.8f / std::pow(r, 1.5f);
+    s.u = uu;
+    s.v = vv;
+    s.mag = 1.0f + 1.0f * uMag;
+    m_sStarParams.push_back(s);
+  }
+}
+
+void SceneManager::initM31Disk() {
+  // M31 volumetric disk starfield: ~4500 points in the disk plane (XZ),
+  // radius 6..30 (uniform area), thickness ~0.8 in Y, ~70% pulled toward
+  // the two logarithmic spiral arms (same phase as galaxy.frag).
+  // Deterministic LCG so screenshots stay stable run to run.
+  // Plus 4 bright named stars near the nucleus for close-range labels.
+  const int kDiskCount = 4500;
+  const float kPi = 3.14159265358979323846f;
+
+  m_m31Bright = {
+      {{2.5f, 0.2f, 4.0f}, "AE Andromedae", "Luminous blue variable in M31"},
+      {{-2.2f, -0.3f, 3.5f}, "AF Andromedae", "Luminous blue variable in M31"},
+      {{0.8f, 0.3f, 5.0f}, "S Andromedae", "SN 1885, Type Ia supernova"},
+      {{-0.8f, 0.5f, 6.0f}, "M31N 2008-12a", "Recurrent nova in M31"},
+  };
+
+  uint32_t state = 0xA531A531u;
+  auto next01 = [&state]() -> float {
+    state = state * 1664525u + 1013904223u;
+    return static_cast<float>(state >> 8) * (1.0f / 16777216.0f);
+  };
+
+  std::vector<glm::vec3> pos;
+  std::vector<float> mags;
+  pos.reserve(static_cast<size_t>(kDiskCount) + m_m31Bright.size());
+  mags.reserve(static_cast<size_t>(kDiskCount) + m_m31Bright.size());
+
+  for (int i = 0; i < kDiskCount; ++i) {
+    float u = next01();
+    float v = next01();
+    float w1 = next01();
+    float w2 = next01();
+    float w3 = next01();
+    float m = next01();
+    // Uniform-area radius in annulus 6..30.
+    float r = std::sqrt(36.0f + (900.0f - 36.0f) * u);
+    float th = 2.0f * kPi * v;
+    // Pull toward spiral arms (galaxy.frag phase: 2*phi - log(r)*3.5).
+    float armPhase = 2.0f * th - std::log(std::max(r, 0.01f)) * 3.5f;
+    float pull = (w3 < 0.30f) ? 0.0f : 1.0f;
+    th -= pull * 0.30f * std::sin(armPhase);
+    // Thickness ~0.8: sum of 3 uniforms ~= gaussian around the plane.
+    float y = (w1 + w2 + next01() - 1.5f) * 0.53f;
+    pos.emplace_back(std::cos(th) * r, y, std::sin(th) * r);
+    float mag;
+    if (m < 0.05f) {
+      mag = 0.0f + next01() * 1.5f;  // leaders
+    } else if (m < 0.20f) {
+      mag = 1.5f + next01() * 1.0f;
+    } else {
+      mag = 2.5f + next01() * 2.5f;  // disk background
+    }
+    mags.push_back(mag);
+  }
+
+  for (const auto& b : m_m31Bright) {
+    pos.push_back(b.pos);
+    mags.push_back(0.0f);
+  }
+
+  m_m31Stars.setStars(pos, mags);
+}
+
 void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
   const Station* st = findStation(stationId);
   if (!st) {
@@ -301,6 +409,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1i("u_MaxSteps", m_settings.maxSteps);
     m_bhShader->setUniform1i("u_DiskOn", m_settings.diskOn ? 1 : 0);
     m_bhShader->setUniform1i("u_JetOn", (m_currentStation->id == "m87" ? 1 : 0));
+    const bool isSgra = (m_currentStation->id == "sgra");
+    const bool isM87 = (m_currentStation->id == "m87");
+    m_bhShader->setUniform1f("u_BHRingK", isSgra ? 1.8f : (isM87 ? 1.25f : 1.0f));
+    m_bhShader->setUniform1f("u_ThinDisk", isSgra ? 1.0f : 0.0f);
+    m_bhShader->setUniform1f("u_BandK", isSgra ? 1.7f : 1.0f);
     m_bhShader->setUniform1f("u_Time", time);
     m_bhShader->setUniform1f("u_Exposure", m_exposure);
     m_bhShader->setUniform1i("u_Skybox", 0);
@@ -308,12 +421,58 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_skyboxDeep->bind(0);
     m_screenQuad->draw();
     m_bhShader->unbind();
+
+    if (isSgra) {
+      // S-star swarm: ~250 fast white-blue points orbiting the center
+      // (r 0.8-2.5, angle from u_Time). Separate additive star-billboard
+      // pass on top of the raytraced frame, depth write off.
+      if (!m_sStarsInit) {
+        initSStars();
+        m_sStarsInit = true;
+      }
+      std::vector<glm::vec3> sPos;
+      std::vector<float> sMags;
+      sPos.reserve(m_sStarParams.size());
+      sMags.reserve(m_sStarParams.size());
+      for (const auto& s : m_sStarParams) {
+        float th = s.phase + time * s.omega;
+        float c = std::cos(th);
+        float si = std::sin(th);
+        sPos.emplace_back(s.r * (c * s.u.x + si * s.v.x),
+                          s.r * (c * s.u.y + si * s.v.y),
+                          s.r * (c * s.u.z + si * s.v.z));
+        sMags.push_back(s.mag);
+      }
+      m_sStars.setStars(sPos, sMags);
+      glm::mat4 sProj =
+          glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1000.0f);
+      glm::vec3 sEye(cp.x, cp.y, cp.z);
+      glm::vec3 sFwd(cf.x, cf.y, cf.z);
+      glm::vec3 sUp(cu.x, cu.y, cu.z);
+      glm::mat4 sView = glm::lookAt(sEye, sEye + sFwd, sUp);
+      glm::mat4 sMvp = sProj * sView;
+      const float sPixelScale = static_cast<float>(fbHeight) /
+          (2.0f * std::tan(glm::radians(m_settings.fovDegrees) * 0.5f));
+      m_starShader->bind();
+      m_starShader->setUniformMat4f("u_MVP", sMvp);
+      m_starShader->setUniformMat4f("u_MV", sView);
+      m_starShader->setUniform1f("u_PixelScale", sPixelScale);
+      m_starShader->setUniform1f("u_SizeK", 0.045f);
+      glDepthMask(GL_FALSE);
+      glDisable(GL_DEPTH_TEST);
+      m_sStars.draw();
+      glDepthMask(GL_TRUE);
+      m_starShader->unbind();
+    }
   } else if (m_currentStation->type == StationType::Quasar) {
     // 3C 273 Quasar disk + jets + glow
     m_quasarShader->bind();
     m_quasarShader->setUniform3f("u_CoreColor", 1.0f, 0.85f, 0.65f);
     m_quasarShader->setUniform1f("u_Time", time);
     m_quasarShader->setUniform1f("u_Exposure", m_exposure);
+    // Bright star-like core dominates the host, structure preserved (host x0.875).
+    m_quasarShader->setUniform1f("u_QCoreK",
+                                 (m_currentStation->id == "qso-3c273" ? 1.5f : 1.0f));
 
     m_screenQuad->draw();
     m_quasarShader->unbind();
@@ -376,10 +535,43 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     double spawn = m_currentStation->spawnDistanceRs;
     float zoom = static_cast<float>(std::clamp(spawn / std::max(dist, 1e-3), 0.2, 4.0));
     m_galaxyShader->setUniform1f("u_Zoom", zoom);
+    m_galaxyShader->setUniform1f("u_M31Dist", static_cast<float>(dist));
     m_galaxyShader->setUniform1f("u_Exposure", m_exposure);
 
     m_screenQuad->draw();
     m_galaxyShader->unbind();
+
+    // M31 LOD only: NEAR (18 -> 6) volumetric disk starfield, alpha = near.
+    // Additive points, no depth write, drawn over the faded impostor.
+    if (m_currentStation->id == "m31") {
+      float dF = static_cast<float>(dist);
+      float near = 1.0f - glm::smoothstep(6.0f, 18.0f, dF);
+      if (near > 0.003f) {
+        glm::mat4 proj = glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1000.0f);
+        glm::vec3 eye(static_cast<float>(cp.x), static_cast<float>(cp.y),
+                      static_cast<float>(cp.z));
+        glm::vec3 fwd(static_cast<float>(cf.x), static_cast<float>(cf.y),
+                      static_cast<float>(cf.z));
+        glm::vec3 up(static_cast<float>(cu.x), static_cast<float>(cu.y),
+                     static_cast<float>(cu.z));
+        glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
+        glm::mat4 mvp = proj * view;
+
+        const float pixelScale = static_cast<float>(fbHeight) /
+            (2.0f * std::tan(glm::radians(m_settings.fovDegrees) * 0.5f));
+        m_m31StarShader->bind();
+        m_m31StarShader->setUniformMat4f("u_MVP", mvp);
+        m_m31StarShader->setUniformMat4f("u_MV", view);
+        m_m31StarShader->setUniform1f("u_PixelScale", pixelScale);
+        m_m31StarShader->setUniform1f("u_SizeK", 0.08f);
+        m_m31StarShader->setUniform1f("u_GlobalAlpha", near);
+        glDepthMask(GL_FALSE);
+        glDisable(GL_DEPTH_TEST);
+        m_m31Stars.draw();
+        glDepthMask(GL_TRUE);
+        m_m31StarShader->unbind();
+      }
+    }
   } else if (m_currentStation->type == StationType::Nebula) {
     // M1 Crab Nebula impostor sprite
     m_nebulaShader->bind();

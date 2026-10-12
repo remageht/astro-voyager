@@ -83,6 +83,14 @@ class SceneManager {
 
   const Station* getCurrentStation() const { return m_currentStation; }
   const std::vector<BodyState>& getBodies() const { return m_lastBodies; }
+
+  // M31 named bright stars for close-range labels / fly-to (m31 only).
+  struct M31BrightStar {
+    glm::vec3 pos{0.0f};
+    std::string name;
+    std::string fact;
+  };
+  const std::vector<M31BrightStar>& m31BrightStars() const { return m_m31Bright; }
   RenderSettings& getSettings() { return m_settings; }
   const RenderSettings& getSettings() const { return m_settings; }
 
@@ -118,6 +126,20 @@ class SceneManager {
  private:
   void initConstellationOrion();
   void initConstellationUma();
+  // S-star swarm (sgra only): deterministic Kepler-ish orbit params,
+  // advected on CPU by render time, drawn as a separate additive pass.
+  struct SStarParam {
+    float r = 1.0f;
+    float phase = 0.0f;
+    float omega = 0.0f;
+    glm::vec3 u{1.0f, 0.0f, 0.0f};
+    glm::vec3 v{0.0f, 0.0f, 1.0f};
+    float mag = 1.5f;
+  };
+  void initSStars();
+  std::vector<SStarParam> m_sStarParams;
+  bool m_sStarsInit = false;
+  void initM31Disk();
 
   const Station* m_currentStation = nullptr;
   RenderSettings m_settings;
@@ -139,6 +161,7 @@ class SceneManager {
   std::unique_ptr<Shader> m_quasarShader;
   std::unique_ptr<Shader> m_linesShader;
   std::unique_ptr<Shader> m_starShader;
+  std::unique_ptr<Shader> m_m31StarShader;
   std::unique_ptr<Shader> m_galaxyShader;
   std::unique_ptr<Shader> m_nebulaShader;
   std::unique_ptr<Shader> m_planetShader;
@@ -153,6 +176,10 @@ class SceneManager {
   StarPoints m_orionStars;
   StarPoints m_umaStars;
   StarPoints m_bgStars;
+  StarPoints m_sStars;
+  // M31 volumetric disk starfield (m31 NEAR LOD only, alpha = near).
+  StarPoints m_m31Stars;
+  std::vector<M31BrightStar> m_m31Bright;
 
   SolarSystem m_sol;
   SphereMesh m_sphere;

@@ -11,6 +11,10 @@ uniform float u_Time;
 uniform float u_Aspect;
 uniform float u_Zoom;
 uniform float u_Exposure;
+// LOD distance: camera distance to M31 center (default 80 = spawn).
+// Set every frame by SceneManager (m31 branch only); other stations
+// never use this shader, so the fallback keeps them unaffected.
+uniform float u_M31Dist;
 
 // Hash for procedural stars and grain
 float hash21(vec2 p) {
@@ -42,6 +46,13 @@ void main() {
   float phi = atan(p.y, p.x);
   float lr = log(max(r, 0.01));
 
+  // LOD factors from camera distance D (ascending smoothstep edges only).
+  // FAR: D >= 60 base view. MID: 60 -> 25 star formation boost.
+  // NEAR: 18 -> 6 smooth arms fade, volumetric starfield takes over.
+  float m31D = u_M31Dist > 0.5 ? u_M31Dist : 80.0;
+  float m31Mid = 1.0 - smoothstep(25.0, 60.0, m31D);
+  float m31Near = 1.0 - smoothstep(6.0, 18.0, m31D);
+
   // Linear-space palette (sRGB -> linear via pow 2.2)
   vec3 bulgeC = pow(vec3(0.92, 0.78, 0.60), vec3(2.2));
   vec3 armC = pow(vec3(0.45, 0.60, 0.92), vec3(2.2));
@@ -61,13 +72,19 @@ void main() {
   float armMask = smoothstep(0.1, 0.9, spiral) * exp(-r * 1.8) * 1.15;
   float arm = armMask * 0.22;
 
-  // Dust lanes: multiply disk+arms by ~0.35 with dark brown tint
+  // Dust lanes: multiply disk+arms by ~0.35 with dark brown tint,
+  // mixed with magenta #c088aa (pink dust veins between the arms).
   float dust = sin(phi * 2.0 - lr * 3.5 + 0.6);
   float dustLane = smoothstep(0.3, 0.8, dust) * exp(-r * 2.0) * smoothstep(0.08, 0.35, r);
   dustLane = clamp(dustLane, 0.0, 1.0);
   vec3 dustMul = (dustLin / max(dustLin.x, 1e-4)) * 0.35;
+  vec3 pinkLin = pow(vec3(0.7529, 0.5333, 0.6667), vec3(2.2));  // magenta #c088aa
+  dustMul = mix(dustMul, pinkLin * 0.45, 0.62);
   vec3 diskArm = (disk + arm) * armC;
   diskArm *= mix(vec3(1.0), dustMul, dustLane);
+  diskArm += pinkLin * dustLane * exp(-r * 2.0) * 0.14;
+  // NEAR: smooth arms fade to ~15%, volumetric M31Stars take over.
+  diskArm *= mix(1.0, 0.15, m31Near);
 
   // Outer halo: faint warm
   float halo = exp(-r * 1.2);
@@ -95,7 +112,7 @@ void main() {
   knotOff *= 0.8;
   vec2 knotD = hiiF - knotOff;
   float pointProfile = 1.0 / (1.0 + dot(knotD, knotD) * 900.0);
-  col += vec3(1.0, 0.38, 0.50) * knot * pointProfile * armMask * (1.0 - smoothstep(0.8, 1.2, r)) * 1.6;
+  col += vec3(1.0, 0.38, 0.50) * knot * pointProfile * armMask * (1.0 - smoothstep(0.8, 1.2, r)) * 2.2 * (1.0 + 2.5 * m31Mid);
 
   // Globular clusters: dim barely-visible swarm in halo.
   // Coarse grid in galaxy plane (p space, zooms with scene).
@@ -108,22 +125,23 @@ void main() {
   gcOff *= 0.8;
   vec2 gcD = gcF - gcOff;
   float gcProf = exp(-dot(gcD, gcD) * 90.0);
-  col += vec3(0.9, 0.82, 0.68) * gcHit * gcProf * 0.25 * exp(-r * 2.0);
+  col += vec3(0.9, 0.82, 0.68) * gcHit * gcProf * 0.25 * (1.0 + 2.5 * m31Mid) * exp(-r * 2.0);
 
-  // Dense particle star layer: thousands of individual points along arms.
-  // Galaxy-plane grid (p space, zooms with scene), visible at spawn.
+  // Bright individual star-particle layer on top of the smooth arms.
+  // Hash grid in galaxy plane (zooms with scene): ~2000 sharp 1-2px points,
+  // alpha ~0.55, white-blue/amber temperature spread. MID approach densifies it.
   vec2 pg = p * 140.0;
   vec2 pId = floor(pg);
   vec2 pF = fract(pg) - 0.5;
   float pH = hash21(pId);
-  float pHit = step(0.90, pH);
+  float pHit = step(0.90 - 0.06 * m31Mid, pH);
   vec2 pOff = vec2(hash21(pId + 7.13), hash21(pId + 3.71)) - 0.5;
   pOff *= 0.8;
   vec2 pD = pF - pOff;
-  float pProf = 1.0 / (1.0 + dot(pD, pD) * 15.0);
+  float pProf = 1.0 / (1.0 + dot(pD, pD) * 90.0);
   float pH2 = hash21(pId + 4.7);
-  float pBright = (0.15 + 0.85 * pow(pH2, 2.0)) * 1.6
-                + step(0.985, hash21(pId + 31.7)) * 4.0;
+  float pBright = ((0.15 + 0.85 * pow(pH2, 2.0)) * 1.6
+                + step(0.985, hash21(pId + 31.7)) * 4.0) * 1.8;
   float pH3 = hash21(pId + 17.7);
   vec3 pCol = vec3(1.0, 0.93, 0.80);
   if (pH3 > 0.65 && pH3 <= 0.85) {
@@ -132,7 +150,7 @@ void main() {
     pCol = vec3(1.0, 0.62, 0.4);
   }
   float pMask = clamp(armMask * 1.5, 0.0, 1.0) * (1.0 - smoothstep(0.9, 1.4, r));
-  col += pHit * pProf * pBright * pCol * pMask;
+  col += pHit * pProf * pBright * pCol * pMask * 0.65;
 
   // Background starfield in screen space (stable under zoom)
   // Sparse subpixel points: 1/(1+d*d*1e6), power-law brightness

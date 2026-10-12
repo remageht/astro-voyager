@@ -20,6 +20,9 @@ uniform int u_DiskOn;
 uniform int u_JetOn;
 uniform float u_Time;
 uniform float u_Exposure;
+uniform float u_BHRingK;  // photon-ring/rim brightness gain (default 1.0; sgra 1.8, m87 1.25)
+uniform float u_ThinDisk;  // thin-disk mode 0/1 (sgra 1.0): radial x0.55 band + crisper edges
+uniform float u_BandK;  // milky-way band gain (default 1.0; sgra 1.7)
 const float PI = 3.141592653589793;
 const int ABSOLUTE_MAX_STEPS = 8000;
 const float T_DISK = 10000.0;  // reference inner-disk temperature, Kelvin
@@ -298,7 +301,17 @@ void main() {
           // g4 and (1.0 + beta * cosAlpha) kept.
           vec3 diskRgb = emis * g4 * 1.5;
           diskRgb = clamp(diskRgb, 0.0, 12.0);
-          float diskAlpha = clamp(brightness * 1.2, 0.0, 0.9);
+          // Thin-disk mode (sgra edge-on "fishing line" look): compress the
+          // visible radial band toward ISCO (x0.55 width) with crisper edges.
+          // rIn, g-factor and beaming math above are untouched; all edges
+          // ascending; exactly neutral at u_ThinDisk == 0.0.
+          float thinW = mix(1.0, 0.55, u_ThinDisk);
+          float rOutThin = rIn + (rOut - rIn) * thinW;
+          float edgeIn = smoothstep(rIn, rIn + (rOutThin - rIn) * 0.06 + 0.001, rDisk);
+          float edgeOut = 1.0 - smoothstep(rOutThin - (rOutThin - rIn) * 0.12, rOutThin, rDisk);
+          float thinMask = mix(1.0, edgeIn * edgeOut, u_ThinDisk);
+          diskRgb *= thinMask;
+          float diskAlpha = clamp(brightness * 1.2, 0.0, 0.9) * thinMask;
 
           accumColor += (1.0 - accumAlpha) * diskRgb;
           accumAlpha += (1.0 - accumAlpha) * diskAlpha;
@@ -340,6 +353,10 @@ void main() {
     }
     if (p.y >= u_ShellRadius) {
       vec3 sky = texture(u_Skybox, fb).rgb;
+      // Milky-Way band gain: boost sky along the band plane (fb.y ~ 0),
+      // same profile as the procedural cubemap. Neutral at u_BandK == 1.0.
+      float bandW = exp(-abs(fb.y) * 5.0);
+      sky *= 1.0 + (u_BandK - 1.0) * bandW;
       // Jet glow lives in accumColor with no alpha; add it even with disk off
       // (sgra accumulates nothing, so its disk-off frame is unchanged).
       // Capture branch above stays black: the hole absorbs light.
@@ -350,7 +367,7 @@ void main() {
       // approximation (no azimuth stored at minR).
       float shimmer = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
       ring *= shimmer;
-      col += vec3(1.0, 0.85, 0.6) * ring * 2.5;
+      col += vec3(1.0, 0.85, 0.6) * ring * (2.5 * u_BHRingK);
       float eglow = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
       col += vec3(1.0, 0.55, 0.25) * eglow * 0.5;
       if (u_DiskOn == 1) {
@@ -364,6 +381,8 @@ void main() {
   }
 
   vec3 skyFallback = texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22);
+  float bandWFb = exp(-abs(fb.y) * 5.0);
+  skyFallback *= 1.0 + (u_BandK - 1.0) * bandWFb;
   // Same jet-glow rule as the escape branch: visible with disk off too.
   vec3 colFallback = (u_DiskOn == 1)
                          ? accumColor + (1.0 - accumAlpha) * skyFallback
@@ -374,7 +393,7 @@ void main() {
   // approximation (no azimuth stored at minR).
   float shimmerFb = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
   ringFb *= shimmerFb;
-  colFallback += vec3(1.0, 0.85, 0.6) * ringFb * 2.5;
+  colFallback += vec3(1.0, 0.85, 0.6) * ringFb * (2.5 * u_BHRingK);
   float eglowFb = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
   colFallback += vec3(1.0, 0.55, 0.25) * eglowFb * 0.5;
   if (u_DiskOn == 1) {

@@ -271,6 +271,21 @@ void AppGL::processInput(float deltaTime) {
 
   if (!interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
 
+  // M31 approach: distance-scaled WASD speed so the 80 -> 2 flight takes
+  // seconds, not minutes, while staying precise near the core. Other
+  // stations keep the default moveSpeed untouched.
+  double savedSpeed = m_camera.moveSpeed;
+  const Station* mvSt = m_sceneManager->getCurrentStation();
+  if (mvSt && mvSt->id == "m31") {
+    double m31D = std::sqrt(m_camera.position.x * m_camera.position.x +
+                            m_camera.position.y * m_camera.position.y +
+                            m_camera.position.z * m_camera.position.z);
+    double want = 4.0 + m31D * 0.25;
+    if (want < 4.0) want = 4.0;
+    if (want > 30.0) want = 30.0;
+    m_camera.moveSpeed = want;
+  }
+
   if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) {
     m_camera.moveForward(deltaTime, true);
   }
@@ -289,6 +304,7 @@ void AppGL::processInput(float deltaTime) {
   if (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
     m_camera.position.y -= m_camera.moveSpeed * deltaTime;
   }
+  m_camera.moveSpeed = savedSpeed;
 }
 
 void AppGL::processMouse() {
@@ -678,6 +694,38 @@ void AppGL::flyToObjectAt(double px, double py) {
           return;
         }
       }
+    }
+    startDollyFlight();
+    return;
+  }
+
+  // M31 only: double-click a bright named star flies to it, else dolly in.
+  if (curSt->type == StationType::Galaxy && curSt->id == "m31") {
+    bool haveHit = false;
+    double bestScreen = 1e30;
+    Vec3 bestPos;
+    std::string bestName;
+    for (const auto& bs : m_sceneManager->m31BrightStars()) {
+      glm::vec4 clip = mvp * glm::vec4(bs.pos, 1.0f);
+      if (clip.w <= 0.001f) continue;
+      glm::vec3 ndc = glm::vec3(clip) / clip.w;
+      if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) continue;
+      float sx = (ndc.x * 0.5f + 0.5f) * static_cast<float>(fbW);
+      float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * static_cast<float>(fbH);
+      double sdx = static_cast<double>(sx) - fpx;
+      double sdy = static_cast<double>(sy) - fpy;
+      double screenDist = std::sqrt(sdx * sdx + sdy * sdy);
+      if (screenDist < 28.0 && screenDist < bestScreen) {
+        haveHit = true;
+        bestScreen = screenDist;
+        bestPos = Vec3(static_cast<double>(bs.pos.x), static_cast<double>(bs.pos.y),
+                       static_cast<double>(bs.pos.z));
+        bestName = bs.name;
+      }
+    }
+    if (haveHit) {
+      startObjectFlight(bestPos, 2.0, bestName, bestPos);
+      return;
     }
     startDollyFlight();
     return;
@@ -1528,6 +1576,41 @@ void AppGL::drawWorldLabels() {
                           factCol, cl.fact);
       }
     }
+
+    // M31 close range: 4 bright named stars as real 3D points (D < 10).
+    // NGC 206 / G1 clouds already labeled above (kClusters), not duplicated.
+    if (dist < 10.0) {
+      float m31Aspect = displaySize.x / displaySize.y;
+      float m31Fov = m_sceneManager->getSettings().fovDegrees;
+      glm::mat4 m31Proj = glm::perspective(glm::radians(m31Fov), m31Aspect, 0.1f, 1000.0f);
+      glm::vec3 m31Eye(static_cast<float>(cp.x), static_cast<float>(cp.y),
+                       static_cast<float>(cp.z));
+      Vec3 m31Cf = m_camera.forward();
+      Vec3 m31Cu = m_camera.up();
+      glm::vec3 m31Fwd(static_cast<float>(m31Cf.x), static_cast<float>(m31Cf.y),
+                       static_cast<float>(m31Cf.z));
+      glm::vec3 m31Up(static_cast<float>(m31Cu.x), static_cast<float>(m31Cu.y),
+                      static_cast<float>(m31Cu.z));
+      glm::mat4 m31View = glm::lookAt(m31Eye, m31Eye + m31Fwd, m31Up);
+      glm::mat4 m31Mvp = m31Proj * m31View;
+      for (const auto& bs : m_sceneManager->m31BrightStars()) {
+        glm::vec4 clip = m31Mvp * glm::vec4(bs.pos, 1.0f);
+        if (clip.w <= 0.001f) continue;
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) continue;
+        float sx = (ndc.x * 0.5f + 0.5f) * displaySize.x;
+        float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * displaySize.y;
+        float ringR = 5.0f;
+        ImU32 ringCol = IM_COL32(255, 245, 225, 230);
+        drawList->AddCircle(ImVec2(sx, sy), ringR, ringCol, 16, 1.5f);
+        ImVec2 namePos(sx + ringR + 5.0f, sy - 13.0f * 0.55f);
+        ImU32 nameCol = IM_COL32(255, 255, 255, 255);
+        drawList->AddText(font, 13.0f, namePos, nameCol, bs.name.c_str());
+        ImU32 factCol = IM_COL32(170, 200, 230, 230);
+        drawList->AddText(font, 12.0f, ImVec2(namePos.x, namePos.y + 13.0f + 2.0f),
+                          factCol, bs.fact.c_str());
+      }
+    }
   }
 
   // Draw toasts in bottom-right corner, max 3 at a time, growing bottom-to-top with 8px gap
@@ -1659,9 +1742,10 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   }
 
   // Capture close-up progressive detail shots:
-  // 1. M31 Andromeda Galaxy close-up (z = 28)
+  // 1. M31 Andromeda Galaxy close-up inside the starfield (D = 8:
+  //    volumetric M31Stars at full alpha + named bright star labels).
   app.m_sceneManager->teleportTo("m31", app.m_camera);
-  app.m_camera.position.z = 28.0;
+  app.m_camera.position.z = 8.0;
   for (int frame = 0; frame < 5; ++frame) {
     app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
     ImGui_ImplOpenGL3_NewFrame();

@@ -159,6 +159,13 @@ Check 'settings exposure' (($sceneH -match 'm_exposure') -and ($appCpp -match 'g
 Check 'help overlay' (((Read-File 'src/AppGL.h') -match 'm_helpOverlay') -and ($appCpp -match 'm_helpOverlay'))
 Check 'custom body struct' ($sceneH -match 'CustomBody')
 Check 'star clamp' (($interH -match 'pushOutOfSphere') -and ($appCpp -match 'pushOutOfSphere'))
+$galaxyFrag = Read-File 'shaders/galaxy.frag'
+Check 'm31 lod u_M31Dist set' (($sceneCpp -match 'u_M31Dist') -and ($galaxyFrag -match 'u_M31Dist'))
+Check 'm31 starfield mesh' (($sceneH -match 'm_m31Stars') -and ($sceneCpp -match 'm_m31Stars'))
+Check 'm31 close cam near' (($appCpp -match 'm31_close') -and ($appCpp -match 'position\.z = 8'))
+Check 'bh ring gain sgra 1.8' (($bh -match 'u_BHRingK') -and ($sceneCpp -match 'u_BHRingK", isSgra \? 1\.8f'))
+Check 'quasar core gain qso 2.2' (((Read-File 'shaders/quasar.frag') -match 'u_QCoreK') -and ($sceneCpp -match 'u_QCoreK'))
+Check 'sgra thin disk and band' (($bh -match 'u_ThinDisk') -and ((Read-File 'shaders/sky.frag') -match 'u_BandK') -and ($sceneCpp -match 'u_BandK'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
