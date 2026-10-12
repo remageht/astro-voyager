@@ -325,7 +325,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_linesShader->bind();
     m_linesShader->setUniformMat4f("u_MVP", mvp);
     m_linesShader->setUniformMat4f("u_Model", glm::mat4(1.0f));
-    m_linesShader->setUniform3f("u_LineColor", 0.25f, 0.3f, 0.4f);
+    m_linesShader->setUniform3f("u_LineColor", 0.45f, 0.55f, 0.75f);
     m_orbits.drawLines();
 
     m_linesShader->setUniformMat4f("u_Model", glm::rotate(glm::mat4(1.0f), time * 0.02f,

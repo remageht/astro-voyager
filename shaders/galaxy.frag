@@ -57,7 +57,7 @@ void main() {
 
   // Two blue arms (young stars)
   float spiral = sin(phi * 2.0 - lr * 3.5);
-  float armMask = smoothstep(0.1, 0.9, spiral) * exp(-r * 1.8);
+  float armMask = smoothstep(0.1, 0.9, spiral) * exp(-r * 1.8) * 1.15;
   float arm = armMask * 0.22;
 
   // Dust lanes: multiply disk+arms by ~0.35 with dark brown tint
@@ -108,6 +108,30 @@ void main() {
   vec2 gcD = gcF - gcOff;
   float gcProf = exp(-dot(gcD, gcD) * 90.0);
   col += vec3(0.9, 0.82, 0.68) * gcHit * gcProf * 0.25 * exp(-r * 2.0);
+
+  // Dense particle star layer: thousands of individual points along arms.
+  // Galaxy-plane grid (p space, zooms with scene), visible at spawn.
+  vec2 pg = p * 140.0;
+  vec2 pId = floor(pg);
+  vec2 pF = fract(pg) - 0.5;
+  float pH = hash21(pId);
+  float pHit = step(0.90, pH);
+  vec2 pOff = vec2(hash21(pId + 7.13), hash21(pId + 3.71)) - 0.5;
+  pOff *= 0.8;
+  vec2 pD = pF - pOff;
+  float pProf = 1.0 / (1.0 + dot(pD, pD) * 15.0);
+  float pH2 = hash21(pId + 4.7);
+  float pBright = (0.15 + 0.85 * pow(pH2, 2.0)) * 1.6
+                + step(0.985, hash21(pId + 31.7)) * 4.0;
+  float pH3 = hash21(pId + 17.7);
+  vec3 pCol = vec3(1.0, 0.93, 0.80);
+  if (pH3 > 0.65 && pH3 <= 0.85) {
+    pCol = vec3(0.7, 0.82, 1.0);
+  } else if (pH3 > 0.85) {
+    pCol = vec3(1.0, 0.62, 0.4);
+  }
+  float pMask = clamp(armMask * 1.5, 0.0, 1.0) * (1.0 - smoothstep(0.9, 1.4, r));
+  col += pHit * pProf * pBright * pCol * pMask;
 
   // Background starfield in screen space (stable under zoom)
   // Sparse subpixel points: 1/(1+d*d*1e6), power-law brightness

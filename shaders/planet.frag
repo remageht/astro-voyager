@@ -73,8 +73,15 @@ void main() {
   vec3 nightAmb = vec3(0.10, 0.16, 0.30) * (0.015 * (1.0 - diff));
   if (u_Type == 0) {
     float gran = fbm4(v_Local * 3.0 + u_Seed + vec3(u_Time * 0.05));
+    gran = clamp((gran - 0.5) * 1.5 + 0.5, 0.0, 1.0);
     vec3 ecol = mix(u_ColB, u_ColA, gran) * 5.0;
-    float limb = 0.55 + 0.45 * pow(max(dot(n, viewDir), 0.0), 0.6);
+    ecol *= 0.70 + 0.50 * gran;
+    float facN = fbm4(v_Local * 5.0 - u_Seed + vec3(0.0, u_Time * 0.03, 0.0));
+    float facMask = smoothstep(0.60, 0.85, facN);
+    ecol += vec3(1.0, 0.95, 0.85) * facMask * 1.5;
+    float tintN = fbm3(v_Local * 1.5 + u_Seed * 0.7 + vec3(0.0, u_Time * 0.02, 0.0));
+    ecol = mix(ecol, vec3(1.0, 0.55, 0.2) * 5.0, clamp(tintN, 0.0, 1.0) * 0.3);
+    float limb = 0.45 + 0.55 * pow(max(dot(n, viewDir), 0.0), 0.6);
     vec3 scol = ecol * limb;
     scol *= 1.1;
     scol = acesNarkowicz(scol);

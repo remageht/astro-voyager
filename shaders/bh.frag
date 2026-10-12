@@ -273,7 +273,7 @@ void main() {
           vec3 dcol = mix(c1, c2, smoothstep(0.05, 0.5, Tn));
           dcol = mix(dcol, c3, smoothstep(0.5, 0.95, Tn));
           // Concentrated toward ISCO (high beaming contrast), dim floor outside.
-          vec3 emis = dcol * (0.03 + 3.5 * Tn * Tn * Tn) * (0.15 + 0.85 * x * x);
+          vec3 emis = dcol * (0.06 + 3.5 * Tn * Tn * Tn) * (0.30 + 0.70 * x);
           // White-hot inner rim: uniform boost, beaming untouched.
           float rim = 1.0 + 2.2 * (1.0 - smoothstep(rIn, rIn * 1.18, rDisk));
           emis *= rim;
@@ -287,9 +287,9 @@ void main() {
           emis *= turb;
           // Uniform exposure; beaming geometry untouched:
           // g4 and (1.0 + beta * cosAlpha) kept.
-          vec3 diskRgb = emis * g4 * 1.0;
+          vec3 diskRgb = emis * g4 * 1.5;
           diskRgb = clamp(diskRgb, 0.0, 12.0);
-          float diskAlpha = clamp(brightness * 0.9, 0.0, 0.9);
+          float diskAlpha = clamp(brightness * 1.2, 0.0, 0.9);
 
           accumColor += (1.0 - accumAlpha) * diskRgb;
           accumAlpha += (1.0 - accumAlpha) * diskAlpha;
