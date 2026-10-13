@@ -28,6 +28,9 @@ struct PlanetDef {
   float ecc = 0.0f;   // eccentricity, 0 = circular
   float incl = 0.0f;  // inclination radians, tilt of orbital plane about X
   float spinRate = 0.0f;  // axial spin, rad per sim-second (retrograde if < 0)
+  int detail = 0;  // shader detail id: 0 generic, 1 sun, 2 mercury, 3 venus,
+                   // 4 earth, 5 moon, 6 mars, 7 jupiter, 8 saturn, 9 uranus,
+                   // 10 neptune, 11 halley head (planet.frag u_Body)
 };
 
 struct BodyState {

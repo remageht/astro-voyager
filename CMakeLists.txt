@@ -19,6 +19,7 @@ add_executable(astro-voyager
   src/SolarSystem.cpp
   src/Journey.cpp
   src/Achievements.cpp
+  src/Tour.cpp
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -31,7 +32,9 @@ if(WIN32)
 endif()
 
 if(MSVC)
-  target_compile_options(astro-voyager PRIVATE /W4 /permissive-)
+  # /utf-8: русские строковые литералы (кинотур/карточки/HUD) — и в исходниках,
+  # и в рантайме строго UTF-8, иначе ImGui покажет "?" вместо кириллицы.
+  target_compile_options(astro-voyager PRIVATE /W4 /permissive- /utf-8)
 else()
   target_compile_options(astro-voyager PRIVATE -Wall -Wextra -Wpedantic)
 endif()

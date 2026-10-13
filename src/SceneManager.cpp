@@ -18,6 +18,24 @@ namespace {
 constexpr float kM31SpinRate = 0.005f;
 }  // namespace
 
+// === WarpDrive === (агент W: состояние варп-оверлея).
+// AppGL пишет сюда u_WarpK/u_Flash каждый кадр (дефолт 0 — харнесс
+// чистый), render() в общем хвосте ставит uniform и рисует warp.frag.
+// Отдельный namespace + function-local shader: SceneManager.h не тронут,
+// ветки станций не тронуты.
+namespace warpdrive {
+namespace {
+float g_warpK = 0.0f;
+float g_warpFlash = 0.0f;
+}  // namespace
+void setState(float k, float flash) {
+  g_warpK = k;
+  g_warpFlash = flash;
+}
+float warpK() { return g_warpK; }
+float warpFlash() { return g_warpFlash; }
+}  // namespace warpdrive
+
 SceneManager::SceneManager() {
   m_screenQuad = std::make_unique<ScreenQuad>();
   m_bhShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/bh.frag");
@@ -482,6 +500,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_starShader->setUniformMat4f("u_MV", sView);
       m_starShader->setUniform1f("u_PixelScale", sPixelScale);
       m_starShader->setUniform1f("u_SizeK", 0.045f);
+      m_starShader->setUniform1f("u_Time", time);
       glDepthMask(GL_FALSE);
       glDisable(GL_DEPTH_TEST);
       m_sStars.draw();
@@ -529,20 +548,22 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_starShader->setUniformMat4f("u_MV", view);
     m_starShader->setUniform1f("u_PixelScale", pixelScale);
     m_starShader->setUniform1f("u_SizeK", 0.22f);
+    m_starShader->setUniform1f("u_Time", time);
     m_bgStars.draw();
     m_starShader->unbind();
 
     m_linesShader->bind();
     m_linesShader->setUniformMat4f("u_MVP", mvp);
     m_linesShader->setUniformMat4f("u_Model", glm::mat4(1.0f));
+    m_linesShader->setUniform1f("u_Time", time);
 
     if (m_currentStation->id == "ori") {
       // Orion: bright cyan lines
-      m_linesShader->setUniform3f("u_LineColor", 0.35f, 0.75f, 1.0f);
+      m_linesShader->setUniform3f("u_LineColor", 0.45f, 0.85f, 1.0f);
       m_orionMesh.drawLines();
     } else {
       // Big Dipper: cyan-amber lines
-      m_linesShader->setUniform3f("u_LineColor", 0.4f, 0.85f, 0.95f);
+      m_linesShader->setUniform3f("u_LineColor", 0.50f, 0.90f, 1.0f);
       m_umaMesh.drawLines();
     }
 
@@ -553,6 +574,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_starShader->setUniformMat4f("u_MV", view);
     m_starShader->setUniform1f("u_PixelScale", pixelScale);
     m_starShader->setUniform1f("u_SizeK", 0.22f);
+    m_starShader->setUniform1f("u_Time", time);
     if (m_currentStation->id == "ori") {
       m_orionStars.draw();
     } else {
@@ -661,7 +683,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     if (m_showBelt) {
       m_linesShader->setUniformMat4f("u_Model", glm::rotate(glm::mat4(1.0f), time * 0.02f,
                                                             glm::vec3(0.0f, 1.0f, 0.0f)));
-      m_linesShader->setUniform3f("u_LineColor", 0.45f, 0.38f, 0.30f);
+      // Belt shimmer: subtle per-frame glint of the whole belt
+      // (fixed phase at fixed time, screenshots stay deterministic).
+      float beltTw = 0.85f + 0.15f * std::sin(time * 2.3f);
+      m_linesShader->setUniform3f("u_LineColor", 0.45f * beltTw, 0.38f * beltTw, 0.30f * beltTw);
       glEnable(GL_BLEND);
       glBlendFunc(GL_ONE, GL_ONE);
       m_belt.draw();
@@ -685,6 +710,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(def->radius));
       m_planetShader->setUniformMat4f("u_Model", model);
       m_planetShader->setUniform1i("u_Type", def->type);
+      m_planetShader->setUniform1i("u_Body", def->detail);
       m_planetShader->setUniform1f("u_Seed", def->seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(def->colA.x),
                                    static_cast<float>(def->colA.y),
@@ -710,6 +736,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         }
         m_ringShader->setUniformMat4f("u_Model", ringModel);
         m_ringShader->setUniform1f("u_Seed", def->seed);
+        m_ringShader->setUniform1f("u_Time", time);
+        m_ringShader->setUniform3f("u_Center", static_cast<float>(bpos.x),
+                                  static_cast<float>(bpos.y),
+                                  static_cast<float>(bpos.z));
         m_ringShader->setUniform3f("u_ColA", 0.8f, 0.72f, 0.6f);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -726,6 +756,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(custom.radius));
       m_planetShader->setUniformMat4f("u_Model", model);
       m_planetShader->setUniform1i("u_Type", 2);
+      m_planetShader->setUniform1i("u_Body", 0);
       m_planetShader->setUniform1f("u_Seed", custom.seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(custom.color.x),
                                    static_cast<float>(custom.color.y),
@@ -771,23 +802,123 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         basis[0] = glm::vec4(bx, 0.0f);
         basis[1] = glm::vec4(by, 0.0f);
         basis[2] = glm::vec4(bz, 0.0f);
-        glm::mat4 tailModel = glm::translate(glm::mat4(1.0f), cometPos) *
-                              basis *
-                              glm::scale(glm::mat4(1.0f), glm::vec3(len, 0.8f, 0.8f));
         m_cometShader->bind();
         m_cometShader->setUniformMat4f("u_MVP", mvp);
-        m_cometShader->setUniformMat4f("u_Model", tailModel);
         m_cometShader->setUniform1f("u_Seed", cometDef->seed);
-        m_cometShader->setUniform3f("u_ColA", 0.55f, 0.75f, 1.0f);
         m_cometShader->setUniform1f("u_Exposure", m_exposure);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        // Ion tail: long straight thin blue spike anti-sunward.
+        glm::mat4 ionModel = glm::translate(glm::mat4(1.0f), cometPos) *
+                             basis *
+                             glm::scale(glm::mat4(1.0f), glm::vec3(len, 0.5f, 0.5f));
+        m_cometShader->setUniformMat4f("u_Model", ionModel);
+        m_cometShader->setUniform3f("u_ColA", 0.45f, 0.70f, 1.0f);
+        m_sphere.draw();
+        // Dust tail: shorter warm-white fan, tilted off the ion axis.
+        glm::vec3 dustDir = glm::normalize(tailDir * 0.92f + glm::vec3(0.0f, 0.28f, 0.14f));
+        glm::vec3 dby = glm::normalize(glm::cross(tmpUp, dustDir));
+        glm::vec3 dbz = glm::cross(dustDir, dby);
+        glm::mat4 dustBasis(1.0f);
+        dustBasis[0] = glm::vec4(dustDir, 0.0f);
+        dustBasis[1] = glm::vec4(dby, 0.0f);
+        dustBasis[2] = glm::vec4(dbz, 0.0f);
+        glm::mat4 dustModel = glm::translate(glm::mat4(1.0f), cometPos) *
+                              dustBasis *
+                              glm::scale(glm::mat4(1.0f), glm::vec3(len * 0.45f, 1.6f, 0.9f));
+        m_cometShader->setUniformMat4f("u_Model", dustModel);
+        m_cometShader->setUniform3f("u_ColA", 1.0f, 0.93f, 0.80f);
         m_sphere.draw();
         glDisable(GL_BLEND);
         m_cometShader->unbind();
       }
     }
+    // Sun corona shell: additive 1.5x-radius halo with prominence tongues
+    // (sun_corona.frag, centre transparent so the disc shows through).
+    {
+      glm::vec3 sunPos(0.0f);
+      float sunR = 0.0f;
+      for (const auto& body : m_lastBodies) {
+        if (body.def && body.def->id == "sun") {
+          sunPos = glm::vec3(static_cast<float>(body.pos.x),
+                             static_cast<float>(body.pos.y),
+                             static_cast<float>(body.pos.z));
+          sunR = body.def->radius;
+          break;
+        }
+      }
+      if (sunR > 0.0f) {
+        static std::unique_ptr<Shader> s_sunCorona;
+        if (!s_sunCorona) {
+          s_sunCorona = std::make_unique<Shader>("shaders/planet.vert",
+                                                 "shaders/sun_corona.frag");
+        }
+        glm::mat4 coronaModel =
+            glm::translate(glm::mat4(1.0f), sunPos) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(sunR * 1.5f));
+        s_sunCorona->bind();
+        s_sunCorona->setUniformMat4f("u_MVP", mvp);
+        s_sunCorona->setUniformMat4f("u_Model", coronaModel);
+        s_sunCorona->setUniform1f("u_Time", time);
+        s_sunCorona->setUniform3f("u_CamPos", static_cast<float>(cp.x),
+                                  static_cast<float>(cp.y),
+                                  static_cast<float>(cp.z));
+        s_sunCorona->setUniform1f("u_Exposure", m_exposure);
+        s_sunCorona->setUniform1f("u_Seed", 1.0f);
+        glDepthMask(GL_FALSE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        m_sphere.draw();
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+        s_sunCorona->unbind();
+      }
+    }
     glDisable(GL_DEPTH_TEST);
+  }
+
+  // === WarpDrive === (агент W: общий хвост — uniform u_WarpK + оверлей).
+  // Свой warp.frag: радиальные стрики + виньетка + хроматическая кайма +
+  // вспышка. При u_WarpK == 0 и u_Flash == 0 скипаем целиком (ни одного
+  // GL-вызова), поэтому скриншоты байт-в-байт с HEAD. Физику bh/quasar,
+  // m_exposure и ветки станций не трогаем.
+  {
+    float warpK = warpdrive::warpK();
+    float warpFlash = warpdrive::warpFlash();
+    if (warpK > 0.0005f || warpFlash > 0.0005f) {
+      if (warpK < 0.0f) warpK = 0.0f;
+      if (warpK > 1.0f) warpK = 1.0f;
+      if (warpFlash < 0.0f) warpFlash = 0.0f;
+      if (warpFlash > 1.0f) warpFlash = 1.0f;
+      try {
+        static bool s_warpFailed = false;
+        static Shader* s_warpShader = nullptr;
+        if (!s_warpFailed && !s_warpShader) {
+          try {
+            s_warpShader = new Shader("shaders/quad.vert", "shaders/warp.frag");
+          } catch (...) {
+            s_warpFailed = true;
+          }
+        }
+        if (s_warpShader) {
+          glDisable(GL_DEPTH_TEST);
+          glDepthMask(GL_FALSE);
+          glEnable(GL_BLEND);
+          glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+          s_warpShader->bind();
+          s_warpShader->setUniform1f("u_WarpK", warpK);
+          s_warpShader->setUniform1f("u_Flash", warpFlash);
+          s_warpShader->setUniform1f("u_Aspect", aspect);
+          s_warpShader->setUniform1f("u_Time", time);
+          m_screenQuad->draw();
+          s_warpShader->unbind();
+          glDisable(GL_BLEND);
+          glDepthMask(GL_TRUE);
+        }
+      } catch (...) {
+        // Оверлей никогда не ломает кадр.
+      }
+    }
   }
 }
 

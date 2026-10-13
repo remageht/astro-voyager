@@ -7,7 +7,13 @@
 
 #include "Camera.h"
 #include "SceneManager.h"
+#include "Tour.h"
 #include "Window.h"
+
+// === Cinematic ===: forward-decls для ImGui-типов (imgui.h тянуть в хедер не
+// нужно; дефолтный шрифт и чужие виджеты не тронуты).
+struct ImDrawList;
+struct ImFont;
 
 namespace astro {
 
@@ -118,6 +124,98 @@ class AppGL {
   double m_pitchFrom = 0.0;
   double m_pitchTo = 0.0;
   std::string m_flyTargetName;
+
+  // === Cinematic === (агент C: кинотур, интро-карточки, HUD-полиш).
+  // Весь новый штат только здесь. Чужие блоки выше не тронуты:
+  // поиск, варп (fly-to), время, меню, скриншоты — без изменений.
+  // Всё рисуется из drawCinematic(), который харнесс скриншотов
+  // (captureAllScreenshots) не вызывает: PNG остаются чистыми.
+  Tour m_tour;
+  Vec3 m_tourBasePos{0.0, 0.0, 10.0};
+  double m_tourBaseDist = 10.0;
+  bool m_prevTPressed = false;
+  bool m_prevSpacePressed = false;
+  // Интро-карточка ручного телепорта (3с, гаснет сама).
+  bool m_cardActive = false;
+  float m_cardT = 0.0f;
+  std::string m_cardName;
+  std::string m_cardTypeRu;
+  std::string m_cardFact;
+  double m_cardDist = 0.0;
+  // Полоса-подсказка: первые 10с игровой сессии, гаснет сама.
+  float m_sessionT = 0.0f;
+  // Вспышка-трофей (вместо звука): ведём увиденные достижения локально,
+  // checkAchievements() не трогаем.
+  float m_trophyT = -10.0f;
+  std::string m_trophyTitle;
+  std::set<std::string> m_trophyKnown;
+  // Баннер финиша тура (4с).
+  float m_finishT = -10.0f;
+  // Шрифт с кириллицей для русских строк (дефолтный шрифт не трогаем,
+  // иначе поплывут эталонные скриншоты). nullptr = fallback на дефолт.
+  struct ImFont* m_cineFont = nullptr;
+  void startCineTour();
+  void stopCineTour();
+  void tourTeleport(const std::string& id);
+  void showIntroCard(const Station* st);
+  // Возвращает true, если ввод consumed (тур владеет камерой/клавишами).
+  bool processCinematicInput(float deltaTime);
+  void updateCinematic(float deltaTime);
+  void drawCinematic();
+  void drawCineTopBar(ImDrawList* dl, ImFont* font, float distNow);
+  void drawCineCard(ImDrawList* dl, ImFont* font);
+  void drawCineCaption(ImDrawList* dl, ImFont* font);
+  void drawCineHint(ImDrawList* dl, ImFont* font);
+  void drawCineTrophy(ImDrawList* dl, ImFont* font, float now);
+  void drawCineFade(ImDrawList* dl);
+  static const char* cineTypeRu(StationType t);
+
+  // === WarpDrive === (агент W: отдельный режим путешествий на варпе).
+  // Весь новый штат только здесь. Чужие блоки выше и блок Cinematic
+  // не тронуты. Панель рисуется отдельным окном drawWarpPanel() и только
+  // при активном варпе, поэтому харнесс скриншотов (варп выключен,
+  // u_WarpK = 0) остаётся байт-в-байт. Состояния: 0 Off, 1 Cruise,
+  // 2 Charging (обратный отсчёт 3с), 3 Jump (туннель 4с), 4 Cooldown (2с).
+  int m_warpStatus = 0;
+  bool m_warpOn = false;
+  int m_warpFactor = 1;  // 1..9, скорость логарифмическая
+  float m_warpK = 0.0f;  // визуальная интенсивность 0..1 (ease 1.5с)
+  float m_warpKFrom = 0.0f;
+  float m_warpKTo = 0.0f;
+  float m_warpKAnim = 1.0f;
+  float m_warpFlash = 0.0f;  // вспышка входа/выхода/прибытия (свой множитель)
+  float m_warpBaseFov = 60.0f;
+  float m_warpLastFov = 60.0f;
+  bool m_warpFovDirty = false;
+  float m_warpStateT = 0.0f;  // таймер Charging/Jump/Cooldown
+  std::string m_warpJumpTarget;
+  int m_warpJumpFromFactor = 1;
+  int m_warpSel = 0;  // выбор пункта в варп-панели
+  bool m_prevWPressed = false;
+  bool m_prevLBracketPressed = false;
+  bool m_prevRBracketPressed = false;
+  float m_warpShakePhase = 0.0f;
+  float m_warpShakeYaw = 0.0f;
+  float m_warpShakePitch = 0.0f;
+  void warpRetarget(float to);
+  void disengageWarp();
+  void startWarpJump(const std::string& id);
+  // Возвращает true, если кадр consumed (катсцена прыжка: WASD глушим,
+  // осмотр мышью живёт). Вызывать в начале processInput().
+  bool updateWarp(float deltaTime);
+  // Снимает тряску камеры после render(). Вызывать сразу после него.
+  void finishWarpFrame();
+  void drawWarpPanel();  // отдельное окно, только при m_warpOn
+  static double warpSpeedLY(int factor);  // показушные св.лет/с от фактора
+  static float warpTargetK(int factor);   // целевой u_WarpK от фактора
+  static const char* warpStatusName(int status);
 };
+
+// Связь AppGL -> SceneManager без правок SceneManager.h:
+// состояние оверлея (u_WarpK/u_Flash), дефолт 0. Определено в
+// SceneManager.cpp в блоке // === WarpDrive ===.
+namespace warpdrive {
+void setState(float k, float flash);
+}  // namespace warpdrive
 
 }  // namespace astro

@@ -326,6 +326,11 @@ void main() {
           // g4 and (1.0 + beta * cosAlpha) kept.
           vec3 diskRgb = emis * g4 * 1.5;
           diskRgb = clamp(diskRgb, 0.0, 12.0);
+          // Gravitational reddening, symmetric in radius: the inner rim
+          // reads redder, the outer edge bluer. Pure rDisk profile —
+          // beaming (g4, 1.0 + beta * cosAlpha) untouched. Mean gain ~1.0.
+          float gravW = smoothstep(rIn, rOut, rDisk);
+          diskRgb *= mix(vec3(1.18, 0.82, 0.66), vec3(0.88, 0.96, 1.18), gravW);
           // Thin-disk mode (sgra edge-on "fishing line" look): compress the
           // visible radial band toward ISCO (x0.55 width) with crisper edges.
           // rIn, g-factor and beaming math above are untouched; all edges
@@ -365,6 +370,27 @@ void main() {
         // 0.008 was invisible, 0.1+ saturates white; 0.03 reads as a jet.
         vec3 jcol = vec3(0.60, 0.75, 1.0) * knots * exp(-(p.y - 2.0) * 0.12) * 0.03;
         accumColor += (1.0 - accumAlpha) * jcol * float(u_JetOn);
+        // HST-1-like knots: 3 discrete blobs riding outward from the core,
+        // fading with travel distance. Axial (p.y) + time only — symmetric
+        // about the jet axis, disk/beaming math untouched. Kept dim: the
+        // volumetric march integrates over many in-cone steps, 0.05 saturated
+        // the whole column white (proven by m87.png); 0.006 reads as knots.
+        float kR0 = 2.0 + fract(u_Time * 0.10 + 0.00) * 14.0;
+        float kR1 = 2.0 + fract(u_Time * 0.10 + 0.37) * 14.0;
+        float kR2 = 2.0 + fract(u_Time * 0.10 + 0.71) * 14.0;
+        float kSig = 0.0;
+        kSig += exp(-pow((p.y - kR0) * 2.2, 2.0)) * exp(-(kR0 - 2.0) * 0.12);
+        kSig += exp(-pow((p.y - kR1) * 2.2, 2.0)) * exp(-(kR1 - 2.0) * 0.12);
+        kSig += exp(-pow((p.y - kR2) * 2.2, 2.0)) * exp(-(kR2 - 2.0) * 0.12);
+        vec3 kcol = vec3(0.65, 0.78, 1.0) * kSig * 0.006;
+        accumColor += (1.0 - accumAlpha) * kcol * float(u_JetOn);
+      }
+      // Faint radio lobe: wide dim shell around the jet base, axial + time.
+      if (stJet < 0.38 && p.y >= 2.0 && p.y <= 16.0) {
+        float lobeR = exp(-pow((p.y - 5.0) / 6.0, 2.0));
+        float lobeW = 1.0 - smoothstep(0.12, 0.38, stJet);
+        vec3 lobeCol = vec3(0.45, 0.55, 0.85) * lobeR * lobeW * 0.002;
+        accumColor += (1.0 - accumAlpha) * lobeCol * float(u_JetOn);
       }
     }
 
@@ -411,8 +437,16 @@ void main() {
       // relaxes to its mean (no chaotic dotted modulation), far away bit-identical.
       float shimmer = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
       float shimmerSm = mix(shimmer, 0.85, closeK);
-      ring *= shimmerSm;
+      // Slow symmetric breathing of the ring light (time-only, no azimuth).
+      float breath = 0.94 + 0.06 * sin(u_Time * 0.8);
+      ring *= shimmerSm * breath;
       col += vec3(1.0, 0.96, 0.88) * ring * (3.0 * u_BHRingK) * poleDim;
+      // Secondary photon sub-ring: thinner, fainter, just outside primary.
+      // Pure minR profile — radially symmetric, beaming untouched.
+      float ring2Q = (minR - 1.5 * u_Rs - 0.10 * u_Rs) / (0.028 * u_Rs);
+      float ring2 = exp(-ring2Q * ring2Q);
+      ring2 *= shimmerSm * breath;
+      col += vec3(0.92, 0.95, 1.0) * ring2 * (0.7 * u_BHRingK) * poleDim;
       float eglowQ = (minR - u_Rs) / (0.5 * u_Rs);
       float eglow = exp(-eglowQ * eglowQ) * step(minR, 3.0 * u_Rs);
       // Eglow peaks inside (minR ~ Rs) and would glow in the shadow up close:
@@ -446,9 +480,15 @@ void main() {
   // (see escape branch), far away bit-identical.
   float shimmerFb = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
   float shimmerFbSm = mix(shimmerFb, 0.85, closeK);
-  ringFb *= shimmerFbSm;
+  float breathFb = 0.94 + 0.06 * sin(u_Time * 0.8);
+  ringFb *= shimmerFbSm * breathFb;
   vec3 ringColFb = vec3(1.0, 0.96, 0.88) * ringFb * (3.0 * u_BHRingK) * poleDimFb;
   colFallback += ringColFb;
+  // Secondary photon sub-ring in the fallback path (same profile as escape).
+  float ring2FbQ = (minR - 1.5 * u_Rs - 0.10 * u_Rs) / (0.028 * u_Rs);
+  float ring2Fb = exp(-ring2FbQ * ring2FbQ);
+  ring2Fb *= shimmerFbSm * breathFb;
+  colFallback += vec3(0.92, 0.95, 1.0) * ring2Fb * (0.7 * u_BHRingK) * poleDimFb;
   float eglowFbQ = (minR - u_Rs) / (0.5 * u_Rs);
   float eglowFb = exp(-eglowFbQ * eglowFbQ) * step(minR, 3.0 * u_Rs);
   vec3 eglowColFb = vec3(1.0, 0.75, 0.55) * eglowFb * 0.22 * poleDimFb;
@@ -463,8 +503,10 @@ void main() {
   // by red-debug: solid red capture with black fallback rings). Relax fallback
   // to pure dark so capture-black + fallback-black merge into solid shadow.
   // The photon rim at the true edge comes from converged escape rays
-  // (u_BHRingK kept there). Far away closeK == 0, bit-identical.
-  // escape-path rays (honest sky/disk) untouched.
-  colFallback = mix(colFallback, vec3(0.0), closeK);
+  // (u_BHRingK kept there). Same gate at ALL distances: near-capture
+  // fallback (minR < 2.2 Rs) is unconverged noise, not lensed images
+  // (honest sky/disk images live in the escape path, untouched).
+  float fbShadow = 1.0 - smoothstep(u_Rs * 1.1, u_Rs * 2.2, minR);
+  colFallback = mix(colFallback, vec3(0.0), max(closeK, fbShadow));
   FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCamSqrt, camRedden), v_TexCoord), 1.0);
 }

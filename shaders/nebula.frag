@@ -102,12 +102,29 @@ void main() {
   vec3 envelopeCol = filamentCol * 0.25 + vec3(0.42, 0.62, 1.0) * 0.2;
   diffuse += envelopeCol * envMask * 0.25;
 
+  // Expanding wisps: arcs drifting outward from the pulsar, fading as they
+  // travel. Radial + time; arc modulation breaks full rings into wisps.
+  float wAng = atan(p.y, p.x);
+  float arcMod = 0.5 + 0.5 * sin(wAng * 3.0 + 1.0);
+  float wR0 = fract(u_Time * 0.07 + 0.00) * 0.65 + 0.05;
+  float wR1 = fract(u_Time * 0.07 + 0.45) * 0.65 + 0.05;
+  float wispSig = 0.0;
+  wispSig += exp(-pow((r - wR0) * 22.0, 2.0)) * (1.0 - wR0);
+  wispSig += exp(-pow((r - wR1) * 22.0, 2.0)) * (1.0 - wR1);
+  diffuse += vec3(0.65, 0.78, 1.0) * wispSig * (0.25 + 0.75 * arcMod) * radialFalloff * 0.5;
+
+  // Pulsar strobe, synchronous with the lighthouse beams (2x spin rate):
+  // each flash briefly lifts the whole nebula (global lift below).
+  float strobe = pow(0.5 + 0.5 * sin(u_Time * 4.0), 8.0);
+
   // Keep diffuse dim, no white clip.
   diffuse = min(diffuse, vec3(2.0));
   col += diffuse;
+  // Strobe flash lights the mist: brief global lift, synchronous with beams.
+  col += diffuse * (0.55 * strobe);
 
-  // Tiny pulsar dot, 1-2 px.
-  float psr = exp(-r * r * 60000.0) * 3.0;
+  // Tiny pulsar dot, 1-2 px. Flares with the strobe.
+  float psr = exp(-r * r * 60000.0) * 3.0 * (1.0 + 2.5 * strobe);
   col += vec3(1.0) * psr;
 
   // Filament knots: bright approachable objects on filaments.

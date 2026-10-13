@@ -75,6 +75,10 @@ void main() {
   float re = length(euv);
   vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.030 * exp(-pow(re / 0.2, 0.25));
   hostCol *= 1.0 - smoothstep(0.3, 1.0, re);
+  // Faint two-arm spiral hint in the host (m=2, slowly rotating, fades out).
+  float hostAng = atan(euv.y, euv.x) - u_Time * 0.05;
+  float hostSpiral = 0.5 + 0.5 * sin(hostAng * 2.0 + re * 9.0);
+  hostCol *= 1.0 + 0.60 * (hostSpiral - 0.5) * exp(-re * 4.0);
   hostCol *= hostK;
   hostCol *= shadow;
   col += hostCol;
@@ -108,6 +112,17 @@ void main() {
   vec3 jetCol = vec3(0.60, 0.72, 1.0) * jetBright;
   jetMask *= 0.9 + 0.1 * sin(u_Time * 1.5 + s * 20.0);
   col += jetMask * jetCol;
+  // Discrete blobs riding outward along +x, fading with travel distance.
+  // Radial-in-|s| + time only; gated to +x so the de-beamed counter-jet
+  // keeps its asymmetry.
+  float bR0 = 0.03 + fract(u_Time * 0.12 + 0.00) * 0.45;
+  float bR1 = 0.03 + fract(u_Time * 0.12 + 0.37) * 0.45;
+  float bR2 = 0.03 + fract(u_Time * 0.12 + 0.71) * 0.45;
+  float bSig = 0.0;
+  bSig += exp(-pow((abs(s) - bR0) * 14.0, 2.0)) * exp(-bR0 * 3.0);
+  bSig += exp(-pow((abs(s) - bR1) * 14.0, 2.0)) * exp(-bR1 * 3.0);
+  bSig += exp(-pow((abs(s) - bR2) * 14.0, 2.0)) * exp(-bR2 * 3.0);
+  col += vec3(0.62, 0.74, 1.0) * bSig * width * axial * 0.5 * step(0.0, s);
 
   // Faint receding counter-jet (-x), de-beamed: mirrored s, wider, shorter, dimmer.
   float sC = -s;
@@ -136,7 +151,7 @@ void main() {
   float coreFall = 1.0 / (1.0 + r * r * 12000.0);
   vec3 coreBase = vec3(1.0, 0.98, 0.94) * 10.0;
   vec3 tint = u_CoreColor / vec3(1.0, 0.85, 0.65);
-  float flick = 0.97 + 0.03 * sin(u_Time * 2.0);
+  float flick = 0.94 + 0.05 * sin(u_Time * 2.3) + 0.02 * sin(u_Time * 5.7);
   // Proximity dimming: blinding from afar, compact structured core/ring up
   // close (no milky blowout at qso_close). Narrower falloff + deeper dimming.
   float proxDim = mix(1.0, 0.12, qCloseK);

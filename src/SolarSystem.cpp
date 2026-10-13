@@ -45,6 +45,7 @@ std::vector<PlanetDef> initDefs() {
                           Vec3(1.0f, 0.95f, 0.85f), Vec3(1.0f, 0.60f, 0.20f));
     d.facts = {"G2V main-sequence star", "Diameter 1,392,700 km"};
     d.spinRate = 2.0f * kPi / (27.0f * 10.0f);
+    d.detail = 1;
     list.push_back(d);
   }
   // 1: Mercury
@@ -53,6 +54,7 @@ std::vector<PlanetDef> initDefs() {
                           Vec3(0.55f, 0.50f, 0.45f), Vec3(0.35f, 0.30f, 0.27f));
     d.facts = {"Diameter 4,879 km", "88-day year, no moons"};
     d.spinRate = 2.0f * kPi / (58.6f * 10.0f);
+    d.detail = 2;
     list.push_back(d);
   }
   // 2: Venus
@@ -61,6 +63,7 @@ std::vector<PlanetDef> initDefs() {
                           Vec3(0.95f, 0.85f, 0.60f), Vec3(0.75f, 0.60f, 0.35f));
     d.facts = {"Diameter 12,104 km", "Hottest planet 465 C, spins backwards"};
     d.spinRate = -2.0f * kPi / (243.0f * 10.0f);
+    d.detail = 3;
     list.push_back(d);
   }
   // 3: Earth
@@ -69,6 +72,7 @@ std::vector<PlanetDef> initDefs() {
                           Vec3(0.20f, 0.50f, 0.90f), Vec3(0.20f, 0.70f, 0.35f));
     d.facts = {"Diameter 12,742 km", "One moon, liquid water"};
     d.spinRate = 2.0f * kPi / (1.0f * 10.0f);
+    d.detail = 4;
     list.push_back(d);
   }
   // 4: Moon (orbits Earth)
@@ -78,6 +82,7 @@ std::vector<PlanetDef> initDefs() {
     d.parentId = "earth";
     d.facts = {"Diameter 3,474 km", "Tidally locked to Earth"};
     d.spinRate = d.angleSpeed;  // tidally locked: spin matches orbital rate
+    d.detail = 5;
     list.push_back(d);
   }
   // 5: Mars
@@ -86,6 +91,7 @@ std::vector<PlanetDef> initDefs() {
                           Vec3(0.90f, 0.40f, 0.25f), Vec3(0.60f, 0.25f, 0.15f));
     d.facts = {"Diameter 6,779 km", "Olympus Mons, tallest volcano"};
     d.spinRate = 2.0f * kPi / (1.03f * 10.0f);
+    d.detail = 6;
     list.push_back(d);
   }
   // 6: Jupiter
@@ -94,6 +100,7 @@ std::vector<PlanetDef> initDefs() {
                           Vec3(0.90f, 0.80f, 0.65f), Vec3(0.70f, 0.45f, 0.30f));
     d.facts = {"Diameter 139,820 km", "Great Red Spot storm"};
     d.spinRate = 2.0f * kPi / (0.41f * 10.0f);
+    d.detail = 7;
     list.push_back(d);
   }
   // 7: Saturn
@@ -105,6 +112,7 @@ std::vector<PlanetDef> initDefs() {
     d.ringOuter = 2.7f;
     d.facts = {"Diameter 116,460 km", "Rings: ice, Cassini Division"};
     d.spinRate = 2.0f * kPi / (0.44f * 10.0f);
+    d.detail = 8;
     list.push_back(d);
   }
   // 8: Uranus
@@ -113,6 +121,7 @@ std::vector<PlanetDef> initDefs() {
                           Vec3(0.70f, 0.95f, 0.95f), Vec3(0.45f, 0.75f, 0.80f));
     d.facts = {"Diameter 50,724 km", "Tilted 98 degrees, rolls along"};
     d.spinRate = -2.0f * kPi / (0.72f * 10.0f);
+    d.detail = 9;
     list.push_back(d);
   }
   // 9: Neptune
@@ -121,6 +130,7 @@ std::vector<PlanetDef> initDefs() {
                           Vec3(0.30f, 0.50f, 0.95f), Vec3(0.15f, 0.25f, 0.70f));
     d.facts = {"Diameter 49,244 km", "Supersonic methane winds"};
     d.spinRate = 2.0f * kPi / (0.67f * 10.0f);
+    d.detail = 10;
     list.push_back(d);
   }
   // 10: Halley (eccentric inclined comet, type 4 coma ball)
@@ -130,6 +140,7 @@ std::vector<PlanetDef> initDefs() {
     d.ecc = 0.75f;
     d.incl = 0.32f;
     d.facts = {"Periodic comet, 75-year orbit", "Tail grows near the Sun"};
+    d.detail = 11;
     list.push_back(d);
   }
 

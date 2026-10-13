@@ -1,9 +1,14 @@
 #version 330 core
-// Saturn-like ring: radial stripes + Cassini gap. Normal blending.
+// Saturn-like ring: radial stripes + deep Cassini gap, faint radial spokes
+// (azimuth from u_Center, rotating with u_Time), subtle shimmer.
+// Normal blending. Screenshots stay deterministic at fixed u_Time.
 in float v_R01;
+in vec3 v_WorldPos;
 out vec4 FragColor;
 uniform float u_Seed;
 uniform vec3 u_ColA;
+uniform float u_Time;
+uniform vec3 u_Center;
 float hash12(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
@@ -30,12 +35,30 @@ float fbm3(vec2 p) {
   return v / max(s, 0.0001);
 }
 void main() {
-  float stripes = fbm3(vec2(v_R01 * 24.0, u_Seed));
+  float stripes = fbm3(vec2(v_R01 * 28.0, u_Seed));
+  float fine = vnoise2(vec2(v_R01 * 90.0, u_Seed * 1.7));
+  float dens = stripes * (0.75 + 0.25 * fine);
   float edge = (1.0 - smoothstep(0.0, 0.06, v_R01)) * (1.0 - smoothstep(0.94, 1.0, v_R01));
-  float alpha = stripes * edge * 0.85;
-  float gap = abs(v_R01 - 0.65);
-  alpha *= 1.0 - 0.9 * (1.0 - smoothstep(0.0, 0.05, gap));
-  alpha = clamp(alpha, 0.0, 1.0);
-  vec3 col = u_ColA * (0.55 + 0.45 * stripes);
+  // Cassini Division: deep narrow evacuated gap at 0.65.
+  float cass = 1.0 - smoothstep(0.012, 0.035, abs(v_R01 - 0.65));
+  // Encke hairline at 0.875.
+  float encke = 1.0 - smoothstep(0.004, 0.012, abs(v_R01 - 0.875));
+  float alpha = dens * edge * 0.9;
+  alpha *= 1.0 - 0.96 * cass;
+  alpha *= 1.0 - 0.70 * encke;
+  // Faint radial spokes: 5-fold pattern in the mid ring, slowly revolving.
+  vec3 rel = v_WorldPos - u_Center;
+  float ang = atan(rel.z, rel.x);
+  float spokePat = 0.5 + 0.5 * sin(ang * 5.0 + u_Time * 0.15 + sin(ang * 2.0 + u_Seed) * 0.7);
+  float spokeMask = smoothstep(0.25, 0.45, v_R01) * (1.0 - smoothstep(0.55, 0.75, v_R01));
+  float spokes = smoothstep(0.75, 0.95, spokePat) * spokeMask * 0.25;
+  // Subtle icy shimmer.
+  float shim = 0.95 + 0.05 * sin(u_Time * 2.0 + v_R01 * 25.0);
+  vec3 col = u_ColA * (0.5 + 0.5 * dens) * shim;
+  col += vec3(0.9, 0.9, 0.95) * spokes;
+  // Evacuated gaps are darker as well as transparent.
+  col *= 1.0 - 0.6 * cass;
+  col *= 1.0 - 0.35 * encke;
+  alpha = clamp(alpha + spokes * 0.3, 0.0, 1.0);
   FragColor = vec4(col, alpha);
 }

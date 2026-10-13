@@ -119,7 +119,8 @@ void main() {
   float pointProfile = 1.0 / (1.0 + dot(knotD, knotD) * 900.0);
   col += vec3(1.0, 0.30, 0.58) * knot * pointProfile * armMask * (1.0 - smoothstep(0.8, 1.2, r)) * 3.2 * (1.0 + 2.5 * m31Mid);
 
-  // Globular clusters: dim barely-visible swarm in halo.
+  // Globular clusters: dense round balls in the halo (compact bright core
+  // plus soft envelope reads as a ball, not a point). Isotropic profiles.
   // Coarse grid in galaxy plane (p space, zooms with scene).
   vec2 gcGrid = p * 14.0;
   vec2 gcId = floor(gcGrid);
@@ -129,8 +130,19 @@ void main() {
   vec2 gcOff = vec2(hash21(gcId + 7.0 + 7.13), hash21(gcId + 7.0 + 3.71)) - 0.5;
   gcOff *= 0.8;
   vec2 gcD = gcF - gcOff;
-  float gcProf = exp(-dot(gcD, gcD) * 90.0);
-  col += vec3(0.9, 0.82, 0.68) * gcHit * gcProf * 0.25 * (1.0 + 2.5 * m31Mid) * exp(-r * 2.0);
+  float gcProf = exp(-dot(gcD, gcD) * 420.0) * 1.4 + exp(-dot(gcD, gcD) * 70.0) * 0.35;
+  col += vec3(0.95, 0.88, 0.74) * gcHit * gcProf * 0.5 * (1.0 + 2.5 * m31Mid) * exp(-r * 2.0);
+
+  // Faint tidal stream: a great arc of starlight wrapping the outer halo.
+  // Angular gate gives a ~140-degree arc with soft ends (ascending edges).
+  // Kept very dim: HDR-linear 0.045 with ACES read as a bright ring
+  // (proven by m31.png); 0.012 stays a faint whisper.
+  float streamPhi = atan(p.y, p.x);
+  float streamR = 1.05 + 0.30 * sin(streamPhi + 0.7);
+  float streamD = (r - streamR) / 0.07;
+  float stream = exp(-streamD * streamD);
+  float arcGate = smoothstep(-2.2, -1.7, streamPhi) * (1.0 - smoothstep(0.6, 1.1, streamPhi));
+  col += vec3(0.75, 0.82, 1.0) * stream * arcGate * 0.012 * (1.0 - 0.85 * m31Near);
 
   // Bright individual star-particle layer on top of the smooth arms.
   // Hash grid in galaxy plane (zooms with scene): ~2000 sharp 1-2px points,

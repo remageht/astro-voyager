@@ -44,6 +44,29 @@ static bool fuzzyMatch(const std::string& text, const std::string& query) {
 }
 }  // namespace
 
+// === Cinematic === begin (агент C): шрифт с кириллицей для русских строк.
+// Пробуем системные шрифты (без новых deps/файлов). Дефолтный шрифт ImGui
+// не заменяем: киношрифт используется точечно в drawCinematic(), поэтому
+// эталонные скриншоты попиксельно не меняются. Промах = nullptr (fallback).
+namespace {
+ImFont* loadCineFont() {
+  ImGuiIO& io = ImGui::GetIO();
+  static const char* kPaths[] = {
+      "C:\\Windows\\Fonts\\segoeui.ttf",
+      "C:\\Windows\\Fonts\\arial.ttf",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "/usr/share/fonts/TTF/DejaVuSans.ttf",
+  };
+  for (const char* p : kPaths) {
+    ImFont* f = io.Fonts->AddFontFromFileTTF(
+        p, 16.0f, nullptr, io.Fonts->GetGlyphRangesCyrillic());
+    if (f) return f;
+  }
+  return nullptr;
+}
+}  // namespace
+// === Cinematic === end
+
 namespace astro {
 
 AppGL::AppGL(int width, int height, bool visible) {
@@ -63,6 +86,11 @@ AppGL::AppGL(int width, int height, bool visible) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGui::StyleColorsDark();
+  // === Cinematic === begin (агент C): шрифт с кириллицей для русских строк.
+  // Дефолтный шрифт не заменяем (иначе поплывут эталонные скриншоты):
+  // киношрифт используется только внутри drawCinematic().
+  m_cineFont = loadCineFont();
+  // === Cinematic === end
 
   ImGui_ImplGlfw_InitForOpenGL(m_window->getNativeWindow(), true);
   ImGui_ImplOpenGL3_Init("#version 330");
@@ -186,6 +214,9 @@ int AppGL::run() {
     // Render active scene
     m_sceneManager->render(m_camera, fbWidth, fbHeight, currentTime);
 
+    // === WarpDrive === (снять тряску камеры после render()).
+    finishWarpFrame();
+
     // Render ImGui UI
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -198,6 +229,10 @@ int AppGL::run() {
       drawHelpOverlay();
     }
     drawWorldLabels();
+    // === Cinematic === begin (агент C): тур/карточки/HUD только в игре.
+    // Харнесс (captureAllScreenshots) сюда не заходит: PNG чистые.
+    drawCinematic();
+    // === Cinematic === end
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -211,6 +246,14 @@ int AppGL::run() {
 void AppGL::processInput(float deltaTime) {
   GLFWwindow* win = m_window->getNativeWindow();
   ImGuiIO& io = ImGui::GetIO();
+  // === WarpDrive === begin (агент W): ключи W/[ ], таймеры прыжка,
+  // FOV +10deg*K, дрейф, тряска. Возврат true = катсцена прыжка.
+  if (updateWarp(deltaTime)) return;
+  // === WarpDrive === end
+  // === Cinematic === begin (агент C): клавиша T + автопилот тура.
+  // Возврат true = ввод consumed, дальше обычный ввод не идёт.
+  if (processCinematicInput(deltaTime)) return;
+  // === Cinematic === end
 
   const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
   if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard) {
@@ -353,6 +396,16 @@ void AppGL::stepTimePace(int dir) {
 void AppGL::processMouse() {
   GLFWwindow* win = m_window->getNativeWindow();
   ImGuiIO& io = ImGui::GetIO();
+  // === Cinematic === begin (агент C): в туре автопилот владеет камерой.
+  if (m_tour.active()) {
+    const bool anyDown =
+        (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+    m_prevLeftDown = anyDown;
+    m_firstMouse = true;
+    m_mouseDragging = false;
+    return;
+  }
+  // === Cinematic === end
 
   const bool rightDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
   const bool leftDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
@@ -1136,9 +1189,16 @@ void AppGL::drawImGui() {
   }
 
   ImGui::End();
+
+  // === WarpDrive === (отдельное окно; при выключенном варпе пусто,
+  // Navigator выше не менялся — gui.png чистый).
+  drawWarpPanel();
 }
 
 void AppGL::teleportToStation(const std::string& id) {
+  // === Cinematic === begin (агент C): ручной телепорт останавливает тур.
+  if (m_tour.active()) stopCineTour();
+  // === Cinematic === end
   m_sceneManager->teleportTo(id, m_camera);
   m_flying = false;
   if (m_route.empty() || m_route.back() != id) {
@@ -1147,6 +1207,12 @@ void AppGL::teleportToStation(const std::string& id) {
   if (std::find(m_visited.begin(), m_visited.end(), id) == m_visited.end()) {
     m_visited.push_back(id);
   }
+  // === Cinematic === begin (агент C): интро-карточка 3с (только ручной путь;
+  // тур рисует свой капшн сам и сюда не заходит).
+  if (const Station* cst = m_sceneManager->getCurrentStation()) {
+    if (cst->id == id) showIntroCard(cst);
+  }
+  // === Cinematic === end
   checkAchievements();
 }
 
@@ -1926,5 +1992,672 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
 
   return 0;
 }
+
+// === WarpDrive === begin (агент W: режим путешествий на варп-двигателе).
+// Отдельный режим: W вкл/выкл, фактор 1-9 (слайдер + [ ]), скорость
+// логарифмическая (показушные св.лет/с), статусы Cruise/Charging/Jump/
+// Cooldown. Смена фактора — ease in-out 1.5с. Стрики/виньетка/кайма и
+// вспышка — только своим warp.frag-оверлеем (u_WarpK/u_Flash, дефолт 0):
+// sky.frag чужой, m_exposure не трогаем. Прыжок = туннель 4с поверх +
+// штатный телепорт под вспышкой (честной смены координат вселенной нет).
+// Скриншот-блок выше не тронут: варп там выключен, PNG байт-в-байт.
+double AppGL::warpSpeedLY(int factor) {
+  if (factor < 1) factor = 1;
+  if (factor > 9) factor = 9;
+  return std::pow(10.0, (static_cast<double>(factor) - 1.0) * 0.75);
+}
+
+float AppGL::warpTargetK(int factor) {
+  if (factor < 1) factor = 1;
+  if (factor > 9) factor = 9;
+  return 0.15f + 0.85f * (static_cast<float>(factor - 1) / 8.0f);
+}
+
+const char* AppGL::warpStatusName(int status) {
+  switch (status) {
+    case 1: return "Cruise";
+    case 2: return "Charging";
+    case 3: return "Jump";
+    case 4: return "Cooldown";
+    default: return "Off";
+  }
+}
+
+void AppGL::warpRetarget(float to) {
+  m_warpKFrom = m_warpK;
+  m_warpKTo = to;
+  m_warpKAnim = 0.0f;
+}
+
+void AppGL::disengageWarp() {
+  m_warpOn = false;
+  m_warpStatus = 0;
+  m_warpJumpTarget.clear();
+  warpRetarget(0.0f);
+  m_warpFlash = 0.7f;  // вспышка выхода
+}
+
+void AppGL::startWarpJump(const std::string& id) {
+  const Station* cur = m_sceneManager->getCurrentStation();
+  if (!m_warpOn || m_warpStatus != 1) return;  // только из Cruise
+  if (id.empty() || (cur && cur->id == id)) return;
+  if (!findStation(id)) return;
+  m_warpJumpTarget = id;
+  m_warpStatus = 2;  // Charging
+  m_warpStateT = 0.0f;
+  warpRetarget(warpTargetK(m_warpFactor));  // на отсчёте держим крейсерский K
+}
+
+bool AppGL::updateWarp(float deltaTime) {
+  GLFWwindow* win = m_window->getNativeWindow();
+  ImGuiIO& io = ImGui::GetIO();
+
+  // Ключи (фронты, как остальные хоткеи; при фокусе ввода ImGui молчим).
+  // W: вкл/выкл. ВНИМАНИЕ: W также держит движение вперёд (чужой блок
+  // ниже): короткое нажатие включает варп, повторное — выключает.
+  // [ / ]: фактор 1-9 (в туннеле прыжка фактор растёт сам, ключи глушим).
+  if (!io.WantCaptureKeyboard) {
+    const bool wDown = (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS);
+    if (wDown && !m_prevWPressed) {
+      if (!m_warpOn) {
+        m_warpOn = true;
+        m_warpStatus = 1;  // Cruise
+        m_warpBaseFov = m_sceneManager->getSettings().fovDegrees;
+        m_warpLastFov = m_warpBaseFov;
+        m_warpFovDirty = true;
+        warpRetarget(warpTargetK(m_warpFactor));
+        m_warpFlash = 0.9f;  // вспышка входа
+      } else if (m_warpStatus == 1 || m_warpStatus == 4) {
+        disengageWarp();  // в Charging/Jump игнор — катсцену досматриваем
+      }
+    }
+    m_prevWPressed = wDown;
+
+    const bool lbDown = (glfwGetKey(win, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS);
+    const bool rbDown = (glfwGetKey(win, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS);
+    if (m_warpOn && m_warpStatus != 3) {
+      if (lbDown && !m_prevLBracketPressed && m_warpFactor > 1) {
+        --m_warpFactor;
+        warpRetarget(warpTargetK(m_warpFactor));
+      }
+      if (rbDown && !m_prevRBracketPressed && m_warpFactor < 9) {
+        ++m_warpFactor;
+        warpRetarget(warpTargetK(m_warpFactor));
+      }
+    }
+    m_prevLBracketPressed = lbDown;
+    m_prevRBracketPressed = rbDown;
+  }
+
+  // Плавная кривая 1.5с (ease in-out) к целевой интенсивности.
+  if (m_warpKAnim < 1.0f) {
+    m_warpKAnim += deltaTime / 1.5f;
+    if (m_warpKAnim > 1.0f) m_warpKAnim = 1.0f;
+    const float e = m_warpKAnim * m_warpKAnim * (3.0f - 2.0f * m_warpKAnim);
+    m_warpK = m_warpKFrom + (m_warpKTo - m_warpKFrom) * e;
+  } else {
+    m_warpK = m_warpKTo;
+  }
+
+  // Машина состояний прыжка.
+  if (m_warpOn) {
+    if (m_warpStatus == 2) {  // Charging: обратный отсчёт 3-2-1
+      m_warpStateT += deltaTime;
+      if (m_warpStateT >= 3.0f) {
+        m_warpStatus = 3;  // Jump
+        m_warpStateT = 0.0f;
+        m_warpJumpFromFactor = m_warpFactor;
+        warpRetarget(1.0f);  // туннель на максимуме
+      }
+    } else if (m_warpStatus == 3) {  // Jump: туннель 4с, фактор растёт сам
+      m_warpStateT += deltaTime;
+      float t = m_warpStateT / 4.0f;
+      if (t < 0.0f) t = 0.0f;
+      if (t > 1.0f) t = 1.0f;
+      m_warpFactor = m_warpJumpFromFactor +
+                     static_cast<int>(t * (9 - m_warpJumpFromFactor) + 0.5f);
+      if (m_warpStateT >= 4.0f) {
+        const std::string tgt = m_warpJumpTarget;
+        m_warpJumpTarget.clear();
+        teleportToStation(tgt);  // штатный телепорт под вспышкой
+        m_warpStatus = 4;        // Cooldown
+        m_warpStateT = 0.0f;
+        m_warpFlash = 1.0f;  // вспышка прибытия
+        warpRetarget(warpTargetK(m_warpFactor));
+      }
+    } else if (m_warpStatus == 4) {  // Cooldown 2с
+      m_warpStateT += deltaTime;
+      if (m_warpStateT >= 2.0f) {
+        m_warpStatus = 1;  // Cruise
+        m_warpStateT = 0.0f;
+      }
+    }
+  }
+
+  // Затухание вспышки.
+  if (m_warpFlash > 0.0f) {
+    m_warpFlash -= deltaTime * 0.9f;
+    if (m_warpFlash < 0.0f) m_warpFlash = 0.0f;
+  }
+
+  // FOV +10deg*K. Чужой слайдер FOV не глушим: внешнюю правку считаем
+  // новой базой (иначе слайдер казался бы залипшим в варпе).
+  RenderSettings& st = m_sceneManager->getSettings();
+  if (m_warpOn || m_warpK > 0.001f) {
+    if (st.fovDegrees != m_warpLastFov) {
+      m_warpBaseFov = st.fovDegrees - 10.0f * m_warpK;
+    }
+    float eff = m_warpBaseFov + 10.0f * m_warpK;
+    if (eff < 30.0f) eff = 30.0f;
+    if (eff > 110.0f) eff = 110.0f;
+    st.fovDegrees = eff;
+    m_warpLastFov = eff;
+    m_warpFovDirty = true;
+  } else if (m_warpFovDirty) {
+    st.fovDegrees = m_warpBaseFov;
+    m_warpLastFov = m_warpBaseFov;
+    m_warpFovDirty = false;
+  }
+
+  // Крейсерский дрейф вперёд (в катсцене стоим: прыжок — это оверлей,
+  // не разгон сквозь станцию). Сейфти-клампы ниже в run() применяются.
+  if (m_warpOn && m_warpStatus == 1) {
+    const Vec3 f = m_camera.forward();
+    const double sp = 0.35 * static_cast<double>(m_warpFactor);
+    m_camera.position.x += f.x * sp * static_cast<double>(deltaTime);
+    m_camera.position.y += f.y * sp * static_cast<double>(deltaTime);
+    m_camera.position.z += f.z * sp * static_cast<double>(deltaTime);
+  }
+
+  // Лёгкая тряска камеры ~K (снимается в finishWarpFrame после render).
+  m_warpShakePhase += deltaTime * (18.0f + 30.0f * m_warpK);
+  const float amp = 0.0016f * m_warpK;
+  m_warpShakeYaw = amp * std::sin(m_warpShakePhase);
+  m_warpShakePitch = amp * 0.7f * std::sin(m_warpShakePhase * 1.37f + 1.3f);
+  m_camera.yaw += m_warpShakeYaw;
+  m_camera.pitch += m_warpShakePitch;
+
+  // Состояние оверлея для SceneManager (дефолт 0 — харнесс чистый).
+  warpdrive::setState(m_warpK, m_warpFlash);
+
+  return (m_warpOn && (m_warpStatus == 2 || m_warpStatus == 3));
+}
+
+void AppGL::finishWarpFrame() {
+  m_camera.yaw -= m_warpShakeYaw;
+  m_camera.pitch -= m_warpShakePitch;
+  m_warpShakeYaw = 0.0f;
+  m_warpShakePitch = 0.0f;
+}
+
+void AppGL::drawWarpPanel() {
+  if (!m_warpOn) return;  // выключен — окна нет, gui.png байт-в-байт
+  ImGui::SetNextWindowPos(ImVec2(370.0f, 15.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(300.0f, 0.0f), ImGuiCond_FirstUseEver);
+  ImGui::Begin("Warp Drive (W)");
+
+  ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "Status: %s",
+                     warpStatusName(m_warpStatus));
+  int f = m_warpFactor;
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+  if (ImGui::SliderInt("Factor [ ]", &f, 1, 9)) {
+    if (m_warpStatus != 3) {  // в туннеле фактор растёт сам
+      m_warpFactor = f;
+      warpRetarget(warpTargetK(f));
+    }
+  }
+  ImGui::Text("Speed: %g ly/s (showcase)", warpSpeedLY(m_warpFactor));
+
+  if (m_warpStatus == 2) {
+    const int n = 3 - static_cast<int>(m_warpStateT);
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Jump in %d...",
+                       (n < 1 ? 1 : n));
+  } else if (m_warpStatus == 3) {
+    ImGui::TextColored(ImVec4(0.5f, 0.9f, 1.0f, 1.0f), "WARP TUNNEL %.1fs",
+                       4.0 - static_cast<double>(m_warpStateT));
+  } else if (m_warpStatus == 4) {
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Cooldown %.1fs",
+                       2.0 - static_cast<double>(m_warpStateT));
+  }
+
+  // Выбор пункта прыжка (каталог не трогаем, только читаем).
+  const std::vector<Station>& cat = builtinCatalog();
+  if (m_warpSel < 0 || m_warpSel >= static_cast<int>(cat.size())) m_warpSel = 0;
+  if (ImGui::BeginCombo("Destination", cat[static_cast<size_t>(m_warpSel)].name.c_str())) {
+    for (size_t i = 0; i < cat.size(); ++i) {
+      const bool sel = (static_cast<int>(i) == m_warpSel);
+      if (ImGui::Selectable(cat[i].name.c_str(), sel)) {
+        m_warpSel = static_cast<int>(i);
+      }
+      if (sel) ImGui::SetItemDefaultFocus();
+    }
+    ImGui::EndCombo();
+  }
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  const std::string tgtId = cat[static_cast<size_t>(m_warpSel)].id;
+  const bool canJump =
+      (m_warpStatus == 1 && curSt && curSt->id != tgtId);
+  if (!canJump) ImGui::BeginDisabled();
+  if (ImGui::Button("Engage Jump", ImVec2(-1.0f, 0.0f))) {
+    startWarpJump(tgtId);
+  }
+  if (!canJump) ImGui::EndDisabled();
+  if (ImGui::Button("Disengage (W)", ImVec2(-1.0f, 0.0f))) {
+    if (m_warpStatus == 1 || m_warpStatus == 4) disengageWarp();
+  }
+  ImGui::End();
+
+  // Крупный центр-экран: обратный отсчёт и туннель (только в катсцене).
+  if (m_warpStatus == 2 || m_warpStatus == 3) {
+    ImFont* font = ImGui::GetFont();
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    const ImVec2 ds = ImGui::GetIO().DisplaySize;
+    if (font && dl && ds.x > 0.0f && ds.y > 0.0f) {
+      if (m_warpStatus == 2) {
+        const int n = 3 - static_cast<int>(m_warpStateT);
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "T-%d", (n < 1 ? 1 : n));
+        const ImVec2 sz = font->CalcTextSizeA(64.0f, FLT_MAX, 0.0f, buf);
+        dl->AddText(font, 64.0f,
+                    ImVec2((ds.x - sz.x) * 0.5f, ds.y * 0.32f),
+                    IM_COL32(120, 220, 255, 255), buf);
+      } else {
+        const char* msg = "WARP TUNNEL";
+        const ImVec2 sz = font->CalcTextSizeA(40.0f, FLT_MAX, 0.0f, msg);
+        dl->AddText(font, 40.0f,
+                    ImVec2((ds.x - sz.x) * 0.5f, ds.y * 0.32f),
+                    IM_COL32(150, 220, 255, 255), msg);
+        const float t = m_warpStateT / 4.0f;
+        const float bw = ds.x * 0.4f;
+        const ImVec2 p0((ds.x - bw) * 0.5f, ds.y * 0.32f + 60.0f);
+        const ImVec2 p1(p0.x + bw, p0.y + 10.0f);
+        dl->AddRectFilled(p0, p1, IM_COL32(40, 60, 90, 220));
+        dl->AddRectFilled(p0, ImVec2(p0.x + bw * (t > 1.0f ? 1.0f : t), p1.y),
+                          IM_COL32(120, 220, 255, 255));
+      }
+    }
+  }
+}
+// === WarpDrive === end
+
+// === Cinematic === begin (агент C: кинотур T, интро-карточки, HUD-полиш).
+// Весь код ниже — новый. Скриншот-блок выше, варп (fly-to + WarpDrive),
+// поиск, время и меню не тронуты. Русские строки рисуются киношрифтом
+// с кириллицей (дефолтный шрифт не меняем). В атласе только Basic Latin +
+// Cyrillic, поэтому разделители строго ASCII ("|", "-"): иначе были бы "?".
+
+const char* AppGL::cineTypeRu(StationType t) {
+  switch (t) {
+    case StationType::BlackHole: return "Чёрная дыра";
+    case StationType::Quasar: return "Квазар";
+    case StationType::Constellation: return "Созвездие";
+    case StationType::Galaxy: return "Галактика";
+    case StationType::Nebula: return "Туманность";
+    case StationType::SolarSystem: return "Планетная система";
+  }
+  return "?";
+}
+
+void AppGL::startCineTour() {
+  std::vector<std::string> ids;
+  for (const auto& st : builtinCatalog()) ids.push_back(st.id);
+  if (ids.empty()) return;
+  m_flying = false;
+  m_cardActive = false;
+  // Тур — чистый автопилот: варп гасим его же API (код WarpDrive не меняем).
+  if (m_warpOn) disengageWarp();
+  m_tour.start(ids);
+}
+
+void AppGL::stopCineTour() { m_tour.stop(); }
+
+void AppGL::tourTeleport(const std::string& id) {
+  m_sceneManager->teleportTo(id, m_camera);
+  m_flying = false;
+  if (m_route.empty() || m_route.back() != id) m_route.push_back(id);
+  if (std::find(m_visited.begin(), m_visited.end(), id) == m_visited.end()) {
+    m_visited.push_back(id);
+  }
+  // База облёта снимается ПОСЛЕ телепорта (у sol своя точка/питч).
+  m_tourBasePos = m_camera.position;
+  m_tourBaseDist =
+      std::sqrt(m_camera.position.x * m_camera.position.x +
+                m_camera.position.y * m_camera.position.y +
+                m_camera.position.z * m_camera.position.z);
+  if (m_tourBaseDist < 1e-3) m_tourBaseDist = 1e-3;
+  checkAchievements();
+}
+
+void AppGL::showIntroCard(const Station* st) {
+  if (!st) return;
+  m_cardName = st->name;
+  m_cardTypeRu = cineTypeRu(st->type);
+  m_cardFact = st->description;  // факт из Catalog, не выдумываем
+  m_cardDist = st->spawnDistanceRs;
+  m_cardT = 0.0f;
+  m_cardActive = true;
+}
+
+bool AppGL::processCinematicInput(float deltaTime) {
+  GLFWwindow* win = m_window->getNativeWindow();
+  ImGuiIO& io = ImGui::GetIO();
+
+  // T: старт/стоп тура (только в игре, не в строке поиска).
+  const bool tDown = (glfwGetKey(win, GLFW_KEY_T) == GLFW_PRESS);
+  if (tDown && !m_prevTPressed && !io.WantCaptureKeyboard && !m_inMenu) {
+    if (m_tour.active())
+      stopCineTour();
+    else
+      startCineTour();
+  }
+  m_prevTPressed = tDown;
+
+  // Ребро пробела считаем всегда (иначе залипший флаг съест первый пропуск).
+  const bool spaceDown = (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS);
+  const bool spaceEdge =
+      (spaceDown && !m_prevSpacePressed && !io.WantCaptureKeyboard);
+  m_prevSpacePressed = spaceDown;
+
+  // Сессия/карточка/трофей тикают в игре всегда, даже без тура.
+  updateCinematic(deltaTime);
+  if (!m_tour.active()) return false;
+
+  // ESC всегда выходит из тура; ребро съедаем, меню по нему не откроется
+  // (второй ESC уже откроет меню обычным путём).
+  const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard) stopCineTour();
+  m_prevEscPressed = escDown;
+  if (!m_tour.active()) return true;
+
+  // Пробел = пропуск станции; на последней пропуск = финиш.
+  if (spaceEdge) {
+    m_tour.skip();
+    if (!m_tour.active()) m_finishT = static_cast<float>(glfwGetTime());
+  }
+  if (!m_tour.active()) return true;
+
+  TourEvent ev = m_tour.update(deltaTime);
+  if (ev.stationChanged) tourTeleport(ev.stationId);
+  if (ev.finished) m_finishT = static_cast<float>(glfwGetTime());
+
+  // Медленный облёт: база + lissajous, взгляд в центр.
+  if (m_tour.active() && m_tour.phase() == TourPhase::Dwell) {
+    double dx = 0.0, dy = 0.0, dYaw = 0.0, dPitch = 0.0;
+    Tour::dwellOffsets(m_tour.phaseTime(), dx, dy, dYaw, dPitch);
+    double k = m_tourBaseDist / 20.0;
+    if (k < 0.4) k = 0.4;
+    if (k > 3.0) k = 3.0;
+    m_camera.position = Vec3(m_tourBasePos.x + dx * k,
+                             m_tourBasePos.y + dy * k, m_tourBasePos.z);
+    Vec3 origin(0.0, 0.0, 0.0);
+    computeLookYawPitch(m_camera.position, origin, m_camera.yaw,
+                        m_camera.pitch);
+    m_camera.yaw += dYaw;
+    m_camera.pitch += dPitch;
+    const double kMaxP = 1.55;
+    if (m_camera.pitch > kMaxP) m_camera.pitch = kMaxP;
+    if (m_camera.pitch < -kMaxP) m_camera.pitch = -kMaxP;
+  }
+  return true;
+}
+
+void AppGL::updateCinematic(float deltaTime) {
+  if (!m_inMenu) m_sessionT += deltaTime;
+  if (m_cardActive) {
+    m_cardT += deltaTime;
+    if (m_cardT >= 3.0f) m_cardActive = false;
+  }
+  // Трофей: замечаем новые достижения локально, checkAchievements не трогаем.
+  const float now = static_cast<float>(glfwGetTime());
+  for (const auto& id : m_unlockedIds) {
+    if (m_trophyKnown.insert(id).second) {
+      m_trophyTitle = achievementTitle(id);
+      m_trophyT = now;
+    }
+  }
+}
+
+void AppGL::drawCineTopBar(ImDrawList* dl, ImFont* font, float distNow) {
+  const Station* st = m_sceneManager->getCurrentStation();
+  if (!st) return;
+  char buf[192];
+  std::snprintf(buf, sizeof(buf), "Цель: %s  |  %.1f", st->name.c_str(),
+                static_cast<double>(distNow));
+  ImVec2 tsz = font->CalcTextSizeA(15.0f, FLT_MAX, 0.0f, buf);
+  const float padX = 16.0f, padY = 6.0f;
+  const float w = tsz.x + padX * 2.0f, h = tsz.y + padY * 2.0f;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  const float x = (disp.x - w) * 0.5f, y = 10.0f;
+  dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h),
+                    IM_COL32(8, 12, 20, 190), 7.0f);
+  dl->AddRect(ImVec2(x, y), ImVec2(x + w, y + h),
+              IM_COL32(255, 190, 70, 110), 7.0f, 0, 1.0f);
+  dl->AddText(font, 15.0f, ImVec2(x + padX, y + padY),
+              IM_COL32(255, 255, 255, 255), buf);
+}
+
+void AppGL::drawCineCard(ImDrawList* dl, ImFont* font) {
+  // Плавное гашение: последние 0.8с из 3с.
+  float a = (m_cardT < 2.2f) ? 1.0f : 1.0f - (m_cardT - 2.2f) / 0.8f;
+  if (a < 0.0f) a = 0.0f;
+  if (a > 1.0f) a = 1.0f;
+  char line2[192];
+  std::snprintf(line2, sizeof(line2), "%s  |  дистанция %.1f",
+                m_cardTypeRu.c_str(), m_cardDist);
+  ImVec2 sName = font->CalcTextSizeA(24.0f, FLT_MAX, 0.0f, m_cardName.c_str());
+  ImVec2 sType = font->CalcTextSizeA(14.0f, FLT_MAX, 0.0f, line2);
+  ImVec2 sFact = font->CalcTextSizeA(13.0f, FLT_MAX, 0.0f, m_cardFact.c_str());
+  float maxW = sName.x;
+  if (sType.x > maxW) maxW = sType.x;
+  if (sFact.x > maxW) maxW = sFact.x;
+  const float padX = 26.0f, padY = 14.0f, gap = 5.0f;
+  const float w = maxW + padX * 2.0f;
+  const float h = sName.y + gap + sType.y + gap + sFact.y + padY * 2.0f;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  const float x = (disp.x - w) * 0.5f;
+  const float y = disp.y * 0.30f - h * 0.5f;
+  dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h),
+                    IM_COL32(8, 12, 20, static_cast<int>(225.0f * a)), 8.0f);
+  dl->AddRect(ImVec2(x, y), ImVec2(x + w, y + h),
+              IM_COL32(255, 190, 70, static_cast<int>(200.0f * a)), 8.0f, 0,
+              1.0f);
+  float cy = y + padY;
+  dl->AddText(font, 24.0f, ImVec2(x + (w - sName.x) * 0.5f, cy),
+              IM_COL32(255, 255, 255, static_cast<int>(255.0f * a)),
+              m_cardName.c_str());
+  cy += sName.y + gap;
+  dl->AddText(font, 14.0f, ImVec2(x + (w - sType.x) * 0.5f, cy),
+              IM_COL32(170, 200, 230, static_cast<int>(230.0f * a)), line2);
+  cy += sType.y + gap;
+  dl->AddText(font, 13.0f, ImVec2(x + (w - sFact.x) * 0.5f, cy),
+              IM_COL32(210, 210, 210, static_cast<int>(220.0f * a)),
+              m_cardFact.c_str());
+}
+
+void AppGL::drawCineCaption(ImDrawList* dl, ImFont* font) {
+  if (m_tour.phase() != TourPhase::Dwell &&
+      m_tour.phase() != TourPhase::FadeIn) {
+    return;
+  }
+  const Station* st = findStation(m_tour.currentId());
+  if (!st) return;
+  const size_t n = m_tour.total();
+  const size_t cur = m_tour.index();
+  if (n == 0 || cur >= n) return;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  if (m_cineFont) ImGui::PushFont(m_cineFont);
+  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y - 16.0f),
+                          ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+  ImGui::SetNextWindowSize(ImVec2(540.0f, 0.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowBgAlpha(0.88f);
+  const ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_AlwaysAutoResize;
+  bool open = ImGui::Begin("##cinetour", nullptr, flags);
+  if (open) {
+    char head[64];
+    std::snprintf(head, sizeof(head), "КИНОТУР  |  %zu/%zu", cur + 1, n);
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "%s", head);
+    ImGui::SetWindowFontScale(1.3f);
+    ImGui::TextWrapped("%s", st->name.c_str());
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::TextColored(ImVec4(0.75f, 0.78f, 0.82f, 1.0f), "%s",
+                       st->description.c_str());
+    // Прогресс: точки-кружки + счёт (кружки примитивами: глифов нет в атласе).
+    char prog[32];
+    std::snprintf(prog, sizeof(prog), "%zu/%zu", cur + 1, n);
+    ImVec2 progSz = font->CalcTextSizeA(13.0f, FLT_MAX, 0.0f, prog);
+    const float r = 4.0f, gap = 15.0f;
+    const float rowW =
+        static_cast<float>(n - 1) * gap + static_cast<float>(n) * r * 2.0f +
+        10.0f + progSz.x;
+    ImDrawList* wdl = ImGui::GetWindowDrawList();
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float x0 = p0.x + (avail - rowW) * 0.5f;
+    const float yc = p0.y + r + 2.0f;
+    for (size_t i = 0; i < n; ++i) {
+      ImVec2 c(x0 + r + static_cast<float>(i) * (r * 2.0f + gap), yc);
+      if (i <= cur)
+        wdl->AddCircleFilled(c, r, IM_COL32(255, 190, 70, 255));
+      else
+        wdl->AddCircle(c, r, IM_COL32(140, 140, 140, 255), 12, 1.0f);
+    }
+    wdl->AddText(font, 13.0f,
+                 ImVec2(x0 + rowW - progSz.x, yc - progSz.y * 0.5f),
+                 IM_COL32(200, 200, 200, 255), prog);
+    ImGui::Dummy(ImVec2(rowW, r * 2.0f + 4.0f));
+    // Кнопки без нав-фокуса: пробел не должен жать их повторно.
+    ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+    const float bw = (ImGui::GetContentRegionAvail().x -
+                      ImGui::GetStyle().ItemSpacing.x) *
+                     0.5f;
+    if (ImGui::Button("Пропустить (Space)", ImVec2(bw, 0.0f))) {
+      m_tour.skip();
+      if (!m_tour.active()) m_finishT = static_cast<float>(glfwGetTime());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Выйти (ESC)", ImVec2(bw, 0.0f))) stopCineTour();
+    ImGui::PopItemFlag();
+  }
+  ImGui::End();
+  if (m_cineFont) ImGui::PopFont();
+  (void)dl;
+}
+
+void AppGL::drawCineHint(ImDrawList* dl, ImFont* font) {
+  if (m_sessionT >= 10.0f) return;
+  float a = (m_sessionT < 8.0f) ? 0.9f : 0.9f * (10.0f - m_sessionT) / 2.0f;
+  if (a < 0.0f) a = 0.0f;
+  const char* txt =
+      "WASD - полет | мышь - осмотр | T - кинотур | / - поиск | F1 - помощь | "
+      "ESC - меню";
+  ImVec2 tsz = font->CalcTextSizeA(13.0f, FLT_MAX, 0.0f, txt);
+  const float padX = 14.0f, padY = 5.0f;
+  const float w = tsz.x + padX * 2.0f, h = tsz.y + padY * 2.0f;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  const float x = 12.0f, y = disp.y - h - 12.0f;
+  dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h),
+                    IM_COL32(8, 12, 20, static_cast<int>(190.0f * a)), 6.0f);
+  dl->AddText(font, 13.0f, ImVec2(x + padX, y + padY),
+              IM_COL32(200, 200, 200, static_cast<int>(255.0f * a)), txt);
+}
+
+void AppGL::drawCineTrophy(ImDrawList* dl, ImFont* font, float now) {
+  const float age = now - m_trophyT;
+  if (age < 0.0f || age > 1.6f) return;
+  const float a = 1.0f - age / 1.6f;
+  const char* line1 = "ДОСТИЖЕНИЕ";
+  ImVec2 s1 = font->CalcTextSizeA(15.0f, FLT_MAX, 0.0f, line1);
+  ImVec2 s2 =
+      font->CalcTextSizeA(14.0f, FLT_MAX, 0.0f, m_trophyTitle.c_str());
+  float maxW = (s1.x > s2.x) ? s1.x : s2.x;
+  const float iconW = 30.0f, gap = 10.0f;
+  const float w = iconW + gap + maxW;
+  const float h = s1.y + 3.0f + s2.y;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  const float x = (disp.x - w) * 0.5f;
+  const float y = 50.0f;
+  // Вспышка-кольцо вместо звука.
+  dl->AddCircle(ImVec2(x + iconW * 0.5f, y + h * 0.5f), 12.0f + age * 52.0f,
+                IM_COL32(255, 200, 90, static_cast<int>(200.0f * a)), 32, 2.0f);
+  // Кубок примитивами (глифа трофея в атласе нет).
+  const ImU32 amber = IM_COL32(255, 190, 70, static_cast<int>(255.0f * a));
+  const float ix = x + iconW * 0.5f, iy = y + h * 0.5f - 10.0f;
+  dl->AddQuad(ImVec2(ix - 10.0f, iy), ImVec2(ix + 10.0f, iy),
+              ImVec2(ix + 6.0f, iy + 12.0f), ImVec2(ix - 6.0f, iy + 12.0f),
+              amber, 2.0f);
+  dl->AddLine(ImVec2(ix, iy + 12.0f), ImVec2(ix, iy + 20.0f), amber, 2.0f);
+  dl->AddLine(ImVec2(ix - 7.0f, iy + 20.0f), ImVec2(ix + 7.0f, iy + 20.0f),
+              amber, 2.0f);
+  dl->AddText(font, 15.0f, ImVec2(x + iconW + gap, y),
+              IM_COL32(255, 190, 70, static_cast<int>(255.0f * a)), line1);
+  dl->AddText(font, 14.0f, ImVec2(x + iconW + gap, y + s1.y + 3.0f),
+              IM_COL32(255, 255, 255, static_cast<int>(255.0f * a)),
+              m_trophyTitle.c_str());
+}
+
+void AppGL::drawCineFade(ImDrawList* dl) {
+  const float a = m_tour.fadeAlpha();
+  if (a <= 0.001f) return;
+  int ab = static_cast<int>(a * 255.0f);
+  if (ab < 0) ab = 0;
+  if (ab > 255) ab = 255;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  dl->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(0, 0, 0, ab));
+}
+
+void AppGL::drawCinematic() {
+  ImDrawList* dl = ImGui::GetForegroundDrawList();
+  if (!dl) return;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+  ImFont* font = m_cineFont ? m_cineFont : ImGui::GetFont();
+  if (!font) return;
+  const float now = static_cast<float>(glfwGetTime());
+  const double distNow =
+      std::sqrt(m_camera.position.x * m_camera.position.x +
+                m_camera.position.y * m_camera.position.y +
+                m_camera.position.z * m_camera.position.z);
+  const bool showUi = !m_hideUI;
+  if (showUi) drawCineTopBar(dl, font, static_cast<float>(distNow));
+  if (showUi) drawCineTrophy(dl, font, now);
+  if (showUi) {
+    // Баннер финиша тура (4с, гаснет последний 1с).
+    const float fage = now - m_finishT;
+    if (fage >= 0.0f && fage < 4.0f) {
+      float fa = (fage < 3.0f) ? 1.0f : 1.0f - (fage - 3.0f);
+      if (fa < 0.0f) fa = 0.0f;
+      const char* l1 = "Кинотур завершён";
+      const char* l2 = "все станции показаны";
+      ImVec2 fs1 = font->CalcTextSizeA(18.0f, FLT_MAX, 0.0f, l1);
+      ImVec2 fs2 = font->CalcTextSizeA(13.0f, FLT_MAX, 0.0f, l2);
+      float fw = (fs1.x > fs2.x) ? fs1.x : fs2.x;
+      const float fpadX = 22.0f, fpadY = 10.0f, fgap = 4.0f;
+      fw += fpadX * 2.0f;
+      const float fh = fs1.y + fgap + fs2.y + fpadY * 2.0f;
+      const float fx = (disp.x - fw) * 0.5f;
+      const float fy = disp.y * 0.40f - fh * 0.5f;
+      dl->AddRectFilled(ImVec2(fx, fy), ImVec2(fx + fw, fy + fh),
+                        IM_COL32(8, 12, 20, static_cast<int>(220.0f * fa)),
+                        8.0f);
+      dl->AddRect(ImVec2(fx, fy), ImVec2(fx + fw, fy + fh),
+                  IM_COL32(255, 190, 70, static_cast<int>(200.0f * fa)), 8.0f,
+                  0, 1.5f);
+      dl->AddText(font, 18.0f, ImVec2(fx + (fw - fs1.x) * 0.5f, fy + fpadY),
+                  IM_COL32(255, 255, 255, static_cast<int>(255.0f * fa)), l1);
+      dl->AddText(font, 13.0f,
+                  ImVec2(fx + (fw - fs2.x) * 0.5f, fy + fpadY + fs1.y + fgap),
+                  IM_COL32(180, 180, 180, static_cast<int>(220.0f * fa)), l2);
+    }
+  }
+  if (showUi && m_cardActive && !m_tour.active()) drawCineCard(dl, font);
+  if (showUi && m_tour.active()) drawCineCaption(dl, font);
+  if (showUi) drawCineHint(dl, font);
+  drawCineFade(dl);  // вуаль всегда поверх, даже при скрытом UI
+}
+
+// === Cinematic === end
 
 }  // namespace astro
