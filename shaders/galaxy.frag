@@ -53,15 +53,16 @@ void main() {
   float m31Mid = 1.0 - smoothstep(25.0, 60.0, m31D);
   float m31Near = 1.0 - smoothstep(6.0, 18.0, m31D);
 
-  // Linear-space palette (sRGB -> linear via pow 2.2)
+  // Linear-space palette (sRGB -> linear via pow 2.2): cold blue arms,
+  // dark dust, warm bright core.
   vec3 bulgeC = pow(vec3(0.92, 0.78, 0.60), vec3(2.2));
-  vec3 armC = pow(vec3(0.45, 0.60, 0.92), vec3(2.2));
+  vec3 armC = pow(vec3(0.32, 0.55, 1.00), vec3(2.2));
   vec3 dustLin = pow(vec3(0.16, 0.10, 0.06), vec3(2.2));
   vec3 haloC = pow(vec3(0.45, 0.40, 0.35), vec3(2.2)) * 0.06;
   vec3 bgC = vec3(0.004, 0.005, 0.009);
 
-  // Bulge: de-Vaucouleurs-like r^1/4 falloff, HDR peak 5.0
-  float bulge = 5.0 * exp(-pow(max(r * 7.0, 0.0), 0.25) * 3.0);
+  // Bulge: de-Vaucouleurs-like r^1/4 falloff, HDR peak 6.5 (bright core).
+  float bulge = 6.5 * exp(-pow(max(r * 7.0, 0.0), 0.25) * 3.0);
   vec3 bulgeTerm = bulge * bulgeC;
 
   // Exponential disk, faint vs bulge for 12-20x core-to-arm ratio
@@ -72,17 +73,17 @@ void main() {
   float armMask = smoothstep(0.1, 0.9, spiral) * exp(-r * 1.8) * 1.15;
   float arm = armMask * 0.22;
 
-  // Dust lanes: multiply disk+arms by ~0.35 with dark brown tint,
-  // mixed with magenta #c088aa (pink dust veins between the arms).
+  // Dust lanes: DARKEN disk+arms (dust absorbs), only a faint magenta vein
+  // (#c088aa) remains between the arms instead of glowing pink.
   float dust = sin(phi * 2.0 - lr * 3.5 + 0.6);
   float dustLane = smoothstep(0.3, 0.8, dust) * exp(-r * 2.0) * smoothstep(0.08, 0.35, r);
   dustLane = clamp(dustLane, 0.0, 1.0);
-  vec3 dustMul = (dustLin / max(dustLin.x, 1e-4)) * 0.35;
+  vec3 dustMul = (dustLin / max(dustLin.x, 1e-4)) * 0.18;
   vec3 pinkLin = pow(vec3(0.7529, 0.5333, 0.6667), vec3(2.2));  // magenta #c088aa
-  dustMul = mix(dustMul, pinkLin * 0.45, 0.62);
+  dustMul = mix(dustMul, pinkLin * 0.30, 0.25);
   vec3 diskArm = (disk + arm) * armC;
   diskArm *= mix(vec3(1.0), dustMul, dustLane);
-  diskArm += pinkLin * dustLane * exp(-r * 2.0) * 0.14;
+  diskArm += pinkLin * dustLane * exp(-r * 2.0) * 0.05;
   // NEAR: smooth arms fade to ~15%, volumetric M31Stars take over.
   diskArm *= mix(1.0, 0.15, m31Near);
 
@@ -112,7 +113,7 @@ void main() {
   knotOff *= 0.8;
   vec2 knotD = hiiF - knotOff;
   float pointProfile = 1.0 / (1.0 + dot(knotD, knotD) * 900.0);
-  col += vec3(1.0, 0.38, 0.50) * knot * pointProfile * armMask * (1.0 - smoothstep(0.8, 1.2, r)) * 2.2 * (1.0 + 2.5 * m31Mid);
+  col += vec3(1.0, 0.30, 0.58) * knot * pointProfile * armMask * (1.0 - smoothstep(0.8, 1.2, r)) * 3.2 * (1.0 + 2.5 * m31Mid);
 
   // Globular clusters: dim barely-visible swarm in halo.
   // Coarse grid in galaxy plane (p space, zooms with scene).
@@ -204,6 +205,11 @@ void main() {
   col *= exposure * u_Exposure;
   col = acesNarkowicz(col);
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
+
+  // Tiny dark central point (the dormant black hole in the bright core):
+  // applied post-tonemap so ACES white compression can't wash it out.
+  float coreDot = exp(-r * r * 30000.0);
+  col *= 1.0 - 0.70 * coreDot;
 
   // Vignette ~0.3
   vec2 q = v_TexCoord * 2.0 - 1.0;

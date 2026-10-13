@@ -166,6 +166,8 @@ Check 'm31 close cam near' (($appCpp -match 'm31_close') -and ($appCpp -match 'p
 Check 'bh shadow mask capture returns black' ($bh -match '(?s)if \(p\.y <= u_Rs \* 1\.001\)[\s\S]{0,600}?vec3\(0\.0\)')
 Check 'bh close cam disk smoothing via u_CamDist' (($bh -match 'uniform float u_CamDist') -and ($sceneCpp -match 'setUniform1f\("u_CamDist"'))
 Check 'bh ring gain sgra 1.8' (($bh -match 'u_BHRingK') -and ($sceneCpp -match 'u_BHRingK", isSgra \? 1\.8f'))
+Check 'bh nan guard black, no gray rings' (($bh -match 'any\(isnan\(p\)\)') -and ($bh -cnotmatch '0\.02, 0\.015, 0\.025'))
+Check 'bh closeK full at 8Rs with wide shadow gate' (($bh -match 'smoothstep\(8\.0, 10\.0, camDistRs\)') -and ($bh -match 'smoothstep\(u_Rs \* 1\.1, u_Rs \* 2\.2, minR\)'))
 Check 'quasar core gain qso 2.2' (((Read-File 'shaders/quasar.frag') -match 'u_QCoreK') -and ($sceneCpp -match 'u_QCoreK'))
 Check 'sgra thin disk and band' (($bh -match 'u_ThinDisk') -and ((Read-File 'shaders/sky.frag') -match 'u_BandK') -and ($sceneCpp -match 'u_BandK'))
 

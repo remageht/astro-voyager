@@ -215,11 +215,12 @@ void main() {
   float minSin = 1.0;
 
   // Close-camera factor: 0 far away (legacy behavior, bit-identical frames),
-  // 1 up close (disk detail smoothed, poles damped). Spawn distances
-  // (sgra 10, m87 ~9.3 Rs) give exactly 0, so reference shots don't change.
-  // Full smoothing at D <= 6 Rs per spec (< ~6 Rs).
+  // 1 up close (disk detail smoothed, shadow masked, poles damped). Spawn
+  // distance sgra 10 Rs gives exactly 0, so the far reference shot is kept.
+  // Full smoothing at D <= 8 Rs: D = 8 helper frames are fully masked, only
+  // true far-field spawns keep legacy pixels.
   float camDistRs = (u_CamDist <= 0.0) ? 1000.0 : u_CamDist;
-  float closeK = 1.0 - smoothstep(6.0, 8.0, camDistRs);
+  float closeK = 1.0 - smoothstep(8.0, 10.0, camDistRs);
 
   for (int i = 0; i < ABSOLUTE_MAX_STEPS; i++) {
     if (i >= u_MaxSteps) break;
@@ -239,8 +240,12 @@ void main() {
     float poleDamp = smoothstep(0.0, 0.05, abs(sin(p.z)));
     float poleFreeze = (abs(sin(p.z)) < 0.05) ? 0.0 : 1.0;
     dp.w *= mix(poleDamp, poleFreeze, 1.0 - closeK);
+    // NaN guard renders pure black: winding rays near the photon sphere can
+    // blow the fixed-step march to NaN in alternating impact-parameter bands;
+    // the old gray tint painted those as visible concentric rings inside the
+    // shadow at every distance and view (proven by RGB pathmap debug).
     if (any(isnan(p)) || any(isnan(dp))) {
-      FragColor = vec4(0.02, 0.015, 0.025, 1.0); return;
+      FragColor = vec4(0.0, 0.0, 0.0, 1.0); return;
     }
     fb = normalize(velToCart(p, dp));
 
@@ -291,11 +296,12 @@ void main() {
           // Tn = (x^3 * (1 - sqrt(x)) * 2.11)^0.25, x = rIn / r.
           float x = rIn / rDisk;
           float Tn = pow(x * x * x * (1.0 - sqrt(x)) * 2.11, 0.25);
-          // 4-stop ramp: deep -> orange -> amber -> hot.
-          vec3 c1 = vec3(0.95, 0.18, 0.02);
-          vec3 c2 = vec3(1.00, 0.45, 0.08);
-          vec3 c3 = vec3(1.00, 0.72, 0.30);
-          vec3 c4 = vec3(0.88, 0.90, 1.00);
+          // 4-stop ramp: deep -> warm -> amber -> hot-white (cooled: the dim
+          // receding side reads neutral brown-gray, the beamed side white).
+          vec3 c1 = vec3(0.60, 0.28, 0.14);
+          vec3 c2 = vec3(0.78, 0.52, 0.30);
+          vec3 c3 = vec3(1.00, 0.72, 0.42);
+          vec3 c4 = vec3(0.82, 0.88, 1.00);
           vec3 dcol = mix(c1, c2, smoothstep(0.0, 0.3, Tn));
           dcol = mix(dcol, c3, smoothstep(0.3, 0.65, Tn));
           dcol = mix(dcol, c4, smoothstep(0.65, 1.0, Tn));
@@ -324,7 +330,7 @@ void main() {
           // visible radial band toward ISCO (x0.55 width) with crisper edges.
           // rIn, g-factor and beaming math above are untouched; all edges
           // ascending; exactly neutral at u_ThinDisk == 0.0.
-          float thinW = mix(1.0, 0.55, u_ThinDisk);
+          float thinW = mix(1.0, 0.40, u_ThinDisk);
           float rOutThin = rIn + (rOut - rIn) * thinW;
           float edgeIn = smoothstep(rIn, rIn + (rOutThin - rIn) * 0.06 + 0.001, rDisk);
           float edgeOut = 1.0 - smoothstep(rOutThin - (rOutThin - rIn) * 0.12, rOutThin, rDisk);
@@ -388,15 +394,17 @@ void main() {
       // fallback-black merge into solid shadow (no alternating moire bands,
       // proven by red-debug). Rim (ring) stays unmasked outside (u_BHRingK
       // kept). Far away closeK == 0, bit-identical (masks exactly 1.0).
-      // All smoothstep edges ascending.
-      float shadowMask = smoothstep(u_Rs * 1.1, u_Rs * 1.6, minR);
+      // All smoothstep edges ascending. Gate widened to 2.2 Rs so the warm
+      // skirt just outside the rim is absorbed too (compact white glow only).
+      float shadowMask = smoothstep(u_Rs * 1.1, u_Rs * 2.2, minR);
       float escMask = mix(1.0, shadowMask, closeK);
       vec3 col = (u_DiskOn == 1) ? accumColor * escMask + (1.0 - accumAlpha) * sky * escMask : sky * escMask + accumColor * escMask;
-      // Pole-transit dimming: rays that crossed the pole band keep less
-      // photon-glow up close, so no white columns grow above/below the
-      // shadow. Far away poleDim is exactly 1.0 (frames unchanged).
-      float poleDim = mix(mix(0.4, 1.0, smoothstep(0.0, 0.05, minSin)), 1.0, 1.0 - closeK);
-      float ring = exp(-pow((minR - 1.5 * u_Rs) / (0.08 * u_Rs), 2.0));
+      // Pole-transit dimming at ALL distances: rays that crossed the pole band
+      // keep less photon-glow, so no white columns grow above/below the
+      // shadow (far frames had them too). Deeper floor + wider smooth band.
+      float poleDim = mix(0.15, 1.0, smoothstep(0.0, 0.12, minSin));
+      float ringQ = (minR - 1.5 * u_Rs) / (0.055 * u_Rs);
+      float ring = exp(-ringQ * ringQ);
       // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - stylized
       // photon-ring visualization; shimmer uses current exit phi p.w as honest
       // approximation (no azimuth stored at minR). Up close the shimmer
@@ -404,11 +412,13 @@ void main() {
       float shimmer = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
       float shimmerSm = mix(shimmer, 0.85, closeK);
       ring *= shimmerSm;
-      col += vec3(1.0, 0.85, 0.6) * ring * (2.5 * u_BHRingK) * poleDim;
-      float eglow = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
+      col += vec3(1.0, 0.96, 0.88) * ring * (3.0 * u_BHRingK) * poleDim;
+      float eglowQ = (minR - u_Rs) / (0.5 * u_Rs);
+      float eglow = exp(-eglowQ * eglowQ) * step(minR, 3.0 * u_Rs);
       // Eglow peaks inside (minR ~ Rs) and would glow in the shadow up close:
       // mask it by the same shadow mask (far away escMask == 1.0, identical).
-      col += vec3(1.0, 0.55, 0.25) * eglow * 0.5 * poleDim * escMask;
+      // Whitened and dimmed: the glow hugs the rim instead of spreading gold.
+      col += vec3(1.0, 0.75, 0.55) * eglow * 0.22 * poleDim * escMask;
       if (u_DiskOn == 1) {
         float glowLuma = dot(col, vec3(0.299, 0.587, 0.114));
         float glowF = smoothstep(0.2, 0.8, glowLuma);
@@ -427,8 +437,9 @@ void main() {
                          ? accumColor + (1.0 - accumAlpha) * skyFallback
                          : skyFallback + accumColor;
   // Same pole-transit dimming as the escape branch (see above).
-  float poleDimFb = mix(mix(0.4, 1.0, smoothstep(0.0, 0.05, minSin)), 1.0, 1.0 - closeK);
-  float ringFb = exp(-pow((minR - 1.5 * u_Rs) / (0.08 * u_Rs), 2.0));
+  float poleDimFb = mix(0.15, 1.0, smoothstep(0.0, 0.12, minSin));
+  float ringFbQ = (minR - 1.5 * u_Rs) / (0.055 * u_Rs);
+  float ringFb = exp(-ringFbQ * ringFbQ);
   // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - stylized
   // photon-ring visualization; shimmer uses current exit phi p.w as honest
   // approximation (no azimuth stored at minR). Up close relaxed to mean
@@ -436,10 +447,11 @@ void main() {
   float shimmerFb = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
   float shimmerFbSm = mix(shimmerFb, 0.85, closeK);
   ringFb *= shimmerFbSm;
-  vec3 ringColFb = vec3(1.0, 0.85, 0.6) * ringFb * (2.5 * u_BHRingK) * poleDimFb;
+  vec3 ringColFb = vec3(1.0, 0.96, 0.88) * ringFb * (3.0 * u_BHRingK) * poleDimFb;
   colFallback += ringColFb;
-  float eglowFb = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
-  vec3 eglowColFb = vec3(1.0, 0.55, 0.25) * eglowFb * 0.5 * poleDimFb;
+  float eglowFbQ = (minR - u_Rs) / (0.5 * u_Rs);
+  float eglowFb = exp(-eglowFbQ * eglowFbQ) * step(minR, 3.0 * u_Rs);
+  vec3 eglowColFb = vec3(1.0, 0.75, 0.55) * eglowFb * 0.22 * poleDimFb;
   colFallback += eglowColFb;
   if (u_DiskOn == 1) {
     float glowLumaFb = dot(colFallback, vec3(0.299, 0.587, 0.114));

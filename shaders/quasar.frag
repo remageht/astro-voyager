@@ -57,9 +57,9 @@ void main() {
   float qCloseK = smoothstep(2.0, 6.0, qz);
   float r = length(uv);
 
-  // Central black-hole shadow absorbs core/host/disk light inside r < 0.018,
-  // at any zoom: the shadow stays dark, no rings inside it.
-  float shadow = smoothstep(0.008, 0.018, r);
+  // Central black-hole shadow absorbs core/host/disk light inside r < 0.015,
+  // at any zoom: the shadow stays dark and hard-edged, no rings inside it.
+  float shadow = smoothstep(0.010, 0.015, r);
 
   // Near-black sky.
   vec3 col = vec3(0.004, 0.005, 0.009);
@@ -73,7 +73,7 @@ void main() {
   float hostK = mix(1.0, 0.7, clamp((u_QCoreK - 1.0) / 1.2, 0.0, 1.0));
   vec2 euv = vec2(uv.x, uv.y * 1.6);
   float re = length(euv);
-  vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.045 * exp(-pow(re / 0.2, 0.25));
+  vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.030 * exp(-pow(re / 0.2, 0.25));
   hostCol *= 1.0 - smoothstep(0.3, 1.0, re);
   hostCol *= hostK;
   hostCol *= shadow;
@@ -132,20 +132,22 @@ void main() {
   // HDR core with tight falloff, 2-3 px feel. No cross spikes.
   // BH vs quasar look: a black hole shows a dark shadow + lensed thin disk
   // with a dark core; a quasar core outshines everything (u_QCoreK) + jets.
-  // Central black-hole shadow absorbs core light inside r < 0.018.
-  float coreFall = 1.0 / (1.0 + r * r * 4000.0);
+  // Central black-hole shadow absorbs core light inside r < 0.015.
+  float coreFall = 1.0 / (1.0 + r * r * 12000.0);
   vec3 coreBase = vec3(1.0, 0.98, 0.94) * 10.0;
   vec3 tint = u_CoreColor / vec3(1.0, 0.85, 0.65);
   float flick = 0.97 + 0.03 * sin(u_Time * 2.0);
-  // Proximity dimming: blinding from afar, structured core/ring up close.
-  float proxDim = mix(1.0, 0.32, qCloseK);
+  // Proximity dimming: blinding from afar, compact structured core/ring up
+  // close (no milky blowout at qso_close). Narrower falloff + deeper dimming.
+  float proxDim = mix(1.0, 0.12, qCloseK);
   col += coreBase * tint * coreFall * flick * shadow * u_QCoreK * proxDim;
 
-  // Rotating ergosphere-style glow ring hugging the shadow.
-  float ringBright = exp(-pow((r - 0.033) * 90.0, 2.0));
+  // Compact white glow ring hugging the shadow (closer in, narrower, whiter).
+  float ringQ = (r - 0.026) * 120.0;
+  float ringBright = exp(-ringQ * ringQ);
   float ang = atan(uv.y, uv.x) - u_Time * 1.5;
   float asym = 0.55 + 0.45 * sin(ang * 2.0);
-  col += vec3(1.0, 0.8, 0.55) * ringBright * asym * (3.0 * u_QCoreK) * proxDim;
+  col += vec3(1.0, 0.93, 0.82) * ringBright * asym * (3.0 * u_QCoreK) * proxDim;
 
   // Vignette about 0.3.
   float vig = 1.0 - 0.3 * clamp(dot(uv * 0.7, uv * 0.7), 0.0, 1.0);
