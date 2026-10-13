@@ -9,6 +9,9 @@
 #include "SceneManager.h"
 #include "Tour.h"
 #include "Window.h"
+// === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
+// с Tour.h-образцом, остальной хедер не тронут).
+#include "WarpJump.h"
 // === Audio === begin (агент AU: процедурный звук, только GL-таргет).
 #include "audio/AudioEngine.h"
 // === Audio === end
@@ -68,6 +71,8 @@ class AppGL {
   bool m_firstMouse = true;
   bool m_mouseDragging = false;
   std::string m_lastScreenshotStatus;
+  // Харнесс пинит FPS-текст в 60: иначе gui.png флейкает от wall-clock.
+  static inline bool s_harnessPinFps = false;
 
   // Auto-performance benchmarking
   bool m_benchmarking = true;
@@ -240,6 +245,41 @@ class AppGL {
   static float warpTargetK(int factor);   // целевой u_WarpK от фактора
   static const char* warpStatusName(int status);
 
+  // === WarpJump === begin (агент J: кинематографичный варп-прыжок).
+  // Контроллер живёт ПОВЕРХ статусов 2/3/4, их семантику не ломает: пока
+  // m_jumpCine активен, updateWarp отдаёт управление updateJumpCine, а
+  // m_warpStatus маппится на старые значения (2 = Charge/Pullback и первая
+  // половина Burst, 3 = пик Burst/Travel/Arrival, 4 = Pushin/Cooldown) —
+  // UI-панель и аудио-polling (playJump-фронт на входе в 3, setWarpLevel
+  // через m_warpK) продолжают работать без правок. Прыжок запускается из
+  // startWarpJump. Дефолт: m_jumpCine = false, m_jump в Idle — харнесс
+  // идёт старым путём, PNG байт-в-байт.
+  WarpJump m_jump;
+  bool m_jumpCine = false;
+  JumpPhase m_jumpPrevPhase = JumpPhase::Idle;
+  std::string m_jumpTarget;
+  bool m_jumpDidTeleport = false;
+  float m_jumpBurst = 0.0f;  // u_Burst для warp.frag (дефолт 0)
+  // TP-риг: корабль и FP запомнены на входе в Pullback (rebased в пик Burst
+  // после телепорта — скачок прячет белый flash=1).
+  Vec3 m_jumpShipPos{0.0, 0.0, 0.0};
+  Vec3 m_jumpShipDir{0.0, 0.0, -1.0};
+  Vec3 m_jumpFpPos{0.0, 0.0, 10.0};
+  double m_jumpFpYaw = 0.0;
+  double m_jumpFpPitch = 0.0;
+  Vec3 m_jumpCamPos{0.0, 0.0, 10.0};  // текущая TP-позиция (пружина)
+  Vec3 m_jumpCamVel{0.0, 0.0, 0.0};   // скорость пружины
+  Vec3 m_jumpPushinPos{0.0, 0.0, 10.0};  // TP-старт возврата
+  double m_jumpPushinYaw = 0.0;
+  double m_jumpPushinPitch = 0.0;
+  // Возвращает true, если кадр consumed (катсцена держит камеру: WASD
+  // глушим; в Cooldown возвращает false — управление уже у игрока).
+  // Вызывать из updateWarp, пока m_jumpCine активен.
+  bool updateJumpCine(float deltaTime);
+  // ESC-прерывание: всегда в Idle + восстановление FP-камеры.
+  void abortJumpCine();
+  // === WarpJump === end
+
   // === Audio === begin (агент AU: процедурный звук без бинарников).
   // Весь новый штат только здесь. Чужие блоки выше (поиск/варп/тур/время/
   // меню/скриншоты/ModernUI) не тронуты. Движок лениво стартует при ПЕРВОМ
@@ -267,8 +307,11 @@ class AppGL {
 // Связь AppGL -> SceneManager без правок SceneManager.h:
 // состояние оверлея (u_WarpK/u_Flash), дефолт 0. Определено в
 // SceneManager.cpp в блоке // === WarpDrive ===.
+// === WarpJump === (агент J): +u_Burst и корабль-силуэт, дефолты 0/скрыт.
 namespace warpdrive {
 void setState(float k, float flash);
+void setBurst(float b);
+void setShip(bool v, float x, float y, float z, float yaw);
 }  // namespace warpdrive
 
 }  // namespace astro

@@ -449,6 +449,18 @@ void AppGL::processMouse() {
     return;
   }
   // === Cinematic === end
+  // === WarpJump === begin (агент J): катсцена держит камеру — тот же
+  // паттерн, что m_captureAnim у капчи горизонта и тур выше: drag-состояние
+  // сбрасываем, осмотр не идёт. В Cooldown управление уже у игрока.
+  if (m_jumpCine && m_jump.phase() != JumpPhase::Cooldown) {
+    const bool jumpDown =
+        (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+    m_prevLeftDown = jumpDown;
+    m_firstMouse = true;
+    m_mouseDragging = false;
+    return;
+  }
+  // === WarpJump === end
 
   const bool rightDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
   const bool leftDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
@@ -1168,6 +1180,8 @@ void AppGL::drawModernTransportBar() {
 // === ModernUI === end
 
 void AppGL::drawImGui() {
+// Детерминизм скриншотов: в харнессе FPS-текст всегда 60.
+if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   // === ModernUI ===: тема применяется один раз (флаг внутри).
   applyModernThemeOnce();
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
@@ -2305,6 +2319,7 @@ bool AppGL::saveScreenshot(const std::string& filepath) {
 }
 
 int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
+  s_harnessPinFps = true;
   std::filesystem::create_directories(outDir);
 
   // Create AppGL (with window 1280x720)
@@ -2497,13 +2512,30 @@ void AppGL::startWarpJump(const std::string& id) {
   if (!m_warpOn || m_warpStatus != 1) return;  // только из Cruise
   if (id.empty() || (cur && cur->id == id)) return;
   if (!findStation(id)) return;
-  m_warpJumpTarget = id;
-  m_warpStatus = 2;  // Charging
-  m_warpStateT = 0.0f;
-  warpRetarget(warpTargetK(m_warpFactor));  // на отсчёте держим крейсерский K
+  // === WarpJump === (агент J): прыжок идёт через кино-контроллер поверх
+  // статусов (Charge->Pullback->Burst->Travel->Arrival->Pushin->Cooldown).
+  // Старый прямой путь Charging(3с)/Jump(4с) ниже остаётся fallback'ом
+  // (статический чек 'warp jump machine 3-4s' на него опирается).
+  m_jumpTarget = id;
+  m_jumpDidTeleport = false;
+  m_jumpBurst = 0.0f;
+  m_jumpShipPos = m_camera.position;
+  m_jumpShipDir = m_camera.forward();
+  m_jumpFpPos = m_camera.position;
+  m_jumpFpYaw = m_camera.yaw;
+  m_jumpFpPitch = m_camera.pitch;
+  m_jumpCamPos = m_camera.position;
+  m_jumpCamVel = Vec3(0.0, 0.0, 0.0);
+  m_jump.start(id);
+  m_jumpPrevPhase = JumpPhase::Idle;
+  m_jumpCine = true;
 }
 
 bool AppGL::updateWarp(float deltaTime) {
+  // === WarpJump === (агент J): пока катсцена активна, управление у нового
+  // контроллера; статусы 2/3/4 он маппит сам (UI/аудио не ломаются).
+  if (m_jumpCine) return updateJumpCine(deltaTime);
+  // === WarpJump === end
   GLFWwindow* win = m_window->getNativeWindow();
   ImGuiIO& io = ImGui::GetIO();
 
@@ -2645,6 +2677,291 @@ void AppGL::finishWarpFrame() {
   m_warpShakePitch = 0.0f;
 }
 
+// === WarpJump === begin (агент J: кинематографичный варп-прыжок).
+// Sequence: Charge(1с) -> Pullback FP→TP(1.2с) -> Burst(0.5с, flash-пик +
+// телепорт) -> Travel(3.5с) -> Arrival(0.4с) -> Pushin TP→FP(1.2с) ->
+// Cooldown(1.5с). Статусы 2/3/4 маппятся на старые значения, поэтому
+// drawWarpPanel и аудио-polling (playJump-фронт на входе в 3, setWarpLevel
+// через m_warpK) работают без правок: playJump звучит ровно в пик Burst
+// (статус 3 выставляется вместе с switchStation), rumble гаснет в Arrival
+// (m_warpK идёт к крейсерскому через обычный ease). Прямых вызовов
+// m_audio.* здесь нет, чтобы не двоить голоса (Jump длится 1.6с).
+void AppGL::abortJumpCine() {
+  m_jump.stop();
+  m_jumpCine = false;
+  m_jumpPrevPhase = JumpPhase::Idle;
+  m_jumpBurst = 0.0f;
+  m_warpFlash = 0.0f;
+  m_camera.position = m_jumpFpPos;
+  m_camera.yaw = m_jumpFpYaw;
+  m_camera.pitch = m_jumpFpPitch;
+  m_warpStatus = 1;  // назад в Cruise
+  warpRetarget(warpTargetK(m_warpFactor));
+  warpdrive::setBurst(0.0f);
+  warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+bool AppGL::updateJumpCine(float deltaTime) {
+  GLFWwindow* win = m_window->getNativeWindow();
+  ImGuiIO& io = ImGui::GetIO();
+
+  // Фронты W/[ ] за время катсцены поглощаем (не залипать после неё);
+  // ESC — прерывание всегда в Idle (как Tour::stop). Фронт съедаем,
+  // меню после abort не открываем.
+  if (!io.WantCaptureKeyboard) {
+    m_prevWPressed = (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS);
+    m_prevLBracketPressed = (glfwGetKey(win, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS);
+    m_prevRBracketPressed = (glfwGetKey(win, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS);
+    const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+    if (escDown && !m_prevEscPressed) {
+      m_prevEscPressed = true;
+      abortJumpCine();
+      return false;
+    }
+    m_prevEscPressed = escDown;
+  }
+
+  JumpEvent jumpEv = m_jump.update(deltaTime);
+  const JumpPhase ph = m_jump.phase();
+  const float t01 = m_jump.phaseT01();
+  const bool entered = (ph != m_jumpPrevPhase);
+  m_jumpPrevPhase = ph;
+
+  const float cruiseK = warpTargetK(m_warpFactor);
+  bool shipVisible = false;
+
+  switch (ph) {
+    case JumpPhase::Idle:
+      break;  // ниже: финиш (finished уже выдан контроллером)
+    case JumpPhase::Charge: {
+      m_warpStatus = 2;
+      break;  // FP стоит (ввод заморожен consumed), K крейсерский
+    }
+    case JumpPhase::Pullback: {
+      m_warpStatus = 2;
+      if (entered) {
+        // TP-риг: корабль = FP на старте отъезда.
+        m_jumpShipPos = m_camera.position;
+        m_jumpShipDir = m_camera.forward();
+        m_jumpFpPos = m_camera.position;
+        m_jumpFpYaw = m_camera.yaw;
+        m_jumpFpPitch = m_camera.pitch;
+        m_jumpCamPos = m_camera.position;
+        m_jumpCamVel = Vec3(0.0, 0.0, 0.0);
+        warpRetarget(1.0f);  // туннель нарастает к максимуму
+      }
+      shipVisible = true;
+      break;
+    }
+    case JumpPhase::Burst: {
+      if (entered) warpRetarget(1.0f);  // держать максимум
+      // Статус 3 — только со второй половины (в пик, вместе с телепортом):
+      // polling-фронт audioUpdate сыграет playJump ровно в пик.
+      if (t01 >= 0.5f) m_warpStatus = 3;
+      m_jumpBurst = t01;
+      m_warpFlash = WarpJump::burstEnv(t01);  // прямая запись, пик 1
+      shipVisible = true;
+      break;
+    }
+    case JumpPhase::Travel: {
+      m_warpStatus = 3;
+      if (entered) warpRetarget(1.0f);
+      m_warpK = 1.0f;
+      m_warpKTo = 1.0f;
+      m_jumpBurst = 1.0f * WarpJump::travelK(t01);  // ровная полка 1
+      shipVisible = true;
+      break;
+    }
+    case JumpPhase::Arrival: {
+      m_warpStatus = 3;
+      if (entered) warpRetarget(cruiseK);  // rumble гаснет через ease+polling
+      m_jumpBurst = 1.0f - t01;
+      shipVisible = true;
+      break;
+    }
+    case JumpPhase::Pushin: {
+      m_warpStatus = 4;
+      if (entered) {
+        m_jumpPushinPos = m_jumpCamPos;
+        m_jumpPushinYaw = m_camera.yaw;
+        m_jumpPushinPitch = m_camera.pitch;
+      }
+      shipVisible = true;
+      break;
+    }
+    case JumpPhase::Cooldown: {
+      m_warpStatus = 4;
+      if (entered) {
+        // Точное FP: интерполяция сошлась, фиксируем без дрейфа.
+        m_camera.position = m_jumpFpPos;
+        m_camera.yaw = m_jumpFpYaw;
+        m_camera.pitch = m_jumpFpPitch;
+        m_jumpCamPos = m_jumpFpPos;
+        m_jumpCamVel = Vec3(0.0, 0.0, 0.0);
+        m_jumpBurst = 0.0f;
+      }
+      break;
+    }
+  }
+
+  // Пик Burst: штатный телепорт под белым flash=1 + rebase рига в новую
+  // систему (скачок прячет вспышка). Статус 3 здесь же — playJump-фронт.
+  if (jumpEv.switchStation && !m_jumpDidTeleport) {
+    m_jumpDidTeleport = true;
+    m_warpStatus = 3;
+    teleportToStation(m_jumpTarget);
+    m_jumpShipPos = m_camera.position;
+    m_jumpShipDir = m_camera.forward();
+    m_jumpFpPos = m_camera.position;
+    m_jumpFpYaw = m_camera.yaw;
+    m_jumpFpPitch = m_camera.pitch;
+    // Камера сразу за кораблём новой станции (D=6, H=1.2), пружина с нуля.
+    {
+      const float D = 6.0f, H = 1.2f;
+      m_jumpCamPos = Vec3(m_jumpShipPos.x - m_jumpShipDir.x * D,
+                          m_jumpShipPos.y - m_jumpShipDir.y * D + H,
+                          m_jumpShipPos.z - m_jumpShipDir.z * D);
+      m_jumpCamVel = Vec3(0.0, 0.0, 0.0);
+      m_camera.position = m_jumpCamPos;
+      computeLookYawPitch(m_jumpCamPos, m_jumpShipPos, m_camera.yaw,
+                          m_camera.pitch);
+    }
+  }
+
+  // TP-камера без рефакторинга Camera: пружина тянет позицию к desired,
+  // взгляд — computeLookYawPitch на корабль. Pullback: D 2.5->6 по pullK;
+  // Burst/Travel/Arrival: D=6 висеть. Pushin: обратная интерполяция к FP.
+  if (ph == JumpPhase::Pullback || ph == JumpPhase::Burst ||
+      ph == JumpPhase::Travel || ph == JumpPhase::Arrival) {
+    float pullD = 6.0f;
+    if (ph == JumpPhase::Pullback) {
+      pullD = 2.5f + 3.5f * WarpJump::pullK(t01);
+      // Коллизия: на ЧД-станциях камере нельзя ближе rs*6 к центру.
+      const Station* jst = m_sceneManager->getCurrentStation();
+      if (jst && jst->type == StationType::BlackHole) {
+        double rs = static_cast<double>(m_sceneManager->getSettings().rs);
+        if (rs < 0.1) rs = 1.0;
+        const double minR = rs * 6.0;
+        while (pullD > 1.0f) {
+          const double dx = m_jumpShipPos.x - m_jumpShipDir.x * pullD;
+          const double dy = m_jumpShipPos.y - m_jumpShipDir.y * pullD + 1.2;
+          const double dz = m_jumpShipPos.z - m_jumpShipDir.z * pullD;
+          if (std::sqrt(dx * dx + dy * dy + dz * dz) >= minR) break;
+          pullD -= 0.25f;
+        }
+      }
+    }
+    const float H = 1.2f;
+    const Vec3 des(m_jumpShipPos.x - m_jumpShipDir.x * pullD,
+                   m_jumpShipPos.y - m_jumpShipDir.y * pullD + H,
+                   m_jumpShipPos.z - m_jumpShipDir.z * pullD);
+    // Critically-damped пружина k=8 (w=8, c=2w); dt кламп 1/30.
+    float sdt = deltaTime;
+    if (sdt < 0.0f) sdt = 0.0f;
+    if (sdt > 1.0f / 30.0f) sdt = 1.0f / 30.0f;
+    const float w = 8.0f;
+    const Vec3 acc(w * w * (des.x - m_jumpCamPos.x) - 2.0f * w * m_jumpCamVel.x,
+                   w * w * (des.y - m_jumpCamPos.y) - 2.0f * w * m_jumpCamVel.y,
+                   w * w * (des.z - m_jumpCamPos.z) - 2.0f * w * m_jumpCamVel.z);
+    m_jumpCamVel = Vec3(m_jumpCamVel.x + acc.x * sdt,
+                        m_jumpCamVel.y + acc.y * sdt,
+                        m_jumpCamVel.z + acc.z * sdt);
+    m_jumpCamPos = Vec3(m_jumpCamPos.x + m_jumpCamVel.x * sdt,
+                        m_jumpCamPos.y + m_jumpCamVel.y * sdt,
+                        m_jumpCamPos.z + m_jumpCamVel.z * sdt);
+    m_camera.position = m_jumpCamPos;
+    computeLookYawPitch(m_jumpCamPos, m_jumpShipPos, m_camera.yaw,
+                        m_camera.pitch);
+  } else if (ph == JumpPhase::Pushin) {
+    const float e = WarpJump::pushK(t01);
+    m_camera.position = Vec3(m_jumpPushinPos.x + (m_jumpFpPos.x - m_jumpPushinPos.x) * e,
+                             m_jumpPushinPos.y + (m_jumpFpPos.y - m_jumpPushinPos.y) * e,
+                             m_jumpPushinPos.z + (m_jumpFpPos.z - m_jumpPushinPos.z) * e);
+    const double kPi = 3.14159265358979323846;
+    double yawDelta = m_jumpFpYaw - m_jumpPushinYaw;
+    while (yawDelta > kPi) yawDelta -= 2.0 * kPi;
+    while (yawDelta < -kPi) yawDelta += 2.0 * kPi;
+    m_camera.yaw = m_jumpPushinYaw + yawDelta * e;
+    m_camera.pitch = m_jumpPushinPitch + (m_jumpFpPitch - m_jumpPushinPitch) * e;
+    m_jumpCamPos = m_camera.position;
+  }
+
+  // Плавная кривая m_warpK (ease in-out, как в обычном updateWarp).
+  if (m_warpKAnim < 1.0f) {
+    m_warpKAnim += deltaTime / 1.5f;
+    if (m_warpKAnim > 1.0f) m_warpKAnim = 1.0f;
+    const float e = m_warpKAnim * m_warpKAnim * (3.0f - 2.0f * m_warpKAnim);
+    m_warpK = m_warpKFrom + (m_warpKTo - m_warpKFrom) * e;
+  } else {
+    m_warpK = m_warpKTo;
+  }
+  if (ph == JumpPhase::Travel) m_warpK = 1.0f;  // полка без просадки ease
+
+  // Затухание вспышки (в Burst — прямая запись конверта выше).
+  if (ph != JumpPhase::Burst && m_warpFlash > 0.0f) {
+    m_warpFlash -= deltaTime * 0.9f;
+    if (m_warpFlash < 0.0f) m_warpFlash = 0.0f;
+  }
+
+  // FOV +10deg*K (та же формула, что в обычном updateWarp).
+  RenderSettings& jst = m_sceneManager->getSettings();
+  if (m_warpOn || m_warpK > 0.001f) {
+    if (jst.fovDegrees != m_warpLastFov) {
+      m_warpBaseFov = jst.fovDegrees - 10.0f * m_warpK;
+    }
+    float eff = m_warpBaseFov + 10.0f * m_warpK;
+    if (eff < 30.0f) eff = 30.0f;
+    if (eff > 110.0f) eff = 110.0f;
+    jst.fovDegrees = eff;
+    m_warpLastFov = eff;
+    m_warpFovDirty = true;
+  } else if (m_warpFovDirty) {
+    jst.fovDegrees = m_warpBaseFov;
+    m_warpLastFov = m_warpBaseFov;
+    m_warpFovDirty = false;
+  }
+
+  // Тряска ~K (снимается в finishWarpFrame после render, как обычно).
+  m_warpShakePhase += deltaTime * (18.0f + 30.0f * m_warpK);
+  const float amp = 0.0016f * m_warpK;
+  m_warpShakeYaw = amp * std::sin(m_warpShakePhase);
+  m_warpShakePitch = amp * 0.7f * std::sin(m_warpShakePhase * 1.37f + 1.3f);
+  m_camera.yaw += m_warpShakeYaw;
+  m_camera.pitch += m_warpShakePitch;
+
+  // Мосты в SceneManager: оверлей + u_Burst + корабль (виден только в
+  // Pullback/Travel/Arrival/Pushin; дефолт скрыт — харнесс чистый).
+  warpdrive::setState(m_warpK, m_warpFlash);
+  warpdrive::setBurst(m_jumpBurst);
+  if (shipVisible) {
+    const double shipYaw = std::atan2(-m_jumpShipDir.x, -m_jumpShipDir.z);
+    warpdrive::setShip(true, static_cast<float>(m_jumpShipPos.x),
+                       static_cast<float>(m_jumpShipPos.y),
+                       static_cast<float>(m_jumpShipPos.z),
+                       static_cast<float>(shipYaw));
+  } else {
+    warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+  }
+
+  // Финиш sequence: контроллер уже в Idle — отдать Cruise, флаг снять.
+  // Управление игроку возвращено ещё в Cooldown (consumed=false ниже).
+  if (jumpEv.finished || ph == JumpPhase::Idle) {
+    m_jumpCine = false;
+    m_jumpPrevPhase = JumpPhase::Idle;
+    m_warpStatus = 1;  // Cruise
+    m_jumpBurst = 0.0f;
+    warpRetarget(cruiseK);
+    warpdrive::setBurst(0.0f);
+    warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+    return false;
+  }
+
+  // Катсцена держит ввод до конца Pushin; в Cooldown управление уже у игрока
+  // (как m_captureAnim-паттерн: WASD/мышь заморожены, дальше обычный ввод).
+  return (ph != JumpPhase::Cooldown);
+}
+// === WarpJump === end
+
 void AppGL::drawWarpPanel() {
   if (!m_warpOn) return;  // выключен — окна нет, gui.png байт-в-байт
   ImGui::SetNextWindowPos(ImVec2(370.0f, 15.0f), ImGuiCond_FirstUseEver);
@@ -2698,17 +3015,96 @@ void AppGL::drawWarpPanel() {
   }
   if (!canJump) ImGui::EndDisabled();
   if (ImGui::Button("Disengage (W)", ImVec2(-1.0f, 0.0f))) {
-    if (m_warpStatus == 1 || m_warpStatus == 4) disengageWarp();
+    // === WarpJump === (агент J): посреди катсцены не гасим (досматриваем).
+    if ((m_warpStatus == 1 || m_warpStatus == 4) && !m_jumpCine) disengageWarp();
   }
   ImGui::End();
 
   // Крупный центр-экран: обратный отсчёт и туннель (только в катсцене).
-  if (m_warpStatus == 2 || m_warpStatus == 3) {
+  // === WarpJump === (агент J): в кино-режиме тексты/прогресс — по фазам
+  // контроллера (старые формулы 3-2-1/4с к новым длительностям не подходят).
+  if (m_jumpCine) {
     ImFont* font = ImGui::GetFont();
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     const ImVec2 ds = ImGui::GetIO().DisplaySize;
     if (font && dl && ds.x > 0.0f && ds.y > 0.0f) {
-      if (m_warpStatus == 2) {
+      const JumpPhase jp = m_jump.phase();
+      if (jp == JumpPhase::Charge || jp == JumpPhase::Pullback) {
+        float toPeak = WarpJump::kBurstDur * 0.5f;
+        if (jp == JumpPhase::Charge) {
+          toPeak += (WarpJump::kChargeDur - m_jump.phaseTime()) +
+                    WarpJump::kPullbackDur;
+        } else {
+          toPeak += (WarpJump::kPullbackDur - m_jump.phaseTime());
+        }
+        int n = static_cast<int>(std::ceil(toPeak));
+        if (n < 1) n = 1;
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "T-%d", n);
+        const ImVec2 sz = font->CalcTextSizeA(64.0f, FLT_MAX, 0.0f, buf);
+        dl->AddText(font, 64.0f,
+                    ImVec2((ds.x - sz.x) * 0.5f, ds.y * 0.32f),
+                    IM_COL32(120, 220, 255, 255), buf);
+      } else if (jp == JumpPhase::Burst) {
+        const char* msg = "BURST";
+        const ImVec2 sz = font->CalcTextSizeA(64.0f, FLT_MAX, 0.0f, msg);
+        dl->AddText(font, 64.0f,
+                    ImVec2((ds.x - sz.x) * 0.5f, ds.y * 0.32f),
+                    IM_COL32(255, 255, 255, 255), msg);
+      } else if (jp == JumpPhase::Travel) {
+        const char* msg = "WARP TUNNEL";
+        const ImVec2 sz = font->CalcTextSizeA(40.0f, FLT_MAX, 0.0f, msg);
+        dl->AddText(font, 40.0f,
+                    ImVec2((ds.x - sz.x) * 0.5f, ds.y * 0.32f),
+                    IM_COL32(150, 220, 255, 255), msg);
+        const float t = m_jump.phaseT01();
+        const float bw = ds.x * 0.4f;
+        const ImVec2 p0((ds.x - bw) * 0.5f, ds.y * 0.32f + 60.0f);
+        const ImVec2 p1(p0.x + bw, p0.y + 10.0f);
+        dl->AddRectFilled(p0, p1, IM_COL32(40, 60, 90, 220));
+        dl->AddRectFilled(p0, ImVec2(p0.x + bw * (t > 1.0f ? 1.0f : t), p1.y),
+                          IM_COL32(120, 220, 255, 255));
+      }
+    }
+  } else if (m_warpStatus == 2 || m_warpStatus == 3) {
+    ImFont* font = ImGui::GetFont();
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    const ImVec2 ds = ImGui::GetIO().DisplaySize;
+    if (font && dl && ds.x > 0.0f && ds.y > 0.0f) {
+  // === WarpJump === (агент J): в кино-режиме статусы — по контроллеру.
+  if (m_jumpCine) {
+    const float jt = m_jump.phaseTime();
+    switch (m_jump.phase()) {
+      case JumpPhase::Charge:
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Charging %.1fs",
+                           WarpJump::kChargeDur - static_cast<double>(jt));
+        break;
+      case JumpPhase::Pullback:
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Pullback %.1fs",
+                           WarpJump::kPullbackDur - static_cast<double>(jt));
+        break;
+      case JumpPhase::Burst:
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "BURST");
+        break;
+      case JumpPhase::Travel:
+        ImGui::TextColored(ImVec4(0.5f, 0.9f, 1.0f, 1.0f), "WARP TUNNEL %.1fs",
+                           WarpJump::kTravelDur - static_cast<double>(jt));
+        break;
+      case JumpPhase::Arrival:
+        ImGui::TextColored(ImVec4(0.5f, 0.9f, 1.0f, 1.0f), "ARRIVAL");
+        break;
+      case JumpPhase::Pushin:
+        ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.0f), "Approach %.1fs",
+                           WarpJump::kPushinDur - static_cast<double>(jt));
+        break;
+      case JumpPhase::Cooldown:
+        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Cooldown %.1fs",
+                           WarpJump::kCooldownDur - static_cast<double>(jt));
+        break;
+      case JumpPhase::Idle:
+        break;
+    }
+  } else if (m_warpStatus == 2) {
         const int n = 3 - static_cast<int>(m_warpStateT);
         char buf[16];
         std::snprintf(buf, sizeof(buf), "T-%d", (n < 1 ? 1 : n));

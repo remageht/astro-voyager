@@ -142,6 +142,7 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/Cubemap.cpp
     src/SceneManager.cpp
     src/AppGL.cpp
+    src/WarpJump.cpp  # === WarpJump === (агент J: чистая логика катсцены)
     src/vendor/imgui/imgui.cpp
     src/vendor/imgui/imgui_draw.cpp
     src/vendor/imgui/imgui_tables.cpp

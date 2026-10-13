@@ -23,10 +23,16 @@ constexpr float kM31SpinRate = 0.005f;
 // чистый), render() в общем хвосте ставит uniform и рисует warp.frag.
 // Отдельный namespace + function-local shader: SceneManager.h не тронут,
 // ветки станций не тронуты.
+// === WarpJump === (агент J: +u_Burst и корабль-силуэт). Дефолты: burst 0,
+// корабль скрыт — хвост скипается целиком, ни одного GL-вызова.
 namespace warpdrive {
 namespace {
 float g_warpK = 0.0f;
 float g_warpFlash = 0.0f;
+float g_burst = 0.0f;
+bool g_shipVisible = false;
+float g_shipPos[3] = {0.0f, 0.0f, 0.0f};
+float g_shipYaw = 0.0f;
 }  // namespace
 void setState(float k, float flash) {
   g_warpK = k;
@@ -34,6 +40,20 @@ void setState(float k, float flash) {
 }
 float warpK() { return g_warpK; }
 float warpFlash() { return g_warpFlash; }
+void setBurst(float b) { g_burst = b; }
+float burst() { return g_burst; }
+void setShip(bool v, float x, float y, float z, float yaw) {
+  g_shipVisible = v;
+  g_shipPos[0] = x;
+  g_shipPos[1] = y;
+  g_shipPos[2] = z;
+  g_shipYaw = yaw;
+}
+bool shipVisible() { return g_shipVisible; }
+float shipX() { return g_shipPos[0]; }
+float shipY() { return g_shipPos[1]; }
+float shipZ() { return g_shipPos[2]; }
+float shipYaw() { return g_shipYaw; }
 }  // namespace warpdrive
 
 SceneManager::SceneManager() {
@@ -903,14 +923,26 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   // вспышка. При u_WarpK == 0 и u_Flash == 0 скипаем целиком (ни одного
   // GL-вызова), поэтому скриншоты байт-в-байт с HEAD. Физику bh/quasar,
   // m_exposure и ветки станций не трогаем.
+  // === WarpJump === (агент J: +u_Burst и корабль-силуэт поверх оверлея).
+  // Корабль виден ТОЛЬКО в Pullback/Travel/Arrival/Pushin (флаг скрыт по
+  // дефолту — вне катсцены ни одного GL-вызова). Геометрия статична в
+  // локальных координатах (нос -Z, ~1.5 ед), в мир — через u_Model
+  // (translate + yaw из shipDir). Контур-дарт: 2 LineMesh (корпус +
+  // кабина/пилоны, ~30 точек хардкодом), движок — StarPoints 1 шт крупный
+  // пульсирующий (mag<1 = голубой в star.frag), трейл — LineMesh-лента
+  // 20 сегментов за кормой (per-vertex alpha у LineMesh нет — равномерный
+  // тусклый голубой). Инициализация ленивая внутри visible-ветви.
   {
     float warpK = warpdrive::warpK();
     float warpFlash = warpdrive::warpFlash();
-    if (warpK > 0.0005f || warpFlash > 0.0005f) {
+    float burst = warpdrive::burst();
+    if (warpK > 0.0005f || warpFlash > 0.0005f || burst > 0.0005f) {
       if (warpK < 0.0f) warpK = 0.0f;
       if (warpK > 1.0f) warpK = 1.0f;
       if (warpFlash < 0.0f) warpFlash = 0.0f;
       if (warpFlash > 1.0f) warpFlash = 1.0f;
+      if (burst < 0.0f) burst = 0.0f;
+      if (burst > 1.0f) burst = 1.0f;
       try {
         static bool s_warpFailed = false;
         static Shader* s_warpShader = nullptr;
@@ -929,6 +961,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_warpShader->bind();
           s_warpShader->setUniform1f("u_WarpK", warpK);
           s_warpShader->setUniform1f("u_Flash", warpFlash);
+          s_warpShader->setUniform1f("u_Burst", burst);
           s_warpShader->setUniform1f("u_Aspect", aspect);
           s_warpShader->setUniform1f("u_Time", time);
           m_screenQuad->draw();
@@ -938,6 +971,123 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         }
       } catch (...) {
         // Оверлей никогда не ломает кадр.
+      }
+    }
+    // Корабль-силуэт: поверх оверлея, чтобы emissive-контур читался.
+    if (warpdrive::shipVisible()) {
+      try {
+        static bool s_shipInit = false;
+        static LineMesh s_hull;
+        static LineMesh s_keel;
+        static LineMesh s_trail;
+        static StarPoints s_engine;
+        if (!s_shipInit) {
+          // Корпус-дарт: нос + крылья + хвост + киль (нос смотрит -Z).
+          const std::vector<glm::vec3> hull = {
+              // N-L, N-R
+              {0.0f, 0.0f, -0.9f}, {-0.75f, 0.0f, 0.55f},
+              {0.0f, 0.0f, -0.9f}, {0.75f, 0.0f, 0.55f},
+              // L-T, R-T (хвостовая кромка через центр)
+              {-0.75f, 0.0f, 0.55f}, {0.0f, 0.0f, 0.35f},
+              {0.75f, 0.0f, 0.55f}, {0.0f, 0.0f, 0.35f},
+              // L-R (задняя кромка)
+              {-0.75f, 0.0f, 0.55f}, {0.75f, 0.0f, 0.55f},
+              // N-K, K-T (киль)
+              {0.0f, 0.0f, -0.9f}, {0.0f, 0.28f, 0.30f},
+              {0.0f, 0.28f, 0.30f}, {0.0f, 0.0f, 0.35f},
+              // K-L, K-R (киль к крыльям)
+              {0.0f, 0.28f, 0.30f}, {-0.75f, 0.0f, 0.55f},
+              {0.0f, 0.28f, 0.30f}, {0.75f, 0.0f, 0.55f},
+          };
+          std::vector<unsigned int> hullIdx(hull.size());
+          for (unsigned int i = 0; i < hullIdx.size(); ++i) hullIdx[i] = i;
+          s_hull.setGeometry(hull, hullIdx);
+          // Кабина + пилоны к крыльям.
+          const std::vector<glm::vec3> keel = {
+              {0.0f, 0.02f, -0.45f}, {0.0f, 0.14f, -0.10f},
+              {0.0f, 0.14f, -0.10f}, {0.0f, 0.14f, 0.30f},
+              {0.0f, 0.14f, -0.10f}, {-0.75f, 0.0f, 0.55f},
+              {0.0f, 0.14f, -0.10f}, {0.75f, 0.0f, 0.55f},
+          };
+          std::vector<unsigned int> keelIdx(keel.size());
+          for (unsigned int i = 0; i < keelIdx.size(); ++i) keelIdx[i] = i;
+          s_keel.setGeometry(keel, keelIdx);
+          // Трейл-лента: 20 поперечных пар за кормой (z 0.55 -> 2.75,
+          // полуширина 0.30 -> 0.03) + 2 продольных ребра.
+          std::vector<glm::vec3> trail;
+          trail.reserve(120);
+          constexpr int kSeg = 20;
+          for (int i = 0; i < kSeg; ++i) {
+            const float f0 = static_cast<float>(i) / kSeg;
+            const float z = 0.55f + f0 * 2.2f;
+            const float hw = 0.30f + (0.03f - 0.30f) * f0;
+            trail.emplace_back(-hw, 0.0f, z);
+            trail.emplace_back(hw, 0.0f, z);
+          }
+          for (int side = -1; side <= 1; side += 2) {
+            for (int i = 0; i < kSeg; ++i) {
+              const float f0 = static_cast<float>(i) / kSeg;
+              const float f1 = static_cast<float>(i + 1) / kSeg;
+              const float hw0 = 0.30f + (0.03f - 0.30f) * f0;
+              const float hw1 = 0.30f + (0.03f - 0.30f) * f1;
+              trail.emplace_back(side * hw0, 0.0f, 0.55f + f0 * 2.2f);
+              trail.emplace_back(side * hw1, 0.0f, 0.55f + f1 * 2.2f);
+            }
+          }
+          std::vector<unsigned int> trailIdx(trail.size());
+          for (unsigned int i = 0; i < trailIdx.size(); ++i) trailIdx[i] = i;
+          s_trail.setGeometry(trail, trailIdx);
+          s_shipInit = true;
+        }
+        const glm::vec3 shipPos(warpdrive::shipX(), warpdrive::shipY(),
+                                warpdrive::shipZ());
+        const glm::mat4 shipModel =
+            glm::translate(glm::mat4(1.0f), shipPos) *
+            glm::rotate(glm::mat4(1.0f), warpdrive::shipYaw(),
+                        glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 proj = glm::perspective(glm::radians(m_settings.fovDegrees),
+                                          aspect, 0.1f, 1000.0f);
+        glm::vec3 eye(cp.x, cp.y, cp.z);
+        glm::vec3 fwd(cf.x, cf.y, cf.z);
+        glm::vec3 up(cu.x, cu.y, cu.z);
+        glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
+        glm::mat4 mvp = proj * view;
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+        m_linesShader->bind();
+        m_linesShader->setUniformMat4f("u_MVP", mvp);
+        m_linesShader->setUniformMat4f("u_Model", shipModel);
+        m_linesShader->setUniform1f("u_Time", time);
+        // Emissive-белый контур корпуса + голубоватая кабина.
+        m_linesShader->setUniform3f("u_LineColor", 0.92f, 0.96f, 1.0f);
+        s_hull.drawLines();
+        m_linesShader->setUniform3f("u_LineColor", 0.55f, 0.78f, 1.0f);
+        s_keel.drawLines();
+        // Тусклый равномерный шлейф (per-vertex alpha у LineMesh нет).
+        m_linesShader->setUniform3f("u_LineColor", 0.25f, 0.45f, 0.70f);
+        s_trail.drawLines();
+        m_linesShader->unbind();
+        // Движок: 1 крупная пульсирующая голубая точка за кормой.
+        {
+          const float sy = warpdrive::shipYaw();
+          const float ex = warpdrive::shipX() + 0.55f * std::sin(sy);
+          const float ez = warpdrive::shipZ() + 0.55f * std::cos(sy);
+          const float mag = 0.1f + 0.35f * std::sin(time * 18.0f);
+          s_engine.setStars({glm::vec3(ex, warpdrive::shipY(), ez)}, {mag});
+          const float pixelScale = static_cast<float>(fbHeight) /
+              (2.0f * std::tan(glm::radians(m_settings.fovDegrees) * 0.5f));
+          m_starShader->bind();
+          m_starShader->setUniformMat4f("u_MVP", mvp);
+          m_starShader->setUniformMat4f("u_MV", view);
+          m_starShader->setUniform1f("u_PixelScale", pixelScale);
+          m_starShader->setUniform1f("u_SizeK", 0.22f);
+          m_starShader->setUniform1f("u_Time", time);
+          s_engine.draw();
+          m_starShader->unbind();
+        }
+        glDepthMask(GL_TRUE);
+      } catch (...) {
+        // Корабль никогда не ломает кадр.
       }
     }
   }

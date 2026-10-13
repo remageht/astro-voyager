@@ -307,8 +307,12 @@ void main() {
           dcol = mix(dcol, c4, smoothstep(0.65, 1.0, Tn));
           // Concentrated toward ISCO (high beaming contrast), dim floor outside.
           vec3 emis = dcol * (0.06 + 3.5 * Tn * Tn * Tn) * (0.30 + 0.70 * x);
-          // White-hot inner rim: uniform boost, beaming untouched.
-          float rim = 1.0 + 2.2 * (1.0 - smoothstep(rIn, rIn * 1.18, rDisk));
+          // Hot ISCO rim: Gaussian brightness peak at rIn, steep outward
+          // falloff exp(-((r-rIn)/w)^2), w = 0.5 Rs. Strictly radial
+          // (rDisk only) — beaming g4 / beta / cosAlpha untouched.
+          float rimQ = (rDisk - rIn) / (0.5 * u_Rs);
+          float rimG = exp(-rimQ * rimQ);
+          float rim = 1.0 + 1.6 * rimG;
           emis *= rim;
           // Keplerian turbulence: fbm in (log(r)*2.5, phi*1.5 - t*omega),
           // omega = 4.0 * pow(r, -1.5), single domain-warp, advected by u_Time.
@@ -460,7 +464,12 @@ void main() {
       // Slow symmetric breathing of the ring light (time-only, no azimuth).
       float breath = 0.94 + 0.06 * sin(u_Time * 0.8);
       ring *= shimmerSm * breath;
-      col += vec3(1.0, 0.96, 0.88) * ring * (3.0 * u_BHRingK) * poleDim;
+      // Peak whitening: warm wings (1.0,0.96,0.88) -> white peak
+      // (1.0,0.98,0.94). Mix factor is the pure radial Gaussian
+      // (ringQ only, no azimuth) so only the peak whitens; beaming untouched.
+      float ringPeakW = clamp(exp(-ringQ * ringQ), 0.0, 1.0);
+      vec3 ringCol = mix(vec3(1.0, 0.96, 0.88), vec3(1.0, 0.98, 0.94), ringPeakW);
+      col += ringCol * ring * (3.0 * u_BHRingK) * poleDim;
       // Secondary photon sub-ring: thinner, fainter, just outside primary.
       // Pure minR profile — radially symmetric, beaming untouched.
       float ring2Q = (minR - 1.5 * u_Rs - 0.10 * u_Rs) / (0.028 * u_Rs);
@@ -508,7 +517,8 @@ void main() {
   float shimmerFbSm = mix(shimmerFb, 0.85, closeK);
   float breathFb = 0.94 + 0.06 * sin(u_Time * 0.8);
   ringFb *= shimmerFbSm * breathFb;
-  vec3 ringColFb = vec3(1.0, 0.96, 0.88) * ringFb * (3.0 * u_BHRingK) * poleDimFb;
+  float ringPeakWFb = clamp(exp(-ringFbQ * ringFbQ), 0.0, 1.0);
+  vec3 ringColFb = mix(vec3(1.0, 0.96, 0.88), vec3(1.0, 0.98, 0.94), ringPeakWFb) * ringFb * (3.0 * u_BHRingK) * poleDimFb;
   colFallback += ringColFb;
   // Secondary photon sub-ring in the fallback path (same profile as escape).
   float ring2FbQ = (minR - 1.5 * u_Rs - 0.10 * u_Rs) / (0.028 * u_Rs);

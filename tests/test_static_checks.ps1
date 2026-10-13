@@ -191,6 +191,12 @@ Check 'win32 gui no console option' ((Read-File 'CMakeLists.txt') -match 'ASTROV
 Check 'horizon capture cinematic' ((($appCpp) -match 'startHorizonCapture') -and ((Read-File 'src/AppGL.h') -match 'm_captureAnim'))
 Check 'slide collisions and far plane' ((((Read-File 'src/Interaction.h') -match 'slideOnSphere') -and (($appCpp) -match '1e7f')))
 Check 'horizon achievement wired' ((((Read-File 'src/Achievements.h') -match 'capturedHorizon') -and (($appCpp) -match 'capturedHorizon')))
+Check 'warpjump pullback and switch' ((((Read-File 'src/WarpJump.cpp') -match 'Pullback') -and ((Read-File 'src/WarpJump.cpp') -match 'switchStation')))
+Check 'warp burst envelope' ((((Read-File 'shaders/warp.frag') -match 'u_Burst') -and ($sceneCpp -match 'u_Burst')))
+Check 'jump ship rig' ((($appCpp) -match 'shipPos') -and ($sceneCpp -match 'Ship'))
+Check 'bh hot rim at ISCO' ($bh -match 'rimQ')
+Check 'galaxy HDR core' ($galaxyFrag -match '8\.5')
+Check 'harness fps pinned' (((Read-File 'src/AppGL.h') -match 's_harnessPinFps') -and (($appCpp) -match 's_harnessPinFps = true'))
 Check 'spin angle uniform driven by simTime' (($planetFrag -match 'uniform float u_SpinAngle') -and ($sceneCpp -match 'setUniform1f\("u_SpinAngle"') -and ($solarCpp -match 'spinRate'))
 Check 'time pace presets up to 1000x' (($appCpp -match '300x') -and ($appCpp -match '1000x') -and ($sceneH -match '1000\.0f') -and ($appCpp -match 'Logarithmic'))
 

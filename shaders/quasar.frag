@@ -75,10 +75,18 @@ void main() {
   float re = length(euv);
   vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.030 * exp(-pow(re / 0.2, 0.25));
   hostCol *= 1.0 - smoothstep(0.3, 1.0, re);
-  // Faint two-arm spiral hint in the host (m=2, slowly rotating, fades out).
+  // Host spiral: m=2 base + phase-shifted m=1 lopsidedness + weak m=3 —
+  // breaks the perfect two-arm symmetry. Light one-sidedness along the jet
+  // (+x) plus a faint ejection wisp. Core (u_QCoreK) untouched.
   float hostAng = atan(euv.y, euv.x) - u_Time * 0.05;
   float hostSpiral = 0.5 + 0.5 * sin(hostAng * 2.0 + re * 9.0);
-  hostCol *= 1.0 + 0.60 * (hostSpiral - 0.5) * exp(-re * 4.0);
+  float hostM1 = 0.5 + 0.5 * sin(hostAng * 1.0 + 1.3 + re * 4.0);
+  float hostM3 = 0.5 + 0.5 * sin(hostAng * 3.0 - 0.7 + re * 12.0);
+  hostCol *= 1.0 + (0.45 * (hostSpiral - 0.5) + 0.28 * (hostM1 - 0.5) + 0.12 * (hostM3 - 0.5)) * exp(-re * 4.0);
+  float jetSide = clamp(euv.x / max(re, 1e-3), -1.0, 1.0);
+  hostCol *= 1.0 + 0.14 * jetSide * exp(-re * 3.0);
+  float jetEject = exp(-pow(abs(euv.y) - 0.02, 2.0) * 800.0) * exp(-max(euv.x, 0.0) * 4.0) * step(0.0, euv.x) * exp(-re * 2.0);
+  hostCol += vec3(0.55, 0.60, 0.75) * jetEject * 0.012;
   hostCol *= hostK;
   hostCol *= shadow;
   col += hostCol;

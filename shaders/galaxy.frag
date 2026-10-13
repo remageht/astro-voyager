@@ -65,9 +65,14 @@ void main() {
   vec3 haloC = pow(vec3(0.45, 0.40, 0.35), vec3(2.2)) * 0.06;
   vec3 bgC = vec3(0.004, 0.005, 0.009);
 
-  // Bulge: de-Vaucouleurs-like r^1/4 falloff, HDR peak 6.5 (bright core).
-  float bulge = 6.5 * exp(-pow(max(r * 7.0, 0.0), 0.25) * 3.0);
+  // Bulge: de-Vaucouleurs-like r^1/4 falloff, HDR peak 8.5 (bright core).
+  float bulge = 8.5 * exp(-pow(max(r * 7.0, 0.0), 0.25) * 3.0);
   vec3 bulgeTerm = bulge * bulgeC;
+  // HDR core peak: compact white-hot center (1.0,0.98,0.94) with hard
+  // radial rolloff (w = 0.04, Gaussian). Outer bulge nearly unchanged.
+  float coreHQ = r / 0.04;
+  float coreH = exp(-coreHQ * coreHQ);
+  bulgeTerm += coreH * vec3(1.0, 0.98, 0.94) * 2.5;
 
   // Exponential disk, faint vs bulge for 12-20x core-to-arm ratio
   float disk = exp(-r * 2.8) * 0.18;
@@ -87,13 +92,21 @@ void main() {
   dustMul = mix(dustMul, pinkLin * 0.30, 0.25);
   vec3 diskArm = (disk + arm) * armC;
   diskArm *= mix(vec3(1.0), dustMul, dustLane);
-  diskArm += pinkLin * dustLane * exp(-r * 2.0) * 0.05;
+  diskArm += pinkLin * dustLane * exp(-r * 2.0) * 0.035;
   // NEAR: smooth arms fade to ~15%, volumetric M31Stars take over.
   diskArm *= mix(1.0, 0.15, m31Near);
 
   // Outer halo: faint warm
   float halo = exp(-r * 1.2);
   vec3 haloTerm = halo * haloC;
+
+  // Dust extinction: part of the lane tint becomes true absorption of the
+  // background light (bulge+halo) behind the lane — gives depth. Small and
+  // gated by the existing dustLane profile so the composition holds.
+  float extinct = dustLane * exp(-r * 1.5) * 0.35;
+  float extinctC = clamp(extinct, 0.0, 0.6);
+  bulgeTerm *= 1.0 - extinctC;
+  haloTerm *= 1.0 - clamp(extinct * 0.7, 0.0, 0.5);
 
   // HDR linear base
   vec3 col = bgC + haloTerm + bulgeTerm + diskArm;
