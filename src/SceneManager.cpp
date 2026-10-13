@@ -414,6 +414,15 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_BHRingK", isSgra ? 1.8f : (isM87 ? 1.25f : 1.0f));
     m_bhShader->setUniform1f("u_ThinDisk", isSgra ? 1.0f : 0.0f);
     m_bhShader->setUniform1f("u_BandK", isSgra ? 1.7f : 1.0f);
+    // Close-camera distance in Rs: drives disk-detail smoothing and pole
+    // damping in bh.frag (u_CamDist <= 0 means far/legacy on shader side).
+    {
+      double camLen =
+          std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+      float camDistRs = static_cast<float>(
+          camLen / std::max(static_cast<double>(m_settings.rs), 1e-3));
+      m_bhShader->setUniform1f("u_CamDist", camDistRs);
+    }
     m_bhShader->setUniform1f("u_Time", time);
     m_bhShader->setUniform1f("u_Exposure", m_exposure);
     m_bhShader->setUniform1i("u_Skybox", 0);
@@ -473,6 +482,16 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     // Bright star-like core dominates the host, structure preserved (host x0.875).
     m_quasarShader->setUniform1f("u_QCoreK",
                                  (m_currentStation->id == "qso-3c273" ? 1.5f : 1.0f));
+    // Close-up zoom from camera distance: spawn -> 1.0 (neutral framing),
+    // closer -> magnified shadow for inspection (qso_close helper frame).
+    {
+      double qd = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+      double qs = m_currentStation->spawnDistanceRs;
+      if (qs <= 0.0) qs = 25.0;
+      float qzoom =
+          static_cast<float>(std::clamp(qs / std::max(qd, 1e-3), 1.0, 40.0));
+      m_quasarShader->setUniform1f("u_QZoom", qzoom);
+    }
 
     m_screenQuad->draw();
     m_quasarShader->unbind();

@@ -163,6 +163,8 @@ $galaxyFrag = Read-File 'shaders/galaxy.frag'
 Check 'm31 lod u_M31Dist set' (($sceneCpp -match 'u_M31Dist') -and ($galaxyFrag -match 'u_M31Dist'))
 Check 'm31 starfield mesh' (($sceneH -match 'm_m31Stars') -and ($sceneCpp -match 'm_m31Stars'))
 Check 'm31 close cam near' (($appCpp -match 'm31_close') -and ($appCpp -match 'position\.z = 8'))
+Check 'bh shadow mask capture returns black' ($bh -match '(?s)if \(p\.y <= u_Rs \* 1\.001\)[\s\S]{0,600}?vec3\(0\.0\)')
+Check 'bh close cam disk smoothing via u_CamDist' (($bh -match 'uniform float u_CamDist') -and ($sceneCpp -match 'setUniform1f\("u_CamDist"'))
 Check 'bh ring gain sgra 1.8' (($bh -match 'u_BHRingK') -and ($sceneCpp -match 'u_BHRingK", isSgra \? 1\.8f'))
 Check 'quasar core gain qso 2.2' (((Read-File 'shaders/quasar.frag') -match 'u_QCoreK') -and ($sceneCpp -match 'u_QCoreK'))
 Check 'sgra thin disk and band' (($bh -match 'u_ThinDisk') -and ((Read-File 'shaders/sky.frag') -match 'u_BandK') -and ($sceneCpp -match 'u_BandK'))

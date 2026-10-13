@@ -7,6 +7,7 @@ uniform vec3 u_CoreColor;
 uniform float u_Time;
 uniform float u_Exposure;
 uniform float u_QCoreK;  // quasar core gain (default 1.0; qso 2.2): core + inner glow up, host down
+uniform float u_QZoom;  // close-up magnification from camera distance (neutral 1.0)
 
 float hash21(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -48,7 +49,17 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float gain) {
 
 void main() {
   vec2 uv = v_TexCoord * 2.0 - 1.0;
+  // Close-up zoom driven by camera distance (SceneManager sets u_QZoom from
+  // spawn/dist, clamped >= 1). Far away qz == 1.0: pixel-identical framing.
+  float qz = (u_QZoom <= 0.0) ? 1.0 : u_QZoom;
+  uv /= qz;
+  // Up-close detail smoothing: 0 at qz == 1 (reference frames unchanged).
+  float qCloseK = smoothstep(2.0, 6.0, qz);
   float r = length(uv);
+
+  // Central black-hole shadow absorbs core/host/disk light inside r < 0.018,
+  // at any zoom: the shadow stays dark, no rings inside it.
+  float shadow = smoothstep(0.008, 0.018, r);
 
   // Near-black sky.
   vec3 col = vec3(0.004, 0.005, 0.009);
@@ -65,15 +76,19 @@ void main() {
   vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.045 * exp(-pow(re / 0.2, 0.25));
   hostCol *= 1.0 - smoothstep(0.3, 1.0, re);
   hostCol *= hostK;
+  hostCol *= shadow;
   col += hostCol;
 
   // Rotating accretion disk swirl, face-on spiral, rigid rotation.
+  // Up close the spiral relaxes to its mean (no moire rings near the core).
   float baseAngle = atan(uv.y, uv.x);
   float patternAngle = baseAngle - u_Time * 0.25;
   float diskR = length(uv * vec2(1.0, 2.2));
   float spiral = sin(patternAngle * 3.0 + diskR * 18.0);
+  float spiralSm = mix(spiral, 0.0, qCloseK);
   float diskMask = smoothstep(0.004, 0.015, diskR) * (1.0 - smoothstep(0.015, 0.12, diskR));
-  float diskBright = (0.5 + 0.5 * spiral) * diskMask * exp(-diskR * 6.0);
+  float diskBright = (0.5 + 0.5 * spiralSm) * diskMask * exp(-diskR * 6.0);
+  diskBright *= shadow;
   col += vec3(0.65, 0.75, 1.0) * diskBright * 0.6;
 
   // Thin blue jet along x axis, one side longer (+x).
@@ -122,14 +137,15 @@ void main() {
   vec3 coreBase = vec3(1.0, 0.98, 0.94) * 10.0;
   vec3 tint = u_CoreColor / vec3(1.0, 0.85, 0.65);
   float flick = 0.97 + 0.03 * sin(u_Time * 2.0);
-  float shadow = smoothstep(0.008, 0.018, r);
-  col += coreBase * tint * coreFall * flick * shadow * u_QCoreK;
+  // Proximity dimming: blinding from afar, structured core/ring up close.
+  float proxDim = mix(1.0, 0.32, qCloseK);
+  col += coreBase * tint * coreFall * flick * shadow * u_QCoreK * proxDim;
 
   // Rotating ergosphere-style glow ring hugging the shadow.
   float ringBright = exp(-pow((r - 0.033) * 90.0, 2.0));
   float ang = atan(uv.y, uv.x) - u_Time * 1.5;
   float asym = 0.55 + 0.45 * sin(ang * 2.0);
-  col += vec3(1.0, 0.8, 0.55) * ringBright * asym * (3.0 * u_QCoreK);
+  col += vec3(1.0, 0.8, 0.55) * ringBright * asym * (3.0 * u_QCoreK) * proxDim;
 
   // Vignette about 0.3.
   float vig = 1.0 - 0.3 * clamp(dot(uv * 0.7, uv * 0.7), 0.0, 1.0);

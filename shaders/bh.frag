@@ -23,6 +23,7 @@ uniform float u_Exposure;
 uniform float u_BHRingK;  // photon-ring/rim brightness gain (default 1.0; sgra 1.8, m87 1.25)
 uniform float u_ThinDisk;  // thin-disk mode 0/1 (sgra 1.0): radial x0.55 band + crisper edges
 uniform float u_BandK;  // milky-way band gain (default 1.0; sgra 1.7)
+uniform float u_CamDist;  // camera distance in Rs (set by SceneManager; <=0 = far/legacy)
 const float PI = 3.141592653589793;
 const int ABSOLUTE_MAX_STEPS = 8000;
 const float T_DISK = 10000.0;  // reference inner-disk temperature, Kelvin
@@ -209,6 +210,16 @@ void main() {
   // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - the glow
   // below is a stylized photon-ring visualization at the photon sphere.
   float minR = 1e30;
+  // Smallest |sin(theta)| seen along the march: marks pole-transit rays so
+  // their photon-glow can be dimmed (no white columns above/below shadow).
+  float minSin = 1.0;
+
+  // Close-camera factor: 0 far away (legacy behavior, bit-identical frames),
+  // 1 up close (disk detail smoothed, poles damped). Spawn distances
+  // (sgra 10, m87 ~9.3 Rs) give exactly 0, so reference shots don't change.
+  // Full smoothing at D <= 6 Rs per spec (< ~6 Rs).
+  float camDistRs = (u_CamDist <= 0.0) ? 1000.0 : u_CamDist;
+  float closeK = 1.0 - smoothstep(6.0, 8.0, camDistRs);
 
   for (int i = 0; i < ABSOLUTE_MAX_STEPS; i++) {
     if (i >= u_MaxSteps) break;
@@ -220,10 +231,14 @@ void main() {
     rk4(hAdapt, p, dp);
     renormalizeTime(p, dp);
     if (p.y < minR) minR = p.y;
-    // Wide pole band: hard-freeze phi velocity. Near the poles phi = atan2
-    // is noise-dominated and 1/sin amplifies it into dp.w BEFORE the 1e-3
-    // guards engage; zeroing dp.w every step keeps the transit smooth.
-    if (abs(sin(p.z)) < 0.05) { dp.w = 0.0; }
+    minSin = min(minSin, abs(sin(p.z)));
+    // Wide pole band: far away keep the legacy hard freeze of phi velocity
+    // (bit-identical frames); up close blend to smooth damping so pole
+    // transits don't snap and seed white columns. geoAccel untouched.
+    // All smoothstep edges ascending.
+    float poleDamp = smoothstep(0.0, 0.05, abs(sin(p.z)));
+    float poleFreeze = (abs(sin(p.z)) < 0.05) ? 0.0 : 1.0;
+    dp.w *= mix(poleDamp, poleFreeze, 1.0 - closeK);
     if (any(isnan(p)) || any(isnan(dp))) {
       FragColor = vec4(0.02, 0.015, 0.025, 1.0); return;
     }
@@ -295,7 +310,11 @@ void main() {
           vec2 tuv = vec2(log(max(rDisk, 0.001)) * 2.5, phiDisk * 1.5 - u_Time * omega);
           float warp = diskFbm(tuv + vec2(0.31, 0.17));
           float n = diskFbm(tuv + warp * 0.8);
-          float turb = 0.55 + 0.9 * n;
+          // Close-camera disk smoothing: high-frequency bands relax to their
+          // mean (1.0), the large-scale Doppler gradient (g4 below) is kept.
+          // Far away closeK == 0, so reference and doppler-gate frames stay
+          // bit-identical.
+          float turb = mix(0.55 + 0.9 * n, 1.0, closeK);
           emis *= turb;
           // Uniform exposure; beaming geometry untouched:
           // g4 and (1.0 + beta * cosAlpha) kept.
@@ -344,8 +363,12 @@ void main() {
     }
 
     if (p.y <= u_Rs * 1.001) {
+      // Hard shadow mask: a captured ray carries no disk/sky light at any
+      // distance, so no moire rings can appear inside the shadow. Far away
+      // the accum was already ~zero here (unaffected frames); the photon rim
+      // lives OUTSIDE this branch (escape path, u_BHRingK kept).
       if (u_DiskOn == 1) {
-        FragColor = vec4(applyFinish(applyObserverShift(accumColor, fCamSqrt, camRedden), v_TexCoord), 1.0);
+        FragColor = vec4(applyFinish(applyObserverShift(vec3(0.0), fCamSqrt, camRedden), v_TexCoord), 1.0);
       } else {
         FragColor = vec4(0.0, 0.0, 0.0, 1.0);
       }
@@ -360,16 +383,32 @@ void main() {
       // Jet glow lives in accumColor with no alpha; add it even with disk off
       // (sgra accumulates nothing, so its disk-off frame is unchanged).
       // Capture branch above stays black: the hole absorbs light.
-      vec3 col = (u_DiskOn == 1) ? accumColor + (1.0 - accumAlpha) * sky : sky + accumColor;
+      // Close-camera shadow mask by minR: inside (minR < photon sphere) the
+      // escape sky/disk/eglow relax to dark so capture-black + escape-black +
+      // fallback-black merge into solid shadow (no alternating moire bands,
+      // proven by red-debug). Rim (ring) stays unmasked outside (u_BHRingK
+      // kept). Far away closeK == 0, bit-identical (masks exactly 1.0).
+      // All smoothstep edges ascending.
+      float shadowMask = smoothstep(u_Rs * 1.1, u_Rs * 1.6, minR);
+      float escMask = mix(1.0, shadowMask, closeK);
+      vec3 col = (u_DiskOn == 1) ? accumColor * escMask + (1.0 - accumAlpha) * sky * escMask : sky * escMask + accumColor * escMask;
+      // Pole-transit dimming: rays that crossed the pole band keep less
+      // photon-glow up close, so no white columns grow above/below the
+      // shadow. Far away poleDim is exactly 1.0 (frames unchanged).
+      float poleDim = mix(mix(0.4, 1.0, smoothstep(0.0, 0.05, minSin)), 1.0, 1.0 - closeK);
       float ring = exp(-pow((minR - 1.5 * u_Rs) / (0.08 * u_Rs), 2.0));
       // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - stylized
       // photon-ring visualization; shimmer uses current exit phi p.w as honest
-      // approximation (no azimuth stored at minR).
+      // approximation (no azimuth stored at minR). Up close the shimmer
+      // relaxes to its mean (no chaotic dotted modulation), far away bit-identical.
       float shimmer = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
-      ring *= shimmer;
-      col += vec3(1.0, 0.85, 0.6) * ring * (2.5 * u_BHRingK);
+      float shimmerSm = mix(shimmer, 0.85, closeK);
+      ring *= shimmerSm;
+      col += vec3(1.0, 0.85, 0.6) * ring * (2.5 * u_BHRingK) * poleDim;
       float eglow = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
-      col += vec3(1.0, 0.55, 0.25) * eglow * 0.5;
+      // Eglow peaks inside (minR ~ Rs) and would glow in the shadow up close:
+      // mask it by the same shadow mask (far away escMask == 1.0, identical).
+      col += vec3(1.0, 0.55, 0.25) * eglow * 0.5 * poleDim * escMask;
       if (u_DiskOn == 1) {
         float glowLuma = dot(col, vec3(0.299, 0.587, 0.114));
         float glowF = smoothstep(0.2, 0.8, glowLuma);
@@ -387,19 +426,33 @@ void main() {
   vec3 colFallback = (u_DiskOn == 1)
                          ? accumColor + (1.0 - accumAlpha) * skyFallback
                          : skyFallback + accumColor;
+  // Same pole-transit dimming as the escape branch (see above).
+  float poleDimFb = mix(mix(0.4, 1.0, smoothstep(0.0, 0.05, minSin)), 1.0, 1.0 - closeK);
   float ringFb = exp(-pow((minR - 1.5 * u_Rs) / (0.08 * u_Rs), 2.0));
   // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - stylized
   // photon-ring visualization; shimmer uses current exit phi p.w as honest
-  // approximation (no azimuth stored at minR).
+  // approximation (no azimuth stored at minR). Up close relaxed to mean
+  // (see escape branch), far away bit-identical.
   float shimmerFb = 0.85 + 0.15 * sin(u_Time * 2.0 + p.w * 3.0);
-  ringFb *= shimmerFb;
-  colFallback += vec3(1.0, 0.85, 0.6) * ringFb * (2.5 * u_BHRingK);
+  float shimmerFbSm = mix(shimmerFb, 0.85, closeK);
+  ringFb *= shimmerFbSm;
+  vec3 ringColFb = vec3(1.0, 0.85, 0.6) * ringFb * (2.5 * u_BHRingK) * poleDimFb;
+  colFallback += ringColFb;
   float eglowFb = exp(-pow((minR - u_Rs) / (0.5 * u_Rs), 2.0)) * step(minR, 3.0 * u_Rs);
-  colFallback += vec3(1.0, 0.55, 0.25) * eglowFb * 0.5;
+  vec3 eglowColFb = vec3(1.0, 0.55, 0.25) * eglowFb * 0.5 * poleDimFb;
+  colFallback += eglowColFb;
   if (u_DiskOn == 1) {
     float glowLumaFb = dot(colFallback, vec3(0.299, 0.587, 0.114));
     float glowFFb = smoothstep(0.2, 0.8, glowLumaFb);
     colFallback += mix(mix(colFallback, vec3(1.0), 0.3), vec3(1.0), 0.5) * glowFFb * 0.35;
   }
+  // Close-camera fallback mask: unconverged winding/chaotic rays alternate
+  // with captured rays in thin bands up close (capture/fallback moire, proven
+  // by red-debug: solid red capture with black fallback rings). Relax fallback
+  // to pure dark so capture-black + fallback-black merge into solid shadow.
+  // The photon rim at the true edge comes from converged escape rays
+  // (u_BHRingK kept there). Far away closeK == 0, bit-identical.
+  // escape-path rays (honest sky/disk) untouched.
+  colFallback = mix(colFallback, vec3(0.0), closeK);
   FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCamSqrt, camRedden), v_TexCoord), 1.0);
 }

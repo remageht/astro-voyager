@@ -1783,6 +1783,49 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
     std::cout << "Captured screenshot: " << oriCloseFile << "\n";
   }
 
+  // 3. SgrA* close-up (D = 5 Rs: shadow fills half the screen, exercises
+  //    the close-camera shadow mask + disk smoothing + pole damping).
+  app.m_sceneManager->teleportTo("sgra", app.m_camera);
+  app.m_camera.position = Vec3(0.0, 0.0, 5.0);
+  for (int frame = 0; frame < 5; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawImGui();
+    app.drawWorldLabels();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string sgraCloseFile = outDir + "/sgra_close.png";
+  if (app.saveScreenshot(sgraCloseFile)) {
+    std::cout << "Captured screenshot: " << sgraCloseFile << "\n";
+  }
+
+  // 4. Quasar close-up (D = 5.0: u_QZoom = 5, shadow well resolved, checks
+  //    the dark shadow + ring-free core up close. A bigger zoom would burn
+  //    the core white (1/(1+r^2*4000) fills the frame), hiding ring/disk/jets.
+  app.m_sceneManager->teleportTo("qso-3c273", app.m_camera);
+  app.m_camera.position = Vec3(0.0, 0.0, 5.0);
+  for (int frame = 0; frame < 5; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawImGui();
+    app.drawWorldLabels();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string qsoCloseFile = outDir + "/qso_close.png";
+  if (app.saveScreenshot(qsoCloseFile)) {
+    std::cout << "Captured screenshot: " << qsoCloseFile << "\n";
+  }
+
   return 0;
 }
 
