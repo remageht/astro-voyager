@@ -70,6 +70,13 @@ inline RenderSettings getPresetSettings(PerfPreset preset) {
   return s;
 }
 
+namespace {
+// Adjustable time-pace presets (sim-seconds per wall-second).
+// Keys -/= step through this list; the log slider spans 1..1000.
+constexpr float kTimePacePresets[] = {1.0f, 10.0f, 60.0f, 300.0f, 1000.0f};
+constexpr int kTimePacePresetCount = 5;
+}  // namespace
+
 class SceneManager {
  public:
   SceneManager();
@@ -108,7 +115,7 @@ class SceneManager {
   void togglePause() { m_paused = !m_paused; }
   bool isPaused() const { return m_paused; }
   void setTimeScale(float s) {
-    m_timeScale = (s < 0.0f) ? 0.0f : (s > 8.0f ? 8.0f : s);
+    m_timeScale = (s < 0.0f) ? 0.0f : (s > 1000.0f ? 1000.0f : s);
   }
   float getTimeScale() const { return m_timeScale; }
 
@@ -140,6 +147,11 @@ class SceneManager {
   std::vector<SStarParam> m_sStarParams;
   bool m_sStarsInit = false;
   void initM31Disk();
+
+  // Advances m_simTime from wall-clock time (pause/timeScale aware,
+  // dt clamped to 0.5s). Returns the clamped dt. The harness passes a
+  // constant time so simTime stays 0 and frames stay deterministic.
+  float tickSimTime(float time);
 
   const Station* m_currentStation = nullptr;
   RenderSettings m_settings;

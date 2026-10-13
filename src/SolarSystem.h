@@ -27,6 +27,7 @@ struct PlanetDef {
   std::vector<std::string> facts;  // 1-2 short ASCII lines each
   float ecc = 0.0f;   // eccentricity, 0 = circular
   float incl = 0.0f;  // inclination radians, tilt of orbital plane about X
+  float spinRate = 0.0f;  // axial spin, rad per sim-second (retrograde if < 0)
 };
 
 struct BodyState {

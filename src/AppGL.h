@@ -71,6 +71,9 @@ class AppGL {
   bool m_searchFocusRequest = false;
   bool m_prevSlashPressed = false;
   bool m_prevPPressed = false;
+  bool m_prevMinusPressed = false;
+  bool m_prevEqualPressed = false;
+  void stepTimePace(int dir);
 
   // Journey route history
   std::vector<std::string> m_route;

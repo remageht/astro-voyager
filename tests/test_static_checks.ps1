@@ -153,6 +153,8 @@ Check 'achievements source exists' (Test-Path (Join-Path $root 'src/Achievements
 $sceneH = Read-File 'src/SceneManager.h'
 $sceneCpp = Read-File 'src/SceneManager.cpp'
 $appCpp = Read-File 'src/AppGL.cpp'
+$planetFrag = Read-File 'shaders/planet.frag'
+$solarCpp = Read-File 'src/SolarSystem.cpp'
 Check 'editor spawn' (($sceneH -match 'spawnRockAt') -and ($sceneCpp -match 'spawnRockAt'))
 Check 'menu state' (((Read-File 'src/AppGL.h') -match 'm_inMenu') -and ($appCpp -match 'm_inMenu'))
 Check 'settings exposure' (($sceneH -match 'm_exposure') -and ($appCpp -match 'getExposure'))
@@ -170,6 +172,8 @@ Check 'bh nan guard black, no gray rings' (($bh -match 'any\(isnan\(p\)\)') -and
 Check 'bh closeK full at 8Rs with wide shadow gate' (($bh -match 'smoothstep\(8\.0, 10\.0, camDistRs\)') -and ($bh -match 'smoothstep\(u_Rs \* 1\.1, u_Rs \* 2\.2, minR\)'))
 Check 'quasar core gain qso 2.2' (((Read-File 'shaders/quasar.frag') -match 'u_QCoreK') -and ($sceneCpp -match 'u_QCoreK'))
 Check 'sgra thin disk and band' (($bh -match 'u_ThinDisk') -and ((Read-File 'shaders/sky.frag') -match 'u_BandK') -and ($sceneCpp -match 'u_BandK'))
+Check 'spin angle uniform driven by simTime' (($planetFrag -match 'uniform float u_SpinAngle') -and ($sceneCpp -match 'setUniform1f\("u_SpinAngle"') -and ($solarCpp -match 'spinRate'))
+Check 'time pace presets up to 1000x' (($appCpp -match '300x') -and ($appCpp -match '1000x') -and ($sceneH -match '1000\.0f') -and ($appCpp -match 'Logarithmic'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

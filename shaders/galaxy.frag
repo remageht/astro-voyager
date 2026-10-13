@@ -15,6 +15,9 @@ uniform float u_Exposure;
 // Set every frame by SceneManager (m31 branch only); other stations
 // never use this shader, so the fallback keeps them unaffected.
 uniform float u_M31Dist;
+// Slow pattern rotation (radians), driven by sim time on the CPU
+// (0 in the screenshot harness, so the reference framing is kept).
+uniform float u_SpinAngle;
 
 // Hash for procedural stars and grain
 float hash21(vec2 p) {
@@ -33,8 +36,9 @@ void main() {
   uv.x *= u_Aspect;
   uv /= max(u_Zoom, 0.001);
 
-  // Rotate slightly and tilt for Andromeda's 77 degree inclination
-  float angle = 0.55 + 0.005 * sin(u_Time * 0.2);
+  // Rotate slightly and tilt for Andromeda's 77 degree inclination.
+  // u_SpinAngle adds the slow sim-time pattern rotation (0 = reference).
+  float angle = 0.55 + 0.005 * sin(u_Time * 0.2) + u_SpinAngle;
   float s = sin(angle), c = cos(angle);
   vec2 rot = vec2(c * uv.x - s * uv.y, s * uv.x + c * uv.y);
 

@@ -13,6 +13,9 @@ uniform vec3 u_CamPos;
 uniform float u_Spot;
 uniform float u_Clouds;
 uniform float u_Exposure;
+// Axial spin: surface pattern angle (radians) about the Y axis,
+// driven by sim time on the CPU (0 in the screenshot harness).
+uniform float u_SpinAngle;
 float hash11(float p) {
   return fract(sin(p) * 43758.5453);
 }
@@ -72,25 +75,38 @@ void main() {
   vec3 n = normalize(v_Normal);
   vec3 viewDir = normalize(u_CamPos - v_WorldPos);
   vec3 ln = normalize(v_Local);
+  // Spin the procedural-noise sample position about Y so continents,
+  // bands and granulation travel under a fixed sun terminator.
+  // Zero angle keeps the identity path (bit-exact screenshots).
+  vec3 sp = v_Local;
+  vec3 spN = ln;
+  if (u_SpinAngle != 0.0) {
+    float spinC = cos(u_SpinAngle);
+    float spinS = sin(u_SpinAngle);
+    sp = vec3(spinC * v_Local.x + spinS * v_Local.z, v_Local.y,
+              -spinS * v_Local.x + spinC * v_Local.z);
+    spN = vec3(spinC * ln.x + spinS * ln.z, ln.y,
+               -spinS * ln.x + spinC * ln.z);
+  }
   vec3 sunDir = normalize(-v_WorldPos);
   float diff = max(dot(n, sunDir), 0.0);
   vec3 nightAmb = vec3(0.10, 0.16, 0.30) * (0.015 * (1.0 - diff));
   if (u_Type == 0) {
-    float gran = fbm4(v_Local * 3.0 + u_Seed + vec3(u_Time * 0.05));
+    float gran = fbm4(sp * 3.0 + u_Seed + vec3(u_Time * 0.05));
     gran = clamp((gran - 0.5) * 1.5 + 0.5, 0.0, 1.0);
     vec3 ecol = mix(u_ColB, u_ColA, gran) * 5.0;
     ecol *= 0.70 + 0.50 * gran;
-    float facN = fbm4(v_Local * 5.0 - u_Seed + vec3(0.0, u_Time * 0.03, 0.0));
+    float facN = fbm4(sp * 5.0 - u_Seed + vec3(0.0, u_Time * 0.03, 0.0));
     float facMask = smoothstep(0.60, 0.85, facN);
     ecol += vec3(1.0, 0.95, 0.85) * facMask * 1.5;
-    float tintN = fbm3(v_Local * 1.5 + u_Seed * 0.7 + vec3(0.0, u_Time * 0.02, 0.0));
+    float tintN = fbm3(sp * 1.5 + u_Seed * 0.7 + vec3(0.0, u_Time * 0.02, 0.0));
     ecol = mix(ecol, vec3(1.0, 0.55, 0.2) * 5.0, clamp(tintN, 0.0, 1.0) * 0.3);
     float flareId = floor(u_Time / 9.0);
     float flareFrac = fract(u_Time / 9.0);
     float gate = smoothstep(0.70, 0.9, hash11(flareId)) * (1.0 - smoothstep(0.9, 1.0, flareFrac));
-    float fl = smoothstep(0.72, 0.92, fbm3(v_Local * 6.0 + flareId + vec3(0.0, u_Time * 0.15, 0.0)));
+    float fl = smoothstep(0.72, 0.92, fbm3(sp * 6.0 + flareId + vec3(0.0, u_Time * 0.15, 0.0)));
     vec2 flareCenter = (vec2(hash11(flareId + 17.0), hash11(flareId + 41.0)) - 0.5) * 1.2;
-    float rc = length(v_Local.xy - flareCenter);
+    float rc = length(sp.xy - flareCenter);
     float rd = (rc - flareFrac * 1.5) * 6.0;
     float ring = exp(-rd * rd);
     ecol += (vec3(1.0, 0.6, 0.25) * fl * 2.0 + vec3(1.0, 0.85, 0.6) * ring * 1.2) * gate;
@@ -106,55 +122,55 @@ void main() {
   vec3 albedo = vec3(0.5);
   float land = 0.0;
   if (u_Type == 1) {
-    vec3 lp = ln;
-    float warp = fbm3(vec3(v_Local.zz * 3.0, u_Seed)) * 0.8;
+    vec3 lp = spN;
+    float warp = fbm3(vec3(sp.zz * 3.0, u_Seed)) * 0.8;
     vec3 bp = vec3(lp.x * 2.0, lp.y * 9.0 + warp, lp.z * 2.0) + u_Seed;
     float bands = fbm4(bp) * 0.9677 + 0.0323 * vnoise3(bp * 16.9818);
     albedo = mix(u_ColA, u_ColB, bands);
     if (u_Spot > 0.5) {
       vec3 spotDir = normalize(vec3(0.3, -0.25, 0.9));
-      float d = distance(ln, spotDir);
+      float d = distance(spN, spotDir);
       float spot = 1.0 - smoothstep(0.15, 0.35, d);
       albedo = mix(albedo, vec3(0.85, 0.35, 0.2), spot * 0.85);
-      float turb = (fbm3(ln * 12.0 + u_Seed) - 0.5) * 0.12;
+      float turb = (fbm3(spN * 12.0 + u_Seed) - 0.5) * 0.12;
       float sd = d + turb;
       float rim = smoothstep(0.28, 0.35, sd) * (1.0 - smoothstep(0.35, 0.47, sd));
       albedo *= 1.0 - rim * 0.25;
     }
-    float pol = smoothstep(0.55, 0.9, abs(ln.y));
+    float pol = smoothstep(0.55, 0.9, abs(spN.y));
     albedo = mix(albedo, albedo * vec3(0.75, 0.8, 0.95), pol * 0.5);
   } else if (u_Type == 2) {
-    float continents = fbm4(v_Local * 3.0 + u_Seed) * 0.9677 + 0.0323 * vnoise3((v_Local * 3.0 + u_Seed) * 16.9818);
+    float continents = fbm4(sp * 3.0 + u_Seed) * 0.9677 + 0.0323 * vnoise3((sp * 3.0 + u_Seed) * 16.9818);
     land = smoothstep(0.48, 0.56, continents);
     albedo = mix(u_ColA, u_ColB, land);
-    float cr = smoothstep(0.68, 0.8, fbm3(v_Local * 22.0 + u_Seed));
+    float cr = smoothstep(0.68, 0.8, fbm3(sp * 22.0 + u_Seed));
     albedo *= 1.0 - cr * 0.45;
-    float cap = smoothstep(0.80, 0.88, abs(ln.y));
+    float cap = smoothstep(0.80, 0.88, abs(spN.y));
     albedo = mix(albedo, vec3(0.9, 0.93, 0.95), cap);
-    vec3 cp = v_Local * 5.0 + u_Seed + vec3(u_Time * 0.03, 0.0, 0.0);
+    vec3 cp = sp * 5.0 + u_Seed + vec3(u_Time * 0.03, 0.0, 0.0);
     float cl = fbm4(cp);
     float clm = smoothstep(0.55, 0.75, cl) * u_Clouds;
     albedo = mix(albedo, vec3(1.0), clm * 0.85);
   } else if (u_Type == 4) {
     albedo = vec3(0.75, 1.0, 0.85);
   } else {
-    float b3 = fbm3(v_Local * 4.0 + u_Seed);
-    float iceK = b3 * 0.35 + 0.15 * ln.y;
+    float b3 = fbm3(sp * 4.0 + u_Seed);
+    float iceK = b3 * 0.35 + 0.15 * spN.y;
     iceK = clamp(iceK, 0.0, 1.0);
     albedo = mix(u_ColA, u_ColB, iceK);
   }
   vec3 col = albedo * (0.03 + diff) + nightAmb;
   if (u_Type == 2) {
     float night = 1.0 - smoothstep(0.0, 0.08, diff);
-    float cc = fbm3(v_Local * 14.0 + u_Seed);
+    float cc = fbm3(sp * 14.0 + u_Seed);
     float cities = smoothstep(0.62, 0.8, cc) * land;
     col += vec3(1.0, 0.75, 0.42) * cities * night * u_Clouds * 2.2;
   }
   if (u_Type == 3) {
     float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 2.0);
     col += u_ColB * rim * 0.3;
-    float sp = step(0.985, hash13(vec3(floor(v_Local.xz * 40.0), u_Seed))) * 0.6;
-    col += vec3(1.0) * sp * diff;
+    float spIce = step(0.985, hash13(vec3(floor(sp.xz * 40.0), u_Seed))) * 0.6;
+    col += vec3(1.0) * spIce * diff;
   }
   if (u_Type == 1 || u_Type == 2 || u_Type == 3) {
     vec3 rimColor = vec3(0.45, 0.65, 1.0);

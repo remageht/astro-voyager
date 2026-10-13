@@ -12,6 +12,12 @@
 
 namespace astro {
 
+namespace {
+// M31 spiral pattern speed: rad per sim-second. Barely visible live
+// (a full turn takes ~20 min at 1x), clearly alive at high time pace.
+constexpr float kM31SpinRate = 0.005f;
+}  // namespace
+
 SceneManager::SceneManager() {
   m_screenQuad = std::make_unique<ScreenQuad>();
   m_bhShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/bh.frag");
@@ -354,6 +360,15 @@ void SceneManager::initM31Disk() {
   m_m31Stars.setStars(pos, mags);
 }
 
+float SceneManager::tickSimTime(float time) {
+  float dt = (m_lastTime < 0.0f) ? 0.0f : (time - m_lastTime);
+  m_lastTime = time;
+  if (dt < 0.0f) dt = 0.0f;
+  if (dt > 0.5f) dt = 0.5f;
+  if (!m_paused) m_simTime += dt * m_timeScale;
+  return dt;
+}
+
 void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
   const Station* st = findStation(stationId);
   if (!st) {
@@ -546,8 +561,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_starShader->unbind();
   } else if (m_currentStation->type == StationType::Galaxy) {
     // M31 Andromeda Galaxy impostor sprite
+    tickSimTime(time);
     m_galaxyShader->bind();
     m_galaxyShader->setUniform1f("u_Time", time);
+    m_galaxyShader->setUniform1f("u_SpinAngle", m_simTime * kM31SpinRate);
     m_galaxyShader->setUniform1f("u_Aspect", aspect);
 
     double dist = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
@@ -600,11 +617,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_screenQuad->draw();
     m_nebulaShader->unbind();
   } else if (m_currentStation->type == StationType::SolarSystem) {
-    float dt = (m_lastTime < 0.0f) ? 0.0f : (time - m_lastTime);
-    m_lastTime = time;
-    if (dt < 0.0f) dt = 0.0f;
-    if (dt > 0.5f) dt = 0.5f;
-    if (!m_paused) m_simTime += dt * m_timeScale;
+    float dt = tickSimTime(time);
     m_sol.update(m_simTime);
     m_lastBodies = m_sol.bodies();
     if (!m_paused && dt > 0.0f) updateCustom(dt * m_timeScale);
@@ -681,12 +694,20 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                    static_cast<float>(def->colB.z));
       m_planetShader->setUniform1i("u_Spot", (def->id == "jupiter" ? 1 : 0));
       m_planetShader->setUniform1i("u_Clouds", (def->id == "earth" ? 1 : 0));
+      m_planetShader->setUniform1f("u_SpinAngle", def->spinRate * m_simTime);
       m_sphere.draw();
       if (def->hasRing) {
         m_ringShader->bind();
         m_ringShader->setUniformMat4f("u_MVP", mvp);
         glm::mat4 ringModel = glm::translate(glm::mat4(1.0f), bpos) *
                               glm::rotate(glm::mat4(1.0f), 0.45f, glm::vec3(1.0f, 0.0f, 0.0f));
+        // Rings ride with the planet spin (purely visual: stripes are
+        // radial). Skipped at zero angle to keep the matrix bit-exact.
+        float ringSpin = def->spinRate * m_simTime;
+        if (ringSpin != 0.0f) {
+          ringModel = ringModel *
+                      glm::rotate(glm::mat4(1.0f), ringSpin, glm::vec3(0.0f, 1.0f, 0.0f));
+        }
         m_ringShader->setUniformMat4f("u_Model", ringModel);
         m_ringShader->setUniform1f("u_Seed", def->seed);
         m_ringShader->setUniform3f("u_ColA", 0.8f, 0.72f, 0.6f);
@@ -714,6 +735,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                    static_cast<float>(custom.color.z) * 0.6f);
       m_planetShader->setUniform1i("u_Spot", 0);
       m_planetShader->setUniform1i("u_Clouds", 0);
+      m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
       m_sphere.draw();
     }
     m_planetShader->unbind();

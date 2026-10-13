@@ -242,6 +242,20 @@ void AppGL::processInput(float deltaTime) {
   }
   m_prevPPressed = pDown;
 
+  // Time pace: - steps down, = (or +) steps up the preset list.
+  // Slash is reserved for station search focus, so it is not reused here.
+  const bool minusDown = (glfwGetKey(win, GLFW_KEY_MINUS) == GLFW_PRESS);
+  if (minusDown && !m_prevMinusPressed && !io.WantCaptureKeyboard) {
+    stepTimePace(-1);
+  }
+  m_prevMinusPressed = minusDown;
+
+  const bool equalDown = (glfwGetKey(win, GLFW_KEY_EQUAL) == GLFW_PRESS);
+  if (equalDown && !m_prevEqualPressed && !io.WantCaptureKeyboard) {
+    stepTimePace(+1);
+  }
+  m_prevEqualPressed = equalDown;
+
   const bool delDown = (glfwGetKey(win, GLFW_KEY_DELETE) == GLFW_PRESS);
   if (delDown && !m_prevDeletePressed && !io.WantCaptureKeyboard) {
     m_sceneManager->deleteSelected();
@@ -305,6 +319,35 @@ void AppGL::processInput(float deltaTime) {
     m_camera.position.y -= m_camera.moveSpeed * deltaTime;
   }
   m_camera.moveSpeed = savedSpeed;
+}
+
+void AppGL::stepTimePace(int dir) {
+  // Walk the pace preset list {1, 10, 60, 300, 1000} from the current
+  // scale: +1 takes the next higher preset, -1 the next lower one.
+  // Changing pace resumes a paused clock so the effect is visible.
+  float cur = m_sceneManager->getTimeScale();
+  float next = cur;
+  if (dir > 0) {
+    for (int i = 0; i < kTimePacePresetCount; ++i) {
+      if (kTimePacePresets[i] > cur * 1.001f) {
+        next = kTimePacePresets[i];
+        break;
+      }
+      next = kTimePacePresets[i];
+    }
+  } else if (dir < 0) {
+    for (int i = kTimePacePresetCount - 1; i >= 0; --i) {
+      if (kTimePacePresets[i] < cur * 0.999f) {
+        next = kTimePacePresets[i];
+        break;
+      }
+      next = kTimePacePresets[i];
+    }
+  }
+  if (m_sceneManager->isPaused()) {
+    m_sceneManager->togglePause();
+  }
+  m_sceneManager->setTimeScale(next);
 }
 
 void AppGL::processMouse() {
@@ -895,14 +938,68 @@ void AppGL::drawImGui() {
   ImGui::Separator();
   ImGui::Text("Time:");
   bool paused = m_sceneManager->isPaused();
+  float paceNow = m_sceneManager->getTimeScale();
+  if (paused) {
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Paused (P to resume)");
+  } else if (paceNow < 9.5f) {
+    ImGui::Text("Pace: %.1fx (-/= to change)", static_cast<double>(paceNow));
+  } else {
+    ImGui::Text("Pace: %.0fx (-/= to change)", static_cast<double>(paceNow));
+  }
   if (ImGui::Button(paused ? "Resume (P)" : "Pause (P)", ImVec2(110.0f, 0.0f))) {
     m_sceneManager->togglePause();
   }
-  ImGui::SameLine();
-  float timeScale = m_sceneManager->getTimeScale();
-  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-  if (ImGui::SliderFloat("Speed", &timeScale, 0.0f, 8.0f, "%.1fx")) {
-    m_sceneManager->setTimeScale(timeScale);
+  {
+    // Adjustable time pace: Pause | 1x | 10x | 60x | 300x | 1000x
+    // presets plus a log slider (1..1000). Numeric presets and the
+    // slider resume a paused clock so the effect is visible.
+    const char* paceLabels[kTimePacePresetCount] = {"1x", "10x", "60x", "300x", "1000x"};
+    float avail = ImGui::GetContentRegionAvail().x;
+    float gap = ImGui::GetStyle().ItemSpacing.x;
+    float btnW = (avail - gap * 5.0f) / 6.0f;
+    if (btnW < 28.0f) btnW = 28.0f;
+    if (paused) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.38f, 0.12f, 1.0f));
+    }
+    if (ImGui::Button("II", ImVec2(btnW, 0.0f))) {
+      if (!m_sceneManager->isPaused()) {
+        m_sceneManager->togglePause();
+      }
+    }
+    if (paused) {
+      ImGui::PopStyleColor();
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Pause time (P)");
+    }
+    for (int i = 0; i < kTimePacePresetCount; ++i) {
+      ImGui::SameLine();
+      bool active = !paused && std::abs(paceNow - kTimePacePresets[i]) < 0.001f;
+      if (active) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.45f, 0.65f, 1.0f));
+      }
+      if (ImGui::Button(paceLabels[i], ImVec2(btnW, 0.0f))) {
+        if (m_sceneManager->isPaused()) {
+          m_sceneManager->togglePause();
+        }
+        m_sceneManager->setTimeScale(kTimePacePresets[i]);
+      }
+      if (active) {
+        ImGui::PopStyleColor();
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Time pace %s", paceLabels[i]);
+      }
+    }
+    float sliderV = paceNow < 1.0f ? 1.0f : paceNow;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    if (ImGui::SliderFloat("Speed", &sliderV, 1.0f, 1000.0f, "%.0fx",
+                           ImGuiSliderFlags_Logarithmic)) {
+      if (m_sceneManager->isPaused()) {
+        m_sceneManager->togglePause();
+      }
+      m_sceneManager->setTimeScale(sliderV);
+    }
   }
 
   ImGui::Separator();
@@ -1138,6 +1235,7 @@ void AppGL::drawHelpContent() {
   ImGui::BulletText("/ focus station search");
   ImGui::BulletText("F5 export journey, F6 import journey");
   ImGui::BulletText("P pause / resume time");
+  ImGui::BulletText("- / = time pace down / up");
   ImGui::BulletText("Double-click an object to fly to it");
   ImGui::BulletText("Del delete selected rock");
   ImGui::BulletText("H hide / show UI");
