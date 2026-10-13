@@ -313,7 +313,17 @@ void main() {
           // Keplerian turbulence: fbm in (log(r)*2.5, phi*1.5 - t*omega),
           // omega = 4.0 * pow(r, -1.5), single domain-warp, advected by u_Time.
           float omega = 4.0 * pow(rDisk, -1.5);
-          vec2 tuv = vec2(log(max(rDisk, 0.001)) * 2.5, phiDisk * 1.5 - u_Time * omega);
+          // PH differential pattern rotation: the sampling angle is sheared
+          // Kepler-like, omegaTw = kTw * r^-1.5 (inner rim laps the outer one:
+          // ~0.77 rad/s at ISCO, ~0.2 rad/s at rOut, a visible swirl within
+          // ~10 s live). Beaming geometry above (vDir, cosAlpha, g, g4)
+          // intentionally uses the UNROTATED phiDisk, so the approaching-side
+          // asymmetry stays fixed in space and the doppler gate holds
+          // (pattern statistics symmetric in azimuth). Anchored to the
+          // harness epoch (u_Time == 1.0): the frame there is bit-identical
+          // to the legacy one.
+          float omegaTw = 6.0 * pow(rDisk, -1.5);
+          vec2 tuv = vec2(log(max(rDisk, 0.001)) * 2.5, phiDisk * 1.5 - (omega * 1.0 + omegaTw * (u_Time - 1.0)));
           float warp = diskFbm(tuv + vec2(0.31, 0.17));
           float n = diskFbm(tuv + warp * 0.8);
           // Close-camera disk smoothing: high-frequency bands relax to their
@@ -322,6 +332,16 @@ void main() {
           // bit-identical.
           float turb = mix(0.55 + 0.9 * n, 1.0, closeK);
           emis *= turb;
+          // PH differential pinwheel: m=3 spiral wound by the same Kepler
+          // shear (inner arms lead). Referenced to the harness epoch so the
+          // factor is exactly 1.0 at u_Time == 1.0 (reference PNGs
+          // byte-identical) and a visibly winding swirl live. Zero azimuthal
+          // mean: g4 beaming untouched.
+          float phiSw = phiDisk - (omega * 1.0 + omegaTw * (u_Time - 1.0)) / 1.5;
+          float phiSwRef = phiDisk - omega / 1.5;
+          float swirlArg = log(max(rDisk, 0.001)) * 5.0;
+          float swirl = sin(phiSw * 3.0 + swirlArg) - sin(phiSwRef * 3.0 + swirlArg);
+          emis *= 1.0 + 0.30 * swirl;
           // Uniform exposure; beaming geometry untouched:
           // g4 and (1.0 + beta * cosAlpha) kept.
           vec3 diskRgb = emis * g4 * 1.5;
@@ -458,6 +478,12 @@ void main() {
         float glowF = smoothstep(0.2, 0.8, glowLuma);
         col += mix(mix(col, vec3(1.0), 0.3), vec3(1.0), 0.5) * glowF * 0.35;
       }
+      // PH far marker: beyond ~50 Rs the shadow is subpixel; keep a bright
+      // point so the hole never silently vanishes (station label stays in
+      // AppGL, never culled). Exactly zero at spawn/close range: reference
+      // and doppler-gate frames bit-identical. Ascending smoothstep.
+      float farDotK = smoothstep(50.0, 200.0, camDistRs);
+      col += vec3(1.0, 0.96, 0.88) * farDotK * exp(-dot(ndc, ndc) * 900.0) * 2.5;
       FragColor = vec4(applyFinish(applyObserverShift(col, fCamSqrt, camRedden), v_TexCoord), 1.0);
       return;
     }
@@ -508,5 +534,9 @@ void main() {
   // (honest sky/disk images live in the escape path, untouched).
   float fbShadow = 1.0 - smoothstep(u_Rs * 1.1, u_Rs * 2.2, minR);
   colFallback = mix(colFallback, vec3(0.0), max(closeK, fbShadow));
+  // PH far marker, same profile as the escape branch (see above): missed
+  // rays toward a distant hole still leave a bright point. Zero unless far.
+  float farDotKFb = smoothstep(50.0, 200.0, camDistRs);
+  colFallback += vec3(1.0, 0.96, 0.88) * farDotKFb * exp(-dot(ndc, ndc) * 900.0) * 2.5;
   FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCamSqrt, camRedden), v_TexCoord), 1.0);
 }

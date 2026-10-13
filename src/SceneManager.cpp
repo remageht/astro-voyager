@@ -306,8 +306,13 @@ void SceneManager::initSStars() {
     float dir = (uDir < 0.5f) ? -1.0f : 1.0f;
     SStarParam s;
     s.r = r;
-    s.phase = 2.0f * kPi * uPhase;
-    s.omega = dir * 0.8f / std::pow(r, 1.5f);
+    // PH x1.5 spin-up (was 0.8): the swarm reads alive at 1x pace, inner
+    // stars lap visibly within seconds. Phase is referenced to the harness
+    // epoch (t = 1.0): th(1.0) matches the legacy angles up to float
+    // rounding (~1e-7 rad, far subpixel), so reference PNGs are unchanged.
+    float omLegacy = dir * 0.8f / std::pow(r, 1.5f);
+    s.omega = dir * 1.2f / std::pow(r, 1.5f);
+    s.phase = 2.0f * kPi * uPhase + (omLegacy - s.omega) * 1.0f;
     s.u = uu;
     s.v = vv;
     s.mag = 1.0f + 1.0f * uMag;
@@ -399,6 +404,20 @@ void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
   camera.yaw = 0.0;
   camera.pitch = 0.0;
 
+  // PH: never spawn inside the station collision shell (BH capture radius
+  // rs*1.05, quasar core-touch radius). No-op for all current spawns
+  // (sgra 10 > 1.05, m87 14 > 1.575, qso 25 > 2.0), harness frames kept.
+  if (st->collisionRadius > 0.0) {
+    double d = std::sqrt(camera.position.x * camera.position.x +
+                         camera.position.y * camera.position.y +
+                         camera.position.z * camera.position.z);
+    if (d < st->collisionRadius && d > 1e-9) {
+      double k = st->collisionRadius / d;
+      camera.position = Vec3(camera.position.x * k, camera.position.y * k,
+                             camera.position.z * k);
+    }
+  }
+
   if (st->type == StationType::BlackHole) {
     m_settings.rs = static_cast<float>(st->params.rs);
     if (m_preset != PerfPreset::Custom) {
@@ -486,8 +505,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         sMags.push_back(s.mag);
       }
       m_sStars.setStars(sPos, sMags);
+      // PH: far plane 1e7 (was 1000): the swarm must not clip when the
+      // camera pulls far back; near kept, spawn framing pixel-identical.
       glm::mat4 sProj =
-          glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1000.0f);
+          glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1e7f);
       glm::vec3 sEye(cp.x, cp.y, cp.z);
       glm::vec3 sFwd(cf.x, cf.y, cf.z);
       glm::vec3 sUp(cu.x, cu.y, cu.z);

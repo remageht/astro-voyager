@@ -111,6 +111,14 @@ int AppGL::run() {
     float deltaTime = currentTime - lastTime;
     lastTime = currentTime;
 
+    // === Audio === begin (агент AU: ленивый старт при первом вводе,
+    // update музыки/SFX + polling-триггеры; варп/тур/поиск не трогаем.
+    // Харнесс captureAllScreenshots run() не вызывает: init там нет, PNG чистые).
+    audioEnsureOnFirstInput();
+    audioProcessKey();
+    audioUpdate(deltaTime);
+    // === Audio === end
+
     if (m_inMenu) {
       // Main menu: showcase orbit around the current station, world renders behind.
       // ESC in menu does nothing (consume the edge only).
@@ -171,8 +179,32 @@ int AppGL::run() {
 
     m_window->pollEvents();
 
-    processInput(deltaTime);
-    processMouse();
+    // === Physics === begin: столкновения и захват горизонтом.
+    Vec3 prevCamPos = m_camera.position;
+    if (!m_captureAnim) {
+      processInput(deltaTime);
+      processMouse();
+    }
+    const Station* physSt = m_sceneManager->getCurrentStation();
+    if (!m_captureAnim && physSt &&
+        physSt->type == StationType::BlackHole) {
+      const double rsNow =
+          static_cast<double>(m_sceneManager->getSettings().rs);
+      double capR = physSt->collisionRadius;
+      if (capR <= 0.0) capR = rsNow * 1.05;
+      const double d0 = std::sqrt(m_camera.position.x * m_camera.position.x +
+                                  m_camera.position.y * m_camera.position.y +
+                                  m_camera.position.z * m_camera.position.z);
+      if (d0 <= capR) startHorizonCapture();
+    }
+    if (!m_captureAnim && physSt &&
+        physSt->type == StationType::Quasar) {
+      double qR = physSt->collisionRadius;
+      if (qR <= 0.0) qR = 2.0;
+      m_camera.position = interaction::slideOnSphere(
+          prevCamPos, m_camera.position, 0.0, 0.0, 0.0, qR);
+    }
+    // === Physics === end
 
     if (m_sceneManager->getCurrentStation() &&
         m_sceneManager->getCurrentStation()->type == StationType::BlackHole) {
@@ -197,14 +229,20 @@ int AppGL::run() {
     }
     if (m_sceneManager->getCurrentStation() &&
         m_sceneManager->getCurrentStation()->type == StationType::SolarSystem) {
+      // === Physics ===: скольжение вместо выталкивания (без залипания).
       for (const auto& body : m_sceneManager->getBodies()) {
         if (!body.def) continue;
-        double minDist = static_cast<double>(body.def->radius) * 1.3;
+        double factor = 1.05;
+        if (body.def->type == 0) factor = 1.02;
+        else if (body.def->type == 1 || body.def->type == 3) factor = 1.1;
+        double minDist = static_cast<double>(body.def->radius) * factor;
         if (minDist < 0.8) minDist = 0.8;
-        m_camera.position = interaction::pushOutOfSphere(
-            m_camera.position, body.pos.x, body.pos.y, body.pos.z, minDist);
+        m_camera.position = interaction::slideOnSphere(
+            prevCamPos, m_camera.position, body.pos.x, body.pos.y,
+            body.pos.z, minDist);
       }
     }
+    updateHorizonCapture(deltaTime);  // === Physics ===
     checkAchievements();
 
     int fbWidth = 0, fbHeight = 0;
@@ -233,6 +271,7 @@ int AppGL::run() {
     // Харнесс (captureAllScreenshots) сюда не заходит: PNG чистые.
     drawCinematic();
     // === Cinematic === end
+    drawHorizonCapture(ImGui::GetForegroundDrawList());  // === Physics ===
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -246,6 +285,10 @@ int AppGL::run() {
 void AppGL::processInput(float deltaTime) {
   GLFWwindow* win = m_window->getNativeWindow();
   ImGuiIO& io = ImGui::GetIO();
+  // === Audio === begin (агент AU: первый ввод + M mute; варп/тур ниже не тронуты).
+  audioEnsureOnFirstInput();
+  audioProcessKey();
+  // === Audio === end
   // === WarpDrive === begin (агент W): ключи W/[ ], таймеры прыжка,
   // FOV +10deg*K, дрейф, тряска. Возврат true = катсцена прыжка.
   if (updateWarp(deltaTime)) return;
@@ -615,7 +658,7 @@ std::string AppGL::pickCustomAt(double px, double py) {
   }
   float fov = m_sceneManager->getSettings().fovDegrees;
   float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
-  glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
+  glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1e7f);
   Vec3 cp = m_camera.position;
   Vec3 cf = m_camera.forward();
   Vec3 cu = m_camera.up();
@@ -667,7 +710,7 @@ void AppGL::flyToObjectAt(double px, double py) {
 
   float fov = m_sceneManager->getSettings().fovDegrees;
   float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
-  glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
+  glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1e7f);
   Vec3 cp = m_camera.position;
   Vec3 cf = m_camera.forward();
   Vec3 cu = m_camera.up();
@@ -830,19 +873,321 @@ void AppGL::flyToObjectAt(double px, double py) {
   startDollyFlight();
 }
 
+// === ModernUI === begin (агент UI: тёмная "стеклянная" тема, статус-бар,
+// транспортная панель, карточки станций).
+// Только оформление + кнопки-индикаторы поверх существующего состояния:
+// вызываются только готовые teleportToStation/togglePause/setTimeScale/
+// warpRetarget/startWarpJump/startCineTour/stopCineTour/skip и геттеры
+// SceneManager. Никакой новой логики варпа/тура/времени/поиска/звука.
+// Харнесс captureAllScreenshots вызывает drawImGui(): 8 сценовых PNG
+// рендерятся вообще без ImGui и остаются чистыми, gui.png осознанно
+// обновляется (новый вид).
+void AppGL::applyModernThemeOnce() {
+  static bool done = false;
+  if (done) return;
+  done = true;
+  ImGuiStyle& st = ImGui::GetStyle();
+  // Скругления 8px по всем элементам.
+  st.WindowRounding = 8.0f;
+  st.ChildRounding = 8.0f;
+  st.FrameRounding = 8.0f;
+  st.GrabRounding = 8.0f;
+  st.PopupRounding = 8.0f;
+  st.ScrollbarRounding = 8.0f;
+  st.TabRounding = 8.0f;
+  st.WindowBorderSize = 1.0f;
+  st.FrameBorderSize = 1.0f;
+  // "Стекло": alpha панелей ~0.92 поверх StyleColorsDark.
+  st.Colors[ImGuiCol_WindowBg].w = 0.92f;
+  st.Colors[ImGuiCol_ChildBg].w = 0.92f;
+  st.Colors[ImGuiCol_PopupBg].w = 0.94f;
+  // Акценты проекта: циан (0.40, 0.85, 1.00) + янтарь (1.00, 0.75, 0.28).
+  const ImVec4 cyan(0.40f, 0.85f, 1.00f, 1.00f);
+  const ImVec4 cyanDim(0.16f, 0.38f, 0.55f, 1.00f);
+  const ImVec4 cyanDeep(0.10f, 0.28f, 0.42f, 1.00f);
+  const ImVec4 amber(1.00f, 0.75f, 0.28f, 1.00f);
+  const ImVec4 amberDim(0.55f, 0.38f, 0.12f, 1.00f);
+  st.Colors[ImGuiCol_Button] = ImVec4(0.16f, 0.32f, 0.48f, 1.00f);
+  st.Colors[ImGuiCol_ButtonHovered] = cyanDim;
+  st.Colors[ImGuiCol_ButtonActive] = cyanDeep;
+  st.Colors[ImGuiCol_Header] = amberDim;
+  st.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.65f, 0.46f, 0.16f, 1.00f);
+  st.Colors[ImGuiCol_HeaderActive] = ImVec4(0.70f, 0.52f, 0.20f, 1.00f);
+  st.Colors[ImGuiCol_CheckMark] = cyan;
+  st.Colors[ImGuiCol_SliderGrab] = cyan;
+  st.Colors[ImGuiCol_SliderGrabActive] = amber;
+  st.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.30f, 0.42f, 1.00f);
+  st.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.24f, 0.36f, 0.50f, 1.00f);
+  st.Colors[ImGuiCol_TitleBg] = ImVec4(0.32f, 0.22f, 0.07f, 0.92f);
+  st.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.45f, 0.31f, 0.10f, 0.92f);
+  st.Colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.75f, 0.28f, 0.35f);
+  st.Colors[ImGuiCol_SeparatorHovered] = amber;
+  st.Colors[ImGuiCol_SeparatorActive] = amber;
+  st.Colors[ImGuiCol_TabHovered] = cyanDim;
+  st.Colors[ImGuiCol_TabActive] = cyanDeep;
+}
+
+const char* AppGL::stationTypeRuShort(StationType t) {
+  switch (t) {
+    case StationType::BlackHole: return "ЧД";
+    case StationType::Quasar: return "Квазар";
+    case StationType::Constellation: return "Созв.";
+    case StationType::Galaxy: return "Галакт.";
+    case StationType::Nebula: return "Туманн.";
+    case StationType::SolarSystem: return "Система";
+  }
+  return "?";
+}
+
+unsigned int AppGL::stationTypeChip(StationType t) {
+  // Цветной чип типа станции (фон; текст поверх — тёмный).
+  switch (t) {
+    case StationType::BlackHole: return IM_COL32(150, 120, 255, 255);
+    case StationType::Quasar: return IM_COL32(255, 190, 70, 255);
+    case StationType::Constellation: return IM_COL32(120, 220, 255, 255);
+    case StationType::Galaxy: return IM_COL32(150, 200, 255, 255);
+    case StationType::Nebula: return IM_COL32(255, 130, 200, 255);
+    case StationType::SolarSystem: return IM_COL32(130, 230, 140, 255);
+  }
+  return IM_COL32(140, 140, 140, 255);
+}
+
+const char* AppGL::uiRu(const char* ru, const char* en) const {
+  return m_cineFont ? ru : en;
+}
+
+bool AppGL::modernPushFont() const {
+  if (m_cineFont) {
+    ImGui::PushFont(m_cineFont);
+    return true;
+  }
+  return false;
+}
+
+void AppGL::drawModernStatusBar() {
+  // Slim-бар сверху справа: станция | FPS | темп | варп | звук.
+  // Только чтение геттеров, состояние не меняем.
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+  ImGui::SetNextWindowPos(ImVec2(disp.x - 12.0f, 12.0f), ImGuiCond_Always,
+                          ImVec2(1.0f, 0.0f));
+  ImGui::SetNextWindowBgAlpha(0.92f);
+  const ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_AlwaysAutoResize;
+  const bool pushed = modernPushFont();
+  if (ImGui::Begin("##modern_status", nullptr, flags)) {
+    const Station* st = m_sceneManager->getCurrentStation();
+    const bool paused = m_sceneManager->isPaused();
+    const float pace = m_sceneManager->getTimeScale();
+    char paceBuf[32];
+    if (paused) {
+      std::snprintf(paceBuf, sizeof(paceBuf), "%s",
+                    uiRu("пауза", "paused"));
+    } else if (pace < 9.5f) {
+      std::snprintf(paceBuf, sizeof(paceBuf), "%.1fx",
+                    static_cast<double>(pace));
+    } else {
+      std::snprintf(paceBuf, sizeof(paceBuf), "%.0fx",
+                    static_cast<double>(pace));
+    }
+    char warpBuf[48];
+    if (!m_warpOn) {
+      std::snprintf(warpBuf, sizeof(warpBuf), "%s",
+                    uiRu("варп выкл", "warp off"));
+    } else {
+      std::snprintf(warpBuf, sizeof(warpBuf), "%s F%d",
+                    warpStatusName(m_warpStatus), m_warpFactor);
+    }
+    // Звук: аудиоподсистемы в дереве нет — нейтральный плейсхолдер.
+    // Точка вставки AU-агента: заменить на чтение его состояния.
+    // Строка строго Basic Latin + Cyrillic (дефис вместо тире).
+    const char* soundTxt = uiRu("звук: нет", "sound: n/a");
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.00f, 1.00f), "%s",
+                       st ? st->name.c_str() : "None");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
+    ImGui::SameLine();
+    ImGui::Text("FPS %.0f", static_cast<double>(ImGui::GetIO().Framerate));
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
+    ImGui::SameLine();
+    ImGui::Text("%s: %s", uiRu("темп", "pace"), paceBuf);
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
+    ImGui::SameLine();
+    ImGui::Text("%s", warpBuf);
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.00f), "%s", soundTxt);
+  }
+  ImGui::End();
+  if (pushed) ImGui::PopFont();
+}
+
+void AppGL::drawModernTransportBar() {
+  // Нижняя транспортная панель по центру (как медиаплеер): пауза, пресеты
+  // времени, фактор варпа, тур, прыжок. Только кнопки-индикаторы: каждый
+  // вызов повторяет соответствующий обработчик из Navigator/хоткеев
+  // (togglePause / setTimeScale / warpRetarget / startCineTour /
+  // stopCineTour / startWarpJump с их же гвардами). Новой логики нет.
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y - 12.0f),
+                          ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+  ImGui::SetNextWindowBgAlpha(0.92f);
+  const ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_AlwaysAutoResize;
+  const bool pushed = modernPushFont();
+  if (ImGui::Begin("##modern_transport", nullptr, flags)) {
+    const bool paused = m_sceneManager->isPaused();
+    const float paceNow = m_sceneManager->getTimeScale();
+    // Пауза (тот же вызов, что кнопка "Pause (P)" и хоткей P).
+    // Метки строго ASCII ("II", "|>"): в атласе киношрифта только
+    // Basic Latin + Cyrillic, прочие глифы дали бы "?".
+    if (ImGui::Button(paused ? uiRu("|> (P)", "Resume (P)")
+                             : uiRu("II (P)", "Pause (P)"))) {
+      m_sceneManager->togglePause();
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Пауза/продолжить (P)", "Pause/resume (P)"));
+    }
+    // Пресеты времени (тот же вызов, что кнопки 1x..1000x: снять паузу,
+    // поставить шкалу).
+    ImGui::SameLine();
+    const char* paceLabels[kTimePacePresetCount] = {"1x", "10x", "60x",
+                                                   "300x", "1000x"};
+    for (int i = 0; i < kTimePacePresetCount; ++i) {
+      if (i > 0) ImGui::SameLine();
+      const bool active =
+          !paused && std::abs(paceNow - kTimePacePresets[i]) < 0.001f;
+      if (active) {
+        ImGui::PushStyleColor(ImGuiCol_Button,
+                              ImVec4(0.16f, 0.45f, 0.65f, 1.0f));
+      }
+      if (ImGui::Button(paceLabels[i])) {
+        if (m_sceneManager->isPaused()) m_sceneManager->togglePause();
+        m_sceneManager->setTimeScale(kTimePacePresets[i]);
+      }
+      if (active) ImGui::PopStyleColor();
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s %s",
+                          uiRu("Темп времени", "Time pace"), paceLabels[i]);
+      }
+    }
+    // Фактор варпа (те же гварды, что слайдер варп-панели и [ ]: только
+    // при включённом варпе, не в туннеле; иначе просто индикатор).
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
+    ImGui::SameLine();
+    const bool warpAdj = (m_warpOn && m_warpStatus != 3);
+    if (!warpAdj) ImGui::BeginDisabled();
+    if (ImGui::Button("F-")) {
+      if (m_warpFactor > 1) {
+        --m_warpFactor;
+        warpRetarget(warpTargetK(m_warpFactor));
+      }
+    }
+    if (!warpAdj) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Фактор варпа меньше ([)", "Warp factor down ([)"));
+    }
+    ImGui::SameLine();
+    if (m_warpOn) {
+      ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.00f, 1.00f), "F%d %s",
+                         m_warpFactor, warpStatusName(m_warpStatus));
+    } else {
+      ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "%s (W)",
+                         uiRu("Варп выкл", "Warp off"));
+    }
+    ImGui::SameLine();
+    if (!warpAdj) ImGui::BeginDisabled();
+    if (ImGui::Button("F+")) {
+      if (m_warpFactor < 9) {
+        ++m_warpFactor;
+        warpRetarget(warpTargetK(m_warpFactor));
+      }
+    }
+    if (!warpAdj) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Фактор варпа больше (])", "Warp factor up (])"));
+    }
+    // Тур (те же вызовы, что хоткей T).
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
+    ImGui::SameLine();
+    if (ImGui::Button(m_tour.active() ? uiRu("Стоп-тур", "Stop tour")
+                                      : uiRu("Тур (T)", "Tour (T)"))) {
+      if (m_tour.active())
+        stopCineTour();
+      else
+        startCineTour();
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Кинотур (T)", "Cinematic tour (T)"));
+    }
+    // Прыжок (тот же вызов и гвард, что "Engage Jump": только из Cruise).
+    ImGui::SameLine();
+    const std::vector<Station>& cat = builtinCatalog();
+    int sel = m_warpSel;
+    if (sel < 0 || sel >= static_cast<int>(cat.size())) sel = 0;
+    const Station* curSt = m_sceneManager->getCurrentStation();
+    const std::string tgtId = cat[static_cast<size_t>(sel)].id;
+    const bool canJump = (m_warpOn && m_warpStatus == 1 && curSt &&
+                          curSt->id != tgtId);
+    if (!canJump) ImGui::BeginDisabled();
+    if (ImGui::Button(uiRu("Прыжок", "Jump"))) {
+      startWarpJump(tgtId);
+    }
+    if (!canJump) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s: %s", uiRu("Прыжок к", "Jump to"),
+                        cat[static_cast<size_t>(sel)].name.c_str());
+    }
+    // Hint-полоса в новом виде: статическая строка хоткеев (логику
+    // 10-секундной hint-полосы агента C не трогаем и не дублируем —
+    // там авто-гашение, здесь постоянная slim-подсказка).
+    ImGui::Separator();
+    ImGui::SetWindowFontScale(0.85f);
+    ImGui::TextColored(
+        ImVec4(0.55f, 0.58f, 0.62f, 1.00f), "%s",
+        uiRu("WASD - полет | мышь - осмотр | T - кинотур | W - варп | "
+             "P - пауза | -/= - темп | / - поиск | F1 - помощь | H - скрыть | "
+             "ESC - меню",
+             "WASD fly | drag look | T tour | W warp | P pause | -/= pace | "
+             "/ search | F1 help | H hide | ESC menu"));
+    ImGui::SetWindowFontScale(1.0f);
+  }
+  ImGui::End();
+  if (pushed) ImGui::PopFont();
+}
+// === ModernUI === end
+
 void AppGL::drawImGui() {
+  // === ModernUI ===: тема применяется один раз (флаг внутри).
+  applyModernThemeOnce();
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
   ImGui::Begin("astro-voyager Navigator");
+  // === ModernUI ===: тело 15px (дефолт ~13px), заголовки ниже — 20px.
+  ImGui::SetWindowFontScale(1.15f);
 
   const Station* curSt = m_sceneManager->getCurrentStation();
   std::string curId = curSt ? curSt->id : "";
 
+  // === ModernUI ===: заголовок секции 20px.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::Text("Active Station:");
+  ImGui::SetWindowFontScale(1.15f);
   ImGui::SameLine();
   ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s", curSt ? curSt->name.c_str() : "None");
-  ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s",
+  // === ModernUI ===: перенос описания (при шрифте 15px иначе обрезается).
+  ImGui::TextWrapped("%s",
                      curSt ? curSt->description.c_str() : "");
 
   // Station search box with hotkey '/' focus
@@ -899,7 +1244,11 @@ void AppGL::drawImGui() {
     m_searchBuf[0] = '\0';
   }
 
+  // === ModernUI ===: карточки станций (сетка 2 колонки: имя + цветной
+  // чип типа + дистанция + факт + кнопка). Фильтр/Enter/очистка — 1:1.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Teleport Stations:");
+  ImGui::SetWindowFontScale(1.15f);
   if (!query.empty()) {
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(%zu station(s) matched)", matchedStations.size());
@@ -908,31 +1257,73 @@ void AppGL::drawImGui() {
   if (matchedStations.empty()) {
     ImGui::TextColored(ImVec4(0.7f, 0.5f, 0.5f, 1.0f), "No matches");
   } else {
-    for (const auto* stPtr : matchedStations) {
-      const auto& station = *stPtr;
-      bool isCurrent = (station.id == curId);
-      std::string label = station.name + " (" + station.id + ")";
-      if (isCurrent) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.3f, 1.0f));
+    const bool cardFont = modernPushFont();
+    if (ImGui::BeginTable("##stcards", 2)) {
+      for (const auto* stPtr : matchedStations) {
+        const auto& station = *stPtr;
+        ImGui::TableNextColumn();
+        const bool isCurrent = (station.id == curId);
+        // Карточка: рамка + скругление из темы; у текущей — янтарная рамка.
+        if (isCurrent) {
+          ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                                ImVec4(0.20f, 0.30f, 0.20f, 0.92f));
+          ImGui::PushStyleColor(ImGuiCol_Border,
+                                ImVec4(1.0f, 0.75f, 0.28f, 1.0f));
+        }
+        std::string cardId = std::string("##card_") + station.id;
+        if (ImGui::BeginChild(cardId.c_str(), ImVec2(0.0f, 0.0f), true)) {
+          ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s",
+                             station.name.c_str());
+          // Чип типа (цветной) + дистанция в одну строку.
+          // RU — при киношрифте с кириллицей, иначе EN typeToString.
+          const std::string tagOwn =
+              m_cineFont ? std::string(stationTypeRuShort(station.type))
+                         : typeToString(station.type);
+          const ImU32 chipCol =
+              static_cast<ImU32>(stationTypeChip(station.type));
+          const ImVec4 chipBg = ImGui::ColorConvertU32ToFloat4(chipCol);
+          ImGui::PushStyleColor(ImGuiCol_Button, chipBg);
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, chipBg);
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive, chipBg);
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.08f, 0.10f, 0.14f, 1.0f));
+          ImGui::BeginDisabled();
+          ImGui::SmallButton(tagOwn.c_str());
+          ImGui::EndDisabled();
+          ImGui::PopStyleColor(4);
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.65f, 0.68f, 0.72f, 1.0f), "%.0f",
+                             station.spawnDistanceRs);
+          // Факт из Catalog (не выдумываем), затем кнопка телепорта.
+          ImGui::TextWrapped("%s", station.description.c_str());
+          if (isCurrent) {
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  ImVec4(0.2f, 0.6f, 0.3f, 1.0f));
+          }
+          if (ImGui::Button(isCurrent ? "Here" : "Fly here",
+                            ImVec2(-1.0f, 0.0f))) {
+            teleportToStation(station.id);
+          }
+          if (isCurrent) {
+            ImGui::PopStyleColor();
+          }
+        }
+        ImGui::EndChild();
+        if (isCurrent) {
+          ImGui::PopStyleColor(2);
+        }
       }
-
-      if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f))) {
-        teleportToStation(station.id);
-      }
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s", station.description.c_str());
-      }
-
-      if (isCurrent) {
-        ImGui::PopStyleColor();
-      }
+      ImGui::EndTable();
     }
+    if (cardFont) ImGui::PopFont();
   }
   ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
                      "(Double-click an object to fly to it)");
 
   ImGui::Separator();
+  // === ModernUI ===: заголовки секций 20px, тело остаётся 15px.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Quality Preset:");
+  ImGui::SetWindowFontScale(1.15f);
   if (m_benchmarking && !m_userOverrodePreset) {
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[Auto-calibrating 2s...]");
@@ -950,7 +1341,10 @@ void AppGL::drawImGui() {
     }
   }
 
+  // === ModernUI ===: заголовок секции 20px.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Parameters:");
+  ImGui::SetWindowFontScale(1.15f);
 
   RenderSettings& settings = m_sceneManager->getSettings();
   bool sliderChanged = false;
@@ -970,7 +1364,10 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
+  // === ModernUI ===: заголовок секции 20px.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Camera & Performance:");
+  ImGui::SetWindowFontScale(1.15f);
   const double dist = std::sqrt(m_camera.position.x * m_camera.position.x +
                                 m_camera.position.y * m_camera.position.y +
                                 m_camera.position.z * m_camera.position.z);
@@ -989,7 +1386,10 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
+  // === ModernUI ===: заголовок секции 20px.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::Text("Time:");
+  ImGui::SetWindowFontScale(1.15f);
   bool paused = m_sceneManager->isPaused();
   float paceNow = m_sceneManager->getTimeScale();
   if (paused) {
@@ -1066,7 +1466,10 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
+  // === ModernUI ===: заголовок секции 20px.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Journey Route:");
+  ImGui::SetWindowFontScale(1.15f);
 
   std::string routeText;
   if (m_route.empty()) {
@@ -1110,7 +1513,10 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
+  // === ModernUI ===: заголовок секции 20px.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Editor:");
+  ImGui::SetWindowFontScale(1.15f);
   if (ImGui::Button("Add rock here")) {
     Vec3 f = m_camera.forward();
     Vec3 u = m_camera.up();
@@ -1158,7 +1564,10 @@ void AppGL::drawImGui() {
   }
 
   ImGui::Separator();
+  // === ModernUI ===: заголовок секции 20px.
+  ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Achievements: %d/7", static_cast<int>(m_unlockedIds.size()));
+  ImGui::SetWindowFontScale(1.15f);
   for (const auto& achId : allAchievementIds()) {
     bool unlocked = (m_unlockedIds.find(achId) != m_unlockedIds.end());
     const char* title = achievementTitle(achId);
@@ -1188,7 +1597,18 @@ void AppGL::drawImGui() {
                        m_lastScreenshotStatus.c_str());
   }
 
+  // === Audio === begin (агент AU: слайдер 0-100 + M/mute + нота В ПАНЕЛИ.
+  // До первого ввода движок не инициализирован — рисуем пустоту, поэтому
+  // харнесс (init нет) даёт gui.png байт-в-байт).
+  audioDrawPanel();
+  // === Audio === end
+
   ImGui::End();
+
+  // === ModernUI ===: статус-бар и транспортная панель (только индикаторы
+  // поверх существующего состояния; при m_hideUI drawImGui не вызывается).
+  drawModernStatusBar();
+  drawModernTransportBar();
 
   // === WarpDrive === (отдельное окно; при выключенном варпе пусто,
   // Navigator выше не менялся — gui.png чистый).
@@ -1278,6 +1698,7 @@ void AppGL::checkAchievements() {
   st.visited = m_visited;
   st.routeSize = m_route.size();
   st.minBhDistance = m_minBhDistance;
+  st.capturedHorizon = m_capturedHorizon;  // === Physics ===
   st.exported = m_journeyExported;
   st.imported = m_journeyImported;
 
@@ -1475,13 +1896,47 @@ void AppGL::drawWorldLabels() {
   ImFont* font = ImGui::GetFont();
   if (!font) return;
 
+  // === Physics === begin: маркер центра ЧД/квазара рисуем ВСЕГДА
+  // (без cull по дистанции/ndc — тело не должно "исчезать" вдали;
+  // дальний импостор держит минимальный размер в шейдере).
+  if (curSt->type == StationType::BlackHole ||
+      curSt->type == StationType::Quasar) {
+    const float aspectM = displaySize.x / displaySize.y;
+    const float fovM = m_sceneManager->getSettings().fovDegrees;
+    const glm::mat4 projM =
+        glm::perspective(glm::radians(fovM), aspectM, 0.1f, 1e7f);
+    const Vec3 cpM = m_camera.position;
+    const Vec3 cfM = m_camera.forward();
+    const Vec3 cuM = m_camera.up();
+    const glm::vec3 eyeM(static_cast<float>(cpM.x), static_cast<float>(cpM.y),
+                         static_cast<float>(cpM.z));
+    const glm::vec3 fwdM(static_cast<float>(cfM.x), static_cast<float>(cfM.y),
+                         static_cast<float>(cfM.z));
+    const glm::vec3 upM(static_cast<float>(cuM.x), static_cast<float>(cuM.y),
+                        static_cast<float>(cuM.z));
+    const glm::mat4 mvpM = projM * glm::lookAt(eyeM, eyeM + fwdM, upM);
+    const glm::vec4 clipM = mvpM * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    if (clipM.w > 0.001f) {
+      glm::vec3 ndcM = glm::vec3(clipM) / clipM.w;
+      ndcM.x = std::clamp(ndcM.x, -0.95f, 0.95f);
+      ndcM.y = std::clamp(ndcM.y, -0.95f, 0.95f);
+      const float sxM = (ndcM.x * 0.5f + 0.5f) * displaySize.x;
+      const float syM = (1.0f - (ndcM.y * 0.5f + 0.5f)) * displaySize.y;
+      drawList->AddCircle(ImVec2(sxM, syM), 5.0f,
+                          IM_COL32(255, 220, 130, 230), 16, 2.0f);
+      drawList->AddText(font, 14.0f, ImVec2(sxM + 9.0f, syM - 9.0f),
+                        IM_COL32(255, 230, 170, 230), curSt->name.c_str());
+    }
+  }
+  // === Physics === end
+
   if (curSt->type == StationType::Constellation) {
     const ConstellationInfo* cInfo = findConstellation(curSt->id);
     if (!cInfo) return;
 
     float aspect = displaySize.x / displaySize.y;
     float fov = m_sceneManager->getSettings().fovDegrees;
-    glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
+    glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1e7f);
 
     Vec3 cp = m_camera.position;
     Vec3 cf = m_camera.forward();
@@ -1560,7 +2015,7 @@ void AppGL::drawWorldLabels() {
     if (!bodies.empty()) {
       float aspect = displaySize.x / displaySize.y;
       float fov = m_sceneManager->getSettings().fovDegrees;
-      glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
+      glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1e7f);
 
       Vec3 cp = m_camera.position;
       Vec3 cf = m_camera.forward();
@@ -1746,7 +2201,7 @@ void AppGL::drawWorldLabels() {
     if (dist < 10.0) {
       float m31Aspect = displaySize.x / displaySize.y;
       float m31Fov = m_sceneManager->getSettings().fovDegrees;
-      glm::mat4 m31Proj = glm::perspective(glm::radians(m31Fov), m31Aspect, 0.1f, 1000.0f);
+      glm::mat4 m31Proj = glm::perspective(glm::radians(m31Fov), m31Aspect, 0.1f, 1e7f);
       glm::vec3 m31Eye(static_cast<float>(cp.x), static_cast<float>(cp.y),
                        static_cast<float>(cp.z));
       Vec3 m31Cf = m_camera.forward();
@@ -2659,5 +3114,214 @@ void AppGL::drawCinematic() {
 }
 
 // === Cinematic === end
+
+// === Audio === begin (агент AU: процедурный звук, только свои методы).
+// Чужие методы/блоки выше не тронуты. Все вызовы движка — только отсюда.
+// Прямые хуки в чужих местах (варп/teleport/ачивка/захват) НЕ вносим:
+// владелец добавит их сам по однострочникам из финала; здесь те же события
+// детектируются polling-ом состояний, поэтому звук работает уже сейчас,
+// а харнесс (без run()) движок не стартует и PNG остаются чистыми.
+void AppGL::audioEnsureOnFirstInput() {
+  if (m_audio.isInitialized()) return;
+  GLFWwindow* w = m_window ? m_window->getNativeWindow() : nullptr;
+  if (!w) return;
+  // Первый ввод: любая из ходовых клавиш/мыши. Полный перебор кодов
+  // не делаем (невалидные коды дают GLFW-ошибки) — достаточно витрины.
+  static const int kKeys[] = {
+      GLFW_KEY_W, GLFW_KEY_A, GLFW_KEY_S, GLFW_KEY_D,
+      GLFW_KEY_SPACE, GLFW_KEY_ESCAPE, GLFW_KEY_ENTER, GLFW_KEY_M,
+      GLFW_KEY_T, GLFW_KEY_P, GLFW_KEY_H, GLFW_KEY_F1, GLFW_KEY_SLASH,
+      GLFW_KEY_MINUS, GLFW_KEY_EQUAL, GLFW_KEY_F5, GLFW_KEY_F6,
+      GLFW_KEY_LEFT_BRACKET, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_DELETE,
+      GLFW_KEY_UP, GLFW_KEY_DOWN, GLFW_KEY_LEFT, GLFW_KEY_RIGHT};
+  bool any = false;
+  for (int k : kKeys) {
+    if (glfwGetKey(w, k) == GLFW_PRESS) {
+      any = true;
+      break;
+    }
+  }
+  if (!any) {
+    if (glfwGetMouseButton(w, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS ||
+        glfwGetMouseButton(w, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+      any = true;
+    }
+  }
+  if (!any) return;
+  m_audio.ensureInitialized();
+  m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+  // Снапшот состояний без триггеров, чтобы старт не давал ложный whoosh.
+  if (const Station* st = m_sceneManager->getCurrentStation()) {
+    m_audioPrevStation = st->id;
+  }
+  m_audioPrevUnlocked = m_unlockedIds.size();
+  m_audioPrevWarpStatus = m_warpStatus;
+  m_audioPrevTourIndex =
+      m_tour.active() ? static_cast<int>(m_tour.index()) : -1;
+  m_audioPrevTourActive = m_tour.active();
+  m_audioPrevInMenu = m_inMenu;
+  m_audioWasInit = true;
+}
+
+void AppGL::audioProcessKey() {
+  GLFWwindow* w = m_window ? m_window->getNativeWindow() : nullptr;
+  if (!w) return;
+  ImGuiIO& io = ImGui::GetIO();
+  const bool mDown =
+      (glfwGetKey(w, GLFW_KEY_M) == GLFW_PRESS);
+  if (mDown && !m_prevMPressed && !io.WantCaptureKeyboard) {
+    audioEnsureOnFirstInput();
+    // ensure мог не сработать без другого ввода — M сам и есть ввод.
+    if (!m_audio.isInitialized()) {
+      m_audio.ensureInitialized();
+      m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+      m_audioWasInit = true;
+    }
+    m_audio.toggleMute();
+    if (!m_audio.isMuted()) m_audio.playClick();
+  }
+  m_prevMPressed = mDown;
+}
+
+void AppGL::audioUpdate(float deltaTime) {
+  if (!m_audio.isInitialized()) return;
+  m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+  m_audio.update(deltaTime);
+
+  // Варп-хук polling-ом (без правок WarpDrive): уровень + дакинг внутри.
+  m_audio.setWarpLevel(m_warpK);
+
+  // Телепорт-whoosh polling-ом: смена станции любым путём
+  // (меню/поиск/варп-прыжок/тур) — без правок teleportToStation.
+  if (const Station* st = m_sceneManager->getCurrentStation()) {
+    if (m_audioWasInit && !m_audioPrevStation.empty() &&
+        st->id != m_audioPrevStation) {
+      m_audio.playWhoosh();
+    }
+    m_audioPrevStation = st->id;
+  }
+
+  // Ачивка-chime polling-ом: рост m_unlockedIds — без правок checkAchievements.
+  if (m_unlockedIds.size() > m_audioPrevUnlocked) {
+    m_audio.playChime();
+  }
+  m_audioPrevUnlocked = m_unlockedIds.size();
+
+  // Прыжок: вход в туннель (статус 3) — без правок updateWarp.
+  if (m_warpStatus == 3 && m_audioPrevWarpStatus != 3) {
+    m_audio.playJump();
+  }
+  m_audioPrevWarpStatus = m_warpStatus;
+
+  // Тур-blip polling-ом: старт/смена станции тура — без правок Tour/AppGL tour.
+  {
+    const bool active = m_tour.active();
+    const int idx = active ? static_cast<int>(m_tour.index()) : -1;
+    if (active && (!m_audioPrevTourActive || idx != m_audioPrevTourIndex)) {
+      m_audio.playBlip();
+    }
+    m_audioPrevTourActive = active;
+    m_audioPrevTourIndex = idx;
+  }
+
+  // Выход из меню (Play) — короткий click.
+  if (m_audioPrevInMenu && !m_inMenu) {
+    m_audio.playClick();
+  }
+  m_audioPrevInMenu = m_inMenu;
+
+  // Захват ЧД: камера у горизонта — тревога (зовёт PH-хук playCapture).
+  // Порог Rs*1.5 с кулдауном 5с (шейдерный capture r<=Rs*1.001 недостижим
+  // из-за clampNearHorizon, поэтому раннее предупреждение честнее).
+  if (m_audioCaptureCooldown > 0.0) m_audioCaptureCooldown -= deltaTime;
+  if (const Station* st = m_sceneManager->getCurrentStation()) {
+    if (st->type == StationType::BlackHole && m_audioCaptureCooldown <= 0.0) {
+      const double d = std::sqrt(m_camera.position.x * m_camera.position.x +
+                                 m_camera.position.y * m_camera.position.y +
+                                 m_camera.position.z * m_camera.position.z);
+      const double rs = static_cast<double>(m_sceneManager->getSettings().rs);
+      if (rs > 0.05 && d < rs * 1.5) {
+        m_audio.playCapture();
+        m_audioCaptureCooldown = 5.0;
+      }
+    }
+  }
+}
+
+void AppGL::audioDrawPanel() {
+  // Гард скриншотов: до init панель пуста -> gui.png байт-в-байт.
+  if (!m_audio.isInitialized()) return;
+  ImGui::Separator();
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Audio (M):");
+  int v = m_audioVolume;
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+  if (ImGui::SliderInt("Volume ##audio", &v, 0, 100)) {
+    if (v < 0) v = 0;
+    if (v > 100) v = 100;
+    m_audioVolume = v;
+    m_audio.setVolume(static_cast<float>(v) / 100.0f);
+    m_audio.playClick();
+  }
+  const bool muted = m_audio.isMuted();
+  const bool live = m_audio.isDeviceLive();
+  // Индикатор ноты в статусе панели: нота + состояние (NULL = null-backend).
+  // Ноту рисуем киношрифтом (дефолтный шрифт ImGui её не имеет — был бы "?").
+  const bool pushed = (m_cineFont != nullptr);
+  if (pushed) ImGui::PushFont(m_cineFont);
+  ImGui::Text("%s %s %d%% (M)", muted ? "[ ]" : "♪",
+              muted ? "MUTED" : (live ? "ON air" : "NULL-backend"),
+              m_audioVolume);
+  if (pushed) ImGui::PopFont();
+  ImGui::SameLine();
+  if (ImGui::Button(muted ? "Unmute" : "Mute")) {
+    m_audio.toggleMute();
+    if (!m_audio.isMuted()) m_audio.playClick();
+  }
+}
+// === Audio === end
+
+// === Physics === begin: катсцена захвата горизонтом событий.
+void AppGL::startHorizonCapture() {
+  if (m_captureAnim) return;
+  m_captureAnim = true;
+  m_captureT = 0.0f;
+  m_captureBaseFov = m_sceneManager->getSettings().fovDegrees;
+  m_audio.playCapture();
+  Toast t;
+  t.title = "Захвачен горизонтом событий";
+  const Station* st = m_sceneManager->getCurrentStation();
+  t.desc = (st ? st->name : "Black hole") + " — возврат на точку входа";
+  t.time = static_cast<float>(glfwGetTime());
+  m_toasts.push_back(t);
+}
+
+void AppGL::updateHorizonCapture(float dt) {
+  if (!m_captureAnim) return;
+  m_captureT += dt;
+  RenderSettings& rset = m_sceneManager->getSettings();
+  const float k = m_captureT / 1.5f;
+  rset.fovDegrees = m_captureBaseFov + 25.0f * (k < 1.0f ? k : 1.0f);
+  if (m_captureT >= 1.5f) {
+    rset.fovDegrees = m_captureBaseFov;
+    m_captureAnim = false;
+    m_capturedHorizon = true;
+    if (const Station* st = m_sceneManager->getCurrentStation()) {
+      m_sceneManager->teleportTo(st->id, m_camera);
+    }
+    checkAchievements();
+  }
+}
+
+void AppGL::drawHorizonCapture(ImDrawList* dl) {
+  if (!m_captureAnim || !dl) return;
+  const float a = m_captureT / 1.2f;
+  int ab = static_cast<int>((a < 1.0f ? a : 1.0f) * 255.0f);
+  if (ab < 0) ab = 0;
+  if (ab > 255) ab = 255;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+  dl->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(0, 0, 0, ab));
+}
+// === Physics === end
 
 }  // namespace astro

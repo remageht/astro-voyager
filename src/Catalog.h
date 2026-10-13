@@ -20,6 +20,10 @@ struct Station {
   std::string description;
   double spawnDistanceRs = 10.0;
   StationParams params;
+  // PH: station-level collision radius in world units (0.0 = disabled,
+  // per-body rules apply instead). BlackHole: rs*1.05 (capture shell),
+  // quasar: core-touch radius for slide + flash hint.
+  double collisionRadius = 0.0;
 };
 
 const std::vector<Station>& builtinCatalog();

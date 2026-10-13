@@ -6,9 +6,9 @@ const std::vector<Station>& builtinCatalog() {
   static const std::vector<Station> kStations = {
       {"sgra", StationType::BlackHole, "Sgr A*",
        "Galactic center black hole. Schwarzschild lensing, Rs=1.0.", 10.0,
-       {1.0, 30.0, 0.05, 600}},
+       {1.0, 30.0, 0.05, 600}, 1.05},
       {"qso-3c273", StationType::Quasar, "3C 273",
-       "Bright quasar: disk + jets + glow billboard.", 25.0, {}},
+       "Bright quasar: disk + jets + glow billboard.", 25.0, {}, 2.0},
       {"ori", StationType::Constellation, "Orion",
        "Orion lines (Betelgeuse-Rigel belt).", 50.0, {}},
       {"uma", StationType::Constellation, "Ursa Major",
@@ -21,7 +21,7 @@ const std::vector<Station>& builtinCatalog() {
        "Sun + 8 planets + Moon, rings, belt.", 70.0, {}},
       {"m87", StationType::BlackHole, "M87*",
        "Supermassive black hole with relativistic jet.", 14.0,
-       {1.5, 30.0, 0.05, 600}},
+       {1.5, 30.0, 0.05, 600}, 1.575},
   };
   return kStations;
 }

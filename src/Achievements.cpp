@@ -31,8 +31,11 @@ std::vector<std::string> achievementsCheck(const AchievementState& s) {
     result.push_back("wayfinder");
   }
 
-  // 5. horizon_watcher: minBhDistance <= 3.0
-  if (s.minBhDistance <= 3.0) {
+  // 5. horizon_watcher ("Горизонт событий"): minBhDistance <= 3.0
+  // (close approach) OR explicit event-horizon capture (rs*1.05 crossed,
+  // set by AppGL capture cutscene). Old saves/tests without the new flag
+  // keep working: default false, old condition unchanged.
+  if (s.minBhDistance <= 3.0 || s.capturedHorizon) {
     result.push_back("horizon_watcher");
   }
 
@@ -54,7 +57,7 @@ const char* achievementTitle(const std::string& id) {
   if (id == "constellation_hunter") return "Constellation Hunter";
   if (id == "deep_field") return "Deep Field";
   if (id == "wayfinder") return "Wayfinder";
-  if (id == "horizon_watcher") return "Horizon Watcher";
+  if (id == "horizon_watcher") return "Горизонт событий";
   if (id == "messenger") return "Messenger";
   if (id == "cartographer") return "Cartographer";
   return "";
@@ -65,7 +68,7 @@ const char* achievementDescription(const std::string& id) {
   if (id == "constellation_hunter") return "Visit Orion and Ursa Major";
   if (id == "deep_field") return "Visit all six stations";
   if (id == "wayfinder") return "Record a route of 8 jumps";
-  if (id == "horizon_watcher") return "Approach the black hole within 3 Rs";
+  if (id == "horizon_watcher") return "Захвачен горизонтом событий";
   if (id == "messenger") return "Export your journey to a file";
   if (id == "cartographer") return "Import a shared journey";
   return "";

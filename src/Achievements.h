@@ -12,6 +12,7 @@ struct AchievementState {
   double minBhDistance = 1e9;        // min distance from camera to center at BlackHole station
   bool exported = false;             // successful route export
   bool imported = false;             // successful route import
+  bool capturedHorizon = false;      // PH: camera crossed rs*1.05 (event-horizon capture)
 };
 
 std::vector<std::string> achievementsCheck(const AchievementState& s);

@@ -83,11 +83,15 @@ void main() {
   hostCol *= shadow;
   col += hostCol;
 
-  // Rotating accretion disk swirl, face-on spiral, rigid rotation.
+  // Rotating accretion disk swirl, face-on spiral with differential
+  // (Kepler-like) shear: inner pattern laps the outer one, visibly winding
+  // live. Anchored to the harness epoch (u_Time == 1.0): the reference frame
+  // is bit-identical to the legacy rigid rotation (baseAngle - 0.25).
   // Up close the spiral relaxes to its mean (no moire rings near the core).
   float baseAngle = atan(uv.y, uv.x);
-  float patternAngle = baseAngle - u_Time * 0.25;
   float diskR = length(uv * vec2(1.0, 2.2));
+  float qOm = 0.004 * pow(max(diskR, 1e-3), -1.5);
+  float patternAngle = baseAngle - (0.25 * 1.0 + qOm * (u_Time - 1.0));
   float spiral = sin(patternAngle * 3.0 + diskR * 18.0);
   float spiralSm = mix(spiral, 0.0, qCloseK);
   float diskMask = smoothstep(0.004, 0.015, diskR) * (1.0 - smoothstep(0.015, 0.12, diskR));
@@ -99,7 +103,9 @@ void main() {
   float d = abs(uv.y + 0.12 * uv.x + sin(u_Time * 0.3) * 0.008);
   float width = 1.0 - smoothstep(0.004, 0.012, d);
   float s = uv.x;
-  float sAdv = s - u_Time * 0.15;
+  // PH x2 outflow (was 0.15): streaks visibly ride outward live; anchored
+  // to the harness epoch so the reference frame is bit-identical.
+  float sAdv = s - (0.15 * 1.0 + 0.30 * (u_Time - 1.0));
   float n = noise1D(sAdv * 8.0 + 1.7);
   float knots = pow(n, 8.0) * 0.8;
   knots *= exp(-abs(s) * 2.0) + 0.25;
@@ -114,10 +120,11 @@ void main() {
   col += jetMask * jetCol;
   // Discrete blobs riding outward along +x, fading with travel distance.
   // Radial-in-|s| + time only; gated to +x so the de-beamed counter-jet
-  // keeps its asymmetry.
-  float bR0 = 0.03 + fract(u_Time * 0.12 + 0.00) * 0.45;
-  float bR1 = 0.03 + fract(u_Time * 0.12 + 0.37) * 0.45;
-  float bR2 = 0.03 + fract(u_Time * 0.12 + 0.71) * 0.45;
+  // keeps its asymmetry. PH x2 outflow (was 0.12): clumps visibly stream
+  // live; harness-epoch anchored, reference frame bit-identical.
+  float bR0 = 0.03 + fract(0.12 * 1.0 + 0.24 * (u_Time - 1.0) + 0.00) * 0.45;
+  float bR1 = 0.03 + fract(0.12 * 1.0 + 0.24 * (u_Time - 1.0) + 0.37) * 0.45;
+  float bR2 = 0.03 + fract(0.12 * 1.0 + 0.24 * (u_Time - 1.0) + 0.71) * 0.45;
   float bSig = 0.0;
   bSig += exp(-pow((abs(s) - bR0) * 14.0, 2.0)) * exp(-bR0 * 3.0);
   bSig += exp(-pow((abs(s) - bR1) * 14.0, 2.0)) * exp(-bR1 * 3.0);
@@ -126,7 +133,7 @@ void main() {
 
   // Faint receding counter-jet (-x), de-beamed: mirrored s, wider, shorter, dimmer.
   float sC = -s;
-  float sCAdv = sC - u_Time * 0.15;
+  float sCAdv = sC - (0.15 * 1.0 + 0.30 * (u_Time - 1.0));
   float nC = noise1D(sCAdv * 8.0 + 1.7);
   float knotsC = pow(nC, 8.0) * 0.8;
   knotsC *= exp(-abs(sC) * 2.0) + 0.25;
@@ -163,6 +170,15 @@ void main() {
   float ang = atan(uv.y, uv.x) - u_Time * 1.5;
   float asym = 0.55 + 0.45 * sin(ang * 2.0);
   col += vec3(1.0, 0.93, 0.82) * ringBright * asym * (3.0 * u_QCoreK) * proxDim;
+
+  // PH core-touch hint: a soft white flash when the camera pushes into the
+  // core shell (qz > 8, i.e. D < ~3 at spawn 25) to accompany the solid
+  // slide handled on CPU. Zero for all reference framings (spawn qz = 1,
+  // qso_close qz = 5): pixel-identical. Ascending smoothstep, u_QZoom read
+  // only. Station label stays in AppGL, never culled.
+  float touchK = smoothstep(8.0, 12.0, qz);
+  float touchPulse = 0.75 + 0.25 * sin(u_Time * 6.0);
+  col += vec3(1.0, 0.97, 0.92) * touchK * touchPulse * exp(-r * r * 40.0) * 0.6;
 
   // Vignette about 0.3.
   float vig = 1.0 - 0.3 * clamp(dot(uv * 0.7, uv * 0.7), 0.0, 1.0);

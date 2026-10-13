@@ -9,6 +9,9 @@
 #include "SceneManager.h"
 #include "Tour.h"
 #include "Window.h"
+// === Audio === begin (агент AU: процедурный звук, только GL-таргет).
+#include "audio/AudioEngine.h"
+// === Audio === end
 
 // === Cinematic ===: forward-decls для ImGui-типов (imgui.h тянуть в хедер не
 // нужно; дефолтный шрифт и чужие виджеты не тронуты).
@@ -96,6 +99,15 @@ class AppGL {
   bool m_journeyImported = false;
   std::vector<Toast> m_toasts;
 
+  // === Physics === (horizon capture / slide state)
+  bool m_captureAnim = false;
+  float m_captureT = 0.0f;
+  bool m_capturedHorizon = false;
+  float m_captureBaseFov = 60.0f;
+  void startHorizonCapture();
+  void updateHorizonCapture(float dt);
+  void drawHorizonCapture(ImDrawList* dl);
+
   // Double-click detection (left-button press edges)
   double m_lastPressTime = -10.0;
   double m_lastPressX = 0.0;
@@ -170,6 +182,24 @@ class AppGL {
   void drawCineFade(ImDrawList* dl);
   static const char* cineTypeRu(StationType t);
 
+  // === ModernUI === begin (агент UI: современная тема + раскладка).
+  // Только оформление и кнопки-индикаторы поверх существующего состояния:
+  // варп/тур/время/поиск/звук не меняем, новую логику не вводим.
+  // Звук: аудиоподсистемы в дереве пока нет (параллельный агент AU) —
+  // статус-бар показывает нейтральный плейсхолдер, точка вставки ниже.
+  void applyModernThemeOnce();
+  void drawModernStatusBar();
+  void drawModernTransportBar();
+  // RU-подпись типа станции для чипа карточки (возврат EN при виде
+  // из харнесса не нужен: выбор делает вызывающий через uiRu()).
+  static const char* stationTypeRuShort(StationType t);
+  static unsigned int stationTypeChip(StationType t);
+  // RU-строка, если есть киношрифт с кириллицей, иначе EN-фолбэк
+  // (дефолтный шрифт ImGui кириллицы не имеет — были бы "?").
+  const char* uiRu(const char* ru, const char* en) const;
+  bool modernPushFont() const;
+  // === ModernUI === end
+
   // === WarpDrive === (агент W: отдельный режим путешествий на варпе).
   // Весь новый штат только здесь. Чужие блоки выше и блок Cinematic
   // не тронуты. Панель рисуется отдельным окном drawWarpPanel() и только
@@ -209,6 +239,29 @@ class AppGL {
   static double warpSpeedLY(int factor);  // показушные св.лет/с от фактора
   static float warpTargetK(int factor);   // целевой u_WarpK от фактора
   static const char* warpStatusName(int status);
+
+  // === Audio === begin (агент AU: процедурный звук без бинарников).
+  // Весь новый штат только здесь. Чужие блоки выше (поиск/варп/тур/время/
+  // меню/скриншоты/ModernUI) не тронуты. Движок лениво стартует при ПЕРВОМ
+  // вводе пользователя; харнесс captureAllScreenshots run() не вызывает,
+  // поэтому PNG чистые. Все вызовы движка — только из Audio-якоря в .cpp.
+  AudioEngine m_audio;
+  int m_audioVolume = 70;  // 0..100 для слайдера панели
+  bool m_prevMPressed = false;
+  // Polling-триггеры SFX (без правок чужих мест): предыдущие состояния.
+  std::string m_audioPrevStation;
+  size_t m_audioPrevUnlocked = 0;
+  int m_audioPrevWarpStatus = 0;
+  int m_audioPrevTourIndex = -1;
+  bool m_audioPrevTourActive = false;
+  bool m_audioPrevInMenu = true;
+  double m_audioCaptureCooldown = 0.0;
+  bool m_audioWasInit = false;
+  void audioEnsureOnFirstInput();
+  void audioUpdate(float deltaTime);
+  void audioProcessKey();
+  void audioDrawPanel();
+  // === Audio === end
 };
 
 // Связь AppGL -> SceneManager без правок SceneManager.h:

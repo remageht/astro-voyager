@@ -149,7 +149,35 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/vendor/imgui/backends/imgui_impl_glfw.cpp
     src/vendor/imgui/backends/imgui_impl_opengl3.cpp
   )
+
+  # === Audio === (агент AU: процедурный звук только для GL-таргета).
+  # Core-таргет (без GL) звук не тянет и собирается без аудио-кода.
+  # miniaudio.h лежит в src/audio (НЕ в src/vendor — он в gitignore).
+  # MINIAUDIO_IMPLEMENTATION ровно в одном .cpp (src/audio/AudioEngine.cpp).
+  target_sources(astro-voyager PRIVATE src/audio/AudioEngine.cpp)
+  target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(UNIX)
+    target_link_libraries(astro-voyager PRIVATE pthread dl m)
+  endif()
+  # === Audio === end
 endif()
+
+# === Win32GUI === begin (агент UI): GL-приложение без консольного окна.
+# При запуске двойным кликом больше нет пустой консоли. Только GL-таргет;
+# core-таргет остаётся консольным. Точка входа main() сохраняется
+# (MSVC /ENTRY:mainCRTStartup, MinGW -mwindows): CLI-флаги (--version,
+# --demo-*, --screenshot-all) парсятся как раньше, файлы пишутся, код
+# возврата в норме — без консоли stdout просто не виден. Опция
+# ASTROVOYAGER_WIN32_GUI=OFF возвращает консоль для отладки.
+option(ASTROVOYAGER_WIN32_GUI "Build GL app as Windows GUI without console" ON)
+if(ASTROVOYAGER_ENABLE_GL AND WIN32 AND ASTROVOYAGER_WIN32_GUI)
+  if(MSVC)
+    target_link_options(astro-voyager PRIVATE "/SUBSYSTEM:WINDOWS" "/ENTRY:mainCRTStartup")
+  else()
+    target_link_options(astro-voyager PRIVATE "-mwindows")
+  endif()
+endif()
+# === Win32GUI === end
 
 enable_testing()
 if(TARGET test_interaction)
