@@ -298,6 +298,7 @@ class AppGL {
   bool m_audioPrevTourActive = false;
   bool m_audioPrevInMenu = true;
   double m_audioCaptureCooldown = 0.0;
+  double m_sunLinkCooldown = 0.0;  // v3.1.0: кулдаун автопрыжка Солнце->sol
   bool m_audioWasInit = false;
   double m_audioTickAcc = 0.0;  // v3.0.0: фаза тика пульсара (сброс при уходе)
   void audioEnsureOnFirstInput();

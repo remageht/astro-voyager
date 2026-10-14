@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 3.1.0 - 2026-10-14
+
+## What's new / Что нового
+- EN: Black hole max-out — tertiary photon sub-ring (n=3) and a compact NT-weighted ISCO corona (axisymmetric, beaming math untouched); quasar maxi-out — ejected shock blob every 9 s plus a slow core flicker mode, both exactly zero at the harness epoch (qso-3c273.png byte-identical).
+- EN: Deep-field zoom — volumetric approach LOD (M31 pattern) for m51/m104/mw with named hero stars and double-click fly-to in every galaxy; Milky Way station with the Sun hero and auto-jump home to sol within 3 units; Hercules Cluster M13 (new StarCluster type, Plummer ball, fly between stars).
+- RU: Максимум ЧД — третичное фотонное суб-кольцо (n=3) и компактная NT-взвешенная корона ISCO (осесимметрична, бимінг не тронут); максимум квазара — вылетающий blob каждые 9 с и медленный flicker ядра, оба строго нулевые в эпохе харнесса (qso-3c273.png байт-в-байт).
+- RU: Дальний зум — объёмный LOD сближения (образец M31) для m51/m104/mw с именными hero-звёздами и долётом по double-click в каждой галактике; станция Млечный Путь с героем-Солнцем и автопрыжком домой в sol ближе 3 единиц; скопление Геркулеса M13 (новый тип StarCluster, сфера Пламмера, полёт между звёздами).
+- Gates / Гейты: ctest 3/3, static checks 187, doppler 2.962 PASS.
+
 ## 3.0.0 - 2026-10-14
 
 ## What's new / Что нового

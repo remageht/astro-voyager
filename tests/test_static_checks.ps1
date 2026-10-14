@@ -227,6 +227,13 @@ Check 'constellation clear linear' ($sceneCpp -match '0\.00004f')
 Check 'pulsar preset uniforms' (((Read-File 'shaders/pulsar.frag') -match 'u_SpinRate') -and ($sceneCpp -match 'setUniform1f\("u_SpinRate"') -and ($sceneCpp -match 'psr-crab') -and ($sceneCpp -match 'sgr-1806'))
 Check 'catalog has pulsar family' ((($catalogCpp -match '"psr-crab"') -and ($catalogCpp -match '"sgr-1806"') -and ($catalogCpp -match '"psr-b1913"')) -and (($catalogJson -match '"psr-crab"') -and ($catalogJson -match '"sgr-1806"') -and ($catalogJson -match '"psr-b1913"')))
 Check 'pulsar tick sfx' ((((Read-File 'src/audio/AudioEngine.h') -match 'playTick') -and ((Read-File 'src/audio/AudioEngine.cpp') -match 'VoiceType::Tick')) -and ($appCpp -match 'm_audio\.playTick'))
+Check 'tertiary photon ring' ($bh -match 'ring3')
+Check 'isco corona glow' (($bh -match 'ISCO corona') -and ($bh -match 'corCol'))
+Check 'quasar ejecta blob' ((Read-File 'shaders/quasar.frag') -match 'ejPh')
+Check 'galaxy lod all' ((($sceneCpp) -match 'm_m51Stars') -and (($sceneCpp) -match 'm_mwStars') -and (($sceneCpp) -match 'lodStars'))
+Check 'milky way station' ((($catalogCpp) -match '"mw"') -and (($catalogJson) -match '"mw"'))
+Check 'sun link home' ((($appCpp) -match 'startWarpJump\("sol"\)') -and (($sceneCpp) -match 'sunWorldPos'))
+Check 'cluster station' ((($catalogCpp) -match '"m13"') -and (($catalogCpp) -match 'StarCluster') -and (($catalogJson) -match '"m13"'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

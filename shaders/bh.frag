@@ -376,6 +376,18 @@ void main() {
         vec3 hcol = blackBodyColor(mix(2400.0, 13000.0, hTn)) * hShape;
         accumColor += (1.0 - accumAlpha) * hcol * hw * hAdapt * HALO_K;
       }
+      // ISCO corona: compact hot glow hugging the inner rim above/below
+      // the sheet (funnel base). Axisymmetric NT-weighted white-blue,
+      // volumetric (x hAdapt) like the jet/halo; per-crossing beaming math
+      // untouched, so the doppler asymmetry is preserved.
+      if (u_DiskOn == 1 && r >= rIn && r <= rIn + 3.0 * u_Rs) {
+        float corR = (r - rIn) / (1.2 * u_Rs);
+        float corY = abs(x.y) / (0.55 * u_Rs);
+        float corShape = ntShape(r, rIn);
+        vec3 corCol = vec3(0.66, 0.78, 1.0) * corShape * NT_PEAK_NORM * 0.05;
+        accumColor += (1.0 - accumAlpha) * corCol *
+                      exp(-corR * corR) * exp(-corY * corY) * hAdapt * 0.05;
+      }
     }
 
     // M87* relativistic jet: polar cones along +-Y, additive glow, no alpha.
@@ -470,6 +482,12 @@ void main() {
     float ring2 = exp(-ring2Q * ring2Q);
     ring2 *= shimmer * breath;
     col += vec3(0.92, 0.95, 1.0) * ring2 * (0.7 * u_BHRingK);
+    // Tertiary sub-ring (n=3): hairline, dimmer, just outside secondary.
+    // Same minR-profile discipline: radially symmetric, beaming untouched.
+    float ring3Q = (minR - 1.5 * u_Rs - 0.16 * u_Rs) / (0.016 * u_Rs);
+    float ring3 = exp(-ring3Q * ring3Q);
+    ring3 *= shimmer * breath;
+    col += vec3(0.88, 0.93, 1.0) * ring3 * (0.35 * u_BHRingK);
     float eglowQ = (minR - u_Rs) / (0.5 * u_Rs);
     float eglow = exp(-eglowQ * eglowQ) * step(minR, 3.0 * u_Rs);
     // Whitened and dimmed: the glow hugs the rim instead of spreading gold.

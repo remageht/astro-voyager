@@ -37,6 +37,12 @@ const std::vector<Station>& builtinCatalog() {
       {"psr-b1913", StationType::Pulsar, "PSR B1913+16",
        "Hulse-Taylor binary: orbital decay proved gravitational waves.",
        38.0, {}, 0.5},
+      {"mw", StationType::Galaxy, "Milky Way",
+       "Our galaxy from outside. Find the Sun, fly close to go home.",
+       45.0, {}},
+      {"m13", StationType::StarCluster, "Hercules Cluster (M13)",
+       "Globular cluster: 300000 ancient stars. Fly between them.", 20.0,
+       {}, 0.5},
   };
   return kStations;
 }
@@ -57,6 +63,7 @@ std::string typeToString(StationType t) {
     case StationType::Nebula: return "nebula";
     case StationType::SolarSystem: return "solar_system";
     case StationType::Pulsar: return "pulsar";
+    case StationType::StarCluster: return "star_cluster";
   }
   return "unknown";
 }

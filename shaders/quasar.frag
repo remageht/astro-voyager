@@ -210,6 +210,14 @@ void main() {
                    * sin(tilt * 90.0 - ay * 14.0 + tK * 0.4);
   float cocoon = exp(-xJ * xJ * 0.09) * 0.05;
   float eJ = (0.30 * coreJ + 0.9 * thread + cocoon) * (0.25 + 1.7 * knot) * fadeIn * fadeOut * wisp;
+  // Ejected blob: a fresh shock born at the base every 9 s, riding outward
+  // to ay ~ 0.5 and dying. Zero at the harness epoch (tE == 0 -> phase 0,
+  // born at the base inside fadeIn), so reference frames stay pixel-identical.
+  float ejPh = fract(tE / 9.0);
+  float ejR = 0.01 + ejPh * 0.5;
+  float ejEnv = smoothstep(0.0, 0.08, ejPh) * (1.0 - smoothstep(0.55, 1.0, ejPh));
+  float ejSig = exp(-pow((ay - ejR) * 22.0, 2.0)) * exp(-xJ * xJ * 1.2);
+  eJ += 1.1 * ejSig * ejEnv;
   float tt = clamp(ay / 0.85, 0.0, 1.2);
   vec3 jc = mix(vec3(0.42, 0.68, 1.0), vec3(0.72, 0.25, 0.95), smoothstep(0.08, 0.85, tt));
   jc = mix(jc, vec3(0.88, 0.96, 1.0), knot * 0.45 * coreJ);
@@ -238,6 +246,8 @@ void main() {
   vec3 coreBase = vec3(1.0, 0.98, 0.94) * 10.0;
   vec3 tint = u_CoreColor / vec3(1.0, 0.85, 0.65);
   float flick = 0.94 + 0.05 * sin(u_Time * 2.3) + 0.02 * sin(u_Time * 5.7);
+  // Slow mode (~0.2 Hz in tE): zero at the harness epoch, alive otherwise.
+  flick += 0.015 * sin(tE * 1.1);
   // Proximity dimming: blinding from afar, compact structured core/ring/halo
   // up close (no milky blowout at qso_close). Disk/jet keep their own
   // milder close gating so structure keeps reading.

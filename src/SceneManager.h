@@ -93,12 +93,21 @@ class SceneManager {
   const std::vector<BodyState>& getBodies() const { return m_lastBodies; }
 
   // M31 named bright stars for close-range labels / fly-to (m31 only).
+  // v3.1.0: reused as hero-star records for every galaxy (mag custom).
   struct M31BrightStar {
     glm::vec3 pos{0.0f};
     std::string name;
     std::string fact;
+    float mag = 0.0f;
   };
   const std::vector<M31BrightStar>& m31BrightStars() const { return m_m31Bright; }
+  // v3.1.0: hero stars for the current galaxy station (fly-to + labels);
+  // empty unless a galaxy station with heroes is active.
+  const std::vector<M31BrightStar>& galaxyBrightStars() const;
+  // v3.1.0 Sun-link: world position of the Sun inside the Milky Way
+  // station; true only there. AppGL flies the camera to it by hand and
+  // auto-jumps to "sol" on proximity.
+  bool sunWorldPos(glm::vec3& out) const;
   RenderSettings& getSettings() { return m_settings; }
   const RenderSettings& getSettings() const { return m_settings; }
 
@@ -148,6 +157,15 @@ class SceneManager {
   std::vector<SStarParam> m_sStarParams;
   bool m_sStarsInit = false;
   void initM31Disk();
+  // v3.1.0: shared deterministic disk generator (initM31Disk calls it with
+  // the legacy constants, so m31 output is bit-identical); cluster ball.
+  static void genDiskPoints(uint32_t seed, int count, float rMin, float rMax,
+                            float thick, float armPull,
+                            const std::vector<M31BrightStar>& heroes,
+                            std::vector<glm::vec3>& pos,
+                            std::vector<float>& mags);
+  void initGalaxyDisks();
+  void initCluster();
 
   // Advances m_simTime from wall-clock time (pause/timeScale aware,
   // dt clamped to 0.5s). Returns the clamped dt. The harness passes a
@@ -205,6 +223,16 @@ class SceneManager {
   // M31 volumetric disk starfield (m31 NEAR LOD only, alpha = near).
   StarPoints m_m31Stars;
   std::vector<M31BrightStar> m_m31Bright;
+  // v3.1.0 Deep Field: approach LOD disks for the other galaxies
+  // (same StarPoints infra, per-galaxy seed) + hero stars for fly-to.
+  StarPoints m_m51Stars;
+  StarPoints m_m104Stars;
+  StarPoints m_mwStars;
+  std::vector<M31BrightStar> m_m51Bright;
+  std::vector<M31BrightStar> m_m104Bright;
+  std::vector<M31BrightStar> m_mwBright;
+  // v3.1.0: globular cluster ball (m13), deterministic Plummer sphere.
+  StarPoints m_clusterStars;
 
   SolarSystem m_sol;
   SphereMesh m_sphere;

@@ -79,7 +79,9 @@ SceneManager::SceneManager() {
 
   initConstellationOrion();
   initConstellationUma();
-  initM31Disk();
+    initM31Disk();
+    initGalaxyDisks();
+    initCluster();
 
   {
     const int kBgCount = 1500;
@@ -344,49 +346,40 @@ void SceneManager::initSStars() {
   }
 }
 
-void SceneManager::initM31Disk() {
-  // M31 volumetric disk starfield: ~4500 points in the disk plane (XZ),
-  // radius 6..30 (uniform area), thickness ~0.8 in Y, ~70% pulled toward
-  // the two logarithmic spiral arms (same phase as galaxy.frag).
-  // Deterministic LCG so screenshots stay stable run to run.
-  // Plus 4 bright named stars near the nucleus for close-range labels.
-  const int kDiskCount = 4500;
+void SceneManager::genDiskPoints(uint32_t seed, int count, float rMin, float rMax,
+                                 float thick, float armPull,
+                                 const std::vector<M31BrightStar>& heroes,
+                                 std::vector<glm::vec3>& pos,
+                                 std::vector<float>& mags) {
+  // Shared deterministic disk generator. LCG call order mirrors the legacy
+  // initM31Disk body exactly, so m31 output is bit-identical for its
+  // constants (seed 0xA531A531, 4500, 6..30, thick 0.53, pull 0.30).
   const float kPi = 3.14159265358979323846f;
-
-  m_m31Bright = {
-      {{2.5f, 0.2f, 4.0f}, "AE Andromedae", "Luminous blue variable in M31"},
-      {{-2.2f, -0.3f, 3.5f}, "AF Andromedae", "Luminous blue variable in M31"},
-      {{0.8f, 0.3f, 5.0f}, "S Andromedae", "SN 1885, Type Ia supernova"},
-      {{-0.8f, 0.5f, 6.0f}, "M31N 2008-12a", "Recurrent nova in M31"},
-  };
-
-  uint32_t state = 0xA531A531u;
+  uint32_t state = seed;
   auto next01 = [&state]() -> float {
     state = state * 1664525u + 1013904223u;
     return static_cast<float>(state >> 8) * (1.0f / 16777216.0f);
   };
-
-  std::vector<glm::vec3> pos;
-  std::vector<float> mags;
-  pos.reserve(static_cast<size_t>(kDiskCount) + m_m31Bright.size());
-  mags.reserve(static_cast<size_t>(kDiskCount) + m_m31Bright.size());
-
-  for (int i = 0; i < kDiskCount; ++i) {
+  pos.reserve(static_cast<size_t>(count) + heroes.size());
+  mags.reserve(static_cast<size_t>(count) + heroes.size());
+  const float rMin2 = rMin * rMin;
+  const float rMax2 = rMax * rMax;
+  for (int i = 0; i < count; ++i) {
     float u = next01();
     float v = next01();
     float w1 = next01();
     float w2 = next01();
     float w3 = next01();
     float m = next01();
-    // Uniform-area radius in annulus 6..30.
-    float r = std::sqrt(36.0f + (900.0f - 36.0f) * u);
+    // Uniform-area radius in annulus rMin..rMax.
+    float r = std::sqrt(rMin2 + (rMax2 - rMin2) * u);
     float th = 2.0f * kPi * v;
     // Pull toward spiral arms (galaxy.frag phase: 2*phi - log(r)*3.5).
     float armPhase = 2.0f * th - std::log(std::max(r, 0.01f)) * 3.5f;
     float pull = (w3 < 0.30f) ? 0.0f : 1.0f;
-    th -= pull * 0.30f * std::sin(armPhase);
-    // Thickness ~0.8: sum of 3 uniforms ~= gaussian around the plane.
-    float y = (w1 + w2 + next01() - 1.5f) * 0.53f;
+    th -= pull * armPull * std::sin(armPhase);
+    // Thickness: sum of 3 uniforms ~= gaussian around the plane.
+    float y = (w1 + w2 + next01() - 1.5f) * thick;
     pos.emplace_back(std::cos(th) * r, y, std::sin(th) * r);
     float mag;
     if (m < 0.05f) {
@@ -398,13 +391,132 @@ void SceneManager::initM31Disk() {
     }
     mags.push_back(mag);
   }
-
-  for (const auto& b : m_m31Bright) {
+  for (const auto& b : heroes) {
     pos.push_back(b.pos);
-    mags.push_back(0.0f);
+    mags.push_back(b.mag);
   }
+}
 
+void SceneManager::initM31Disk() {
+  // M31 volumetric disk starfield: ~4500 points in the disk plane (XZ),
+  // radius 6..30 (uniform area), thickness ~0.8 in Y, ~70% pulled toward
+  // the two logarithmic spiral arms (same phase as galaxy.frag).
+  // Deterministic LCG so screenshots stay stable run to run.
+  // Plus 4 bright named stars near the nucleus for close-range labels.
+  const int kDiskCount = 4500;
+
+  m_m31Bright = {
+      {{2.5f, 0.2f, 4.0f}, "AE Andromedae", "Luminous blue variable in M31"},
+      {{-2.2f, -0.3f, 3.5f}, "AF Andromedae", "Luminous blue variable in M31"},
+      {{0.8f, 0.3f, 5.0f}, "S Andromedae", "SN 1885, Type Ia supernova"},
+      {{-0.8f, 0.5f, 6.0f}, "M31N 2008-12a", "Recurrent nova in M31"},
+  };
+
+  std::vector<glm::vec3> pos;
+  std::vector<float> mags;
+  genDiskPoints(0xA531A531u, kDiskCount, 6.0f, 30.0f, 0.53f, 0.30f,
+                m_m31Bright, pos, mags);
   m_m31Stars.setStars(pos, mags);
+}
+
+// Sun position inside the Milky Way disk (disk units). Single source:
+// initGalaxyDisks places the Sol hero here, sunWorldPos reports it.
+static const glm::vec3 kMwSunPos(9.0f, 0.2f, 5.5f);
+
+void SceneManager::initGalaxyDisks() {
+  // v3.1.0 Deep Field: approach LOD for m51/m104/mw (M31 pattern:
+  // volumetric disk points fading in on approach; see galaxy branch).
+  // Distinct deterministic seeds; heroes double as fly-to targets.
+  {
+    m_m51Bright = {
+        {{14.0f, 0.4f, 9.0f}, "SN 2011dh", "Type IIb supernova, June 2011"},
+        {{-11.0f, -0.5f, 12.0f}, "M51 X-7", "Ultraluminous X-ray source"},
+        {{0.6f, 0.1f, 0.4f}, "Whirlpool Nucleus", "Seyfert 2 nucleus"},
+    };
+    std::vector<glm::vec3> pos;
+    std::vector<float> mags;
+    genDiskPoints(0x51A551A5u, 4200, 7.0f, 34.0f, 0.55f, 0.30f, m_m51Bright,
+                  pos, mags);
+    m_m51Stars.setStars(pos, mags);
+  }
+  {
+    m_m104Bright = {
+        {{0.4f, 0.1f, 0.3f}, "Sombrero Nucleus", "Black hole, 10^9 solar masses"},
+        {{10.0f, 0.5f, -8.0f}, "Dust-lane knot", "Bright star cloud on the dust lane"},
+        {{-6.0f, 2.5f, 9.0f}, "Halo globular", "Bright globular cluster in the halo"},
+    };
+    std::vector<glm::vec3> pos;
+    std::vector<float> mags;
+    genDiskPoints(0x10410410u, 3800, 6.0f, 26.0f, 0.50f, 0.30f, m_m104Bright,
+                  pos, mags);
+    m_m104Stars.setStars(pos, mags);
+  }
+  {
+    M31BrightStar sol;
+    sol.pos = kMwSunPos;
+    sol.name = "Sol";
+    sol.fact = "G2V, our star. Fly within 3 units to go home.";
+    sol.mag = -1.5f;
+    m_mwBright = {
+        sol,
+        {{-7.0f, 0.3f, -6.0f}, "Cygnus X-1", "Stellar black hole, HMXB"},
+        {{0.0f, 0.0f, 0.0f}, "Galactic Center", "Sgr A* lives here"},
+    };
+    std::vector<glm::vec3> pos;
+    std::vector<float> mags;
+    genDiskPoints(0xA577A577u, 4000, 5.0f, 22.0f, 0.45f, 0.30f, m_mwBright,
+                  pos, mags);
+    m_mwStars.setStars(pos, mags);
+  }
+}
+
+void SceneManager::initCluster() {
+  // v3.1.0: M13-like globular cluster — 2600 points in a puffy Plummer
+  // sphere (scale 2.2, capped at 8) so the additive pile-up stays a bright
+  // but resolvable core. Magnitudes dimmed vs disk stars. Deterministic LCG.
+  const float kPi = 3.14159265358979323846f;
+  uint32_t state = 0xC131C131u;
+  auto next01 = [&state]() -> float {
+    state = state * 1664525u + 1013904223u;
+    return static_cast<float>(state >> 8) * (1.0f / 16777216.0f);
+  };
+  std::vector<glm::vec3> pos;
+  std::vector<float> mags;
+  pos.reserve(2600);
+  mags.reserve(2600);
+  for (int i = 0; i < 2600; ++i) {
+    float u = std::max(next01(), 1e-4f);
+    float v = next01();
+    float w = next01();
+    float m = next01();
+    float r = 2.2f / std::sqrt(std::pow(u, -2.0f / 3.0f) - 1.0f);
+    r = std::min(r, 8.0f);
+    float th = 2.0f * kPi * v;
+    float ph = std::acos(std::clamp(2.0f * w - 1.0f, -1.0f, 1.0f));
+    pos.emplace_back(r * std::sin(ph) * std::cos(th), r * std::cos(ph),
+                     r * std::sin(ph) * std::sin(th));
+    float mag = 2.0f + 3.0f * m - 0.8f * (1.0f - r / 8.0f);
+    mags.push_back(std::max(mag, 0.0f));
+  }
+  m_clusterStars.setStars(pos, mags);
+}
+
+const std::vector<SceneManager::M31BrightStar>& SceneManager::galaxyBrightStars() const {
+  if (m_currentStation) {
+    const std::string& id = m_currentStation->id;
+    if (id == "m31") return m_m31Bright;
+    if (id == "m51") return m_m51Bright;
+    if (id == "m104") return m_m104Bright;
+    if (id == "mw") return m_mwBright;
+  }
+  static const std::vector<M31BrightStar> kEmpty;
+  return kEmpty;
+}
+
+bool SceneManager::sunWorldPos(glm::vec3& out) const {
+  if (!m_currentStation || m_currentStation->id != "mw") return false;
+  out = kMwSunPos;
+  return true;
 }
 
 float SceneManager::tickSimTime(float time) {
@@ -704,6 +816,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     } else if (galId == "m104") {
       galSeed = 9.1f; galArms = 2.0f; galPitch = 4.2f;
       galBulge = 12.0f; galDust = 1.6f; galArmGain = 0.45f;
+    } else if (galId == "mw") {
+      // Milky Way from outside: tighter dusty arms, modest bulge.
+      galSeed = 5.3f; galArms = 2.0f; galPitch = 2.5f;
+      galBulge = 5.0f; galDust = 1.8f; galArmGain = 0.8f;
     }
     m_galaxyShader->setUniform1f("u_GalSeed", galSeed);
     m_galaxyShader->setUniform1f("u_GalArms", galArms);
@@ -715,9 +831,16 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_screenQuad->draw();
     m_galaxyShader->unbind();
 
-    // M31 LOD only: NEAR (18 -> 6) volumetric disk starfield, alpha = near.
+    // Galaxy LOD: NEAR (18 -> 6) volumetric disk starfield, alpha = near.
     // Additive points, no depth write, drawn over the faded impostor.
-    if (m_currentStation->id == "m31") {
+    // v3.1.0: every galaxy (m31 pattern); buffers are per-station seeds.
+    StarPoints* lodStars = nullptr;
+    const std::string& lodId = m_currentStation->id;
+    if (lodId == "m31") lodStars = &m_m31Stars;
+    else if (lodId == "m51") lodStars = &m_m51Stars;
+    else if (lodId == "m104") lodStars = &m_m104Stars;
+    else if (lodId == "mw") lodStars = &m_mwStars;
+    if (lodStars) {
       float dF = static_cast<float>(dist);
       float near = 1.0f - glm::smoothstep(6.0f, 18.0f, dF);
       if (near > 0.003f) {
@@ -741,7 +864,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_m31StarShader->setUniform1f("u_GlobalAlpha", near);
         glDepthMask(GL_FALSE);
         glDisable(GL_DEPTH_TEST);
-        m_m31Stars.draw();
+        lodStars->draw();
         glDepthMask(GL_TRUE);
         m_m31StarShader->unbind();
       }
@@ -784,6 +907,30 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_pulsarShader->setUniform1f("u_ArcScale", psrArcs);
     m_screenQuad->draw();
     m_pulsarShader->unbind();
+  } else if (m_currentStation->type == StationType::StarCluster) {
+    // v3.1.0 Deep Field: globular cluster ball (m13). Points only over a
+    // linear-space dark clear (same triple as the constellation branch);
+    // bloom gives the core its glow. Fly between the stars by hand.
+    glClearColor(0.00004f, 0.00010f, 0.00045f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glm::mat4 proj = glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1000.0f);
+    glm::vec3 eye(cp.x, cp.y, cp.z);
+    glm::vec3 fwd(cf.x, cf.y, cf.z);
+    glm::vec3 up(cu.x, cu.y, cu.z);
+    glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
+    glm::mat4 mvp = proj * view;
+
+    const float pixelScale = static_cast<float>(fbHeight) /
+        (2.0f * std::tan(glm::radians(m_settings.fovDegrees) * 0.5f));
+    m_starShader->bind();
+    m_starShader->setUniformMat4f("u_MVP", mvp);
+    m_starShader->setUniformMat4f("u_MV", view);
+    m_starShader->setUniform1f("u_PixelScale", pixelScale);
+    m_starShader->setUniform1f("u_SizeK", 0.14f);
+    m_starShader->setUniform3f("u_Tint", 1.0f, 1.0f, 1.0f);
+    m_clusterStars.draw();
+    m_starShader->unbind();
   } else if (m_currentStation->type == StationType::SolarSystem) {
     float dt = tickSimTime(time);
     m_sol.update(m_simTime);

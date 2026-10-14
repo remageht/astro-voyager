@@ -958,13 +958,13 @@ void AppGL::flyToObjectAt(double px, double py) {
     return;
   }
 
-  // M31 only: double-click a bright named star flies to it, else dolly in.
-  if (curSt->type == StationType::Galaxy && curSt->id == "m31") {
+  // v3.1.0: double-click a bright named star flies to it (every galaxy).
+  if (curSt->type == StationType::Galaxy) {
     bool haveHit = false;
     double bestScreen = 1e30;
     Vec3 bestPos;
     std::string bestName;
-    for (const auto& bs : m_sceneManager->m31BrightStars()) {
+    for (const auto& bs : m_sceneManager->galaxyBrightStars()) {
       glm::vec4 clip = mvp * glm::vec4(bs.pos, 1.0f);
       if (clip.w <= 0.001f) continue;
       glm::vec3 ndc = glm::vec3(clip) / clip.w;
@@ -1056,6 +1056,7 @@ const char* AppGL::stationTypeRuShort(StationType t) {
     case StationType::Nebula: return "Туманн.";
     case StationType::SolarSystem: return "Система";
     case StationType::Pulsar: return "Пульс.";
+    case StationType::StarCluster: return "Скопл.";
   }
   return "?";
 }
@@ -1070,6 +1071,7 @@ unsigned int AppGL::stationTypeChip(StationType t) {
     case StationType::Nebula: return IM_COL32(255, 130, 200, 255);
     case StationType::SolarSystem: return IM_COL32(130, 230, 140, 255);
     case StationType::Pulsar: return IM_COL32(120, 240, 255, 255);
+    case StationType::StarCluster: return IM_COL32(255, 215, 140, 255);
   }
   return IM_COL32(140, 140, 140, 255);
 }
@@ -2311,8 +2313,10 @@ void AppGL::drawWorldLabels() {
       curY += sz.y + lineSpacing;
     }
 
-    // M31 cluster labels: fixed features, base offsets measured at zoom == 1
+    // M31 cluster labels (m31 only; other galaxies have own heroes below):
+    // fixed features, base offsets measured at zoom == 1
     // (fractions of screen center scaling). px = cx + bx*zoom*W*0.25.
+    if (curSt->id == "m31") {
     struct ClusterLabel {
       const char* name;
       const char* fact;
@@ -2346,8 +2350,9 @@ void AppGL::drawWorldLabels() {
                           factCol, cl.fact);
       }
     }
+    }  // end m31 companions guard
 
-    // M31 close range: 4 bright named stars as real 3D points (D < 10).
+    // Close range: hero stars as real 3D points (D < 10), every galaxy.
     // NGC 206 / G1 clouds already labeled above (kClusters), not duplicated.
     if (dist < 10.0) {
       float m31Aspect = displaySize.x / displaySize.y;
@@ -2363,7 +2368,7 @@ void AppGL::drawWorldLabels() {
                       static_cast<float>(m31Cu.z));
       glm::mat4 m31View = glm::lookAt(m31Eye, m31Eye + m31Fwd, m31Up);
       glm::mat4 m31Mvp = m31Proj * m31View;
-      for (const auto& bs : m_sceneManager->m31BrightStars()) {
+      for (const auto& bs : m_sceneManager->galaxyBrightStars()) {
         glm::vec4 clip = m31Mvp * glm::vec4(bs.pos, 1.0f);
         if (clip.w <= 0.001f) continue;
         glm::vec3 ndc = glm::vec3(clip) / clip.w;
@@ -2464,7 +2469,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
 
   const std::vector<std::string> targetStations = {
       "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104",
-      "psr-vela", "psr-crab", "sgr-1806", "psr-b1913"
+      "psr-vela", "psr-crab", "sgr-1806", "psr-b1913", "mw", "m13"
   };
 
   for (const auto& stId : targetStations) {
@@ -3301,6 +3306,7 @@ const char* AppGL::cineTypeRu(StationType t) {
     case StationType::Nebula: return "Туманность";
     case StationType::SolarSystem: return "Планетная система";
     case StationType::Pulsar: return "Пульсар";
+    case StationType::StarCluster: return "Скопление";
   }
   return "?";
 }
@@ -3795,6 +3801,26 @@ void AppGL::audioUpdate(float deltaTime) {
       if (rs > 0.05 && d < rs * 1.5) {
         m_audio.playCapture();
         m_audioCaptureCooldown = 5.0;
+      }
+    }
+  }
+
+  // v3.1.0 Sun-link: at the Milky Way station, flying within 3 units of
+  // the Sun auto-jumps home to "sol" (startWarpJump guards: warp Cruise).
+  // Same polling style as the BH-capture check above; harness never calls
+  // audioUpdate, and warp is off there anyway.
+  if (m_sunLinkCooldown > 0.0) m_sunLinkCooldown -= deltaTime;
+  if (const Station* sunSt = m_sceneManager->getCurrentStation()) {
+    if (sunSt->id == "mw" && m_sunLinkCooldown <= 0.0) {
+      glm::vec3 sunPos(0.0f);
+      if (m_sceneManager->sunWorldPos(sunPos)) {
+        const double dx = m_camera.position.x - static_cast<double>(sunPos.x);
+        const double dy = m_camera.position.y - static_cast<double>(sunPos.y);
+        const double dz = m_camera.position.z - static_cast<double>(sunPos.z);
+        if (std::sqrt(dx * dx + dy * dy + dz * dz) < 3.0) {
+          startWarpJump("sol");
+          m_sunLinkCooldown = 10.0;
+        }
       }
     }
   }

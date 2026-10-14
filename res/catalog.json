@@ -1,5 +1,5 @@
 {
-  "version": "3.0.0",
+  "version": "3.1.0",
   "stations": [
     {
       "id": "sgra",
@@ -100,6 +100,20 @@
       "name": "PSR B1913+16",
       "description": "Hulse-Taylor binary: orbital decay proved gravitational waves.",
       "spawnDistanceRs": 38.0
+    },
+    {
+      "id": "mw",
+      "type": "galaxy",
+      "name": "Milky Way",
+      "description": "Our galaxy from outside. Find the Sun, fly close to go home.",
+      "spawnDistanceRs": 45.0
+    },
+    {
+      "id": "m13",
+      "type": "star_cluster",
+      "name": "Hercules Cluster (M13)",
+      "description": "Globular cluster: 300000 ancient stars. Fly between them.",
+      "spawnDistanceRs": 20.0
     }
   ]
 }
