@@ -624,7 +624,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_quasarShader->unbind();
   } else if (m_currentStation->type == StationType::Constellation) {
     // Orion or Ursa Major Constellation lines
-    glClearColor(0.01f, 0.015f, 0.03f, 1.0f);
+    // v3.0.0: clear color is linear (sRGB 0.01/0.015/0.03 decoded with
+    // pow(c, 2.2)); the composite applies the single gamma on top.
+    glClearColor(0.00004f, 0.00010f, 0.00045f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::mat4 proj = glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1000.0f);
@@ -753,11 +755,33 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_screenQuad->draw();
     m_nebulaShader->unbind();
   } else if (m_currentStation->type == StationType::Pulsar) {
-    // Vela pulsar impostor sprite: hot NS + tilted dipole beams.
+    // Pulsar impostor sprite + per-pulsar preset. Defaults = Vela 1:1, so
+    // psr-vela renders exactly as before (harness byte-identical).
     m_pulsarShader->bind();
     m_pulsarShader->setUniform1f("u_Time", time);
     m_pulsarShader->setUniform1f("u_Aspect", aspect);
     m_pulsarShader->setUniform1f("u_Exposure", m_exposure);
+    float psrSpin = 2.5f, psrTilt = 0.38f, psrHalo = 1.0f, psrArcs = 1.0f;
+    float psrTintR = 1.0f, psrTintG = 1.0f, psrTintB = 1.0f;
+    const std::string& psrId = m_currentStation->id;
+    if (psrId == "psr-crab") {
+      // Crab: faster, tighter beams, cooler tint (pairs with station m1).
+      psrSpin = 6.0f; psrTilt = 0.30f; psrHalo = 1.2f; psrArcs = 0.9f;
+      psrTintR = 0.85f; psrTintG = 0.95f; psrTintB = 1.10f;
+    } else if (psrId == "sgr-1806") {
+      // Magnetar SGR 1806-20: slow rotator, huge loops, amber flare halo.
+      psrSpin = 1.1f; psrTilt = 0.55f; psrHalo = 2.2f; psrArcs = 1.7f;
+      psrTintR = 1.15f; psrTintG = 0.75f; psrTintB = 0.45f;
+    } else if (psrId == "psr-b1913") {
+      // Hulse-Taylor binary: brisk spin, rose-violet tint, wide loops.
+      psrSpin = 4.2f; psrTilt = 0.62f; psrHalo = 1.3f; psrArcs = 1.2f;
+      psrTintR = 1.08f; psrTintG = 0.82f; psrTintB = 1.18f;
+    }
+    m_pulsarShader->setUniform1f("u_SpinRate", psrSpin);
+    m_pulsarShader->setUniform1f("u_MagTilt", psrTilt);
+    m_pulsarShader->setUniform3f("u_BeamTint", psrTintR, psrTintG, psrTintB);
+    m_pulsarShader->setUniform1f("u_HaloGain", psrHalo);
+    m_pulsarShader->setUniform1f("u_ArcScale", psrArcs);
     m_screenQuad->draw();
     m_pulsarShader->unbind();
   } else if (m_currentStation->type == StationType::SolarSystem) {
@@ -1236,6 +1260,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                        glm::radians(m_settings.fovDegrees), aspect, velDir,
                        m_relBeta);
   }
+  m_postFx.setTime(time);
   m_postFx.endScene(fbWidth, fbHeight);
 }
 

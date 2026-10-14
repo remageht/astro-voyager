@@ -9,7 +9,8 @@ namespace astro {
 
 namespace {
 
-// Сила свечения (этап 2б). Порог яркости — u_Threshold = 0.72 в post_bright.
+// Сила свечения (этап 2б). Порог яркости — u_Threshold = 0.72 в post_bright
+// (v3.0.0: порог по линейному HDR, сцена и цепочка — float16).
 constexpr float kBloomStrength = 0.30f;
 
 int levelSize(int base, int level) {
@@ -21,8 +22,8 @@ void makeColorTarget(unsigned int& fbo, unsigned int& tex, int w, int h) {
   glBindFramebuffer(GL_FRAMEBUFFER, fbo);
   glGenTextures(1, &tex);
   glBindTexture(GL_TEXTURE_2D, tex);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA,
-               GL_UNSIGNED_BYTE, nullptr);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA,
+               GL_HALF_FLOAT, nullptr);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -72,8 +73,8 @@ void PostFX::ensureTargets(int width, int height) {
   glBindFramebuffer(GL_FRAMEBUFFER, m_sceneFbo);
   glGenTextures(1, &m_sceneTex);
   glBindTexture(GL_TEXTURE_2D, m_sceneTex);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA,
-               GL_UNSIGNED_BYTE, nullptr);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA,
+               GL_HALF_FLOAT, nullptr);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -139,6 +140,12 @@ void PostFX::beginScene(int width, int height) {
   glDisable(GL_DITHER);
   glBindFramebuffer(GL_FRAMEBUFFER, m_sceneFbo);
   glViewport(0, 0, width, height);
+  // v3.0.0: float16-таргет поднимает неинициализированную VRAM в видимый
+  // лифт после гаммы композита (станции ori/uma не перекрывают весь экран),
+  // поэтому кадр всегда начинается с детерминированного чёрного. Заодно
+  // чистим depth: раньше он тоже был неопределён между кадрами.
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   m_active = true;
 }
 
@@ -223,9 +230,10 @@ void PostFX::endScene(int width, int height) {
   m_compShader->setUniform1i("u_Bloom2", 3);
   m_compShader->setUniform1i("u_Bloom3", 4);
   m_compShader->setUniform1i("u_Bloom4", 5);
-  // === Bloom === этап 2б: свечение включено. LDR-порог 0.72 по
-  // гамма-кодированным ядрам (диск ЧД, квазар, звёзды, солнце).
+  // === Bloom === этап 2б: свечение включено. Порог 0.72 по линейному
+  // HDR (диск ЧД, квазар, пульсар, звёзды, солнце); тонмаппинг — в композите.
   m_compShader->setUniform1f("u_BloomStrength", kBloomStrength);
+  m_compShader->setUniform1f("u_Time", m_time);
   // === Relativity === доплер-тинт (post_comp.frag); u_Beta == 0 => выкл.
   m_compShader->setUniform3f("u_CamFwd", m_camFwd[0], m_camFwd[1], m_camFwd[2]);
   m_compShader->setUniform3f("u_CamRight", m_camRight[0], m_camRight[1],

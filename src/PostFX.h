@@ -8,7 +8,9 @@
 namespace astro {
 
 // === PostFX === (этап 2а: scene FBO + identity-компоузер, PNG байт-в-байт;
-// этап 2б: яркостный пасс + blur-цепочка + аддитивное свечение).
+// этап 2б: яркостный пасс + blur-цепочка + аддитивное свечение;
+// v3.0.0: scene FBO и цепочка — float16 HDR-linear, тонмаппинг ACES + гамма
+// и зерно живут только в композите, станционные шейдеры отдают линейный HDR).
 // Рендер-петля и харнесс скриншотов идут через SceneManager::render(),
 // поэтому FBO и композит живут внутри него: beginScene() в начале render(),
 // endScene() в конце. При u_BloomStrength == 0.0 композит обязан отдавать
@@ -23,6 +25,10 @@ class PostFX {
 
   void beginScene(int width, int height);
   void endScene(int width, int height);
+
+  // Время симуляции для зерна в композите (u_Time; харнесс фиксирует
+  // его, поэтому PNG детерминированы). Вызывается каждый кадр из render().
+  void setTime(float t) { m_time = t; }
 
   // === Relativity === параметры наблюдателя для доплера-тинта в композите.
   // Вызывается каждый кадр из SceneManager::render; beta == 0 => тинт выкл.
@@ -47,6 +53,7 @@ class PostFX {
 
   int m_w = 0;
   int m_h = 0;
+  float m_time = 0.0f;
   bool m_fboOk = false;
   bool m_active = false;
   bool m_compOk = false;
@@ -54,8 +61,7 @@ class PostFX {
   bool m_shadersTried = false;
 
   // Relativity flight state (see setFlight).
-  float m_camFwd[3] = {0.0f, 0.0f, -1.0f};
-  float m_camRight[3] = {1.0f, 0.0f, 0.0f};
+  float m_camFwd[3] = {0.0f, 0.0f, -1.0f};  float m_camRight[3] = {1.0f, 0.0f, 0.0f};
   float m_camUp[3] = {0.0f, 1.0f, 0.0f};
   float m_fovY = 1.0f;
   float m_aspect = 1.777f;

@@ -186,24 +186,14 @@ float diskFbm(vec2 p) {
   }
   return v;
 }
-// ACES filmic (Narkowicz fit) + gamma + vignette + animated grain.
-// Applied to the final combined color, grain runs AFTER tonemap.
-vec3 acesTonemap(vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
-float finishHash(vec2 p) {
-  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-}
+// HDR-linear finish (v3.0.0): exposure gain + vignette only. ACES + gamma
+// + grain moved to post_comp.frag; this returns unbounded linear color.
 vec3 applyFinish(vec3 col, vec2 uv) {
   col *= 1.1 * u_Exposure;
-  col = acesTonemap(col);
-  col = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
   float d = distance(uv, vec2(0.5));
   float vig = 1.0 - 0.3 * smoothstep(0.2, 0.8, d);
   col *= vig;
-  float gr = finishHash(gl_FragCoord.xy + fract(u_Time) * 100.0);
-  col += (gr - 0.5) * 0.012;
-  return col;
+  return max(col, vec3(0.0));
 }
 // Novikov-Thorne flux shape (unnormalized): F ~ (rIn/r)^3 (1 - sqrt(rIn/r)).
 float ntShape(float r, float rIn) {

@@ -1,8 +1,9 @@
 #version 330 core
-// PostFX composite: scene + weighted bloom levels + relativistic Doppler.
-// u_BloomStrength == 0.0 => pixel-exact passthrough (stage 2a).
-// u_Beta == 0.0 (harness / standing still) => tint block skipped,
-// output stays byte-exact.
+// PostFX composite: scene (HDR-linear float16) + weighted bloom levels,
+// then ACES + gamma + grain; relativistic Doppler tint when flying.
+// u_BloomStrength == 0.0 => tonemapped scene only (stage 2a no longer
+// pixel-exact: tonemap moved here from the station shaders in v3.0.0).
+// u_Beta == 0.0 (harness / standing still) => tint block skipped.
 out vec4 FragColor;
 in vec2 v_TexCoord;
 
@@ -13,6 +14,14 @@ uniform sampler2D u_Bloom2;
 uniform sampler2D u_Bloom3;
 uniform sampler2D u_Bloom4;
 uniform float u_BloomStrength;
+uniform float u_Time;  // sim time for grain (fixed by the harness => PNG stable)
+
+vec3 acesNarkowicz(vec3 x) {
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
+float compHash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
 
 // === Relativity === observer velocity: Doppler tint per view ray.
 // Ahead of the motion -> blue + brighter, behind -> red + dimmer
@@ -46,5 +55,10 @@ void main() {
     float gain = 1.0 + 0.6 * s;  // beaming: front brighter, rear dimmer
     col *= tint * gain;
   }
+  // Single tonemap for the whole frame (moved here from station shaders).
+  col = acesNarkowicz(col);
+  col = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
+  // Single post-tonemap grain (replaces the per-shader grains).
+  col += (compHash(gl_FragCoord.xy + fract(u_Time) * 100.0) - 0.5) * 0.012;
   FragColor = vec4(col, sceneT.a);
 }

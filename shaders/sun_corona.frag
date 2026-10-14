@@ -14,9 +14,7 @@ float angDist(float a, float b) {
   float d = mod(a - b + 3.14159265, 6.2831853) - 3.14159265;
   return abs(d);
 }
-vec3 acesNarkowicz(vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+// v3.0.0: ACES + gamma moved to post_comp.frag; this shader outputs linear HDR.
 void main() {
   vec3 n = normalize(v_Normal);
   vec3 viewDir = normalize(u_CamPos - v_WorldPos);
@@ -40,7 +38,5 @@ void main() {
   col += vec3(1.0, 0.35, 0.10) * tongues * limbBand * breath * 2.0;
   float alpha = clamp(glow * rays + tongues * limbBand * breath, 0.0, 1.0) * 0.6;
   col *= 1.1 * u_Exposure;
-  col = acesNarkowicz(col);
-  col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
-  FragColor = vec4(col, alpha);
+  FragColor = vec4(max(col, vec3(0.0)), alpha);
 }

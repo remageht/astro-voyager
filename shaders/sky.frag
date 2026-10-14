@@ -15,9 +15,7 @@ uniform float u_BandK;  // milky-way band density/brightness gain (default 1.0)
 // u_Beta == 0.0 keeps dir untouched (byte-exact harness).
 uniform vec3 u_VelDir;
 uniform float u_Beta;
-vec3 acesNarkowicz(vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+// v3.0.0: ACES + gamma moved to post_comp.frag; this shader outputs linear HDR.
 void main() {
   vec2 uv = v_TexCoord;
   float t = tan(u_FovY * 0.5);
@@ -41,7 +39,5 @@ void main() {
   float bandW = exp(-abs(dir.y) * 5.0);
   col *= 1.0 + max(u_BandK - 1.0, 0.0) * bandW;
   col *= 1.1 * u_Exposure;
-  col = acesNarkowicz(col);
-  col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
-  FragColor = vec4(col, 1.0);
+  FragColor = vec4(max(col, vec3(0.0)), 1.0);
 }

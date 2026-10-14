@@ -43,9 +43,7 @@ float ridgedFbm(vec2 p) {
   return v;
 }
 
-vec3 acesNarkowicz(vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+// v3.0.0: ACES + gamma moved to post_comp.frag; this shader outputs linear HDR.
 
 vec3 starLayer(vec2 uv, float scale, float thresh, float gain) {
   vec2 g = uv * scale;
@@ -154,14 +152,8 @@ void main() {
   float vig = 1.0 - 0.3 * clamp(dot(starUV * 0.7, starUV * 0.7), 0.0, 1.0);
   col *= vig;
 
-  // ACES filmic, exposure 1.3, then gamma.
+  // Linear exposure gain (tonemap + gamma + grain: post_comp.frag).
   col *= 1.3 * u_Exposure;
-  col = acesNarkowicz(col);
-  col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
 
-  // Post-ACES grain.
-  float gr = hash21(starUV * 913.7 + vec2(fract(u_Time) * 7.31)) - 0.5;
-  col += gr * 0.012;
-
-  FragColor = vec4(col, 1.0);
+  FragColor = vec4(max(col, vec3(0.0)), 1.0);
 }

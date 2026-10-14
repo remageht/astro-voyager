@@ -105,5 +105,6 @@ void main() {
   col += vec3(1.0, 0.97, 0.92) * flash;
 
   float alpha = clamp(dot(col, vec3(0.3333)) * 1.4 + flash, 0.0, 1.0);
-  FragColor = vec4(clamp(col, 0.0, 1.0), alpha);
+  // v3.0.0: tunnel art is display-referred; decode to linear HDR.
+  FragColor = vec4(pow(max(col, vec3(0.0)), vec3(2.2)), alpha);
 }

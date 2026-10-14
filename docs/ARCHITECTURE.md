@@ -31,8 +31,8 @@
 - `Shader` — загрузка GLSL из файлов, компиляция vertex/fragment, кеширование и установка uniform.
 - `Mesh` (`ScreenQuad`, `LineMesh`) — геометрия fullscreen quad (VAO/VBO/EBO) и полилинии созвездий (GL_LINES, GL_POINTS).
 - `Cubemap` — 6 граней скайбокса. Процедурный генератор звездного поля и рукавов Галактики с автозагрузкой локального HDR при наличии.
-- `SceneManager` — управление сценами и телепортация (`sgra`, `ori`, `qso-3c273`, `uma`, `m31`, `m1`, `sol`, `m87`, `m51`, `m104`), выбор шейдеров, пресеты качества и установка физических параметров; релятивистская кинематика наблюдателя (скорость/beta для сдвига света).
-- `PostFX` — пост-процессинговый конвейер: scene FBO (RGBA8 + DEPTH24), цепочка bloom из 5 уровней bright-pass + гаусс-блюр, композит через texelFetch (`post_comp.frag`), фолбэк blit при отсутствии FBO; доплер-тинт при быстром полёте.
+- `SceneManager` — управление сценами и телепортация (`sgra`, `ori`, `qso-3c273`, `uma`, `m31`, `m1`, `sol`, `m87`, `m51`, `m104`, `psr-vela`, `psr-crab`, `sgr-1806`, `psr-b1913`), выбор шейдеров, пресеты качества и установка физических параметров; релятивистская кинематика наблюдателя (скорость/beta для сдвига света).
+- `PostFX` — пост-процессинговый конвейер: scene FBO (float16 HDR-linear + DEPTH24, пересоздание при resize), цепочка bloom из 5 уровней bright-pass + гаусс-блюр, композит через texelFetch (`post_comp.frag`, единственный тонмаппинг ACES + гамма + зерно на весь кадр), фолбэк blit при отсутствии FBO; доплер-тинт при быстром полёте.
 - `AppGL` — главный цикл, WASD-перемещение, обзор мышью, интеграция Dear ImGui (HUD со списком станций, комбобоксом пресетов, слайдерами и FPS), захват скриншотов.
 
 ## Рендер станций
@@ -42,6 +42,7 @@
 - `shaders/lines.vert + lines.frag` — созвездия Orion (`ori`) и Ursa Major (`uma`) через `GL_LINES` и `GL_POINTS`.
 - `shaders/quad.vert + galaxy.frag` — галактики (`m31`, `m51`, `m104`), процедурные спиральные impostor-спрайты; форма параметризована per-station (`u_GalSeed/Arms/Pitch/Bulge/Dust/ArmGain`).
 - `shaders/quad.vert + nebula.frag` — Крабовидная туманность (`m1`), процедурный impostor-спрайт с пульсаром и волокнами.
+- `shaders/quad.vert + pulsar.frag` — пульсары (`psr-vela`, `psr-crab`, `sgr-1806`, `psr-b1913`): наклонный дипольный маяк, дуги магнитосферы; вид параметризован per-station (`u_SpinRate/MagTilt/BeamTint/HaloGain/ArcScale`), тик с реальным периодом в аудио.
 - `shaders/post_bright/post_blur/post_comp.frag` — bloom-цепочка и композит; `sky.frag` — аберрация звёздного поля при быстром полёте.
 - Скриншоты сохраняются в `docs/screens/`.
 

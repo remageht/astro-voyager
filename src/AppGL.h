@@ -299,6 +299,7 @@ class AppGL {
   bool m_audioPrevInMenu = true;
   double m_audioCaptureCooldown = 0.0;
   bool m_audioWasInit = false;
+  double m_audioTickAcc = 0.0;  // v3.0.0: фаза тика пульсара (сброс при уходе)
   void audioEnsureOnFirstInput();
   void audioUpdate(float deltaTime);
   void audioProcessKey();

@@ -60,5 +60,6 @@ void main() {
   col *= 1.0 - 0.6 * cass;
   col *= 1.0 - 0.35 * encke;
   alpha = clamp(alpha + spokes * 0.3, 0.0, 1.0);
-  FragColor = vec4(col, alpha);
+  // v3.0.0: ring albedo art is display-referred; decode to linear HDR.
+  FragColor = vec4(pow(max(col, vec3(0.0)), vec3(2.2)), alpha);
 }

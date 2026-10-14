@@ -29,6 +29,14 @@ const std::vector<Station>& builtinCatalog() {
       {"psr-vela", StationType::Pulsar, "Vela Pulsar",
        "Young neutron star: tilted dipole beams, lighthouse pulse.", 35.0,
        {}, 0.5},
+      {"psr-crab", StationType::Pulsar, "Crab Pulsar",
+       "33 ms rotator in supernova remnant M1. Pair with station m1.",
+       35.0, {}, 0.5},
+      {"sgr-1806", StationType::Pulsar, "SGR 1806-20",
+       "Magnetar: 1e15 G field, starquake giant flares.", 40.0, {}, 0.5},
+      {"psr-b1913", StationType::Pulsar, "PSR B1913+16",
+       "Hulse-Taylor binary: orbital decay proved gravitational waves.",
+       38.0, {}, 0.5},
   };
   return kStations;
 }

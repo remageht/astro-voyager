@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 3.0.0 - 2026-10-14
+
+## What's new / Что нового
+- EN: True HDR pipeline — scene FBO and 5-level bloom chain upgraded RGBA8 to RGBA16F (resize recreation kept); ACES tonemap + gamma + grain moved from 9 station shaders into the single composite (post_comp.frag); display-referred sprite/clear colors decoded to linear (pow 2.2); scene target cleared to deterministic black every frame.
+- EN: Pulsar family — Crab Pulsar (33 ms rotator, pairs with station m1), magnetar SGR 1806-20 (amber flare halo, giant magnetosphere loops), Hulse-Taylor PSR B1913+16 (orbital decay proved gravitational waves); per-station presets (u_SpinRate/MagTilt/BeamTint/HaloGain/ArcScale); pulsar tick SFX with the true Vela period of 89 ms (Crab x2, magnetar /8 for audibility; visual spin stays artistic).
+- RU: Настоящий HDR-конвейер — scene FBO и 5-уровневая bloom-цепочка переведены с RGBA8 на RGBA16F (пересоздание при resize сохранено); тонмаппинг ACES + гамма + зерно вынесены из 9 станционных шейдеров в единый композит (post_comp.frag); display-referred цвета спрайтов и clear декодированы в linear (pow 2.2); таргет чистится в детерминированный чёрный каждый кадр.
+- RU: Пульсарная семья — Crab Pulsar (ротатор 33 мс, пара к станции m1), магнетар SGR 1806-20 (янтарное гало вспышек, гигантские дуги), Халс-Тейлор PSR B1913+16 (распад орбиты доказал гравитационные волны); per-station пресеты (u_SpinRate/MagTilt/BeamTint/HaloGain/ArcScale); тик пульсара с настоящим периодом Vela 89 мс (Crab x2, магнетар /8 для слышимости; визуальный спин художественный).
+- Gates / Гейты: ctest 3/3, static checks 180, doppler 3.059 PASS.
+
 ## 2.8.0 - 2026-10-14
 
 ## What's new / Что нового

@@ -40,12 +40,13 @@ void main() {
     float ring = exp(-t * t);
     col += starCol * ring * 0.8;
     float a = clamp(disc + ring * 0.5, 0.0, 1.0) * gA;
-    FragColor = vec4(col, a);
+    // v3.0.0: sprite art is display-referred; decode to linear HDR.
+    FragColor = vec4(pow(max(col, vec3(0.0)), vec3(2.2)), a);
   } else {
     float alpha = 1.0 - smoothstep(0.15, 1.0, d);
     float core = 1.0 - smoothstep(0.0, 0.45, d);
     vec3 col = starCol * (0.35 + v_Bright) + vec3(1.0) * core * v_Bright * 0.8;
     float a = clamp(alpha * (0.35 + v_Bright), 0.0, 1.0) * gA;
-    FragColor = vec4(col, a);
+    FragColor = vec4(pow(max(col, vec3(0.0)), vec3(2.2)), a);
   }
 }

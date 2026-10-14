@@ -35,9 +35,7 @@ float hash21(vec2 p) {
 }
 
 // ACES filmic fit (Narkowicz), input HDR linear, output 0..1
-vec3 acesNarkowicz(vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+// v3.0.0: ACES + gamma moved to post_comp.frag; this shader outputs linear HDR.
 
 void main() {
   vec2 uv = v_TexCoord * 2.0 - 1.0;
@@ -237,14 +235,11 @@ void main() {
     col += starHit2 * glow2 * cloudMask * resolve * fcol;
   }
 
-  // ACES filmic tonemap with exposure 1.0, then gamma 1/2.2
+  // Linear exposure gain (tonemap + gamma + grain: post_comp.frag).
   float exposure = 1.0;
   col *= exposure * u_Exposure;
-  col = acesNarkowicz(col);
-  col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
 
-  // Tiny dark central point (the dormant black hole in the bright core):
-  // applied post-tonemap so ACES white compression can't wash it out.
+  // Tiny dark central point (the dormant black hole in the bright core).
   float coreDot = exp(-r * r * 30000.0);
   col *= 1.0 - 0.70 * coreDot;
 
@@ -253,9 +248,5 @@ void main() {
   float vig = clamp(1.0 - 0.3 * dot(q, q), 0.0, 1.0);
   col *= vig;
 
-  // Post-ACES grain
-  float gr = hash21(v_TexCoord * 1021.0 + fract(u_Time) * 7.0) - 0.5;
-  col += gr * 0.012;
-
-  FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+  FragColor = vec4(max(col, vec3(0.0)), 1.0);
 }

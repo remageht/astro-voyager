@@ -1,5 +1,5 @@
 {
-  "version": "2.8.0",
+  "version": "3.0.0",
   "stations": [
     {
       "id": "sgra",
@@ -79,6 +79,27 @@
       "name": "Vela Pulsar",
       "description": "Young neutron star: tilted dipole beams, lighthouse pulse.",
       "spawnDistanceRs": 35.0
+    },
+    {
+      "id": "psr-crab",
+      "type": "pulsar",
+      "name": "Crab Pulsar",
+      "description": "33 ms rotator in supernova remnant M1. Pair with station m1.",
+      "spawnDistanceRs": 35.0
+    },
+    {
+      "id": "sgr-1806",
+      "type": "pulsar",
+      "name": "SGR 1806-20",
+      "description": "Magnetar: 1e15 G field, starquake giant flares.",
+      "spawnDistanceRs": 40.0
+    },
+    {
+      "id": "psr-b1913",
+      "type": "pulsar",
+      "name": "PSR B1913+16",
+      "description": "Hulse-Taylor binary: orbital decay proved gravitational waves.",
+      "spawnDistanceRs": 38.0
     }
   ]
 }

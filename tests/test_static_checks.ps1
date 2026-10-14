@@ -220,6 +220,13 @@ Check 'einstein ring lensing boost' ($bh -match 'lensMag')
 Check 'photo mode F8' ((($appCpp) -match 'GLFW_KEY_F8') -and (($appCpp) -match 'drawPhotoPopup'))
 Check 'auto orbit O' ((($appCpp) -match 'GLFW_KEY_O') -and (($appCpp) -match 'updateOrbit'))
 Check 'gravity clock HUD' ((($appCpp) -match 'dtau|clockRate') -and (($appCpp) -match 'sqrt\(1\.0 - 1\.0'))
+Check 'hdr scene fbo float16' ((Read-File 'src/PostFX.cpp') -match 'GL_RGBA16F')
+Check 'composite single tonemap' (((Read-File 'shaders/post_comp.frag') -match 'acesNarkowicz') -and ((Read-File 'shaders/post_comp.frag') -match '1\.0 / 2\.2'))
+Check 'beginScene clears targets' ((Read-File 'src/PostFX.cpp') -match 'glClear\(GL_COLOR_BUFFER_BIT \| GL_DEPTH_BUFFER_BIT')
+Check 'constellation clear linear' ($sceneCpp -match '0\.00004f')
+Check 'pulsar preset uniforms' (((Read-File 'shaders/pulsar.frag') -match 'u_SpinRate') -and ($sceneCpp -match 'setUniform1f\("u_SpinRate"') -and ($sceneCpp -match 'psr-crab') -and ($sceneCpp -match 'sgr-1806'))
+Check 'catalog has pulsar family' ((($catalogCpp -match '"psr-crab"') -and ($catalogCpp -match '"sgr-1806"') -and ($catalogCpp -match '"psr-b1913"')) -and (($catalogJson -match '"psr-crab"') -and ($catalogJson -match '"sgr-1806"') -and ($catalogJson -match '"psr-b1913"')))
+Check 'pulsar tick sfx' ((((Read-File 'src/audio/AudioEngine.h') -match 'playTick') -and ((Read-File 'src/audio/AudioEngine.cpp') -match 'VoiceType::Tick')) -and ($appCpp -match 'm_audio\.playTick'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

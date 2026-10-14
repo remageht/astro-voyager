@@ -10,6 +10,14 @@ in vec2 v_TexCoord;
 uniform float u_Time;
 uniform float u_Aspect;
 uniform float u_Exposure;
+// v3.0.0 presets (SceneManager per-station switch; defaults = Vela 1:1):
+// spin rate (artistic rad/s at tE), magnetic tilt, beam tint multiplier,
+// radio-halo gain, magnetosphere loop scale.
+uniform float u_SpinRate;
+uniform float u_MagTilt;
+uniform vec3 u_BeamTint;
+uniform float u_HaloGain;
+uniform float u_ArcScale;
 
 float hash2(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -32,9 +40,7 @@ float valueNoise(vec2 p) {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-vec3 acesNarkowicz(vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+// v3.0.0: ACES + gamma moved to post_comp.frag; this shader outputs linear HDR.
 
 vec3 starLayer(vec2 uv, float scale, float thresh, float gain) {
   vec2 g = uv * scale;
@@ -56,7 +62,7 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float gain) {
 float dipoleArcs(vec2 m, float bLen, int count) {
   float acc = 0.0;
   for (int i = 1; i <= count; ++i) {
-    float L = 0.10 * float(i);  // loop scale grows outward
+    float L = 0.10 * float(i) * u_ArcScale;  // loop scale grows outward
     // angle from magnetic axis (both poles) in the projected plane
     float th = atan(m.y, abs(m.x) + 1e-5);
     float lineR = L * sin(th) * sin(th);
@@ -81,14 +87,15 @@ void main() {
   col += starLayer(starUV + vec2(13.1), 190.0, 0.985, 0.55);
 
   // --- 3D frame ----------------------------------------------------------
-  // Spin axis: mostly up, slight lean in screen. Magnetic axis tilted ~22
-  // deg and precessing: period ~2.5s (artistic; real Vela is 89 ms).
-  float spin = tE * 2.5;
+  // Spin axis: mostly up, slight lean in screen. Magnetic axis tilted
+  // (u_MagTilt) and precessing. Rate is artistic: real Vela spins at
+  // 89 ms, far above what 60 fps can show (see audio tick for the rest).
+  float spin = tE * u_SpinRate;
   float axisTilt = 0.22;
   vec3 S = normalize(vec3(sin(axisTilt), cos(axisTilt), 0.0));
   vec3 e1 = normalize(cross(S, vec3(0.0, 0.0, 1.0)));
   vec3 e2 = cross(S, e1);
-  float magTilt = 0.38;
+  float magTilt = u_MagTilt;
   vec3 B = normalize(S * cos(magTilt) +
                       (e1 * cos(spin) + e2 * sin(spin)) * sin(magTilt));
 
@@ -116,14 +123,14 @@ void main() {
     float face = (along > 0.0) ? towardCam : awayCam;
     float gain = 0.12 + 3.2 * pow(max(face, 0.0), 10.0);
     vec3 beamCol = mix(vec3(0.55, 0.72, 1.0), vec3(0.90, 0.95, 1.0),
-                       pow(max(face, 0.0), 6.0));
+                       pow(max(face, 0.0), 6.0)) * u_BeamTint;
     col += beamCol * beam * edge * outward * distFade * gain * 0.55;
   }
 
   // --- Pulsed radio halo -------------------------------------------------
   // Soft synchrotron halo brightening with the pulse (the "on" state).
   float halo = exp(-r * 3.2) * (0.20 + 1.6 * pulse);
-  col += vec3(0.40, 0.58, 1.0) * halo * 0.35;
+  col += vec3(0.40, 0.58, 1.0) * u_BeamTint * halo * 0.35 * u_HaloGain;
 
   // --- Dipole magnetosphere arcs ----------------------------------------
   // Rotate screen coords into the magnetic frame (B projected on screen).
@@ -134,7 +141,7 @@ void main() {
     // Foreshorten: arcs dim when the magnetic pole points along the view
     // (they'd be seen edge-on / face-on in 3D).
     float arcFace = 0.35 + 0.65 * (1.0 - abs(B.z));
-    vec3 arcCol = vec3(0.50, 0.70, 1.0);
+    vec3 arcCol = vec3(0.50, 0.70, 1.0) * u_BeamTint;
     col += arcCol * arcs * arcFace * 0.5;
   }
 
@@ -158,15 +165,11 @@ void main() {
   col += vec3(0.85, 0.92, 1.0) * exp(-r * r * 700.0) * (0.6 + 4.0 * pulse);
 
   // --- Finish ------------------------------------------------------------
+  // HDR-linear: exposure gain + vignette (tonemap + gamma + grain: comp).
   float vig = 1.0 - 0.3 * clamp(dot(starUV * 0.7, starUV * 0.7), 0.0, 1.0);
   col *= vig;
 
   col *= 1.25 * u_Exposure;
-  col = acesNarkowicz(col);
-  col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
 
-  float gr = hash21(starUV * 913.7 + vec2(fract(u_Time) * 7.31)) - 0.5;
-  col += gr * 0.012;
-
-  FragColor = vec4(col, 1.0);
+  FragColor = vec4(max(col, vec3(0.0)), 1.0);
 }

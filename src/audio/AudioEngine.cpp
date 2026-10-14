@@ -170,6 +170,7 @@ void AudioEngine::update(float dt) {
       case VoiceType::Chime: dur = 2.0; break;
       case VoiceType::Blip: dur = 0.3; break;
       case VoiceType::Capture: dur = 2.4; break;
+      case VoiceType::Tick: dur = 0.05; break;
     }
     if (age > dur + 0.1) {
       m_voices[i] = m_voices.back();
@@ -199,6 +200,15 @@ void AudioEngine::playClick() {
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
   m_voices.push_back({VoiceType::Click, m_samples.load()});
+}
+
+// v3.0.0: тик пульсара. Короткий голос (25 мс): планировщик AppGL зовёт
+// его каждые 59..945 мс, перекрытий почти нет, кап общий (32) не жмёт.
+void AudioEngine::playTick() {
+  if (!m_tried) return;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (m_voices.size() > 32) return;
+  m_voices.push_back({VoiceType::Tick, m_samples.load()});
 }
 
 void AudioEngine::playWhoosh() {
@@ -351,6 +361,12 @@ float AudioEngine::renderVoice(const Voice& v, double age,
       if (age < 0.05) env = static_cast<float>(age / 0.05);
       if (age > 2.0) env = static_cast<float>((2.4 - age) / 0.4);
       return s * 0.45f * pulse * env;
+    }
+    case VoiceType::Tick: {
+      // Тик пульсара: пинг 2200 Гц, затухание 25 мс (радиоудар).
+      if (age > 0.05) return 0.0f;
+      const float s = static_cast<float>(std::sin(2.0 * kPi * 2200.0 * age));
+      return s * static_cast<float>(std::exp(-age * 120.0)) * 0.5f;
     }
   }
   return 0.0f;

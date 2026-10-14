@@ -49,6 +49,7 @@ class AudioEngine {
 
   // --- SFX (все синтезом, без вавок) ---
   void playClick();    // UI-клики
+  void playTick();     // v3.0.0: тик пульсара (короткий пинг 25 мс)
   void playWhoosh();   // телепорт: sweep шума 0.6с
   void setWarpLevel(float k);  // 0..1: коричневый шум + суб-синус,
                                // сам же дакает музыку (-8 дБ при K=1)
@@ -64,7 +65,7 @@ class AudioEngine {
   float warpLevel() const { return m_warpCurrent.load(); }
 
  private:
-  enum class VoiceType : int { Click, Whoosh, Jump, Chime, Blip, Capture };
+  enum class VoiceType : int { Click, Whoosh, Jump, Chime, Blip, Capture, Tick };
   struct Voice {
     VoiceType type = VoiceType::Click;
     uint64_t startSample = 0;

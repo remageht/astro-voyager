@@ -2464,7 +2464,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
 
   const std::vector<std::string> targetStations = {
       "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104",
-      "psr-vela"
+      "psr-vela", "psr-crab", "sgr-1806", "psr-b1913"
   };
 
   for (const auto& stId : targetStations) {
@@ -3796,6 +3796,30 @@ void AppGL::audioUpdate(float deltaTime) {
         m_audio.playCapture();
         m_audioCaptureCooldown = 5.0;
       }
+    }
+  }
+
+  // Пульсар-тик polling-ом: период по станции. Vela 89 мс — настоящий;
+  // Crab P*2 (66 мс) и магнетар P/8 (0.945 с) — поделены для слышимости
+  // (33 мс — жужжание, 7.56 с — тишина). Визуальный маятник шейдера
+  // художественный: 60 fps физически не покажут 89 мс (см. pulsar.frag).
+  if (const Station* pst = m_sceneManager->getCurrentStation()) {
+    double tickPeriod = 0.0;
+    if (pst->type == StationType::Pulsar && !m_audio.isMuted()) {
+      const std::string& pid = pst->id;
+      tickPeriod = 0.089;
+      if (pid == "psr-crab") tickPeriod = 0.066;
+      else if (pid == "psr-b1913") tickPeriod = 0.059;
+      else if (pid == "sgr-1806") tickPeriod = 0.945;
+    }
+    if (tickPeriod > 0.0) {
+      m_audioTickAcc += deltaTime;
+      while (m_audioTickAcc >= tickPeriod) {
+        m_audioTickAcc -= tickPeriod;
+        m_audio.playTick();
+      }
+    } else {
+      m_audioTickAcc = 0.0;
     }
   }
 }
