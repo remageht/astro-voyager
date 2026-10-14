@@ -169,6 +169,15 @@ class SceneManager {
   float m_timeScale = 1.0f;
   bool m_paused = false;
 
+  // === Relativity === скорость наблюдателя (дельта позиции камеры за кадр,
+  // сглаженная). Харнесс передаёт константный time => dt == 0 => beta == 0
+  // => шейдерные ветки выключены, PNG байт-в-байт.
+  Vec3 m_relVel{0.0, 0.0, 0.0};
+  Vec3 m_relPos{0.0, 0.0, 0.0};
+  Vec3 m_relDir{0.0, 0.0, 1.0};
+  float m_relTime = -1.0f;
+  float m_relBeta = 0.0f;
+
   std::unique_ptr<ScreenQuad> m_screenQuad;
   // === PostFX === scene FBO + композит (см. PostFX.h).
   PostFX m_postFx;

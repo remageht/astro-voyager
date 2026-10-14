@@ -24,6 +24,12 @@ class PostFX {
   void beginScene(int width, int height);
   void endScene(int width, int height);
 
+  // === Relativity === параметры наблюдателя для доплера-тинта в композите.
+  // Вызывается каждый кадр из SceneManager::render; beta == 0 => тинт выкл.
+  void setFlight(const float camFwd[3], const float camRight[3],
+                 const float camUp[3], float fovY, float aspect,
+                 const float velDir[3], float beta);
+
  private:
   void ensureTargets(int width, int height);
   void release();
@@ -46,6 +52,15 @@ class PostFX {
   bool m_compOk = false;
   bool m_bloomOk = false;
   bool m_shadersTried = false;
+
+  // Relativity flight state (see setFlight).
+  float m_camFwd[3] = {0.0f, 0.0f, -1.0f};
+  float m_camRight[3] = {1.0f, 0.0f, 0.0f};
+  float m_camUp[3] = {0.0f, 1.0f, 0.0f};
+  float m_fovY = 1.0f;
+  float m_aspect = 1.777f;
+  float m_velDir[3] = {0.0f, 0.0f, 1.0f};
+  float m_beta = 0.0f;
 
   std::unique_ptr<Shader> m_compShader;
   std::unique_ptr<Shader> m_downShader;

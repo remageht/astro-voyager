@@ -466,6 +466,44 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   const Vec3 cr = camera.right();
   const Vec3 cu = camera.up();
 
+  // === Relativity === скорость наблюдателя: дельта позиции камеры за кадр.
+  // dt <= 0 (константный time в харнессе) => скорость нулевая, beta = 0,
+  // доплер/абберация выключены. Телепорт (дельта > 1500 ед./с) сбрасывает.
+  {
+    const float relDt = (m_relTime >= 0.0f) ? (time - m_relTime) : 0.0f;
+    if (relDt > 1e-5f) {
+      Vec3 vel((cp.x - m_relPos.x) / static_cast<double>(relDt),
+               (cp.y - m_relPos.y) / static_cast<double>(relDt),
+               (cp.z - m_relPos.z) / static_cast<double>(relDt));
+      const double sp =
+          std::sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+      if (sp > 1500.0) {
+        m_relVel = Vec3(0.0, 0.0, 0.0);
+      } else {
+        const double k = 1.0 - std::exp(-static_cast<double>(relDt) * 5.0);
+        m_relVel.x += (vel.x - m_relVel.x) * k;
+        m_relVel.y += (vel.y - m_relVel.y) * k;
+        m_relVel.z += (vel.z - m_relVel.z) * k;
+      }
+    } else {
+      m_relVel = Vec3(0.0, 0.0, 0.0);
+    }
+    m_relTime = time;
+    m_relPos = cp;
+    const double rsp =
+        std::sqrt(m_relVel.x * m_relVel.x + m_relVel.y * m_relVel.y +
+                  m_relVel.z * m_relVel.z);
+    double beta = rsp / 60.0;  // референс-скорость эффекта
+    if (beta < 0.0) beta = 0.0;
+    if (beta > 0.95) beta = 0.95;
+    m_relBeta = static_cast<float>(beta);
+    if (rsp > 1e-6) {
+      m_relDir.x = m_relVel.x / rsp;
+      m_relDir.y = m_relVel.y / rsp;
+      m_relDir.z = m_relVel.z / rsp;
+    }
+  }
+
   if (m_currentStation->type == StationType::BlackHole) {
     // Sgr A* Schwarzschild Raytracing
     m_bhShader->bind();
@@ -502,6 +540,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_Time", time);
     m_bhShader->setUniform1f("u_Exposure", m_exposure);
     m_bhShader->setUniform1i("u_Skybox", 0);
+    // === Relativity === абберация направления на звёзды при быстром полёте.
+    m_bhShader->setUniform3f("u_VelDir", static_cast<float>(m_relDir.x),
+                             static_cast<float>(m_relDir.y),
+                             static_cast<float>(m_relDir.z));
+    m_bhShader->setUniform1f("u_Beta", m_relBeta);
 
     m_skyboxDeep->bind(0);
     m_screenQuad->draw();
@@ -729,6 +772,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_skyShader->setUniform1f("u_Aspect", aspect);
     m_skyShader->setUniform1f("u_FovY", glm::radians(m_settings.fovDegrees));
     m_skyShader->setUniform1i("u_Sky", 0);
+    // === Relativity === абберация направления на звёзды при быстром полёте.
+    m_skyShader->setUniform3f("u_VelDir", static_cast<float>(m_relDir.x),
+                              static_cast<float>(m_relDir.y),
+                              static_cast<float>(m_relDir.z));
+    m_skyShader->setUniform1f("u_Beta", m_relBeta);
     m_skyShader->setUniform1f("u_Exposure", m_exposure);
     m_skyboxLocal->bind(0);
     glDepthMask(GL_FALSE);
@@ -1115,6 +1163,22 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     }
   }
 
+  // === Relativity === базис камеры и скорость для доплера-тинта в композите.
+  {
+    const float camFwd[3] = {static_cast<float>(cf.x), static_cast<float>(cf.y),
+                             static_cast<float>(cf.z)};
+    const float camRight[3] = {static_cast<float>(cr.x),
+                               static_cast<float>(cr.y),
+                               static_cast<float>(cr.z)};
+    const float camUp[3] = {static_cast<float>(cu.x), static_cast<float>(cu.y),
+                            static_cast<float>(cu.z)};
+    const float velDir[3] = {static_cast<float>(m_relDir.x),
+                             static_cast<float>(m_relDir.y),
+                             static_cast<float>(m_relDir.z)};
+    m_postFx.setFlight(camFwd, camRight, camUp,
+                       glm::radians(m_settings.fovDegrees), aspect, velDir,
+                       m_relBeta);
+  }
   m_postFx.endScene(fbWidth, fbHeight);
 }
 

@@ -62,6 +62,23 @@ uniform float u_BHRingK;  // photon-ring/rim brightness gain (default 1.0; sgra 
 uniform float u_ThinDisk;  // thin-disk mode 0/1 (sgra 1.0): radial x0.55 band + crisper edges
 uniform float u_BandK;  // milky-way band gain (default 1.0; sgra 1.7)
 uniform float u_CamDist;  // camera distance in Rs (set by SceneManager; <=0 = far/legacy)
+// === Relativity === skybox aberration (same as sky.frag): apparent star
+// directions compress towards u_VelDir at speed. u_Beta == 0.0 returns d
+// untouched (byte-exact harness); geodesic march is NOT affected.
+uniform vec3 u_VelDir;
+uniform float u_Beta;
+vec3 aberrateDir(vec3 d) {
+  if (u_Beta <= 0.001) return d;
+  float c = dot(d, u_VelDir);
+  float c2 = clamp((c + u_Beta) / (1.0 + u_Beta * c), -1.0, 1.0);
+  vec3 tang = d - u_VelDir * c;
+  float tl = length(tang);
+  if (tl > 1e-5) {
+    float s2 = sqrt(max(1.0 - c2 * c2, 0.0));
+    return normalize(u_VelDir * c2 + tang * (s2 / tl));
+  }
+  return u_VelDir * (c2 < 0.0 ? -1.0 : 1.0);
+}
 const int ABSOLUTE_MAX_STEPS = 8000;
 // Novikov-Thorne peak normalization: 1 / max(x^3 (1 - sqrt(x))) = 823543/46656.
 const float NT_PEAK_NORM = 17.652;
@@ -421,10 +438,11 @@ void main() {
     return;
   }
   if (r >= u_ShellRadius) {
-    vec3 sky = texture(u_Skybox, fb).rgb;
+    vec3 skyDir = aberrateDir(fb);
+    vec3 sky = texture(u_Skybox, skyDir).rgb;
     // Milky-Way band gain: boost sky along the band plane (fb.y ~ 0),
     // same profile as the procedural cubemap. Neutral at u_BandK == 1.0.
-    float bandW = exp(-abs(fb.y) * 5.0);
+    float bandW = exp(-abs(skyDir.y) * 5.0);
     sky *= 1.0 + (u_BandK - 1.0) * bandW;
     // Jet glow lives in accumColor with no alpha; add it even with disk off
     // (sgra accumulates nothing, so its disk-off frame is unchanged).
@@ -476,8 +494,9 @@ void main() {
   // Step budget exhausted without capture or escape: single minR gate.
   // Near-capture rays (minR < 2.2Rs) are unconverged winding noise -> black;
   // the rest resolve to the sky they were heading for.
-  vec3 skyFallback = texture(u_Skybox, fb).rgb * vec3(0.18, 0.16, 0.22);
-  float bandWFb = exp(-abs(fb.y) * 5.0);
+  vec3 fbDir = aberrateDir(fb);
+  vec3 skyFallback = texture(u_Skybox, fbDir).rgb * vec3(0.18, 0.16, 0.22);
+  float bandWFb = exp(-abs(fbDir.y) * 5.0);
   skyFallback *= 1.0 + (u_BandK - 1.0) * bandWFb;
   // Same jet-glow rule as the escape branch: visible with disk off too.
   vec3 colFallback = (u_DiskOn == 1)
