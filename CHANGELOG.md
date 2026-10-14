@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2.6.0 - 2026-10-14
+
+## What's new / Что нового
+- EN: Two new galaxy stations — Whirlpool (M51, wide arms, bright bulge, companion NGC 5195) and Sombrero (M104, edge-on dust lane, giant bulge); galaxy shader parameterized per-station.
+- EN: PostFX pipeline — scene FBO, 5-level bloom chain, HDR composite with texelFetch and ACES; black hole ring now glows.
+- EN: Relativistic light shift at high speed — doppler tint (blue ahead, red behind) and starlight aberration toward the direction of motion; active during warp jumps and fast flight.
+- EN: Switchable warp-ship hulls — Dart, Ring Ship (IXS Enterprise style with Alcubierre rings), Shuttle — selectable in the warp panel; engine glow is now red.
+- RU: Две новые галактики — Whirlpool (M51, широкие рукава, яркий балдж, компаньон NGC 5195) и Sombrero (M104, пылевая полоса по краю, крупный балдж); шейдер галактик параметризован per-station.
+- RU: PostFX-конвейер — scene FBO, 5-уровневая цепочка bloom, HDR-композит с texelFetch и ACES; кольцо ЧД теперь светится.
+- RU: Релятивистский сдвиг света на больших скоростях — доплер-тинт (вперёд синий, назад красный) и аберрация звёзд к направлению движения; активен в варп-прыжках и быстром полёте.
+- RU: Сменяемые корпуса варп-корабля — Dart, Ring Ship (стиль IXS Enterprise с кольцами Алькубьерра) и Shuttle — выбор в варп-панели; свечение движка красное.
+- Gates / Гейты: ctest 3/3, static checks 160, glslang OK, doppler 1.419 PASS.
+
 ## 2.5.0 - 2026-10-13
 
 - **Кинематографичный варп-прыжок**: state machine Charge/Pullback/Burst/Travel/Arrival/Pushin/Cooldown, пружинная third-person камера, корабль-силуэт (контур + движок + шлейф, ноль ассетов), ударная волна u_Burst в warp.frag, смена станции в пик вспышки.
