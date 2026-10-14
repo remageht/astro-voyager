@@ -33,6 +33,7 @@ float g_burst = 0.0f;
 bool g_shipVisible = false;
 float g_shipPos[3] = {0.0f, 0.0f, 0.0f};
 float g_shipYaw = 0.0f;
+int g_shipStyle = 0;  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle
 }  // namespace
 void setState(float k, float flash) {
   g_warpK = k;
@@ -54,6 +55,8 @@ float shipX() { return g_shipPos[0]; }
 float shipY() { return g_shipPos[1]; }
 float shipZ() { return g_shipPos[2]; }
 float shipYaw() { return g_shipYaw; }
+void setShipStyle(int s) { g_shipStyle = (s < 0 || s > 2) ? 0 : s; }
+int shipStyle() { return g_shipStyle; }
 }  // namespace warpdrive
 
 SceneManager::SceneManager() {
@@ -589,6 +592,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_starShader->setUniform1f("u_PixelScale", sPixelScale);
       m_starShader->setUniform1f("u_SizeK", 0.045f);
       m_starShader->setUniform1f("u_Time", time);
+      m_starShader->setUniform3f("u_Tint", 1.0f, 1.0f, 1.0f);
       glDepthMask(GL_FALSE);
       glDisable(GL_DEPTH_TEST);
       m_sStars.draw();
@@ -637,6 +641,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_starShader->setUniform1f("u_PixelScale", pixelScale);
     m_starShader->setUniform1f("u_SizeK", 0.22f);
     m_starShader->setUniform1f("u_Time", time);
+    m_starShader->setUniform3f("u_Tint", 1.0f, 1.0f, 1.0f);
     m_bgStars.draw();
     m_starShader->unbind();
 
@@ -663,6 +668,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_starShader->setUniform1f("u_PixelScale", pixelScale);
     m_starShader->setUniform1f("u_SizeK", 0.22f);
     m_starShader->setUniform1f("u_Time", time);
+    m_starShader->setUniform3f("u_Tint", 1.0f, 1.0f, 1.0f);
     if (m_currentStation->id == "ori") {
       m_orionStars.draw();
     } else {
@@ -1050,10 +1056,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         static bool s_shipInit = false;
         static LineMesh s_hull;
         static LineMesh s_keel;
+        static LineMesh s_ringShip;
+        static LineMesh s_shuttle;
         static LineMesh s_trail;
         static StarPoints s_engine;
         if (!s_shipInit) {
-          // Корпус-дарт: нос + крылья + хвост + киль (нос смотрит -Z).
+          // 0) Dart (нос -Z): корпус-дарт + киль.
           const std::vector<glm::vec3> hull = {
               // N-L, N-R
               {0.0f, 0.0f, -0.9f}, {-0.75f, 0.0f, 0.55f},
@@ -1083,6 +1091,75 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           std::vector<unsigned int> keelIdx(keel.size());
           for (unsigned int i = 0; i < keelIdx.size(); ++i) keelIdx[i] = i;
           s_keel.setGeometry(keel, keelIdx);
+          // 1) Ring Ship (IXS Enterprise): цилиндрический корпус + два
+          // витка кольца по Алькубьерре (по мотивам концепта NASA/Harold White).
+          std::vector<glm::vec3> ring;
+          ring.reserve(400);
+          auto seg = [&ring](const glm::vec3& a, const glm::vec3& b) {
+            ring.push_back(a);
+            ring.push_back(b);
+          };
+          // Фюзеляж-труба: 4 продольных ребра + передняя/задняя обечайки.
+          const float fr = 0.10f;
+          const float zf = -0.70f;
+          const float zr = 0.55f;
+          seg({fr, 0.0f, zf}, {fr, 0.0f, zr});
+          seg({-fr, 0.0f, zf}, {-fr, 0.0f, zr});
+          seg({0.0f, fr, zf}, {0.0f, fr, zr});
+          seg({0.0f, -fr, zf}, {0.0f, -fr, zr});
+          // Носовой конус.
+          const glm::vec3 nose(0.0f, 0.0f, -1.0f);
+          seg({fr, 0.0f, zf}, nose);
+          seg({-fr, 0.0f, zf}, nose);
+          seg({0.0f, fr, zf}, nose);
+          seg({0.0f, -fr, zf}, nose);
+          // Кольца (20 сегментов, XY-плоскость) + 4 спицы к фюзеляжу.
+          const float rr = 0.44f;
+          const int kRS = 20;
+          for (int ringZi = 0; ringZi < 2; ++ringZi) {
+            const float rz = (ringZi == 0) ? -0.32f : 0.32f;
+            for (int i = 0; i < kRS; ++i) {
+              const float a0 = static_cast<float>(i) / kRS * 6.2831853f;
+              const float a1 = static_cast<float>(i + 1) / kRS * 6.2831853f;
+              seg({std::cos(a0) * rr, std::sin(a0) * rr, rz},
+                  {std::cos(a1) * rr, std::sin(a1) * rr, rz});
+            }
+            seg({rr, 0.0f, rz}, {fr, 0.0f, rz});
+            seg({-rr, 0.0f, rz}, {-fr, 0.0f, rz});
+            seg({0.0f, rr, rz}, {0.0f, fr, rz});
+            seg({0.0f, -rr, rz}, {0.0f, -fr, rz});
+          }
+          std::vector<unsigned int> ringIdx(ring.size());
+          for (unsigned int i = 0; i < ringIdx.size(); ++i) ringIdx[i] = i;
+          s_ringShip.setGeometry(ring, ringIdx);
+          // 2) Shuttle: грузовой дельта-корпус с двумя мотогондолами.
+          const std::vector<glm::vec3> shut = {
+              // Дельта: нос + крылья + хвост.
+              {0.0f, 0.0f, -0.85f}, {-0.55f, -0.04f, 0.40f},
+              {0.0f, 0.0f, -0.85f}, {0.55f, -0.04f, 0.40f},
+              {-0.55f, -0.04f, 0.40f}, {0.0f, 0.0f, 0.50f},
+              {0.55f, -0.04f, 0.40f}, {0.0f, 0.0f, 0.50f},
+              {-0.55f, -0.04f, 0.40f}, {0.55f, -0.04f, 0.40f},
+              // Кабина.
+              {0.0f, 0.03f, -0.50f}, {0.0f, 0.13f, -0.15f},
+              {0.0f, 0.13f, -0.15f}, {0.0f, 0.03f, 0.35f},
+              // Мотогондолы: прямоугольники по бокам + пилоны.
+              {-0.55f, -0.04f, -0.20f}, {-0.55f, -0.04f, 0.55f},
+              {-0.55f, -0.04f, 0.55f}, {-0.55f, -0.04f, 0.62f},
+              {-0.55f, 0.08f, -0.20f}, {-0.55f, 0.08f, 0.62f},
+              {-0.55f, -0.04f, -0.20f}, {-0.55f, 0.08f, -0.20f},
+              {-0.55f, -0.04f, 0.62f}, {-0.55f, 0.08f, 0.62f},
+              {-0.20f, 0.0f, 0.10f}, {-0.55f, 0.02f, 0.10f},
+              {0.55f, -0.04f, -0.20f}, {0.55f, -0.04f, 0.55f},
+              {0.55f, -0.04f, 0.55f}, {0.55f, -0.04f, 0.62f},
+              {0.55f, 0.08f, -0.20f}, {0.55f, 0.08f, 0.62f},
+              {0.55f, -0.04f, -0.20f}, {0.55f, 0.08f, -0.20f},
+              {0.55f, -0.04f, 0.62f}, {0.55f, 0.08f, 0.62f},
+              {0.20f, 0.0f, 0.10f}, {0.55f, 0.02f, 0.10f},
+          };
+          std::vector<unsigned int> shutIdx(shut.size());
+          for (unsigned int i = 0; i < shutIdx.size(); ++i) shutIdx[i] = i;
+          s_shuttle.setGeometry(shut, shutIdx);
           // Трейл-лента: 20 поперечных пар за кормой (z 0.55 -> 2.75,
           // полуширина 0.30 -> 0.03) + 2 продольных ребра.
           std::vector<glm::vec3> trail;
@@ -1129,16 +1206,26 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_linesShader->setUniformMat4f("u_MVP", mvp);
         m_linesShader->setUniformMat4f("u_Model", shipModel);
         m_linesShader->setUniform1f("u_Time", time);
-        // Emissive-белый контур корпуса + голубоватая кабина.
-        m_linesShader->setUniform3f("u_LineColor", 0.92f, 0.96f, 1.0f);
-        s_hull.drawLines();
-        m_linesShader->setUniform3f("u_LineColor", 0.55f, 0.78f, 1.0f);
-        s_keel.drawLines();
+        // Emissive-контур выбранного корпуса.
+        const int style = warpdrive::shipStyle();
+        if (style == 1) {
+          // Ring Ship: голубовато-белый фюзеляж.
+          m_linesShader->setUniform3f("u_LineColor", 0.85f, 0.92f, 1.0f);
+          s_ringShip.drawLines();
+        } else if (style == 2) {
+          m_linesShader->setUniform3f("u_LineColor", 0.92f, 0.96f, 1.0f);
+          s_shuttle.drawLines();
+        } else {
+          m_linesShader->setUniform3f("u_LineColor", 0.92f, 0.96f, 1.0f);
+          s_hull.drawLines();
+          m_linesShader->setUniform3f("u_LineColor", 0.55f, 0.78f, 1.0f);
+          s_keel.drawLines();
+        }
         // Тусклый равномерный шлейф (per-vertex alpha у LineMesh нет).
         m_linesShader->setUniform3f("u_LineColor", 0.25f, 0.45f, 0.70f);
         s_trail.drawLines();
         m_linesShader->unbind();
-        // Движок: 1 крупная пульсирующая голубая точка за кормой.
+        // Движок: 1 крупная пульсирующая КРАСНАЯ точка за кормой.
         {
           const float sy = warpdrive::shipYaw();
           const float ex = warpdrive::shipX() + 0.55f * std::sin(sy);
@@ -1153,6 +1240,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           m_starShader->setUniform1f("u_PixelScale", pixelScale);
           m_starShader->setUniform1f("u_SizeK", 0.22f);
           m_starShader->setUniform1f("u_Time", time);
+          m_starShader->setUniform3f("u_Tint", 1.0f, 0.22f, 0.10f);
           s_engine.draw();
           m_starShader->unbind();
         }

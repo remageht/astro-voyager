@@ -226,6 +226,7 @@ class AppGL {
   std::string m_warpJumpTarget;
   int m_warpJumpFromFactor = 1;
   int m_warpSel = 0;  // выбор пункта в варп-панели
+  int m_shipStyle = 0;  // корпус корабля: 0 Dart, 1 Ring Ship (IXS), 2 Shuttle
   bool m_prevWPressed = false;
   bool m_prevXPressed = false;
   bool m_prevLBracketPressed = false;
@@ -313,6 +314,7 @@ namespace warpdrive {
 void setState(float k, float flash);
 void setBurst(float b);
 void setShip(bool v, float x, float y, float z, float yaw);
+void setShipStyle(int s);  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle
 }  // namespace warpdrive
 
 }  // namespace astro

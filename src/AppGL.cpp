@@ -3011,6 +3011,22 @@ void AppGL::drawWarpPanel() {
   const std::string tgtId = cat[static_cast<size_t>(m_warpSel)].id;
   const bool canJump =
       (m_warpStatus == 1 && curSt && curSt->id != tgtId);
+  // Выбор корпуса корабля (смена вида).
+  {
+    static const char* kShipStyles[] = {"Dart", "Ring Ship (IXS)", "Shuttle"};
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    if (ImGui::BeginCombo("Hull", kShipStyles[m_shipStyle])) {
+      for (int n = 0; n < 3; ++n) {
+        const bool sel = (n == m_shipStyle);
+        if (ImGui::Selectable(kShipStyles[n], sel)) {
+          m_shipStyle = n;
+          warpdrive::setShipStyle(n);
+        }
+        if (sel) ImGui::SetItemDefaultFocus();
+      }
+      ImGui::EndCombo();
+    }
+  }
   if (!canJump) ImGui::BeginDisabled();
   if (ImGui::Button("Engage Jump", ImVec2(-1.0f, 0.0f))) {
     startWarpJump(tgtId);

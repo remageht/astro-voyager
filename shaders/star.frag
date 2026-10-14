@@ -5,6 +5,8 @@ in float v_Bright;
 in float v_Size;
 in float v_Tw;
 out vec4 FragColor;
+// Per-draw tint (default white at call sites): warp engine sets red.
+uniform vec3 u_Tint;
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
@@ -26,6 +28,7 @@ void main() {
   vec3 dim = vec3(1.0, 0.62, 0.34);
   vec3 starCol = mix(bright, mid, smoothstep(1.0, 2.0, v_Mag));
   starCol = mix(starCol, dim, smoothstep(3.0, 4.5, v_Mag));
+  starCol *= u_Tint;
   float d = length(gl_PointCoord - vec2(0.5)) * 2.0;
   if (v_Size > 36.0) {
     float disc = 1.0 - smoothstep(0.85, 1.0, d);
