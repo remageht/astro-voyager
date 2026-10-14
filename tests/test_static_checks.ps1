@@ -201,6 +201,8 @@ Check 'catalog has m51' ($catalogCpp -match '"m51"')
 Check 'catalog has m104' ($catalogCpp -match '"m104"')
 Check 'catalog json has m51/m104' (($catalogJson -match '"m51"') -and ($catalogJson -match '"m104"'))
 Check 'galaxy per-station uniforms' ((($galaxyFrag) -match 'u_GalArms') -and ($sceneCpp -match 'u_GalPitch'))
+Check 'postfx wired into render' ((($sceneCpp) -match 'm_postFx\.beginScene') -and ($sceneCpp -match 'm_postFx\.endScene') -and (Test-Path (Join-Path $root 'shaders/post_comp.frag')))
+Check 'post composite texelfetch passthrough' ((Read-File 'shaders/post_comp.frag') -match 'texelFetch')
 Check 'spin angle uniform driven by simTime' (($planetFrag -match 'uniform float u_SpinAngle') -and ($sceneCpp -match 'setUniform1f\("u_SpinAngle"') -and ($solarCpp -match 'spinRate'))
 Check 'time pace presets up to 1000x' (($appCpp -match '300x') -and ($appCpp -match '1000x') -and ($sceneH -match '1000\.0f') -and ($appCpp -match 'Logarithmic'))
 

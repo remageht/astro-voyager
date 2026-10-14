@@ -140,6 +140,7 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/Shader.cpp
     src/Mesh.cpp
     src/Cubemap.cpp
+    src/PostFX.cpp
     src/SceneManager.cpp
     src/AppGL.cpp
     src/WarpJump.cpp  # === WarpJump === (агент J: чистая логика катсцены)

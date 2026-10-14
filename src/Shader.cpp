@@ -52,6 +52,13 @@ void Shader::setUniform3f(const std::string& name, float v0, float v1, float v2)
   }
 }
 
+void Shader::setUniform2f(const std::string& name, float v0, float v1) {
+  int loc = getUniformLocation(name);
+  if (loc != -1) {
+    glUniform2f(loc, v0, v1);
+  }
+}
+
 void Shader::setUniform3f(const std::string& name, const glm::vec3& v) {
   setUniform3f(name, v.x, v.y, v.z);
 }

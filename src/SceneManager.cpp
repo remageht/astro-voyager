@@ -456,6 +456,10 @@ void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
 void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float time) {
   if (!m_currentStation) return;
 
+  // === PostFX === весь кадр идёт в scene FBO, композит в конце render():
+  // и петля, и харнесс скриншотов зовут только этот метод.
+  m_postFx.beginScene(fbWidth, fbHeight);
+
   const float aspect = static_cast<float>(fbWidth) / static_cast<float>(fbHeight > 0 ? fbHeight : 1);
   const Vec3 cp = camera.position;
   const Vec3 cf = camera.forward();
@@ -1110,6 +1114,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       }
     }
   }
+
+  m_postFx.endScene(fbWidth, fbHeight);
 }
 
 }  // namespace astro

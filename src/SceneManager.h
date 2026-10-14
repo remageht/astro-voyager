@@ -9,6 +9,7 @@
 #include "Catalog.h"
 #include "Cubemap.h"
 #include "Mesh.h"
+#include "PostFX.h"
 #include "Shader.h"
 #include "SolarSystem.h"
 
@@ -169,6 +170,8 @@ class SceneManager {
   bool m_paused = false;
 
   std::unique_ptr<ScreenQuad> m_screenQuad;
+  // === PostFX === scene FBO + композит (см. PostFX.h).
+  PostFX m_postFx;
   std::unique_ptr<Shader> m_bhShader;
   std::unique_ptr<Shader> m_quasarShader;
   std::unique_ptr<Shader> m_linesShader;
