@@ -26,6 +26,9 @@ const std::vector<Station>& builtinCatalog() {
       {"m87", StationType::BlackHole, "M87*",
        "Supermassive black hole with relativistic jet.", 14.0,
        {1.5, 30.0, 0.05, 600}, 1.575},
+      {"psr-vela", StationType::Pulsar, "Vela Pulsar",
+       "Young neutron star: tilted dipole beams, lighthouse pulse.", 35.0,
+       {}, 0.5},
   };
   return kStations;
 }
@@ -45,6 +48,7 @@ std::string typeToString(StationType t) {
     case StationType::Galaxy: return "galaxy";
     case StationType::Nebula: return "nebula";
     case StationType::SolarSystem: return "solar_system";
+    case StationType::Pulsar: return "pulsar";
   }
   return "unknown";
 }

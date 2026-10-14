@@ -1055,6 +1055,7 @@ const char* AppGL::stationTypeRuShort(StationType t) {
     case StationType::Galaxy: return "Галакт.";
     case StationType::Nebula: return "Туманн.";
     case StationType::SolarSystem: return "Система";
+    case StationType::Pulsar: return "Пульс.";
   }
   return "?";
 }
@@ -1068,6 +1069,7 @@ unsigned int AppGL::stationTypeChip(StationType t) {
     case StationType::Galaxy: return IM_COL32(150, 200, 255, 255);
     case StationType::Nebula: return IM_COL32(255, 130, 200, 255);
     case StationType::SolarSystem: return IM_COL32(130, 230, 140, 255);
+    case StationType::Pulsar: return IM_COL32(120, 240, 255, 255);
   }
   return IM_COL32(140, 140, 140, 255);
 }
@@ -2461,7 +2463,8 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   AppGL app(1280, 720, false);
 
   const std::vector<std::string> targetStations = {
-      "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104"
+      "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104",
+      "psr-vela"
   };
 
   for (const auto& stId : targetStations) {
@@ -3297,6 +3300,7 @@ const char* AppGL::cineTypeRu(StationType t) {
     case StationType::Galaxy: return "Галактика";
     case StationType::Nebula: return "Туманность";
     case StationType::SolarSystem: return "Планетная система";
+    case StationType::Pulsar: return "Пульсар";
   }
   return "?";
 }

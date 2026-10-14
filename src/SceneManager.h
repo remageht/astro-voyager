@@ -188,6 +188,7 @@ class SceneManager {
   std::unique_ptr<Shader> m_m31StarShader;
   std::unique_ptr<Shader> m_galaxyShader;
   std::unique_ptr<Shader> m_nebulaShader;
+  std::unique_ptr<Shader> m_pulsarShader;
   std::unique_ptr<Shader> m_planetShader;
   std::unique_ptr<Shader> m_ringShader;
   std::unique_ptr<Shader> m_cometShader;

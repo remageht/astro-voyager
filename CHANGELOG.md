@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2.8.0 - 2026-10-14
+
+## What's new / Что нового
+- EN: New station — Vela Pulsar (neutron star): tilted dipole beams, lighthouse pulse, magnetosphere arcs, hot polar caps; full-screen impostor billboard with ACES tonemapping and grain.
+- EN: Catalog entry `psr-vela` (type `Pulsar`), UI short label «Пульс.», cyan chip, cinema mode name «Пульсар»; station list and teleport search updated.
+- RU: Новая станция — Vela Pulsar (нейтронная звезда): наклонённые дипольные лучи, маятниковый пульс, дуги магнитосферы, горячие полюса; полноэкранный импостор-спрайт с ACES-тонмаппингом и зерном.
+- RU: Запись каталога `psr-vela` (тип `Pulsar`), короткое имя «Пульс.», бирюзовый чип, «Пульсар» в катсцене; список станций и поиск обновлены.
+- Gates / Гейты: ctest 3/3, static checks 173, doppler 1.448 PASS.
+
 ## 2.7.0 - 2026-10-14
 
 ## What's new / Что нового

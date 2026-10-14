@@ -68,6 +68,7 @@ SceneManager::SceneManager() {
   m_m31StarShader = std::make_unique<Shader>("shaders/m31star.vert", "shaders/m31star.frag");
   m_galaxyShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/galaxy.frag");
   m_nebulaShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/nebula.frag");
+  m_pulsarShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/pulsar.frag");
   m_planetShader = std::make_unique<Shader>("shaders/planet.vert", "shaders/planet.frag");
   m_cometShader = std::make_unique<Shader>("shaders/planet.vert", "shaders/comet.frag");
   m_ringShader = std::make_unique<Shader>("shaders/ring.vert", "shaders/ring.frag");
@@ -751,6 +752,14 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_nebulaShader->setUniform1f("u_Exposure", m_exposure);
     m_screenQuad->draw();
     m_nebulaShader->unbind();
+  } else if (m_currentStation->type == StationType::Pulsar) {
+    // Vela pulsar impostor sprite: hot NS + tilted dipole beams.
+    m_pulsarShader->bind();
+    m_pulsarShader->setUniform1f("u_Time", time);
+    m_pulsarShader->setUniform1f("u_Aspect", aspect);
+    m_pulsarShader->setUniform1f("u_Exposure", m_exposure);
+    m_screenQuad->draw();
+    m_pulsarShader->unbind();
   } else if (m_currentStation->type == StationType::SolarSystem) {
     float dt = tickSimTime(time);
     m_sol.update(m_simTime);
