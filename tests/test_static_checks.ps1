@@ -208,6 +208,13 @@ Check 'spin angle uniform driven by simTime' (($planetFrag -match 'uniform float
 Check 'time pace presets up to 1000x' (($appCpp -match '300x') -and ($appCpp -match '1000x') -and ($sceneH -match '1000\.0f') -and ($appCpp -match 'Logarithmic'))
 Check 'ship hull switchable 3 styles' ((($appCpp) -match 'Ring Ship \(IXS\)') -and ($sceneCpp -match 'setShipStyle') -and ($sceneCpp -match 'shipStyle'))
 Check 'warp engine red tint' ((Read-File 'shaders/star.frag') -match 'u_Tint') -and ($sceneCpp -match 'u_Tint", 1\.0f, 0\.22f, 0\.10f')
+Check 'solid ship shader' (((Test-Path (Join-Path $root 'shaders/ship.vert')) -and (Test-Path (Join-Path $root 'shaders/ship.frag'))) -and ($sceneCpp -match 'shaders/ship\.vert'))
+Check 'disk default on' ($sceneH -match 'diskOn = true')
+Check 'm87 jet helical filaments' ($bh -match 'helix')
+Check 'einstein ring lensing boost' ($bh -match 'lensMag')
+Check 'photo mode F8' ((($appCpp) -match 'GLFW_KEY_F8') -and (($appCpp) -match 'drawPhotoPopup'))
+Check 'auto orbit O' ((($appCpp) -match 'GLFW_KEY_O') -and (($appCpp) -match 'updateOrbit'))
+Check 'gravity clock HUD' ((($appCpp) -match 'dtau|clockRate') -and (($appCpp) -match 'sqrt\(1\.0 - 1\.0'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

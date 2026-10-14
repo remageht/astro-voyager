@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cctype>
+#include <ctime>
 #include <filesystem>
 #include <iostream>
 #include <vector>
@@ -263,6 +264,9 @@ int AppGL::run() {
     if (!m_hideUI) {
       drawImGui();
     }
+    if (m_photoMode) {
+      drawPhotoPopup();
+    }
     if (m_helpOverlay) {
       drawHelpOverlay();
     }
@@ -354,6 +358,27 @@ void AppGL::processInput(float deltaTime) {
   }
   m_prevHPressed = hDown;
 
+  // === Beauty === F8 photo mode, O auto-orbit (v2.7).
+  const bool f8Down = (glfwGetKey(win, GLFW_KEY_F8) == GLFW_PRESS);
+  if (f8Down && !m_prevF8Pressed && !io.WantCaptureKeyboard) {
+    m_photoMode = !m_photoMode;
+    if (m_photoMode) m_hideUI = true;  // скрыть всё, попап рисуем сами
+  }
+  m_prevF8Pressed = f8Down;
+
+  const bool oDown = (glfwGetKey(win, GLFW_KEY_O) == GLFW_PRESS);
+  if (oDown && !m_prevOPressed && !io.WantCaptureKeyboard) {
+    m_orbitOn = !m_orbitOn;
+    if (m_orbitOn) {
+      // Стартуем с текущего азимута, чтобы не было рывка.
+      const double px = m_camera.position.x;
+      const double pz = m_camera.position.z;
+      m_orbitAngle = static_cast<float>(std::atan2(pz, px));
+    }
+  }
+  m_prevOPressed = oDown;
+  // === Beauty === end
+
   const bool f1Down = (glfwGetKey(win, GLFW_KEY_F1) == GLFW_PRESS);
   if (f1Down && !m_prevF1Pressed && !io.WantCaptureKeyboard) {
     m_helpOverlay = !m_helpOverlay;
@@ -367,6 +392,24 @@ void AppGL::processInput(float deltaTime) {
       return;
     }
     // If flight just finished or was cancelled, fall through to normal input.
+  }
+
+  // === Beauty === автоорбита: крутим камеру вокруг фокуса станции (O).
+  // Идёт до гварда клавиатуры, чтобы орбита жила и при открытом ImGui.
+  // Любое WASD-движение выключает орбиту — управление возвращается игроку.
+  if (m_orbitOn) {
+    const bool wasdDown =
+        (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) ||
+        (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS) ||
+        (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS) ||
+        (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS) ||
+        (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS) ||
+        (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS);
+    if (wasdDown) {
+      m_orbitOn = false;
+    } else {
+      updateOrbit(deltaTime);
+    }
   }
 
   if (!interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
@@ -434,6 +477,71 @@ void AppGL::stepTimePace(int dir) {
     m_sceneManager->togglePause();
   }
   m_sceneManager->setTimeScale(next);
+}
+
+// === Beauty === (v2.7): автоорбита + фото-режим.
+void AppGL::updateOrbit(float deltaTime) {
+  // Камера кружит вокруг фокуса текущей станции (мир всегда центрирован
+  // на origin — teleportTo ставит камеру на сферу вокруг (0,0,0)).
+  const double px = m_camera.position.x;
+  const double py = m_camera.position.y;
+  const double pz = m_camera.position.z;
+  const double radius = std::sqrt(px * px + pz * pz);
+  if (radius < 1e-3) return;
+  // ~12 deg/s: медленный облёт для созерцания.
+  m_orbitAngle += static_cast<float>(deltaTime * 0.21);
+  m_camera.position.x = std::cos(static_cast<double>(m_orbitAngle)) * radius;
+  m_camera.position.z = std::sin(static_cast<double>(m_orbitAngle)) * radius;
+  m_camera.position.y = py;  // высоту держим
+  // Смотрим в фокус (origin).
+  const double dx = -m_camera.position.x;
+  const double dy = -m_camera.position.y;
+  const double dz = -m_camera.position.z;
+  m_camera.yaw = std::atan2(dx, dz);
+  const double horiz = std::sqrt(dx * dx + dz * dz);
+  m_camera.pitch = std::atan2(dy, horiz);
+}
+
+void AppGL::drawPhotoPopup() {
+  // Маленький попап в правом нижнем: exposure + Save PNG + подсказка.
+  // Рисуется даже при m_hideUI (фото-режим сам его выставил).
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowPos(ImVec2(disp.x - 12.0f, disp.y - 12.0f),
+                          ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+  ImGui::SetNextWindowBgAlpha(0.90f);
+  const ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_AlwaysAutoResize;
+  if (ImGui::Begin("##photo_mode", nullptr, flags)) {
+    ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f),
+                       "%s", uiRu("Фото-режим (F8)", "Photo mode (F8)"));
+    float expNow = m_sceneManager->getExposure();
+    if (ImGui::SliderFloat("Exposure", &expNow, 0.2f, 4.0f, "%.2f")) {
+      m_sceneManager->setExposure(expNow);
+    }
+    if (ImGui::Button(uiRu("Сохранить PNG", "Save PNG"))) {
+      // Имя по станции + unix-время — не перетирает эталоны docs/screens.
+      const Station* st = m_sceneManager->getCurrentStation();
+      char buf[128];
+      std::snprintf(buf, sizeof(buf), "docs/photos/%s_%lld.png",
+                    st ? st->id.c_str() : "shot",
+                    static_cast<long long>(std::time(nullptr)));
+      if (saveScreenshot(buf)) {
+        m_lastScreenshotStatus = std::string("Saved: ") + buf;
+      } else {
+        m_lastScreenshotStatus = "Failed to save screenshot";
+      }
+    }
+    if (!m_lastScreenshotStatus.empty()) {
+      ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s",
+                         m_lastScreenshotStatus.c_str());
+    }
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s",
+                       uiRu("O - орбита, H - UI, Esc - меню",
+                            "O - orbit, H - UI, Esc - menu"));
+  }
+  ImGui::End();
 }
 
 void AppGL::processMouse() {
@@ -1034,6 +1142,30 @@ void AppGL::drawModernStatusBar() {
     ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.00f), "%s", soundTxt);
+    // === Beauty === часы гравитационного замедления у ЧД:
+    // dτ/dt = sqrt(1 − Rs/r), r = |camPos| в единицах Rs станции.
+    if (st && st->type == StationType::BlackHole) {
+      double rs = static_cast<double>(m_sceneManager->getSettings().rs);
+      if (rs < 0.1) rs = 1.0;
+      const double rx = m_camera.position.x;
+      const double ry = m_camera.position.y;
+      const double rz = m_camera.position.z;
+      const double r = std::sqrt(rx * rx + ry * ry + rz * rz);
+      const double ratioRs = r / rs;
+      double clockRate = 0.0;
+      if (ratioRs > 1.001) {
+        clockRate = std::sqrt(1.0 - 1.0 / ratioRs);
+      }
+      char clockBuf[48];
+      std::snprintf(clockBuf, sizeof(clockBuf), "%.3f x", clockRate);
+      ImGui::SameLine();
+      ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
+      ImGui::SameLine();
+      ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.00f),
+                         "%s %s @ %.1f Rs",
+                         uiRu("часы", "clock"), clockBuf,
+                         static_cast<double>(ratioRs));
+    }
   }
   ImGui::End();
   if (pushed) ImGui::PopFont();
@@ -1169,9 +1301,9 @@ void AppGL::drawModernTransportBar() {
         ImVec4(0.55f, 0.58f, 0.62f, 1.00f), "%s",
          uiRu("WASD - полет | мышь - осмотр | T - кинотур | X - варп | "
               "P - пауза | -/= - темп | / - поиск | F1 - помощь | H - скрыть | "
-              "ESC - меню",
+              "F8 - фото | O - орбита | ESC - меню",
               "WASD fly | drag look | T tour | X warp | P pause | -/= pace | "
-              "/ search | F1 help | H hide | ESC menu"));
+              "/ search | F1 help | H hide | F8 photo | O orbit | ESC menu"));
     ImGui::SetWindowFontScale(1.0f);
   }
   ImGui::End();
@@ -1741,6 +1873,8 @@ void AppGL::drawHelpContent() {
   ImGui::BulletText("Double-click an object to fly to it");
   ImGui::BulletText("Del delete selected rock");
   ImGui::BulletText("H hide / show UI");
+  ImGui::BulletText("F8 photo mode (exposure + Save PNG)");
+  ImGui::BulletText("O auto-orbit around station (WASD exits)");
   ImGui::BulletText("F1 toggle this help");
   ImGui::BulletText("ESC back to menu");
 }

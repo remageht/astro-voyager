@@ -304,6 +304,17 @@ class AppGL {
   void audioProcessKey();
   void audioDrawPanel();
   // === Audio === end
+
+  // === Beauty === (v2.7: фото-режим F8, автоорбита O, часы гравитации).
+  // Харнесс сюда не заходит:PNG байт-в-байт.
+  bool m_photoMode = false;   // F8: скрыть UI + попап exposure/Save PNG
+  bool m_prevF8Pressed = false;
+  bool m_orbitOn = false;     // O: камера кружит вокруг фокуса станции
+  bool m_prevOPressed = false;
+  float m_orbitAngle = 0.0f;  // rad, накапливается каждый кадр
+  void updateOrbit(float deltaTime);  // вызывать в processInput до WASD
+  void drawPhotoPopup();              // вызывать в drawImGui при m_photoMode
+  // === Beauty === end
 };
 
 // Связь AppGL -> SceneManager без правок SceneManager.h:

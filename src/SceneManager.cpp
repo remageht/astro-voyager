@@ -1000,15 +1000,13 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   // вспышка. При u_WarpK == 0 и u_Flash == 0 скипаем целиком (ни одного
   // GL-вызова), поэтому скриншоты байт-в-байт с HEAD. Физику bh/quasar,
   // m_exposure и ветки станций не трогаем.
-  // === WarpJump === (агент J: +u_Burst и корабль-силуэт поверх оверлея).
+  // === WarpJump === (агент J: +u_Burst и сплошной корабль поверх оверлея).
   // Корабль виден ТОЛЬКО в Pullback/Travel/Arrival/Pushin (флаг скрыт по
-  // дефолту — вне катсцены ни одного GL-вызова). Геометрия статична в
-  // локальных координатах (нос -Z, ~1.5 ед), в мир — через u_Model
-  // (translate + yaw из shipDir). Контур-дарт: 2 LineMesh (корпус +
-  // кабина/пилоны, ~30 точек хардкодом), движок — StarPoints 1 шт крупный
-  // пульсирующий (mag<1 = голубой в star.frag), трейл — LineMesh-лента
-  // 20 сегментов за кормой (per-vertex alpha у LineMesh нет — равномерный
-  // тусклый голубой). Инициализация ленивая внутри visible-ветви.
+  // дефолту — вне катсцены ни одного GL-вызова). Сплошные корпуса (v2.7):
+  // SphereMesh-эллипсоиды + RingMesh-кольца через ship.vert/ship.frag
+  // (ламберт + френель), переключение стилей Hull в warp panel. Трейл —
+  // LineMesh-лента, движок — StarPoints с красным u_Tint. Инициализация
+  // ленивая внутри visible-ветви. История: v2.6 — wireframe-силуэт (LineMesh).
   {
     float warpK = warpdrive::warpK();
     float warpFlash = warpdrive::warpFlash();
@@ -1050,116 +1048,26 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         // Оверлей никогда не ломает кадр.
       }
     }
-    // Корабль-силуэт: поверх оверлея, чтобы emissive-контур читался.
+    // Сплошной корабль: поверх оверлея, с depth-тестом между частями.
     if (warpdrive::shipVisible()) {
       try {
-        static bool s_shipInit = false;
-        static LineMesh s_hull;
-        static LineMesh s_keel;
-        static LineMesh s_ringShip;
-        static LineMesh s_shuttle;
+        static bool s_shipFailed = false;
+        static Shader* s_shipShader = nullptr;
+        static SphereMesh s_shipSphere;
+        static RingMesh s_shipRing;
         static LineMesh s_trail;
         static StarPoints s_engine;
-        if (!s_shipInit) {
-          // 0) Dart (нос -Z): корпус-дарт + киль.
-          const std::vector<glm::vec3> hull = {
-              // N-L, N-R
-              {0.0f, 0.0f, -0.9f}, {-0.75f, 0.0f, 0.55f},
-              {0.0f, 0.0f, -0.9f}, {0.75f, 0.0f, 0.55f},
-              // L-T, R-T (хвостовая кромка через центр)
-              {-0.75f, 0.0f, 0.55f}, {0.0f, 0.0f, 0.35f},
-              {0.75f, 0.0f, 0.55f}, {0.0f, 0.0f, 0.35f},
-              // L-R (задняя кромка)
-              {-0.75f, 0.0f, 0.55f}, {0.75f, 0.0f, 0.55f},
-              // N-K, K-T (киль)
-              {0.0f, 0.0f, -0.9f}, {0.0f, 0.28f, 0.30f},
-              {0.0f, 0.28f, 0.30f}, {0.0f, 0.0f, 0.35f},
-              // K-L, K-R (киль к крыльям)
-              {0.0f, 0.28f, 0.30f}, {-0.75f, 0.0f, 0.55f},
-              {0.0f, 0.28f, 0.30f}, {0.75f, 0.0f, 0.55f},
-          };
-          std::vector<unsigned int> hullIdx(hull.size());
-          for (unsigned int i = 0; i < hullIdx.size(); ++i) hullIdx[i] = i;
-          s_hull.setGeometry(hull, hullIdx);
-          // Кабина + пилоны к крыльям.
-          const std::vector<glm::vec3> keel = {
-              {0.0f, 0.02f, -0.45f}, {0.0f, 0.14f, -0.10f},
-              {0.0f, 0.14f, -0.10f}, {0.0f, 0.14f, 0.30f},
-              {0.0f, 0.14f, -0.10f}, {-0.75f, 0.0f, 0.55f},
-              {0.0f, 0.14f, -0.10f}, {0.75f, 0.0f, 0.55f},
-          };
-          std::vector<unsigned int> keelIdx(keel.size());
-          for (unsigned int i = 0; i < keelIdx.size(); ++i) keelIdx[i] = i;
-          s_keel.setGeometry(keel, keelIdx);
-          // 1) Ring Ship (IXS Enterprise): цилиндрический корпус + два
-          // витка кольца по Алькубьерре (по мотивам концепта NASA/Harold White).
-          std::vector<glm::vec3> ring;
-          ring.reserve(400);
-          auto seg = [&ring](const glm::vec3& a, const glm::vec3& b) {
-            ring.push_back(a);
-            ring.push_back(b);
-          };
-          // Фюзеляж-труба: 4 продольных ребра + передняя/задняя обечайки.
-          const float fr = 0.10f;
-          const float zf = -0.70f;
-          const float zr = 0.55f;
-          seg({fr, 0.0f, zf}, {fr, 0.0f, zr});
-          seg({-fr, 0.0f, zf}, {-fr, 0.0f, zr});
-          seg({0.0f, fr, zf}, {0.0f, fr, zr});
-          seg({0.0f, -fr, zf}, {0.0f, -fr, zr});
-          // Носовой конус.
-          const glm::vec3 nose(0.0f, 0.0f, -1.0f);
-          seg({fr, 0.0f, zf}, nose);
-          seg({-fr, 0.0f, zf}, nose);
-          seg({0.0f, fr, zf}, nose);
-          seg({0.0f, -fr, zf}, nose);
-          // Кольца (20 сегментов, XY-плоскость) + 4 спицы к фюзеляжу.
-          const float rr = 0.44f;
-          const int kRS = 20;
-          for (int ringZi = 0; ringZi < 2; ++ringZi) {
-            const float rz = (ringZi == 0) ? -0.32f : 0.32f;
-            for (int i = 0; i < kRS; ++i) {
-              const float a0 = static_cast<float>(i) / kRS * 6.2831853f;
-              const float a1 = static_cast<float>(i + 1) / kRS * 6.2831853f;
-              seg({std::cos(a0) * rr, std::sin(a0) * rr, rz},
-                  {std::cos(a1) * rr, std::sin(a1) * rr, rz});
-            }
-            seg({rr, 0.0f, rz}, {fr, 0.0f, rz});
-            seg({-rr, 0.0f, rz}, {-fr, 0.0f, rz});
-            seg({0.0f, rr, rz}, {0.0f, fr, rz});
-            seg({0.0f, -rr, rz}, {0.0f, -fr, rz});
+        static bool s_shipInit = false;
+        if (!s_shipFailed && !s_shipShader) {
+          try {
+            s_shipShader = new Shader("shaders/ship.vert", "shaders/ship.frag");
+          } catch (...) {
+            s_shipFailed = true;
           }
-          std::vector<unsigned int> ringIdx(ring.size());
-          for (unsigned int i = 0; i < ringIdx.size(); ++i) ringIdx[i] = i;
-          s_ringShip.setGeometry(ring, ringIdx);
-          // 2) Shuttle: грузовой дельта-корпус с двумя мотогондолами.
-          const std::vector<glm::vec3> shut = {
-              // Дельта: нос + крылья + хвост.
-              {0.0f, 0.0f, -0.85f}, {-0.55f, -0.04f, 0.40f},
-              {0.0f, 0.0f, -0.85f}, {0.55f, -0.04f, 0.40f},
-              {-0.55f, -0.04f, 0.40f}, {0.0f, 0.0f, 0.50f},
-              {0.55f, -0.04f, 0.40f}, {0.0f, 0.0f, 0.50f},
-              {-0.55f, -0.04f, 0.40f}, {0.55f, -0.04f, 0.40f},
-              // Кабина.
-              {0.0f, 0.03f, -0.50f}, {0.0f, 0.13f, -0.15f},
-              {0.0f, 0.13f, -0.15f}, {0.0f, 0.03f, 0.35f},
-              // Мотогондолы: прямоугольники по бокам + пилоны.
-              {-0.55f, -0.04f, -0.20f}, {-0.55f, -0.04f, 0.55f},
-              {-0.55f, -0.04f, 0.55f}, {-0.55f, -0.04f, 0.62f},
-              {-0.55f, 0.08f, -0.20f}, {-0.55f, 0.08f, 0.62f},
-              {-0.55f, -0.04f, -0.20f}, {-0.55f, 0.08f, -0.20f},
-              {-0.55f, -0.04f, 0.62f}, {-0.55f, 0.08f, 0.62f},
-              {-0.20f, 0.0f, 0.10f}, {-0.55f, 0.02f, 0.10f},
-              {0.55f, -0.04f, -0.20f}, {0.55f, -0.04f, 0.55f},
-              {0.55f, -0.04f, 0.55f}, {0.55f, -0.04f, 0.62f},
-              {0.55f, 0.08f, -0.20f}, {0.55f, 0.08f, 0.62f},
-              {0.55f, -0.04f, -0.20f}, {0.55f, 0.08f, -0.20f},
-              {0.55f, -0.04f, 0.62f}, {0.55f, 0.08f, 0.62f},
-              {0.20f, 0.0f, 0.10f}, {0.55f, 0.02f, 0.10f},
-          };
-          std::vector<unsigned int> shutIdx(shut.size());
-          for (unsigned int i = 0; i < shutIdx.size(); ++i) shutIdx[i] = i;
-          s_shuttle.setGeometry(shut, shutIdx);
+        }
+        if (!s_shipInit) {
+          s_shipSphere.setSphere(14, 28);
+          s_shipRing.setRing(0.30f, 0.44f, 40);
           // Трейл-лента: 20 поперечных пар за кормой (z 0.55 -> 2.75,
           // полуширина 0.30 -> 0.03) + 2 продольных ребра.
           std::vector<glm::vec3> trail;
@@ -1200,28 +1108,79 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glm::vec3 up(cu.x, cu.y, cu.z);
         glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
         glm::mat4 mvp = proj * view;
+        // Сплошные части: depth тест + запись, ламберт+френель через ship.frag.
+        glClear(GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        // Часть корпуса: {pos, scale, baseColor, ring?}
+        struct ShipPart {
+          glm::vec3 pos;
+          glm::vec3 scale;
+          glm::vec3 color;
+          int ring;
+        };
+        const glm::vec3 hullCol(0.84f, 0.88f, 0.94f);
+        const glm::vec3 glassCol(0.35f, 0.55f, 0.80f);
+        const glm::vec3 wingCol(0.62f, 0.70f, 0.82f);
+        std::vector<ShipPart> parts;
+        const int style = warpdrive::shipStyle();
+        if (style == 1) {
+          // Ring Ship (IXS Enterprise): цилиндр-фюзеляж + 2 кольца.
+          parts.push_back({{0.0f, 0.0f, -0.05f}, {0.10f, 0.10f, 0.80f}, hullCol, 0});
+          parts.push_back({{0.0f, 0.0f, -0.92f}, {0.08f, 0.08f, 0.14f}, hullCol, 0});
+          parts.push_back({{0.0f, 0.0f, 0.68f}, {0.12f, 0.12f, 0.12f}, wingCol, 0});
+          parts.push_back({{0.0f, 0.0f, -0.34f}, {1.0f, 1.0f, 1.0f}, wingCol, 1});
+          parts.push_back({{0.0f, 0.0f, 0.30f}, {1.0f, 1.0f, 1.0f}, wingCol, 1});
+        } else if (style == 2) {
+          // Shuttle: широкий корпус + кабина + 2 мотогондолы.
+          parts.push_back({{0.0f, 0.0f, 0.0f}, {0.48f, 0.10f, 0.55f}, hullCol, 0});
+          parts.push_back({{0.0f, 0.07f, -0.32f}, {0.11f, 0.08f, 0.15f}, glassCol, 0});
+          parts.push_back({{-0.52f, 0.0f, 0.10f}, {0.07f, 0.07f, 0.28f}, wingCol, 0});
+          parts.push_back({{0.52f, 0.0f, 0.10f}, {0.07f, 0.07f, 0.28f}, wingCol, 0});
+        } else {
+          // Dart: заострённый фюзеляж + крыло + киль + кабина.
+          parts.push_back({{0.0f, 0.0f, -0.10f}, {0.13f, 0.11f, 0.82f}, hullCol, 0});
+          parts.push_back({{0.0f, 0.02f, -0.48f}, {0.09f, 0.08f, 0.16f}, glassCol, 0});
+          parts.push_back({{0.0f, -0.02f, 0.22f}, {0.78f, 0.035f, 0.34f}, wingCol, 0});
+          parts.push_back({{0.0f, 0.15f, 0.28f}, {0.035f, 0.22f, 0.30f}, wingCol, 0});
+        }
+        if (s_shipShader) {
+          s_shipShader->bind();
+          s_shipShader->setUniformMat4f("u_MVP", mvp);
+          s_shipShader->setUniform3f("u_CamPos", eye);
+          for (const ShipPart& p : parts) {
+            glm::mat4 model = shipModel *
+                              glm::translate(glm::mat4(1.0f), p.pos);
+            if (p.ring == 1) {
+              // RingMesh лежит в XZ (нормаль +Y) — поворот в плоскость XY.
+              model = model * glm::rotate(glm::mat4(1.0f),
+                                          glm::radians(90.0f),
+                                          glm::vec3(1.0f, 0.0f, 0.0f));
+            }
+            model = model * glm::scale(glm::mat4(1.0f), p.scale);
+            s_shipShader->setUniformMat4f("u_Model", model);
+            s_shipShader->setUniform3f("u_InvScale", 1.0f / p.scale.x,
+                                       1.0f / p.scale.y, 1.0f / p.scale.z);
+            s_shipShader->setUniform1i("u_FlatNormal", p.ring);
+            s_shipShader->setUniform3f("u_BaseColor", p.color);
+            if (p.ring == 1) {
+              s_shipRing.draw();
+            } else {
+              s_shipSphere.draw();
+            }
+          }
+          s_shipShader->unbind();
+        }
+        // Трейл + движок: без depth, аддитивно поверх корпуса.
         glDisable(GL_DEPTH_TEST);
         glDepthMask(GL_FALSE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         m_linesShader->bind();
         m_linesShader->setUniformMat4f("u_MVP", mvp);
         m_linesShader->setUniformMat4f("u_Model", shipModel);
         m_linesShader->setUniform1f("u_Time", time);
-        // Emissive-контур выбранного корпуса.
-        const int style = warpdrive::shipStyle();
-        if (style == 1) {
-          // Ring Ship: голубовато-белый фюзеляж.
-          m_linesShader->setUniform3f("u_LineColor", 0.85f, 0.92f, 1.0f);
-          s_ringShip.drawLines();
-        } else if (style == 2) {
-          m_linesShader->setUniform3f("u_LineColor", 0.92f, 0.96f, 1.0f);
-          s_shuttle.drawLines();
-        } else {
-          m_linesShader->setUniform3f("u_LineColor", 0.92f, 0.96f, 1.0f);
-          s_hull.drawLines();
-          m_linesShader->setUniform3f("u_LineColor", 0.55f, 0.78f, 1.0f);
-          s_keel.drawLines();
-        }
-        // Тусклый равномерный шлейф (per-vertex alpha у LineMesh нет).
         m_linesShader->setUniform3f("u_LineColor", 0.25f, 0.45f, 0.70f);
         s_trail.drawLines();
         m_linesShader->unbind();
@@ -1244,6 +1203,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_engine.draw();
           m_starShader->unbind();
         }
+        glDisable(GL_BLEND);
         glDepthMask(GL_TRUE);
       } catch (...) {
         // Корабль никогда не ломает кадр.

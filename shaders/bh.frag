@@ -392,37 +392,43 @@ void main() {
     // Independent of u_DiskOn so it shows with disk on or off.
     // Volumetric emission is step-invariant: scaled by hAdapt/0.125 (legacy
     // far step), so the adaptive march integrates the same totals as before.
+    // v2.7: longer reach (0.08 falloff), brighter core, helical filaments.
     if (u_JetOn == 1) {
       float jetStepK = hAdapt / 0.125;
       float axSin = length(x.xz) / max(r, 1e-6);
       float phiJet = atan(x.z, x.x);
-      if (axSin < 0.12 && r >= 2.0 && r <= 25.0) {
+      if (axSin < 0.14 && r >= 2.0 && r <= 32.0) {
         float streaks = diskFbm(vec2(r * 1.5 - u_Time * 0.4, phiJet * 2.0));
         float knots = pow(max(streaks, 0.0), 3.0);
+        // Helical filament: two strands winding along the jet axis.
+        float helix = 0.5 + 0.5 * sin(phiJet * 2.0 + r * 0.55 - u_Time * 1.6);
+        float helix2 = 0.5 + 0.5 * sin(phiJet * 2.0 + 3.14159 + r * 0.55 - u_Time * 1.6);
+        float filament = max(helix, helix2);
         // Tuned: volumetric emission integrates over many in-cone steps;
-        // 0.008 was invisible, 0.1+ saturates white; 0.03 reads as a jet.
-        vec3 jcol = vec3(0.60, 0.75, 1.0) * knots * exp(-(r - 2.0) * 0.12) * 0.03 * jetStepK;
+        // 0.1+ saturates white; 0.045 + filaments reads as a structured jet.
+        vec3 jcol = vec3(0.60, 0.75, 1.0) * (knots + 0.35 * filament * knots)
+            * exp(-(r - 2.0) * 0.08) * 0.045 * jetStepK;
         accumColor += (1.0 - accumAlpha) * jcol * float(u_JetOn);
         // HST-1-like knots: 3 discrete blobs riding outward from the core,
         // fading with travel distance. Axial (r) + time only — symmetric
         // about the jet axis, disk/beaming math untouched. Kept dim: the
         // volumetric march integrates over many in-cone steps, 0.05 saturated
         // the whole column white (proven by m87.png); 0.006 reads as knots.
-        float kR0 = 2.0 + fract(u_Time * 0.10 + 0.00) * 14.0;
-        float kR1 = 2.0 + fract(u_Time * 0.10 + 0.37) * 14.0;
-        float kR2 = 2.0 + fract(u_Time * 0.10 + 0.71) * 14.0;
+        float kR0 = 2.0 + fract(u_Time * 0.10 + 0.00) * 18.0;
+        float kR1 = 2.0 + fract(u_Time * 0.10 + 0.37) * 18.0;
+        float kR2 = 2.0 + fract(u_Time * 0.10 + 0.71) * 18.0;
         float kSig = 0.0;
-        kSig += exp(-pow((r - kR0) * 2.2, 2.0)) * exp(-(kR0 - 2.0) * 0.12);
-        kSig += exp(-pow((r - kR1) * 2.2, 2.0)) * exp(-(kR1 - 2.0) * 0.12);
-        kSig += exp(-pow((r - kR2) * 2.2, 2.0)) * exp(-(kR2 - 2.0) * 0.12);
-        vec3 kcol = vec3(0.65, 0.78, 1.0) * kSig * 0.006 * jetStepK;
+        kSig += exp(-pow((r - kR0) * 2.0, 2.0)) * exp(-(kR0 - 2.0) * 0.08);
+        kSig += exp(-pow((r - kR1) * 2.0, 2.0)) * exp(-(kR1 - 2.0) * 0.08);
+        kSig += exp(-pow((r - kR2) * 2.0, 2.0)) * exp(-(kR2 - 2.0) * 0.08);
+        vec3 kcol = vec3(0.65, 0.78, 1.0) * kSig * 0.008 * jetStepK;
         accumColor += (1.0 - accumAlpha) * kcol * float(u_JetOn);
       }
       // Faint radio lobe: wide dim shell around the jet base, axial + time.
-      if (axSin < 0.38 && r >= 2.0 && r <= 16.0) {
-        float lobeR = exp(-pow((r - 5.0) / 6.0, 2.0));
-        float lobeW = 1.0 - smoothstep(0.12, 0.38, axSin);
-        vec3 lobeCol = vec3(0.45, 0.55, 0.85) * lobeR * lobeW * 0.002 * jetStepK;
+      if (axSin < 0.42 && r >= 2.0 && r <= 20.0) {
+        float lobeR = exp(-pow((r - 6.0) / 7.0, 2.0));
+        float lobeW = 1.0 - smoothstep(0.14, 0.42, axSin);
+        vec3 lobeCol = vec3(0.45, 0.55, 0.85) * lobeR * lobeW * 0.003 * jetStepK;
         accumColor += (1.0 - accumAlpha) * lobeCol * float(u_JetOn);
       }
     }
@@ -444,6 +450,11 @@ void main() {
     // same profile as the procedural cubemap. Neutral at u_BandK == 1.0.
     float bandW = exp(-abs(skyDir.y) * 5.0);
     sky *= 1.0 + (u_BandK - 1.0) * bandW;
+    // Einstein-ring lensing: rays that grazed the photon sphere magnify
+    // the lensed sky. Peak at minR ~ 1.5 Rs, falls off by ~3.5 Rs.
+    float lensQ = (minR - 1.5 * u_Rs) / (1.1 * u_Rs);
+    float lensMag = 1.0 + 0.55 * exp(-lensQ * lensQ);
+    sky *= lensMag;
     // Jet glow lives in accumColor with no alpha; add it even with disk off
     // (sgra accumulates nothing, so its disk-off frame is unchanged).
     // Capture branch above stays black: the hole absorbs light.

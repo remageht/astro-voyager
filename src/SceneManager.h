@@ -21,7 +21,7 @@ struct RenderSettings {
   float stepSize = 0.05f;
   int maxSteps = 600;
   float fovDegrees = 60.0f;
-  bool diskOn = false;
+  bool diskOn = true;  // accretion disk visible by default (harness overrides)
 };
 
 // User-spawned rock (object editor, Universe-Sandbox-style v1).

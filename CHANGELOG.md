@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2.7.0 - 2026-10-14
+
+## What's new / Что нового
+- EN: Solid warp-ship hulls — wireframe silhouettes replaced with shaded ellipsoid/torus geometry (Dart, Ring Ship IXS, Shuttle); accretion disk now on by default at black hole stations.
+- EN: M87* jet upgrade — longer reach, brighter core, dual helical filaments winding along the axis, denser HST-1 knots, wider radio lobe.
+- EN: Einstein-ring lensing — lensed background sky magnified near the photon sphere, making the ring of light around the shadow clearly brighter.
+- EN: Photo mode (F8) — hides all UI, exposure slider, Save PNG to docs/photos/; auto-orbit (O) circles the camera around the current station, WASD exits.
+- EN: Gravitational time-dilation clock in the status bar at black hole stations — ship-clock rate dτ/dt = sqrt(1−Rs/r) with live distance in Rs.
+- RU: Сплошные корпуса варп-корабля — каркасные силуэты заменены на отрисованные эллипсоиды/торы (Dart, Ring Ship IXS, Shuttle); аккреционный диск ЧД включён по умолчанию.
+- RU: Апгрейд джета M87* — большая длина, ядро ярче, две геликоидальные нити вдоль оси, плотнее узлы HST-1, шире радио-лоб.
+- RU: Линзирование кольца Эйнштейна — линзованный фон усилен у фотонной сферы, кольцо света вокруг тени заметно ярче.
+- RU: Фото-режим (F8) — скрывает UI, слайдер exposure, Save PNG в docs/photos/; автоорбита (O) кружит камеру вокруг станции, WASD выходит.
+- RU: Часы гравитационного замедления в статус-баре на ЧД — ход корабельных часов dτ/dt = sqrt(1−Rs/r) с живой дистанцией в Rs.
+- Gates / Гейты: ctest 3/3, static checks 167, doppler 1.448 PASS.
+
 ## 2.6.0 - 2026-10-14
 
 ## What's new / Что нового
