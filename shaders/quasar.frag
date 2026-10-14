@@ -1,12 +1,19 @@
 #version 330 core
-// 3C 273 quasar impostor: HDR core + thin blue jet + faint host + starfield.
-// ACES + vignette + grain. Diffraction spikes removed (cheap look).
+// 3C 273 quasar impostor (P2 revision): HDR core + relativistic jets +
+// NT-disk + corona halo + de Vaucouleurs host + hard shadow + photon ring.
+// Adapted from the WebGL Schwarzschild-reference ideas (FS_RAY + bloom):
+// jet double-helix/knots/cocoon/beaming, disk NT+bbody/two-phase blend,
+// exponential corona, hard shadow, m=1 host, dust torus. Refit to our
+// GLSL 3.3 impostor: screen-space uv, u_Time epoch 1.0 (harness determinism),
+// u_QCoreK/u_QZoom semantics kept, u_Exposure last, ACES+gamma as project.
+// No bloom pass (separate task). No reference background stars (own skybox).
+// Diffraction spikes removed (cheap look).
 out vec4 FragColor;
 in vec2 v_TexCoord;
 uniform vec3 u_CoreColor;
 uniform float u_Time;
 uniform float u_Exposure;
-uniform float u_QCoreK;  // quasar core gain (default 1.0; qso 2.2): core + inner glow up, host down
+uniform float u_QCoreK;  // quasar core gain (default 1.0; qso 1.5): core+ring+corona up, host down
 uniform float u_QZoom;  // close-up magnification from camera distance (neutral 1.0)
 
 float hash21(vec2 p) {
@@ -15,17 +22,51 @@ float hash21(vec2 p) {
   return fract(p.x * p.y);
 }
 
-float hash11(float p) {
-  p = fract(p * 443.8975);
-  p *= p + 19.19;
-  return fract(p * p);
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i);
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-float noise1D(float p) {
-  float i = floor(p);
-  float f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(hash11(i), hash11(i + 1.0), f);
+float fbm4(vec2 p) {
+  float s = 0.0;
+  float a = 0.5;
+  mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+  for (int i = 0; i < 4; i++) {
+    s += a * vnoise(p);
+    p = m * p;
+    a *= 0.5;
+  }
+  return s / 0.9375;
+}
+
+// Blackbody after Tanner (piecewise-logarithmic, result ^2.2), linear space.
+vec3 bbody(float Tk) {
+  float t = clamp(Tk, 1000.0, 40000.0) / 100.0;
+  float rr;
+  float gg;
+  float bb;
+  if (t <= 66.0) {
+    rr = 1.0;
+    gg = clamp(0.39008158 * log(t) - 0.63184144, 0.0, 1.0);
+  } else {
+    float u = t - 60.0;
+    rr = clamp(1.29293619 * pow(u, -0.13320476), 0.0, 1.0);
+    gg = clamp(1.12989086 * pow(u, -0.07551485), 0.0, 1.0);
+  }
+  if (t >= 66.0) {
+    bb = 1.0;
+  } else if (t <= 19.0) {
+    bb = 0.0;
+  } else {
+    bb = clamp(0.54320679 * log(t - 10.0) - 1.19625409, 0.0, 1.0);
+  }
+  return pow(vec3(rr, gg, bb), vec3(2.2));
 }
 
 vec3 acesNarkowicz(vec3 x) {
@@ -47,139 +88,173 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float gain) {
   return mask * glow * bright * tint;
 }
 
+// Disk plasma density: differential rotation, spiral arms cos(2phi+2.4*ln r),
+// fbm turbulence + rings. rq is the effective Rs-radius (ISCO = 3 at inner edge).
+float diskDensity(vec2 xz, float rq, float t) {
+  float th = t * 0.707 * pow(rq, -1.5);
+  float c = cos(th);
+  float s = sin(th);
+  vec2 q = vec2(c * xz.x + s * xz.y, -s * xz.x + c * xz.y);
+  float phi = atan(xz.y, xz.x) - th;
+  float arms = 0.5 + 0.5 * cos(2.0 * phi + 2.4 * log(max(rq, 1e-3)));
+  arms *= arms;
+  float n = fbm4(q * 0.55);
+  float n2 = fbm4(q * 1.7 + n * 2.2);
+  float n3 = fbm4(q * 5.0 - n2 * 1.5);
+  float rings = 0.5 + 0.5 * sin(rq * 4.5 + n * 5.0);
+  float d = 0.38 + 0.55 * (n - 0.5) + 0.5 * (n2 - 0.5) + 0.38 * (n3 - 0.5)
+          + 0.50 * (arms - 0.4) + 0.12 * (rings - 0.5);
+  return clamp(d, 0.04, 1.5);
+}
+
 void main() {
   vec2 uv = v_TexCoord * 2.0 - 1.0;
   // Close-up zoom driven by camera distance (SceneManager sets u_QZoom from
-  // spawn/dist, clamped >= 1). Far away qz == 1.0: pixel-identical framing.
+  // spawn/dist, clamped >= 1). Far away qz == 1.0: framing anchored.
   float qz = (u_QZoom <= 0.0) ? 1.0 : u_QZoom;
   uv /= qz;
-  // Up-close detail smoothing: 0 at qz == 1 (reference frames unchanged).
+  // Up-close detail relaxation: 0 at qz == 1.
   float qCloseK = smoothstep(2.0, 6.0, qz);
+  // Harness epoch: live evolution anchored so time == 1.0 is deterministic.
+  float tE = u_Time - 1.0;
   float r = length(uv);
 
-  // Central black-hole shadow absorbs core/host/disk light inside r < 0.015,
-  // at any zoom: the shadow stays dark and hard-edged, no rings inside it.
+  // Hard black-hole shadow absorbs everything inside r < 0.015, at any zoom.
   float shadow = smoothstep(0.010, 0.015, r);
 
-  // Near-black sky.
+  // Near-black sky + own starfield layers (reference background NOT ported).
   vec3 col = vec3(0.004, 0.005, 0.009);
-
-  // Background starfield: two depth layers, power-law brightness.
   col += starLayer(uv, 90.0, 0.992, 1.4);
   col += starLayer(uv + vec2(13.1), 190.0, 0.985, 0.55);
 
-  // Faint elliptical host galaxy under the core. Dimmed as the core gain
-  // rises (x0.7 at u_QCoreK == 2.2); exactly neutral at u_QCoreK == 1.0.
+  // Torn elliptical host (de Vaucouleurs r^1/4), m=1 lopsidedness only
+  // (no m=2 flower), fbm raggedness, dust-torus extinction at mid radii.
+  // Dimmed as the core gain rises (x0.7 at u_QCoreK == 2.2); neutral at 1.0.
   float hostK = mix(1.0, 0.7, clamp((u_QCoreK - 1.0) / 1.2, 0.0, 1.0));
   vec2 euv = vec2(uv.x, uv.y * 1.6);
   float re = length(euv);
-  vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.030 * exp(-pow(re / 0.2, 0.25));
+  float reS = max(re, 1e-4);
+  vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.030 * exp(-pow(reS / 0.2, 0.25));
   hostCol *= 1.0 - smoothstep(0.3, 1.0, re);
-  // Host spiral: m=2 base + phase-shifted m=1 lopsidedness + weak m=3 —
-  // breaks the perfect two-arm symmetry. Light one-sidedness along the jet
-  // (+x) plus a faint ejection wisp. Core (u_QCoreK) untouched.
   float hostAng = atan(euv.y, euv.x) - u_Time * 0.05;
-  float hostSpiral = 0.5 + 0.5 * sin(hostAng * 2.0 + re * 9.0);
-  float hostM1 = 0.5 + 0.5 * sin(hostAng * 1.0 + 1.3 + re * 4.0);
-  float hostM3 = 0.5 + 0.5 * sin(hostAng * 3.0 - 0.7 + re * 12.0);
-  hostCol *= 1.0 + (0.45 * (hostSpiral - 0.5) + 0.28 * (hostM1 - 0.5) + 0.12 * (hostM3 - 0.5)) * exp(-re * 4.0);
-  float jetSide = clamp(euv.x / max(re, 1e-3), -1.0, 1.0);
-  hostCol *= 1.0 + 0.14 * jetSide * exp(-re * 3.0);
-  float jetEject = exp(-pow(abs(euv.y) - 0.02, 2.0) * 800.0) * exp(-max(euv.x, 0.0) * 4.0) * step(0.0, euv.x) * exp(-re * 2.0);
-  hostCol += vec3(0.55, 0.60, 0.75) * jetEject * 0.012;
-  hostCol *= hostK;
-  hostCol *= shadow;
+  float hostM1 = 0.5 + 0.5 * sin(hostAng + 1.3 + re * 4.0);
+  float rag = fbm4(euv * 14.0 + vec2(3.7)) - 0.5;
+  hostCol *= 1.0 + (0.60 * (hostM1 - 0.5) + 0.90 * rag) * exp(-re * 4.0);
+  float dTor = (re - 0.38) / 0.10;
+  hostCol *= 1.0 - 0.55 * exp(-dTor * dTor);
+  hostCol *= hostK * shadow;
   col += hostCol;
 
-  // Rotating accretion disk swirl, face-on spiral with differential
-  // (Kepler-like) shear: inner pattern laps the outer one, visibly winding
-  // live. Anchored to the harness epoch (u_Time == 1.0): the reference frame
-  // is bit-identical to the legacy rigid rotation (baseAngle - 0.25).
-  // Up close the spiral relaxes to its mean (no moire rings near the core).
-  float baseAngle = atan(uv.y, uv.x);
+  // Accretion disk: NT temperature profile + bbody color, Kepler shear,
+  // spiral arms, fbm rings; two-phase blend (half-period shifted copies,
+  // weights wA/(1-wA)) so the winding never grows unbounded. Disk plane is
+  // the flattened vec2(1.0, 2.2) projection; approaching side is -x.
   float diskR = length(uv * vec2(1.0, 2.2));
-  float qOm = 0.004 * pow(max(diskR, 1e-3), -1.5);
-  float patternAngle = baseAngle - (0.25 * 1.0 + qOm * (u_Time - 1.0));
-  float spiral = sin(patternAngle * 3.0 + diskR * 18.0);
-  float spiralSm = mix(spiral, 0.0, qCloseK);
-  float diskMask = smoothstep(0.004, 0.015, diskR) * (1.0 - smoothstep(0.015, 0.12, diskR));
-  float diskBright = (0.5 + 0.5 * spiralSm) * diskMask * exp(-diskR * 6.0);
-  diskBright *= shadow;
-  col += vec3(0.65, 0.75, 1.0) * diskBright * 0.6;
+  float rn = diskR / 0.015;
+  float rq = rn + 2.0;
+  float PER = 40.0;
+  float tD = tE * 2.5;
+  float tA = mod(tD, PER);
+  float tB = mod(tD + 0.5 * PER, PER);
+  float wA = 1.0 - abs(2.0 * tA / PER - 1.0);
+  vec2 dxz = vec2(uv.x, uv.y * 2.2) * 38.0;
+  float dens = wA * diskDensity(dxz, rq, tA) + (1.0 - wA) * diskDensity(dxz, rq, tB);
+  float densEff = mix(dens, 0.80, qCloseK * 0.35);
+  float edge = smoothstep(0.015, 0.019, diskR) * (1.0 - smoothstep(0.09, 0.13, diskR));
+  float beta = sqrt(0.5 / rq);
+  float gam = inversesqrt(1.0 - beta * beta);
+  float side = -uv.x / max(r, 1e-3);
+  float bn = beta * side;
+  float dop = clamp(1.0 / (gam * (1.0 - bn)), 0.4, 3.0);
+  float grav = sqrt(max(1.0 - 1.0 / rq, 0.02));
+  float Tobs = clamp(21000.0 * pow(3.0 / rq, 0.85) * dop * grav, 1000.0, 40000.0);
+  vec3 dcol = bbody(Tobs);
+  float inten = pow(Tobs / 8500.0, 2.8);
+  vec3 diskTerm = dcol * (inten * densEff * 0.13) * edge * shadow;
+  diskTerm *= mix(1.0, 0.55, qCloseK);
+  col += diskTerm;
 
-  // Thin blue jet along x axis, one side longer (+x).
-  float d = abs(uv.y + 0.12 * uv.x + sin(u_Time * 0.3) * 0.008);
-  float width = 1.0 - smoothstep(0.004, 0.012, d);
+  // Corona: exponential atmosphere over the disk, peaking at the inner edge,
+  // white-blue, mildly beamed. It (not a naked gain) feeds the blinding halo.
+  float ayC = abs(uv.y);
+  float hc = 0.012 + 0.004 * rn;
+  float eC = exp(-ayC / hc) * pow(3.0 / max(rq, 2.4), 1.5)
+           * (1.0 - smoothstep(0.09, 0.16, r)) * smoothstep(0.015, 0.019, diskR);
+  float betaC = sqrt(0.5 / max(rq, 1.5));
+  float bm = clamp(pow(1.0 / (1.0 - betaC * side), 2.5), 0.25, 4.0);
+  vec3 corCol = vec3(0.62, 0.76, 1.0) * eC * bm * 0.20;
+  corCol *= mix(1.0, 0.25, qCloseK);
+  col += corCol * shadow;
+
+  // Relativistic jets along x (+x approaching, boosted; -x de-beamed):
+  // double helical filaments (two cos threads, pi shift, ^3), travelling
+  // shock knots (sin^5), wide weak cocoon, blue->magenta gradient along the
+  // length, smooth turn-on at the base, fade-out at the tip, 0.92c beaming
+  // with sign(s) for the two sides, clamped gain.
+  float tilt = uv.y + 0.12 * uv.x + sin(u_Time * 0.3) * 0.008;
+  float wig = 0.0020 * sin(abs(uv.x) * 18.0 - tE * 1.3);
+  float rho = abs(tilt - wig);
   float s = uv.x;
-  // PH x2 outflow (was 0.15): streaks visibly ride outward live; anchored
-  // to the harness epoch so the reference frame is bit-identical.
-  float sAdv = s - (0.15 * 1.0 + 0.30 * (u_Time - 1.0));
-  float n = noise1D(sAdv * 8.0 + 1.7);
-  float knots = pow(n, 8.0) * 0.8;
-  knots *= exp(-abs(s) * 2.0) + 0.25;
-  float jetBright = 0.08 + knots * 0.34;
-  float envP = exp(-max(s, 0.0) * 2.2);
-  float envN = exp(-max(-s, 0.0) * 5.5);
-  float env = mix(envN, envP, step(0.0, s));
-  float axial = smoothstep(0.008, 0.03, abs(s));
-  float jetMask = width * env * axial * (1.0 - smoothstep(0.2, 0.9, r));
-  vec3 jetCol = vec3(0.60, 0.72, 1.0) * jetBright;
-  jetMask *= 0.9 + 0.1 * sin(u_Time * 1.5 + s * 20.0);
-  col += jetMask * jetCol;
-  // Discrete blobs riding outward along +x, fading with travel distance.
-  // Radial-in-|s| + time only; gated to +x so the de-beamed counter-jet
-  // keeps its asymmetry. PH x2 outflow (was 0.12): clumps visibly stream
-  // live; harness-epoch anchored, reference frame bit-identical.
-  float bR0 = 0.03 + fract(0.12 * 1.0 + 0.24 * (u_Time - 1.0) + 0.00) * 0.45;
-  float bR1 = 0.03 + fract(0.12 * 1.0 + 0.24 * (u_Time - 1.0) + 0.37) * 0.45;
-  float bR2 = 0.03 + fract(0.12 * 1.0 + 0.24 * (u_Time - 1.0) + 0.71) * 0.45;
-  float bSig = 0.0;
-  bSig += exp(-pow((abs(s) - bR0) * 14.0, 2.0)) * exp(-bR0 * 3.0);
-  bSig += exp(-pow((abs(s) - bR1) * 14.0, 2.0)) * exp(-bR1 * 3.0);
-  bSig += exp(-pow((abs(s) - bR2) * 14.0, 2.0)) * exp(-bR2 * 3.0);
-  col += vec3(0.62, 0.74, 1.0) * bSig * width * axial * 0.5 * step(0.0, s);
-
-  // Faint receding counter-jet (-x), de-beamed: mirrored s, wider, shorter, dimmer.
-  float sC = -s;
-  float sCAdv = sC - (0.15 * 1.0 + 0.30 * (u_Time - 1.0));
-  float nC = noise1D(sCAdv * 8.0 + 1.7);
-  float knotsC = pow(nC, 8.0) * 0.8;
-  knotsC *= exp(-abs(sC) * 2.0) + 0.25;
-  float jetBrightC = (0.08 + knotsC * 0.34) * 0.15;
-  float envCP = exp(-max(sC, 0.0) * 2.2);
-  float envCN = exp(-max(-sC, 0.0) * 5.5);
-  float envC = mix(envCN, envCP, step(0.0, sC));
-  float dC = abs(uv.y + 0.12 * uv.x + sin(u_Time * 0.3) * 0.008);
-  float widthC = min((1.0 - smoothstep(0.004, 0.012, dC)) * 1.6, 1.0);
-  float axialC = smoothstep(0.008, 0.03, abs(sC));
-  float cjShort = 1.0 - smoothstep(0.30, 0.54, abs(sC));
-  float sideC = 1.0 - step(0.0, s);
-  float jetMaskC = widthC * envC * axialC * cjShort * sideC * (1.0 - smoothstep(0.2, 0.9, r));
-  vec3 jetColC = vec3(0.60, 0.72, 1.0) * jetBrightC;
-  jetMaskC *= 0.9 + 0.1 * sin(u_Time * 1.5 + sC * 20.0);
-  col += jetMaskC * jetColC;
+  float ay = abs(s);
+  float wJ = 0.0045 + 0.011 * ay;
+  float xJ = rho / max(wJ, 1e-5);
+  float coreJ = exp(-xJ * xJ * 1.6);
+  float tJ = tE * 1.3;
+  float tK = tE * 2.2;
+  float phJ = ay * 21.0 - tJ;
+  float helix = pow(0.5 + 0.5 * cos(phJ), 3.0) + pow(0.5 + 0.5 * cos(phJ + 3.14159265), 3.0);
+  float dTh = (xJ - 0.72) * 2.8;
+  float thread = exp(-dTh * dTh) * helix;
+  float knot = pow(0.5 + 0.5 * sin(ay * 19.0 - tK + 1.3 * sin(ay * 7.0)), 5.0);
+  float fadeIn = smoothstep(0.008, 0.030, ay);
+  float fadeOut = 1.0 - smoothstep(0.26, 0.95, ay);
+  float wisp = 0.7 + 0.3 * sin(s * 40.0 + ay * 18.0 - tK * 0.6)
+                   * sin(tilt * 90.0 - ay * 14.0 + tK * 0.4);
+  float cocoon = exp(-xJ * xJ * 0.09) * 0.05;
+  float eJ = (0.30 * coreJ + 0.9 * thread + cocoon) * (0.25 + 1.7 * knot) * fadeIn * fadeOut * wisp;
+  float tt = clamp(ay / 0.85, 0.0, 1.2);
+  vec3 jc = mix(vec3(0.42, 0.68, 1.0), vec3(0.72, 0.25, 0.95), smoothstep(0.08, 0.85, tt));
+  jc = mix(jc, vec3(0.88, 0.96, 1.0), knot * 0.45 * coreJ);
+  float betaJ = 0.92;
+  float gamJ = inversesqrt(1.0 - betaJ * betaJ);
+  float mu = 0.7;
+  float dop0 = 1.0 / gamJ;
+  float beam = (s >= 0.0)
+      ? pow((1.0 / (gamJ * (1.0 - betaJ * mu))) / dop0, 2.2)
+      : pow((1.0 / (gamJ * (1.0 + betaJ * mu))) / dop0, 2.2);
+  beam = clamp(beam, 0.02, 12.0);
+  float gate = 1.0 - smoothstep(0.2, 0.9, r);
+  vec3 jetCol = jc * eJ * beam * 0.55;
+  jetCol *= mix(1.0, 0.30, qCloseK);
+  // Dust-torus extinction crosses the jet too (dark gap at mid radii).
+  jetCol *= 1.0 - 0.45 * exp(-dTor * dTor);
+  if (xJ < 5.0) {
+    col += jetCol * gate * shadow;
+  }
 
   // HDR core with tight falloff, 2-3 px feel. No cross spikes.
   // BH vs quasar look: a black hole shows a dark shadow + lensed thin disk
   // with a dark core; a quasar core outshines everything (u_QCoreK) + jets.
-  // Central black-hole shadow absorbs core light inside r < 0.015.
-  float coreFall = 1.0 / (1.0 + r * r * 12000.0);
+  // The shadow absorbs core light inside r < 0.015.
+  float coreFall = 1.0 / (1.0 + r * r * 20000.0);
   vec3 coreBase = vec3(1.0, 0.98, 0.94) * 10.0;
   vec3 tint = u_CoreColor / vec3(1.0, 0.85, 0.65);
   float flick = 0.94 + 0.05 * sin(u_Time * 2.3) + 0.02 * sin(u_Time * 5.7);
-  // Proximity dimming: blinding from afar, compact structured core/ring up
-  // close (no milky blowout at qso_close). Narrower falloff + deeper dimming.
-  float proxDim = mix(1.0, 0.12, qCloseK);
+  // Proximity dimming: blinding from afar, compact structured core/ring/halo
+  // up close (no milky blowout at qso_close). Disk/jet keep their own
+  // milder close gating so structure keeps reading.
+  float proxDim = mix(1.0, 0.08, qCloseK);
   col += coreBase * tint * coreFall * flick * shadow * u_QCoreK * proxDim;
 
-  // Compact white glow ring hugging the shadow (closer in, narrower, whiter).
-  float ringQ = (r - 0.026) * 120.0;
-  float ringBright = exp(-ringQ * ringQ);
-  float ang = atan(uv.y, uv.x) - u_Time * 1.5;
-  float asym = 0.55 + 0.45 * sin(ang * 2.0);
-  col += vec3(1.0, 0.93, 0.82) * ringBright * asym * (3.0 * u_QCoreK) * proxDim;
+  // Thin white photon ring hugging the shadow edge, slight m=1 asymmetry
+  // (spin fake). Shadow-gated so nothing leaks into the black disc.
+  float ringD = (r - 0.0195) * 150.0;
+  float ringB = exp(-ringD * ringD);
+  float ang = atan(uv.y, uv.x) - u_Time * 0.35;
+  float asym = 0.72 + 0.28 * sin(ang);
+  col += vec3(1.0, 0.96, 0.90) * ringB * asym * (2.6 * u_QCoreK) * proxDim * shadow;
 
-  // PH core-touch hint: a soft white flash when the camera pushes into the
+  // Core-touch hint: a soft white flash when the camera pushes into the
   // core shell (qz > 8, i.e. D < ~3 at spawn 25) to accompany the solid
   // slide handled on CPU. Zero for all reference framings (spawn qz = 1,
   // qso_close qz = 5): pixel-identical. Ascending smoothstep, u_QZoom read
