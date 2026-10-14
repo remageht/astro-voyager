@@ -2327,7 +2327,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   AppGL app(1280, 720, false);
 
   const std::vector<std::string> targetStations = {
-      "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87"
+      "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104"
   };
 
   for (const auto& stId : targetStations) {

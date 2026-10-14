@@ -38,6 +38,20 @@
       "spawnDistanceRs": 80.0
     },
     {
+      "id": "m51",
+      "type": "galaxy",
+      "name": "Whirlpool (M51)",
+      "description": "Whirlpool spiral: two open arms.",
+      "spawnDistanceRs": 90.0
+    },
+    {
+      "id": "m104",
+      "type": "galaxy",
+      "name": "Sombrero (M104)",
+      "description": "Sombrero: bright bulge, dark dust lane.",
+      "spawnDistanceRs": 85.0
+    },
+    {
       "id": "m1",
       "type": "nebula",
       "name": "Crab Nebula (M1)",

@@ -637,6 +637,25 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_galaxyShader->setUniform1f("u_M31Dist", static_cast<float>(dist));
     m_galaxyShader->setUniform1f("u_Exposure", m_exposure);
 
+    // Per-galaxy look by station id. Defaults = M31 constants 1:1, so an
+    // unknown id (and m31 itself) renders exactly as before.
+    float galSeed = 0.0f, galArms = 2.0f, galPitch = 3.5f;
+    float galBulge = 8.5f, galDust = 1.0f, galArmGain = 1.0f;
+    const std::string& galId = m_currentStation->id;
+    if (galId == "m51") {
+      galSeed = 3.7f; galArms = 2.0f; galPitch = 2.2f;
+      galBulge = 4.5f; galDust = 0.7f; galArmGain = 1.2f;
+    } else if (galId == "m104") {
+      galSeed = 9.1f; galArms = 2.0f; galPitch = 4.2f;
+      galBulge = 12.0f; galDust = 1.6f; galArmGain = 0.45f;
+    }
+    m_galaxyShader->setUniform1f("u_GalSeed", galSeed);
+    m_galaxyShader->setUniform1f("u_GalArms", galArms);
+    m_galaxyShader->setUniform1f("u_GalPitch", galPitch);
+    m_galaxyShader->setUniform1f("u_GalBulge", galBulge);
+    m_galaxyShader->setUniform1f("u_GalDust", galDust);
+    m_galaxyShader->setUniform1f("u_GalArmGain", galArmGain);
+
     m_screenQuad->draw();
     m_galaxyShader->unbind();
 

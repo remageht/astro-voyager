@@ -18,6 +18,14 @@ uniform float u_M31Dist;
 // Slow pattern rotation (radians), driven by sim time on the CPU
 // (0 in the screenshot harness, so the reference framing is kept).
 uniform float u_SpinAngle;
+// Per-galaxy look. Defaults below = M31 constants (M31 pixels unchanged).
+// Set every frame by SceneManager (galaxy branch, by station id).
+uniform float u_GalSeed;    // default 0.0: offset of all hash grids
+uniform float u_GalArms;    // default 2.0: spiral arm count
+uniform float u_GalPitch;   // default 3.5: log-spiral winding
+uniform float u_GalBulge;   // default 8.5: bulge HDR peak
+uniform float u_GalDust;    // default 1.0: dust lane strength
+uniform float u_GalArmGain; // default 1.0: smooth arm brightness
 
 // Hash for procedural stars and grain
 float hash21(vec2 p) {
@@ -66,7 +74,7 @@ void main() {
   vec3 bgC = vec3(0.004, 0.005, 0.009);
 
   // Bulge: de-Vaucouleurs-like r^1/4 falloff, HDR peak 8.5 (bright core).
-  float bulge = 8.5 * exp(-pow(max(r * 7.0, 0.0), 0.25) * 3.0);
+  float bulge = u_GalBulge * exp(-pow(max(r * 7.0, 0.0), 0.25) * 3.0);
   vec3 bulgeTerm = bulge * bulgeC;
   // HDR core peak: compact white-hot center (1.0,0.98,0.94) with hard
   // radial rolloff (w = 0.04, Gaussian). Outer bulge nearly unchanged.
@@ -78,15 +86,15 @@ void main() {
   float disk = exp(-r * 2.8) * 0.18;
 
   // Two blue arms (young stars)
-  float spiral = sin(phi * 2.0 - lr * 3.5);
+  float spiral = sin(phi * u_GalArms - lr * u_GalPitch);
   float armMask = smoothstep(0.1, 0.9, spiral) * exp(-r * 1.8) * 1.15;
-  float arm = armMask * 0.22;
+  float arm = armMask * 0.22 * u_GalArmGain;
 
   // Dust lanes: DARKEN disk+arms (dust absorbs), only a faint magenta vein
   // (#c088aa) remains between the arms instead of glowing pink.
-  float dust = sin(phi * 2.0 - lr * 3.5 + 0.6);
+  float dust = sin(phi * u_GalArms - lr * u_GalPitch + 0.6);
   float dustLane = smoothstep(0.3, 0.8, dust) * exp(-r * 2.0) * smoothstep(0.08, 0.35, r);
-  dustLane = clamp(dustLane, 0.0, 1.0);
+  dustLane = clamp(dustLane * u_GalDust, 0.0, 1.0);
   vec3 dustMul = (dustLin / max(dustLin.x, 1e-4)) * 0.18;
   vec3 pinkLin = pow(vec3(0.7529, 0.5333, 0.6667), vec3(2.2));  // magenta #c088aa
   dustMul = mix(dustMul, pinkLin * 0.30, 0.25);
@@ -121,7 +129,7 @@ void main() {
 
   // HII regions: pink star-forming knots sitting ON the arms.
   // Dense grid in galaxy plane (p space, zooms with scene).
-  vec2 hiiGrid = p * 90.0;
+  vec2 hiiGrid = p * 90.0 + u_GalSeed;
   vec2 hiiId = floor(hiiGrid);
   vec2 hiiF = fract(hiiGrid) - 0.5;
   float hiiH = hash21(hiiId);
@@ -135,7 +143,7 @@ void main() {
   // Globular clusters: dense round balls in the halo (compact bright core
   // plus soft envelope reads as a ball, not a point). Isotropic profiles.
   // Coarse grid in galaxy plane (p space, zooms with scene).
-  vec2 gcGrid = p * 14.0;
+  vec2 gcGrid = p * 14.0 + u_GalSeed;
   vec2 gcId = floor(gcGrid);
   vec2 gcF = fract(gcGrid) - 0.5;
   float gcH = hash21(gcId + 7.0);
@@ -160,7 +168,7 @@ void main() {
   // Bright individual star-particle layer on top of the smooth arms.
   // Hash grid in galaxy plane (zooms with scene): ~2000 sharp 1-2px points,
   // alpha ~0.55, white-blue/amber temperature spread. MID approach densifies it.
-  vec2 pg = p * 140.0;
+  vec2 pg = p * 140.0 + u_GalSeed;
   vec2 pId = floor(pg);
   vec2 pF = fract(pg) - 0.5;
   float pH = hash21(pId);
@@ -185,7 +193,7 @@ void main() {
   // Background starfield in screen space (stable under zoom)
   // Sparse subpixel points: 1/(1+d*d*1e6), power-law brightness
   vec2 bq = vec2((v_TexCoord.x * 2.0 - 1.0) * u_Aspect, v_TexCoord.y * 2.0 - 1.0);
-  vec2 sg = bq * 24.0;
+  vec2 sg = bq * 24.0 + u_GalSeed;
   vec2 sid = floor(sg);
   vec2 sf = fract(sg) - 0.5;
   float sh = hash21(sid);
@@ -207,7 +215,7 @@ void main() {
   // Adapted to new palette: denser threshold, blue-to-warm mix, mask rescaled
   float resolve = smoothstep(1.2, 2.2, u_Zoom);
   if (resolve > 0.0) {
-    vec2 gridP = p * 60.0;
+    vec2 gridP = p * 60.0 + u_GalSeed;
     vec2 id = floor(gridP);
     vec2 f = fract(gridP) - 0.5;
     float h = hash21(id);
@@ -219,7 +227,7 @@ void main() {
     col += starHit * glow * cloudMask * resolve * rcol * 1.8;
     // Second sparse bright foreground-star layer (nearer galaxy stars).
     // Same point profile, coarser grid, masked to disk/arms.
-    vec2 gridP2 = p * 23.0;
+    vec2 gridP2 = p * 23.0 + u_GalSeed;
     vec2 id2 = floor(gridP2);
     vec2 f2 = fract(gridP2) - 0.5;
     float hb = hash21(id2 + 9.1);
