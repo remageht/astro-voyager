@@ -1113,7 +1113,7 @@ void AppGL::drawModernTransportBar() {
       ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.00f, 1.00f), "F%d %s",
                          m_warpFactor, warpStatusName(m_warpStatus));
     } else {
-      ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "%s (W)",
+      ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "%s (X)",
                          uiRu("Варп выкл", "Warp off"));
     }
     ImGui::SameLine();
@@ -1167,11 +1167,11 @@ void AppGL::drawModernTransportBar() {
     ImGui::SetWindowFontScale(0.85f);
     ImGui::TextColored(
         ImVec4(0.55f, 0.58f, 0.62f, 1.00f), "%s",
-        uiRu("WASD - полет | мышь - осмотр | T - кинотур | W - варп | "
-             "P - пауза | -/= - темп | / - поиск | F1 - помощь | H - скрыть | "
-             "ESC - меню",
-             "WASD fly | drag look | T tour | W warp | P pause | -/= pace | "
-             "/ search | F1 help | H hide | ESC menu"));
+         uiRu("WASD - полет | мышь - осмотр | T - кинотур | X - варп | "
+              "P - пауза | -/= - темп | / - поиск | F1 - помощь | H - скрыть | "
+              "ESC - меню",
+              "WASD fly | drag look | T tour | X warp | P pause | -/= pace | "
+              "/ search | F1 help | H hide | ESC menu"));
     ImGui::SetWindowFontScale(1.0f);
   }
   ImGui::End();
@@ -1736,6 +1736,7 @@ void AppGL::drawHelpContent() {
   ImGui::BulletText("/ focus station search");
   ImGui::BulletText("F5 export journey, F6 import journey");
   ImGui::BulletText("P pause / resume time");
+  ImGui::BulletText("X warp drive on / off");
   ImGui::BulletText("- / = time pace down / up");
   ImGui::BulletText("Double-click an object to fly to it");
   ImGui::BulletText("Del delete selected rock");
@@ -2544,8 +2545,8 @@ bool AppGL::updateWarp(float deltaTime) {
   // ниже): короткое нажатие включает варп, повторное — выключает.
   // [ / ]: фактор 1-9 (в туннеле прыжка фактор растёт сам, ключи глушим).
   if (!io.WantCaptureKeyboard) {
-    const bool wDown = (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS);
-    if (wDown && !m_prevWPressed) {
+    const bool xDown = (glfwGetKey(win, GLFW_KEY_X) == GLFW_PRESS);
+    if (xDown && !m_prevXPressed) {
       if (!m_warpOn) {
         m_warpOn = true;
         m_warpStatus = 1;  // Cruise
@@ -2558,7 +2559,7 @@ bool AppGL::updateWarp(float deltaTime) {
         disengageWarp();  // в Charging/Jump игнор — катсцену досматриваем
       }
     }
-    m_prevWPressed = wDown;
+    m_prevXPressed = xDown;
 
     const bool lbDown = (glfwGetKey(win, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS);
     const bool rbDown = (glfwGetKey(win, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS);
@@ -2710,6 +2711,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
   // меню после abort не открываем.
   if (!io.WantCaptureKeyboard) {
     m_prevWPressed = (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS);
+    m_prevXPressed = (glfwGetKey(win, GLFW_KEY_X) == GLFW_PRESS);
     m_prevLBracketPressed = (glfwGetKey(win, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS);
     m_prevRBracketPressed = (glfwGetKey(win, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS);
     const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
@@ -2966,7 +2968,7 @@ void AppGL::drawWarpPanel() {
   if (!m_warpOn) return;  // выключен — окна нет, gui.png байт-в-байт
   ImGui::SetNextWindowPos(ImVec2(370.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(300.0f, 0.0f), ImGuiCond_FirstUseEver);
-  ImGui::Begin("Warp Drive (W)");
+  ImGui::Begin("Warp Drive (X)");
 
   ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "Status: %s",
                      warpStatusName(m_warpStatus));
@@ -3014,7 +3016,7 @@ void AppGL::drawWarpPanel() {
     startWarpJump(tgtId);
   }
   if (!canJump) ImGui::EndDisabled();
-  if (ImGui::Button("Disengage (W)", ImVec2(-1.0f, 0.0f))) {
+  if (ImGui::Button("Disengage (X)", ImVec2(-1.0f, 0.0f))) {
     // === WarpJump === (агент J): посреди катсцены не гасим (досматриваем).
     if ((m_warpStatus == 1 || m_warpStatus == 4) && !m_jumpCine) disengageWarp();
   }
@@ -3524,7 +3526,7 @@ void AppGL::audioEnsureOnFirstInput() {
   // Первый ввод: любая из ходовых клавиш/мыши. Полный перебор кодов
   // не делаем (невалидные коды дают GLFW-ошибки) — достаточно витрины.
   static const int kKeys[] = {
-      GLFW_KEY_W, GLFW_KEY_A, GLFW_KEY_S, GLFW_KEY_D,
+      GLFW_KEY_W, GLFW_KEY_X, GLFW_KEY_A, GLFW_KEY_S, GLFW_KEY_D,
       GLFW_KEY_SPACE, GLFW_KEY_ESCAPE, GLFW_KEY_ENTER, GLFW_KEY_M,
       GLFW_KEY_T, GLFW_KEY_P, GLFW_KEY_H, GLFW_KEY_F1, GLFW_KEY_SLASH,
       GLFW_KEY_MINUS, GLFW_KEY_EQUAL, GLFW_KEY_F5, GLFW_KEY_F6,

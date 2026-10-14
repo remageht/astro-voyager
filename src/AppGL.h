@@ -227,6 +227,7 @@ class AppGL {
   int m_warpJumpFromFactor = 1;
   int m_warpSel = 0;  // выбор пункта в варп-панели
   bool m_prevWPressed = false;
+  bool m_prevXPressed = false;
   bool m_prevLBracketPressed = false;
   bool m_prevRBracketPressed = false;
   float m_warpShakePhase = 0.0f;
