@@ -51,14 +51,15 @@ astro-voyager-v2.1.0-windows-x64.zip
 ```
 *Критерий:* 100% тестов проходят (`All BlackHoleInteraction tests passed!`, проверка захвата мыши, блокировки WASD при ImGui вводе и clamp $R \ge 1.05 R_s$).
 
-### Шаг 3. Автоматический рендер всех 6 станций и UI
+### Шаг 3. Автоматический рендер всех станций и UI
 ```powershell
 .\build-gl\Release\astro-voyager.exe --screenshot-all
 ```
-*Критерий:* В каталоге `docs/screens/` сформированы 9 PNG-изображений:
+*Критерий:* В каталоге `docs/screens/` сформированы 13 PNG-изображений:
 `sgra.png`, `qso-3c273.png`, `ori.png`, `uma.png`, `m31.png`, `m1.png`, `sol.png`,
-`m87.png`, `gui.png` (плюс gitignored-хелперы `m31_close.png`, `ori_close.png`
-для проверки ближних планов, в коммит не входят).
+`m87.png`, `m51.png`, `m104.png`, `gui.png` (плюс gitignored-хелперы `m31_close.png`,
+`ori_close.png`, `qso_close.png`, `sgra_close.png` для проверки ближних планов,
+в коммит не входят).
 
 ### Шаг 4. Набор статических тестов репозитория
 ```powershell
