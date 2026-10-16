@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 3.2.0 - 2026-10-16
+
+## What's new / Что нового
+- EN: Black-hole/quasar polish — filament strand texture on the accretion disk, a collimated M87-style jet (cone + spine, 4 knots, asymmetric 0.45 counter-jet); quasar lensed secondary arcs, wider knots, brighter host core; Sgr A* orbital hot-spot flare (close-range only, harness-safe gate).
+- EN: Solar System beautification — Saturn ring shadow on the planet and planet eclipse on the rings, Galilean moons + Titan with moon-transit shadows (u_MoonOcc), Earth ocean glint and night city lights, asteroid belt densified to 5200, faint vertical Uranus rings, Pluto on an inclined eccentric Kuiper orbit.
+- EN: Close-range surface detail — rocky, moon and gas-giant surfaces gain two extra noise octaves that fade in with camera proximity (nearK gate; far screenshots unchanged); dedicated sol/earth close-up harness frames.
+- EN: Flexible object editor v2 — palette of 5 types (rock, rocky planet, moon, gas giant, star) with size, two-colour palette, seed and an optional ring; click-select, live edit of the selected object, delete, clear, collisions (Solar System station).
+- RU: Полировка ЧД и квазара — филаментная текстура диска, коллимированный джет M87-типа (конус + spine, 4 узла, контр-джет 0.45); линзированные дуги квазара, крупнее узлы, ярче ядро; орбитальная вспышка-хотспот Sgr A* (только вблизи, гейт для харнесса).
+- RU: Красоты Солнечной системы — тень колец Сатурна на планете и затмение колец планетой, галилеевы луны + Титан с транзитными тенями (u_MoonOcc), блик океана и ночные огни городов Земли, пояс уплотнён до 5200, слабые вертикальные кольца Урана, Плутон по наклонной эксцентрической орбите.
+- RU: Детализация поверхностей вблизи — скалы, луны и газовые гиганты получают два дополнительных шумовых слоя, проявляющихся при приближении камеры (гейт nearK; дальние кадры не меняются); добавлены хелпер-кадры sol_close/earth_close.
+- RU: Гибкий редактор объектов v2 — палитра из 5 типов (камень, скалистая планета, луна, газовый гигант, звезда) с размером, двумя цветами палитры, seed и опциональным кольцом; выбор кликом, живое редактирование выбранного, удаление, очистка, коллизии (станция Solar System).
+- Gates / Гейты: ctest 3/3, static checks 209, doppler 3.111 PASS.
+
 ## 3.1.0 - 2026-10-14
 
 ## What's new / Что нового

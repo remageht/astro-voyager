@@ -112,7 +112,8 @@ SceneManager::SceneManager() {
 
   m_sphere.setSphere(48, 96);
   m_saturnRing.setRing(1.7f, 2.7f, 128);
-  m_belt.setBelt(2200, 19.5f, 22.5f);
+  // v3.2.0: denser, dimmer belt reads as a dust band instead of speckles.
+  m_belt.setBelt(5200, 19.5f, 22.5f);
 
   {
     std::vector<glm::vec3> orbitVerts;
@@ -146,17 +147,49 @@ SceneManager::SceneManager() {
   applyPreset(PerfPreset::Med);
 }
 
+static const char* customIdPrefix(const CustomBody& b) {
+  if (b.type == 0 || b.detail == 1) return "star";
+  if (b.detail >= 7) return "gas";
+  if (b.detail == 5) return "moon";
+  if (b.detail == 2) return "planet";
+  return "rock";
+}
+
+static const char* customNamePrefix(const CustomBody& b) {
+  if (b.type == 0 || b.detail == 1) return "Star";
+  if (b.detail >= 7) return "Gas giant";
+  if (b.detail == 5) return "Moon";
+  if (b.detail == 2) return "Planet";
+  return "Rock";
+}
+
 void SceneManager::spawnRockAt(const Vec3& p, const Vec3& v) {
-  ++m_customSeq;
   CustomBody b;
-  b.id = "rock-" + std::to_string(m_customSeq);
-  b.name = "Rock " + std::to_string(m_customSeq);
-  b.pos = p;
-  b.vel = v;
   b.radius = 0.3f;
   b.color = Vec3(0.62, 0.58, 0.52);
-  b.seed = static_cast<float>(m_customSeq);
+  b.colorB = Vec3(0.62 * 0.6, 0.58 * 0.6, 0.52 * 0.6);
+  b.type = 2;
+  b.detail = 0;
+  b.seed = 0.0f;  // auto: sequence number (legacy rock behaviour)
+  spawnCustom(b, p, v);
+}
+
+void SceneManager::spawnCustom(const CustomBody& templ, const Vec3& p, const Vec3& v) {
+  ++m_customSeq;
+  CustomBody b = templ;
+  b.id = std::string(customIdPrefix(b)) + "-" + std::to_string(m_customSeq);
+  b.name = std::string(customNamePrefix(b)) + " " + std::to_string(m_customSeq);
+  b.pos = p;
+  b.vel = v;
+  if (b.seed == 0.0f) b.seed = static_cast<float>(m_customSeq);
   m_custom.push_back(b);
+}
+
+CustomBody* SceneManager::findCustom(const std::string& id) {
+  for (auto& b : m_custom) {
+    if (b.id == id) return &b;
+  }
+  return nullptr;
 }
 
 void SceneManager::deleteSelected() {
@@ -983,8 +1016,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                                             glm::vec3(0.0f, 1.0f, 0.0f)));
       // Belt shimmer: subtle per-frame glint of the whole belt
       // (fixed phase at fixed time, screenshots stay deterministic).
+      // v3.2.0: per-point colour dimmed to match the 5200-point density.
       float beltTw = 0.85f + 0.15f * std::sin(time * 2.3f);
-      m_linesShader->setUniform3f("u_LineColor", 0.45f * beltTw, 0.38f * beltTw, 0.30f * beltTw);
+      m_linesShader->setUniform3f("u_LineColor", 0.30f * beltTw, 0.25f * beltTw, 0.20f * beltTw);
       glEnable(GL_BLEND);
       glBlendFunc(GL_ONE, GL_ONE);
       m_belt.draw();
@@ -1019,12 +1053,39 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_planetShader->setUniform1i("u_Spot", (def->id == "jupiter" ? 1 : 0));
       m_planetShader->setUniform1i("u_Clouds", (def->id == "earth" ? 1 : 0));
       m_planetShader->setUniform1f("u_SpinAngle", def->spinRate * m_simTime);
+      // v3.2.0 ring-shadow set (only Saturn has u_RingOn == 1).
+      m_planetShader->setUniform1f("u_Radius", def->radius);
+      m_planetShader->setUniform1i("u_RingOn", def->hasRing ? 1 : 0);
+      m_planetShader->setUniform1f("u_RingInner", def->ringInner);
+      m_planetShader->setUniform1f("u_RingOuter", def->ringOuter);
+      m_planetShader->setUniform1f("u_RingTilt", def->ringTilt);
+      // v3.2.0: moon transit shadows — collect this body's moons from the
+      // same snapshot the moon spheres are drawn from (Jupiter: 4
+      // Galileans, Saturn: Titan). Sun-at-origin convention, see
+      // planet.frag moonShadow().
+      int occN = 0;
+      for (const auto& mb : m_lastBodies) {
+        if (occN >= 5) break;
+        if (!mb.def || mb.def->parentId != def->id) continue;
+        const std::string occName = "u_MoonOcc[" + std::to_string(occN) + "]";
+        m_planetShader->setUniform4f(occName.c_str(),
+                                     static_cast<float>(mb.pos.x - bpos.x),
+                                     static_cast<float>(mb.pos.y - bpos.y),
+                                     static_cast<float>(mb.pos.z - bpos.z),
+                                     mb.def->radius);
+        ++occN;
+      }
+      m_planetShader->setUniform1i("u_MoonOccN", occN);
       m_sphere.draw();
       if (def->hasRing) {
         m_ringShader->bind();
         m_ringShader->setUniformMat4f("u_MVP", mvp);
+        // v3.2.0: per-body ring tilt (Saturn 0.45 default, Uranus ~vertical
+        // at 1.5) and mesh scale so ringOuter lands on the def value:
+        // Saturn 2.7/2.7 = 1.0 (bit-identical), Uranus 1.80/2.7 = 0.667.
         glm::mat4 ringModel = glm::translate(glm::mat4(1.0f), bpos) *
-                              glm::rotate(glm::mat4(1.0f), 0.45f, glm::vec3(1.0f, 0.0f, 0.0f));
+                              glm::rotate(glm::mat4(1.0f), def->ringTilt, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                              glm::scale(glm::mat4(1.0f), glm::vec3(def->ringOuter / 2.7f));
         // Rings ride with the planet spin (purely visual: stripes are
         // radial). Skipped at zero angle to keep the matrix bit-exact.
         float ringSpin = def->spinRate * m_simTime;
@@ -1038,7 +1099,13 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_ringShader->setUniform3f("u_Center", static_cast<float>(bpos.x),
                                   static_cast<float>(bpos.y),
                                   static_cast<float>(bpos.z));
-        m_ringShader->setUniform3f("u_ColA", 0.8f, 0.72f, 0.6f);
+        if (def->id == "uranus") {
+          m_ringShader->setUniform3f("u_ColA", 0.55f, 0.62f, 0.68f);
+        } else {
+          m_ringShader->setUniform3f("u_ColA", 0.8f, 0.72f, 0.6f);
+        }
+        // v3.2.0: planet eclipse on the ring (sun at the world origin).
+        m_ringShader->setUniform1f("u_PlanetR", def->radius);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         m_saturnRing.draw();
@@ -1053,19 +1120,52 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       glm::mat4 model = glm::translate(glm::mat4(1.0f), cpos) *
                         glm::scale(glm::mat4(1.0f), glm::vec3(custom.radius));
       m_planetShader->setUniformMat4f("u_Model", model);
-      m_planetShader->setUniform1i("u_Type", 2);
-      m_planetShader->setUniform1i("u_Body", 0);
+      // v3.2.0 editor: surface type from the palette (rock/rocky/moon/gas/
+      // star), secondary colour, world radius (ring shadow + close detail).
+      m_planetShader->setUniform1i("u_Type", custom.type);
+      m_planetShader->setUniform1i("u_Body", custom.detail);
       m_planetShader->setUniform1f("u_Seed", custom.seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(custom.color.x),
                                    static_cast<float>(custom.color.y),
                                    static_cast<float>(custom.color.z));
-      m_planetShader->setUniform3f("u_ColB", static_cast<float>(custom.color.x) * 0.6f,
-                                   static_cast<float>(custom.color.y) * 0.6f,
-                                   static_cast<float>(custom.color.z) * 0.6f);
+      m_planetShader->setUniform3f("u_ColB", static_cast<float>(custom.colorB.x),
+                                   static_cast<float>(custom.colorB.y),
+                                   static_cast<float>(custom.colorB.z));
+      m_planetShader->setUniform1f("u_Radius", custom.radius);
       m_planetShader->setUniform1i("u_Spot", 0);
       m_planetShader->setUniform1i("u_Clouds", 0);
       m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
+      m_planetShader->setUniform1i("u_MoonOccN", 0);
+      bool customRing = custom.ringOuter > 0.0f;
+      m_planetShader->setUniform1i("u_RingOn", customRing ? 1 : 0);
+      if (customRing) {
+        float ringScale = custom.ringOuter / 2.7f;
+        m_planetShader->setUniform1f("u_RingInner", 1.7f * ringScale);
+        m_planetShader->setUniform1f("u_RingOuter", custom.ringOuter);
+        m_planetShader->setUniform1f("u_RingTilt", 0.45f);
+      }
       m_sphere.draw();
+      if (customRing) {
+        m_ringShader->bind();
+        m_ringShader->setUniformMat4f("u_MVP", mvp);
+        glm::mat4 ringModel = glm::translate(glm::mat4(1.0f), cpos) *
+                              glm::rotate(glm::mat4(1.0f), 0.45f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                              glm::scale(glm::mat4(1.0f), glm::vec3(custom.ringOuter / 2.7f));
+        m_ringShader->setUniformMat4f("u_Model", ringModel);
+        m_ringShader->setUniform1f("u_Seed", custom.seed);
+        m_ringShader->setUniform1f("u_Time", time);
+        m_ringShader->setUniform3f("u_Center", cpos.x, cpos.y, cpos.z);
+        m_ringShader->setUniform3f("u_ColA",
+                                   static_cast<float>(custom.color.x) * 0.9f + 0.08f,
+                                   static_cast<float>(custom.color.y) * 0.9f + 0.08f,
+                                   static_cast<float>(custom.color.z) * 0.9f + 0.08f);
+        m_ringShader->setUniform1f("u_PlanetR", custom.radius);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        m_saturnRing.draw();
+        glDisable(GL_BLEND);
+        m_planetShader->bind();
+      }
     }
     m_planetShader->unbind();
 

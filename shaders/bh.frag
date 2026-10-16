@@ -328,7 +328,30 @@ void main() {
           // mean (1.0), the large-scale Doppler gradient (g4) is kept.
           // Far away closeK == 0, so reference frames stay deterministic.
           float turb = mix(0.55 + 0.9 * nse, 1.0, closeK);
+          // v3.2.0 filament strands: thin grooves stretched along the shear
+          // direction instead of the isotropic speckle. Sampled in the same
+          // (log r, phi) frame with high radial / low azimuthal frequency,
+          // advected by the exact Keplerian phase (same omega*t law as the
+          // turbulence, so strands lap the inner disk first). Contrast
+          // relaxes to smooth up close exactly like turb; the strand
+          // multiplier is azimuth-mean neutral, so g4 beaming is untouched.
+          vec2 filUv = vec2(log(max(rDisk, 0.001)) * 7.5 + 2.1,
+                            (phiDisk * 3.0 - 2.0 * phAdv) * 0.35 - 1.7);
+          float fil = diskFbm(filUv);
+          float strand = pow(clamp(fil, 0.0, 1.0), 1.6);
+          turb *= mix(0.55 + 0.85 * strand, 1.0, closeK);
           emis *= turb;
+          // v3.2.0 Sgr A*-style orbital flare: one compact bright blob
+          // circling just outside the ISCO (GRAVITY-style hot spot). Phase
+          // advances with tE, so the harness epoch (tE = 0) is a fixed
+          // position; (1 - closeK) hides the flare at reference distances
+          // (sgra/m87 PNGs stay unchanged) while close-ups show the orbit.
+          float spotPh = 2.4 + (u_Time - 1.0) * 0.9;
+          float dPhS = phiDisk - spotPh;
+          dPhS = atan(sin(dPhS), cos(dPhS));
+          float dRS = (rDisk - 3.4) * 1.6;
+          float dPS = dPhS * 2.2;
+          emis += exp(-(dRS * dRS + dPS * dPS)) * 2.4 * (1.0 - closeK);
           // Differential pinwheel: m=3 spiral wound by the same Kepler
           // shear. Zero at the harness epoch (phase difference), visibly
           // winding live. Zero azimuthal mean: g4 beaming untouched.
@@ -399,7 +422,15 @@ void main() {
       float jetStepK = hAdapt / 0.125;
       float axSin = length(x.xz) / max(r, 1e-6);
       float phiJet = atan(x.z, x.x);
-      if (axSin < 0.14 && r >= 2.0 && r <= 32.0) {
+      // v3.2.0 structure: parabolically collimated cone (tight 0.05
+      // half-opening at the base, ~0.15 by r ~ 20), a bright axial spine,
+      // dimmer counter-jet (-Y; approaching side is +Y) and stronger
+      // knot/helix contrast so the beam reads as structured plasma.
+      float cone = 0.05 + 0.10 * smoothstep(2.0, 20.0, r);
+      float crossJet = exp(-pow(axSin / max(cone, 0.01), 2.0) * 1.8);
+      float spine = exp(-pow(axSin / 0.02, 2.0));
+      float sideJet = (x.y >= 0.0) ? 1.0 : 0.45;
+      if (axSin < 0.22 && r >= 2.0 && r <= 32.0) {
         float streaks = diskFbm(vec2(r * 1.5 - u_Time * 0.4, phiJet * 2.0));
         float knots = pow(max(streaks, 0.0), 3.0);
         // Helical filament: two strands winding along the jet axis.
@@ -408,22 +439,27 @@ void main() {
         float filament = max(helix, helix2);
         // Tuned: volumetric emission integrates over many in-cone steps;
         // 0.1+ saturates white; 0.045 + filaments reads as a structured jet.
-        vec3 jcol = vec3(0.60, 0.75, 1.0) * (knots + 0.35 * filament * knots)
-            * exp(-(r - 2.0) * 0.08) * 0.045 * jetStepK;
+        vec3 jcol = vec3(0.60, 0.75, 1.0) *
+            (0.55 * spine + crossJet * (knots + 0.55 * filament * knots))
+            * exp(-(r - 2.0) * 0.08) * 0.045 * jetStepK * sideJet;
         accumColor += (1.0 - accumAlpha) * jcol * float(u_JetOn);
-        // HST-1-like knots: 3 discrete blobs riding outward from the core,
-        // fading with travel distance. Axial (r) + time only — symmetric
-        // about the jet axis, disk/beaming math untouched. Kept dim: the
-        // volumetric march integrates over many in-cone steps, 0.05 saturated
-        // the whole column white (proven by m87.png); 0.006 reads as knots.
+        // HST-1-like knots: 4 discrete blobs riding outward from the core,
+        // fading with travel distance and damped on the counter-jet side.
+        // Axial (r) + time only — symmetric about the jet axis, disk/beaming
+        // math untouched. Gated by jetStepK because the volumetric march
+        // integrates over many in-cone steps; 0.05 saturated the column
+        // white (proven by m87.png); 0.014 with the dim, time-gated passes
+        // reads as bright knots without blowing out.
         float kR0 = 2.0 + fract(u_Time * 0.10 + 0.00) * 18.0;
-        float kR1 = 2.0 + fract(u_Time * 0.10 + 0.37) * 18.0;
-        float kR2 = 2.0 + fract(u_Time * 0.10 + 0.71) * 18.0;
+        float kR1 = 2.0 + fract(u_Time * 0.10 + 0.27) * 18.0;
+        float kR2 = 2.0 + fract(u_Time * 0.10 + 0.52) * 18.0;
+        float kR3 = 2.0 + fract(u_Time * 0.10 + 0.79) * 18.0;
         float kSig = 0.0;
         kSig += exp(-pow((r - kR0) * 2.0, 2.0)) * exp(-(kR0 - 2.0) * 0.08);
         kSig += exp(-pow((r - kR1) * 2.0, 2.0)) * exp(-(kR1 - 2.0) * 0.08);
         kSig += exp(-pow((r - kR2) * 2.0, 2.0)) * exp(-(kR2 - 2.0) * 0.08);
-        vec3 kcol = vec3(0.65, 0.78, 1.0) * kSig * 0.008 * jetStepK;
+        kSig += exp(-pow((r - kR3) * 2.0, 2.0)) * exp(-(kR3 - 2.0) * 0.08);
+        vec3 kcol = vec3(0.65, 0.78, 1.0) * kSig * 0.014 * jetStepK * sideJet;
         accumColor += (1.0 - accumAlpha) * kcol * float(u_JetOn);
       }
       // Faint radio lobe: wide dim shell around the jet base, axial + time.

@@ -96,6 +96,15 @@ class AppGL {
   bool m_prevF5Pressed = false;
   bool m_prevF6Pressed = false;
 
+  // Object editor (v3.2.0): palette state for spawning custom bodies and
+  // live-editing the selected one.
+  int m_editorType = 1;  // 0 rock, 1 rocky planet, 2 moon, 3 gas giant, 4 star
+  float m_editorRadius = 0.60f;
+  float m_editorColA[3] = {0.45f, 0.42f, 0.38f};
+  float m_editorColB[3] = {0.28f, 0.26f, 0.24f};
+  bool m_editorRing = false;
+  float m_editorSeed = 0.0f;
+
   // Achievements
   std::vector<std::string> m_visited;
   std::set<std::string> m_unlockedIds;

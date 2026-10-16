@@ -34,9 +34,10 @@ PlanetDef makeDef(const char* id, const char* name, float radius, float orbitRad
 
 std::vector<PlanetDef> initDefs() {
   std::vector<PlanetDef> list;
-  list.reserve(11);
+  list.reserve(18);
 
-  // Index i gives angle0 = i * 0.8 rad and seed = i + 1.
+  // Planets keep their literal angle0 = i * 0.8 rad and seed values;
+  // v3.2.0 moons (indices 7-10, 12) carry explicit seeds 12-16, Pluto 17.
   // spinRate = 2*pi / (rotation period in days * 10 sim-sec per day),
   // so Earth spins once per 10 sim-sec at 1x; retrograde bodies < 0.
   // 0: Sun
@@ -77,8 +78,11 @@ std::vector<PlanetDef> initDefs() {
   }
   // 4: Moon (orbits Earth)
   {
+    // v3.2.0: colours match the planet.frag moon-path constants 1:1 (mix of
+    // 0.62/0.63 greys) so the Moon keeps its exact classic palette now that
+    // the moon branch tints via u_ColA/u_ColB.
     PlanetDef d = makeDef("moon", "Moon", 0.16f, 1.3f, 0.60f, 4.0f * 0.8f, 2, 5.0f,
-                          Vec3(0.80f, 0.80f, 0.80f), Vec3(0.50f, 0.50f, 0.50f));
+                          Vec3(0.62f, 0.62f, 0.63f), Vec3(0.30f, 0.30f, 0.32f));
     d.parentId = "earth";
     d.facts = {"Diameter 3,474 km", "Tidally locked to Earth"};
     d.spinRate = d.angleSpeed;  // tidally locked: spin matches orbital rate
@@ -103,7 +107,46 @@ std::vector<PlanetDef> initDefs() {
     d.detail = 7;
     list.push_back(d);
   }
-  // 7: Saturn
+  // 7-10: Galilean moons (v3.2.0). Sizes artistic (readable up close, not
+  // to scale); orbits just outside Jupiter's cloud tops, intrinsic speeds
+  // Kepler-ish (inner laps outer), tidally locked like the Moon.
+  {
+    PlanetDef d = makeDef("io", "Io", 0.10f, 2.9f, 0.62f, 7.1f, 2, 12.0f,
+                          Vec3(0.95f, 0.85f, 0.55f), Vec3(0.55f, 0.40f, 0.20f));
+    d.parentId = "jupiter";
+    d.facts = {"Diameter 3,643 km", "400-plus active volcanoes"};
+    d.spinRate = d.angleSpeed;
+    d.detail = 5;
+    list.push_back(d);
+  }
+  {
+    PlanetDef d = makeDef("europa", "Europa", 0.09f, 3.7f, 0.50f, 7.9f, 2, 13.0f,
+                          Vec3(0.92f, 0.93f, 0.95f), Vec3(0.55f, 0.60f, 0.68f));
+    d.parentId = "jupiter";
+    d.facts = {"Diameter 3,122 km", "Ice shell over a global ocean"};
+    d.spinRate = d.angleSpeed;
+    d.detail = 5;
+    list.push_back(d);
+  }
+  {
+    PlanetDef d = makeDef("ganymede", "Ganymede", 0.13f, 4.6f, 0.40f, 8.7f, 2, 14.0f,
+                          Vec3(0.75f, 0.70f, 0.62f), Vec3(0.42f, 0.38f, 0.34f));
+    d.parentId = "jupiter";
+    d.facts = {"Diameter 5,268 km", "Largest moon in the solar system"};
+    d.spinRate = d.angleSpeed;
+    d.detail = 5;
+    list.push_back(d);
+  }
+  {
+    PlanetDef d = makeDef("callisto", "Callisto", 0.12f, 5.7f, 0.32f, 9.5f, 2, 15.0f,
+                          Vec3(0.55f, 0.50f, 0.44f), Vec3(0.28f, 0.25f, 0.22f));
+    d.parentId = "jupiter";
+    d.facts = {"Diameter 4,821 km", "Most cratered body known"};
+    d.spinRate = d.angleSpeed;
+    d.detail = 5;
+    list.push_back(d);
+  }
+  // 11: Saturn
   {
     PlanetDef d = makeDef("saturn", "Saturn", 1.35f, 31.0f, 0.030f, 7.0f * 0.8f, 1, 8.0f,
                           Vec3(0.95f, 0.88f, 0.70f), Vec3(0.75f, 0.65f, 0.45f));
@@ -115,16 +158,34 @@ std::vector<PlanetDef> initDefs() {
     d.detail = 8;
     list.push_back(d);
   }
-  // 8: Uranus
+  // 12: Titan (orbits Saturn, outside the ring plane)
+  {
+    PlanetDef d = makeDef("titan", "Titan", 0.11f, 3.9f, 0.38f, 8.3f, 2, 16.0f,
+                          Vec3(0.92f, 0.68f, 0.35f), Vec3(0.62f, 0.42f, 0.18f));
+    d.parentId = "saturn";
+    d.facts = {"Diameter 5,150 km", "Thick nitrogen atmosphere"};
+    d.spinRate = d.angleSpeed;
+    d.detail = 5;
+    list.push_back(d);
+  }
+  // 13: Uranus
   {
     PlanetDef d = makeDef("uranus", "Uranus", 0.90f, 38.0f, 0.020f, 8.0f * 0.8f, 3, 9.0f,
                           Vec3(0.70f, 0.95f, 0.95f), Vec3(0.45f, 0.75f, 0.80f));
+    // v3.2.0: faint Uranian rings, near-vertical (the 98-degree axial
+    // tilt). The ring mesh (1.7..2.7) is drawn scaled by ringOuter / 2.7,
+    // so these literals are the SEMI-FINAL world radii: mesh 1.7..2.7 ->
+    // world 1.13..1.80 (0.9-radius planet).
+    d.hasRing = true;
+    d.ringInner = 1.13f;
+    d.ringOuter = 1.80f;
+    d.ringTilt = 1.5f;
     d.facts = {"Diameter 50,724 km", "Tilted 98 degrees, rolls along"};
     d.spinRate = -2.0f * kPi / (0.72f * 10.0f);
     d.detail = 9;
     list.push_back(d);
   }
-  // 9: Neptune
+  // 14: Neptune
   {
     PlanetDef d = makeDef("neptune", "Neptune", 0.92f, 44.0f, 0.016f, 9.0f * 0.8f, 3, 10.0f,
                           Vec3(0.30f, 0.50f, 0.95f), Vec3(0.15f, 0.25f, 0.70f));
@@ -133,7 +194,7 @@ std::vector<PlanetDef> initDefs() {
     d.detail = 10;
     list.push_back(d);
   }
-  // 10: Halley (eccentric inclined comet, type 4 coma ball)
+  // 15: Halley (eccentric inclined comet, type 4 coma ball)
   {
     PlanetDef d = makeDef("halley", "Halley", 0.28f, 30.0f, 0.055f, 2.0f, 4, 11.0f,
                           Vec3(0.75f, 1.0f, 0.85f), Vec3(1.0f, 1.0f, 1.0f));
@@ -141,6 +202,18 @@ std::vector<PlanetDef> initDefs() {
     d.incl = 0.32f;
     d.facts = {"Periodic comet, 75-year orbit", "Tail grows near the Sun"};
     d.detail = 11;
+    list.push_back(d);
+  }
+  // 16: Pluto (v3.2.0; dwarf planet, Kuiper belt, slight eccentric
+  // inclined orbit just like the real one)
+  {
+    PlanetDef d = makeDef("pluto", "Pluto", 0.10f, 39.0f, 0.012f, 4.4f, 2, 17.0f,
+                          Vec3(0.72f, 0.62f, 0.52f), Vec3(0.35f, 0.30f, 0.26f));
+    d.ecc = 0.05f;
+    d.incl = 0.15f;
+    d.facts = {"Diameter 2,377 km", "Dwarf planet, Kuiper belt"};
+    d.spinRate = 0.15f;
+    d.detail = 5;
     list.push_back(d);
   }
 

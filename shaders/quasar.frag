@@ -132,7 +132,7 @@ void main() {
   vec2 euv = vec2(uv.x, uv.y * 1.6);
   float re = length(euv);
   float reS = max(re, 1e-4);
-  vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.030 * exp(-pow(reS / 0.2, 0.25));
+  vec3 hostCol = vec3(0.55, 0.47, 0.38) * 0.040 * exp(-pow(reS / 0.2, 0.25));
   hostCol *= 1.0 - smoothstep(0.3, 1.0, re);
   float hostAng = atan(euv.y, euv.x) - u_Time * 0.05;
   float hostM1 = 0.5 + 0.5 * sin(hostAng + 1.3 + re * 4.0);
@@ -189,12 +189,18 @@ void main() {
   // shock knots (sin^5), wide weak cocoon, blue->magenta gradient along the
   // length, smooth turn-on at the base, fade-out at the tip, 0.92c beaming
   // with sign(s) for the two sides, clamped gain.
-  float tilt = uv.y + 0.12 * uv.x + sin(u_Time * 0.3) * 0.008;
+  // v3.2.0 precession: the jet axis slowly nods around its mean
+  // inclination (S-shaped sway). sin(tE * ...) is exactly zero at the
+  // harness epoch (tE = 0), so reference frames stay deterministic.
+  float precA = sin(tE * 0.08) * 0.028;
+  float tilt = uv.y + (0.12 + precA) * uv.x + sin(u_Time * 0.3) * 0.008;
   float wig = 0.0020 * sin(abs(uv.x) * 18.0 - tE * 1.3);
   float rho = abs(tilt - wig);
   float s = uv.x;
   float ay = abs(s);
-  float wJ = 0.0045 + 0.011 * ay;
+  // v3.2.0: slightly wider jets so the helix/thread structure reads at the
+  // spawn framing too (was 0.0045 + 0.011*ay).
+  float wJ = 0.006 + 0.016 * ay;
   float xJ = rho / max(wJ, 1e-5);
   float coreJ = exp(-xJ * xJ * 1.6);
   float tJ = tE * 1.3;
@@ -203,7 +209,8 @@ void main() {
   float helix = pow(0.5 + 0.5 * cos(phJ), 3.0) + pow(0.5 + 0.5 * cos(phJ + 3.14159265), 3.0);
   float dTh = (xJ - 0.72) * 2.8;
   float thread = exp(-dTh * dTh) * helix;
-  float knot = pow(0.5 + 0.5 * sin(ay * 19.0 - tK + 1.3 * sin(ay * 7.0)), 5.0);
+  // v3.2.0: coarser travelling knots (19 -> 11 per unit, gentler wobble).
+  float knot = pow(0.5 + 0.5 * sin(ay * 11.0 - tK + 1.1 * sin(ay * 4.0)), 5.0);
   float fadeIn = smoothstep(0.008, 0.030, ay);
   float fadeOut = 1.0 - smoothstep(0.26, 0.95, ay);
   float wisp = 0.7 + 0.3 * sin(s * 40.0 + ay * 18.0 - tK * 0.6)
@@ -243,7 +250,9 @@ void main() {
   // with a dark core; a quasar core outshines everything (u_QCoreK) + jets.
   // The shadow absorbs core light inside r < 0.015.
   float coreFall = 1.0 / (1.0 + r * r * 20000.0);
-  vec3 coreBase = vec3(1.0, 0.98, 0.94) * 10.0;
+  // v3.2.0: 10.0 -> 8.0 so the new arcs/ring structure is not washed out by
+  // the naked core; still a blinding quasar from afar (x u_QCoreK x proxDim).
+  vec3 coreBase = vec3(1.0, 0.98, 0.94) * 8.0;
   vec3 tint = u_CoreColor / vec3(1.0, 0.85, 0.65);
   float flick = 0.94 + 0.05 * sin(u_Time * 2.3) + 0.02 * sin(u_Time * 5.7);
   // Slow mode (~0.2 Hz in tE): zero at the harness epoch, alive otherwise.
@@ -261,6 +270,20 @@ void main() {
   float ang = atan(uv.y, uv.x) - u_Time * 0.35;
   float asym = 0.72 + 0.28 * sin(ang);
   col += vec3(1.0, 0.96, 0.90) * ringB * asym * (2.6 * u_QCoreK) * proxDim * shadow;
+
+  // v3.2.0 lensed secondary arcs: the disk's higher-order images seen over
+  // and under the shadow as two thin crescents. arcPar traces the parabola
+  // |uv.y| = 0.024 + 0.9*uv.x^2 in the disk's flattened frame; the two
+  // exponential gates cut it to a ring-shaped arc pair. Intensity rides the
+  // core gain with a mild close-camera relax (unlike the core's proxDim),
+  // stays shadow-gated and is time-independent, so reference frames are
+  // deterministic.
+  float arcPar = abs(uv.y) - (0.024 + 0.9 * uv.x * uv.x);
+  float arcSig = exp(-pow(arcPar * 240.0, 2.0));
+  float arcGate = exp(-uv.x * uv.x * 420.0) * (1.0 - smoothstep(0.05, 0.12, r));
+  vec3 arcCol = vec3(0.72, 0.80, 1.0) * arcSig * arcGate *
+                (0.55 * u_QCoreK) * mix(1.0, 0.35, qCloseK) * shadow;
+  col += arcCol;
 
   // Core-touch hint: a soft white flash when the camera pushes into the
   // core shell (qz > 8, i.e. D < ~3 at spawn 25) to accompany the solid

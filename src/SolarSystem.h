@@ -21,8 +21,9 @@ struct PlanetDef {
   Vec3 colA{1.0, 1.0, 1.0};
   Vec3 colB{1.0, 1.0, 1.0};
   bool hasRing = false;
-  float ringInner = 0.0f;
-  float ringOuter = 0.0f;
+  float ringInner = 0.0f;  // world-unit radius of the ring inner edge
+  float ringOuter = 0.0f;  // world-unit radius of the ring outer edge
+  float ringTilt = 0.45f;  // ring plane tilt about X, rad (Uranus ~vertical)
   std::string parentId;  // "" = orbits sun, else body id (moon->earth)
   std::vector<std::string> facts;  // 1-2 short ASCII lines each
   float ecc = 0.0f;   // eccentricity, 0 = circular

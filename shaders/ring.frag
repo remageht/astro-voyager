@@ -9,6 +9,10 @@ uniform float u_Seed;
 uniform vec3 u_ColA;
 uniform float u_Time;
 uniform vec3 u_Center;
+// v3.2.0: planet radius (world units), 0 = shadow off. The sun sits at the
+// world origin: ring fragments whose sightline to the sun passes through
+// the planet sphere (centre u_Center) are eclipsed.
+uniform float u_PlanetR;
 float hash12(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
@@ -60,6 +64,20 @@ void main() {
   col *= 1.0 - 0.6 * cass;
   col *= 1.0 - 0.35 * encke;
   alpha = clamp(alpha + spokes * 0.3, 0.0, 1.0);
+  // v3.2.0 planet shadow: the sun is at the world origin, so the planet
+  // sphere at u_Center occludes the ring on the far side: dim + thin out.
+  if (u_PlanetR > 0.0) {
+    vec3 sd = normalize(-v_WorldPos);
+    vec3 L = u_Center - v_WorldPos;
+    float tP = dot(L, sd);
+    if (tP > 0.0) {
+      vec3 closest = v_WorldPos + tP * sd;
+      float dP = length(closest - u_Center);
+      float sh = 1.0 - smoothstep(u_PlanetR * 0.90, u_PlanetR * 1.08, dP);
+      col *= 1.0 - 0.80 * sh;
+      alpha *= 1.0 - 0.45 * sh;
+    }
+  }
   // v3.0.0: ring albedo art is display-referred; decode to linear HDR.
   FragColor = vec4(pow(max(col, vec3(0.0)), vec3(2.2)), alpha);
 }

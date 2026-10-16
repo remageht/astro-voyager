@@ -21,6 +21,20 @@ uniform float u_Exposure;
 // Axial spin: surface pattern angle (radians) about the Y axis,
 // driven by sim time on the CPU (0 in the screenshot harness).
 uniform float u_SpinAngle;
+// v3.2.0 ring-shadow set (Saturn): body radius in world units, ring-plane
+// tilt (same literal as the SceneManager ring model) and annulus bounds.
+// The sun sits at the world origin; u_Model[3] is the planet centre.
+uniform float u_Radius;
+uniform int u_RingOn;
+uniform float u_RingInner;
+uniform float u_RingOuter;
+uniform float u_RingTilt;
+uniform mat4 u_Model;
+// v3.2.0 moon transit shadows: up to 5 occluder spheres (Jupiter/Saturn
+// moon families). xyz = moon centre relative to the planet centre (world
+// units), w = moon radius; u_MoonOccN = number of active entries.
+uniform vec4 u_MoonOcc[5];
+uniform int u_MoonOccN;
 float hash11(float p) {
   return fract(sin(p) * 43758.5453);
 }
@@ -77,6 +91,47 @@ float fbm3(vec3 p) {
 float angDist(float a, float b) {
   float d = mod(a - b + 3.14159265, 6.2831853) - 3.14159265;
   return abs(d);
+}
+// v3.2.0: Saturn ring shadow on the planet. The ring plane passes through
+// the planet centre with normal (0, cos tilt, sin tilt); the sun is at the
+// world origin. Returns 1 outside the shadow; inside the annulus a stripe
+// comb (plus the deep Cassini gap at the same 0.65 span position as
+// ring.frag) dims the direct sunlight. Soft annulus edges avoid aliasing.
+float ringShadow(vec3 pr, vec3 sd) {
+  if (u_RingOn == 0) return 1.0;
+  vec3 n = vec3(0.0, cos(u_RingTilt), sin(u_RingTilt));
+  float dn = dot(sd, n);
+  if (abs(dn) < 1e-4) return 1.0;
+  float tR = -dot(pr, n) / dn;
+  if (tR <= 0.0) return 1.0;
+  vec3 c = pr + tR * sd;
+  float rho = length(c - dot(c, n) * n);
+  float band = smoothstep(u_RingInner - 0.06, u_RingInner + 0.06, rho) *
+               (1.0 - smoothstep(u_RingOuter - 0.06, u_RingOuter + 0.06, rho));
+  float span = max(u_RingOuter - u_RingInner, 0.01);
+  float r01 = (rho - u_RingInner) / span;
+  float cass = smoothstep(0.60, 0.65, r01) * (1.0 - smoothstep(0.65, 0.71, r01));
+  float comb = 0.55 + 0.45 * sin(r01 * 42.0 + 1.3);
+  float depth = (0.60 - 0.34 * cass) * comb;
+  return 1.0 - band * depth;
+}
+// v3.2.0 moon transit shadows: a moon disc blocks the direct sunlight on
+// the planet (tiny dark dots sweeping across Jupiter/Saturn). Same
+// sun-at-origin convention as ringShadow.
+float moonShadow(vec3 pr, vec3 sd) {
+  float s = 1.0;
+  for (int i = 0; i < 5; ++i) {
+    if (i >= u_MoonOccN) break;
+    vec3 L = u_MoonOcc[i].xyz - pr;
+    float tM = dot(L, sd);
+    if (tM > 0.0) {
+      vec3 cl = pr + tM * sd;
+      float dM = length(cl - u_MoonOcc[i].xyz);
+      s *= 1.0 - 0.92 * (1.0 - smoothstep(u_MoonOcc[i].w * 0.9,
+                                          u_MoonOcc[i].w * 1.15, dM));
+    }
+  }
+  return s;
 }
 // v3.0.0: ACES + gamma moved to post_comp.frag; this shader outputs linear HDR.
 void main() {
@@ -196,9 +251,11 @@ void main() {
       float cap = smoothstep(0.86, 0.93, abs(spN.y));
       albedo = mix(albedo, vec3(0.92, 0.90, 0.88), cap);
     } else if (u_Body == 5) {
-      // MOON: dark maria plains + highlands + two-scale craters.
+      // MOON family (Earth's Moon + Galileans + Titan): maria plains,
+      // highlands, two-scale craters, tinted by u_ColA/u_ColB. The Moon def
+      // carries the classic 0.62/0.30 greys so it renders as before.
       float mar = smoothstep(0.52, 0.64, fbm4(sp * 2.0 + u_Seed));
-      albedo = mix(vec3(0.62, 0.62, 0.63), vec3(0.30, 0.30, 0.32), mar);
+      albedo = mix(u_ColA, u_ColB, mar);
       float crBig = smoothstep(0.64, 0.75, fbm3(sp * 14.0 + u_Seed));
       albedo *= 1.0 - crBig * 0.40;
       float crSmall = smoothstep(0.70, 0.75, fbm3(sp * 40.0 + u_Seed * 1.7));
@@ -257,7 +314,39 @@ void main() {
       albedo = mix(albedo, vec3(0.08, 0.15, 0.35), spot * 0.8);
     }
   }
-  vec3 col = albedo * (0.03 + diff) + nightAmb;
+  // v3.2.0 close-range surface detail: two extra noise octaves that fade in
+  // only when the camera is near the body (nearK == 0 at reference
+  // distances, so the far screenshots are unchanged). Deterministic.
+  {
+    float dCam = length(v_WorldPos - u_CamPos);
+    float nearK = 1.0 - smoothstep(u_Radius * 14.0, u_Radius * 32.0, dCam);
+    if (nearK > 0.001) {
+      if (u_Type == 1 || u_Type == 3) {
+        // Gas/ice giants: azimuthally stretched jet-stream streak detail.
+        float g1 = fbm4(vec3(sp.x, sp.y * 4.0, sp.z) * 42.0 + u_Seed * 5.0);
+        float g2 = fbm4(vec3(sp.x, sp.y * 6.0, sp.z) * 110.0 + u_Seed * 9.0);
+        albedo *= 1.0 + (0.16 * (g1 - 0.5) + 0.10 * (g2 - 0.5)) * nearK;
+      } else if (u_Type == 2) {
+        // Rocky/moon surfaces: two-scale granular relief. Earth keeps its
+        // matte ocean look (relief mostly on land, reduced on water).
+        float r1 = fbm4(sp * 55.0 + u_Seed * 3.1);
+        float r2 = fbm4(sp * 140.0 + u_Seed * 7.7);
+        float rockK = (u_Body == 4) ? mix(0.2, 0.7, land) : 1.0;
+        albedo *= 1.0 + (0.20 * (r1 - 0.5) + 0.12 * (r2 - 0.5)) * nearK * rockK;
+      }
+    }
+  }
+  // Ring + moon-transit shadows: dim only the direct sunlight term, leave
+  // the ambient floor and the night side untouched.
+  vec3 prW = v_WorldPos - u_Model[3].xyz;
+  float rsF = 1.0;
+  if (u_RingOn == 1) {
+    rsF = ringShadow(prW, sunDir);
+  }
+  if (u_MoonOccN > 0) {
+    rsF *= moonShadow(prW, sunDir);
+  }
+  vec3 col = albedo * (0.03 + rsF * diff) + nightAmb;
   if (u_Body == 4) {
     // EARTH: soft terminator with warm twilight band.
     float day = smoothstep(-0.06, 0.22, diff);
@@ -270,7 +359,15 @@ void main() {
     float spec = pow(max(dot(rdir, viewDir), 0.0), 24.0);
     float season = 0.5 + 0.5 * sin(u_Time * 0.1);
     dayCol += vec3(0.9, 0.95, 1.0) * spec * capM * (0.4 + 0.6 * season) * day;
-    col = dayCol + nightAmb;
+    // v3.2.0 ocean sun glint: tight specular on water only (land keeps its
+    // matte look), gated to the day side and away from the ice caps.
+    float glint = pow(max(dot(rdir, viewDir), 0.0), 90.0);
+    dayCol += vec3(0.85, 0.92, 1.0) * glint * (1.0 - land) * (1.0 - capM) * day * 1.7;
+    // v3.2.0 night city lights: static warm speckles on the land of the
+    // night side (deterministic pattern, no time dependence).
+    float cityN = fbm4(sp * 26.0 + u_Seed * 2.0);
+    float city = smoothstep(0.62, 0.78, cityN) * land * (1.0 - day);
+    col = dayCol + nightAmb + vec3(1.0, 0.82, 0.55) * city * 1.3;
     // Night city lights: street network with per-cell flicker, night only.
     float night = 1.0 - smoothstep(0.0, 0.12, diff);
     float cc = fbm3(sp * 14.0 + u_Seed);

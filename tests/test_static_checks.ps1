@@ -235,6 +235,34 @@ Check 'milky way station' ((($catalogCpp) -match '"mw"') -and (($catalogJson) -m
 Check 'sun link home' ((($appCpp) -match 'startWarpJump\("sol"\)') -and (($sceneCpp) -match 'sunWorldPos'))
 Check 'cluster station' ((($catalogCpp) -match '"m13"') -and (($catalogCpp) -match 'StarCluster') -and (($catalogJson) -match '"m13"'))
 
+# --- v3.2.0 graphics pass ---
+Check 'bh disk filament strands' (($bh -match 'filUv') -and ($bh -match 'strand'))
+Check 'bh jet counter-jet asymmetry' (($bh -match 'sideJet') -and ($bh -match 'crossJet'))
+Check 'quasar lensed secondary arcs' ((Read-File 'shaders/quasar.frag') -match 'arcPar')
+Check 'saturn ring shadow on planet' (($planetFrag -match 'ringShadow') -and ($sceneCpp -match '"u_RingTilt"'))
+Check 'planet eclipse on rings u_PlanetR' (((Read-File 'shaders/ring.frag') -match 'u_PlanetR') -and ($sceneCpp -match '"u_PlanetR"'))
+Check 'galilean moons and titan' ((($solarCpp -match '"io"') -and ($solarCpp -match '"europa"') -and ($solarCpp -match '"ganymede"') -and ($solarCpp -match '"callisto"') -and ($solarCpp -match '"titan"')) -and (($solarCpp -match 'd\.parentId = "jupiter"') -and ($solarCpp -match 'd\.parentId = "saturn"')))
+Check 'belt density 5200' ($sceneCpp -match 'setBelt\(5200')
+Check 'earth ocean glint' (($planetFrag -match 'glint') -and ($planetFrag -match '1\.0 - land'))
+Check 'sol earth close shots harness' (($appCpp -match 'sol_close') -and ($appCpp -match 'earth_close'))
+Check 'planet radius uniform u_Radius' (($planetFrag -match 'uniform float u_Radius') -and ($sceneCpp -match 'setUniform1f\("u_Radius"'))
+
+# --- v3.2.0 content pass ---
+Check 'bh sgra orbital hot spot' ($bh -match 'spotPh')
+Check 'quasar jet precession' ((Read-File 'shaders/quasar.frag') -match 'precA')
+Check 'moon transit shadows' (($planetFrag -match 'moonShadow') -and ($sceneCpp -match '"u_MoonOcc\['))
+Check 'earth night city lights' ($planetFrag -match 'cityN')
+Check 'uranus faint rings' ((($solarCpp -match 'ringTilt = 1\.5f') -and ((Read-File 'src/SolarSystem.h') -match 'ringTilt')) -and ($sceneCpp -match 'def->ringTilt'))
+Check 'pluto on orbit' (($solarCpp -match '"pluto"') -and ($solarCpp -match 'Kuiper'))
+
+# --- v3.2.0 editor + close-detail pass ---
+Check 'editor object palette' (($appCpp -match '"Gas giant"') -and ($appCpp -match '"Star"'))
+Check 'custom body surface fields' ((($sceneH -match 'int detail') -and ($sceneH -match 'ringOuter')) -and ($sceneH -match 'colorB'))
+Check 'custom spawn by template' (($sceneH -match 'spawnCustom') -and ($sceneCpp -match 'SceneManager::spawnCustom'))
+Check 'selected object live lookup' (($sceneH -match 'findCustom') -and ($appCpp -match 'findCustom'))
+Check 'custom surface mapping in render' (($sceneCpp -match 'custom\.detail') -and ($sceneCpp -match 'custom\.type'))
+Check 'planet close-range detail nearK' ($planetFrag -match 'nearK')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

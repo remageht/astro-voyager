@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cctype>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <iostream>
@@ -811,6 +812,51 @@ std::string AppGL::pickCustomAt(double px, double py) {
   }
   return bestId;
 }
+
+namespace {
+struct EditorPreset {
+  int type;
+  int detail;
+  float radius;
+  float colA[3];
+  float colB[3];
+};
+
+// v3.2.0 object editor: palette index -> planet-shader look + sensible
+// default size and palette for that class of object.
+EditorPreset editorPresetFor(int idx) {
+  EditorPreset p{};
+  switch (idx) {
+    case 0:
+      p = {2, 0, 0.30f, {0.62f, 0.58f, 0.52f}, {0.37f, 0.35f, 0.31f}};
+      break;
+    case 1:
+      p = {2, 2, 0.60f, {0.45f, 0.42f, 0.38f}, {0.28f, 0.26f, 0.24f}};
+      break;
+    case 2:
+      p = {2, 5, 0.45f, {0.62f, 0.62f, 0.63f}, {0.30f, 0.30f, 0.32f}};
+      break;
+    case 3:
+      p = {1, 7, 1.20f, {0.78f, 0.66f, 0.48f}, {0.55f, 0.40f, 0.28f}};
+      break;
+    default:
+      p = {0, 1, 1.00f, {1.00f, 0.85f, 0.55f}, {0.90f, 0.30f, 0.10f}};
+      break;
+  }
+  return p;
+}
+
+// Reverse mapping for live editing: which palette entry does this body use?
+int editorIndexFor(const CustomBody& b) {
+  if (b.type == 0 || b.detail == 1) return 4;
+  if (b.detail >= 7) return 3;
+  if (b.detail == 5) return 2;
+  if (b.detail == 2) return 1;
+  return 0;
+}
+
+const char* kEditorTypes[] = {"Rock", "Rocky planet", "Moon", "Gas giant", "Star"};
+}  // namespace
 
 void AppGL::flyToObjectAt(double px, double py) {
   const Station* curSt = m_sceneManager->getCurrentStation();
@@ -1667,7 +1713,42 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Editor:");
   ImGui::SetWindowFontScale(1.15f);
-  if (ImGui::Button("Add rock here")) {
+  // v3.2.0 flexible object editor: pick a surface style, tune size, palette
+  // and ring, then Add spawns the object 15 units ahead of the camera.
+  // Objects can be re-selected by clicking and edited live below
+  // (Solar System station only).
+  int prevType = m_editorType;
+  ImGui::SetNextItemWidth(-1.0f);
+  ImGui::Combo("##editortype", &m_editorType, kEditorTypes, IM_ARRAYSIZE(kEditorTypes));
+  if (m_editorType != prevType) {
+    EditorPreset pr = editorPresetFor(m_editorType);
+    m_editorRadius = pr.radius;
+    m_editorColA[0] = pr.colA[0];
+    m_editorColA[1] = pr.colA[1];
+    m_editorColA[2] = pr.colA[2];
+    m_editorColB[0] = pr.colB[0];
+    m_editorColB[1] = pr.colB[1];
+    m_editorColB[2] = pr.colB[2];
+    m_editorRing = false;
+  }
+  ImGui::SliderFloat("Size", &m_editorRadius, 0.05f, 3.0f, "%.2f");
+  ImGui::ColorEdit3("Colour A", m_editorColA);
+  ImGui::ColorEdit3("Colour B", m_editorColB);
+  ImGui::Checkbox("Ring", &m_editorRing);
+  ImGui::SameLine();
+  if (ImGui::Button("Random seed")) {
+    m_editorSeed = 0.5f + static_cast<float>(rand() % 900) / 100.0f;
+  }
+  if (ImGui::Button("Add")) {
+    EditorPreset pr = editorPresetFor(m_editorType);
+    CustomBody b;
+    b.type = pr.type;
+    b.detail = pr.detail;
+    b.radius = m_editorRadius;
+    b.color = Vec3(m_editorColA[0], m_editorColA[1], m_editorColA[2]);
+    b.colorB = Vec3(m_editorColB[0], m_editorColB[1], m_editorColB[2]);
+    b.ringOuter = m_editorRing ? m_editorRadius * 2.0f : 0.0f;
+    b.seed = m_editorSeed;
     Vec3 f = m_camera.forward();
     Vec3 u = m_camera.up();
     Vec3 p(m_camera.position.x + f.x * 15.0,
@@ -1676,7 +1757,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
     Vec3 v(f.x * 2.0 + u.x * 0.5,
             f.y * 2.0 + u.y * 0.5,
             f.z * 2.0 + u.z * 0.5);
-    m_sceneManager->spawnRockAt(p, v);
+    m_sceneManager->spawnCustom(b, p, v);
   }
   ImGui::SameLine();
   bool hasSel = !m_sceneManager->getSelected().empty();
@@ -1710,7 +1791,49 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
         }
       }
     }
-    ImGui::Text("Rocks: %zu, selected: %s", nCustom, selName.c_str());
+    ImGui::Text("Objects: %zu, selected: %s", nCustom, selName.c_str());
+  }
+  if (hasSel) {
+    CustomBody* sel = m_sceneManager->findCustom(m_sceneManager->getSelected());
+    if (sel) {
+      ImGui::Separator();
+      ImGui::TextColored(ImVec4(0.7f, 0.9f, 1.0f, 1.0f), "Selected: %s", sel->name.c_str());
+      // Live edit: palette/size/palette-colours/ring/seed applied on the
+      // spot (click-selected object, no confirm needed).
+      int selIdx = editorIndexFor(*sel);
+      ImGui::SetNextItemWidth(-1.0f);
+      if (ImGui::Combo("##seltype", &selIdx, kEditorTypes, IM_ARRAYSIZE(kEditorTypes))) {
+        EditorPreset pr = editorPresetFor(selIdx);
+        sel->type = pr.type;
+        sel->detail = pr.detail;
+        sel->radius = pr.radius;
+        sel->color = Vec3(pr.colA[0], pr.colA[1], pr.colA[2]);
+        sel->colorB = Vec3(pr.colB[0], pr.colB[1], pr.colB[2]);
+        sel->ringOuter = 0.0f;
+      }
+      ImGui::SliderFloat("Size##sel", &sel->radius, 0.05f, 3.0f, "%.2f");
+      float ca[3] = {static_cast<float>(sel->color.x),
+                     static_cast<float>(sel->color.y),
+                     static_cast<float>(sel->color.z)};
+      if (ImGui::ColorEdit3("Colour A##sel", ca)) {
+        sel->color = Vec3(ca[0], ca[1], ca[2]);
+      }
+      float cb[3] = {static_cast<float>(sel->colorB.x),
+                     static_cast<float>(sel->colorB.y),
+                     static_cast<float>(sel->colorB.z)};
+      if (ImGui::ColorEdit3("Colour B##sel", cb)) {
+        sel->colorB = Vec3(cb[0], cb[1], cb[2]);
+      }
+      bool ringSel = sel->ringOuter > 0.0f;
+      if (ImGui::Checkbox("Ring##sel", &ringSel)) {
+        sel->ringOuter = ringSel ? sel->radius * 2.0f : 0.0f;
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Random seed##sel")) {
+        sel->seed = 0.5f + static_cast<float>(rand() % 900) / 100.0f;
+      }
+      ImGui::Text("Pos: %.1f %.1f %.1f", sel->pos.x, sel->pos.y, sel->pos.z);
+    }
   }
 
   ImGui::Separator();
@@ -2601,6 +2724,141 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   std::string qsoCloseFile = outDir + "/qso_close.png";
   if (app.saveScreenshot(qsoCloseFile)) {
     std::cout << "Captured screenshot: " << qsoCloseFile << "\n";
+  }
+
+  // 5./6. Solar System close-ups (v3.2.0): Saturn (ring shadow on the
+  // planet, planet eclipse on the rings, Titan) and Earth (ocean glint).
+  // Positions are read back from the running system: the harness never
+  // advances sim time, so bodies sit exactly at their angle0 literals and
+  // the framings stay deterministic.
+  app.m_sceneManager->teleportTo("sol", app.m_camera);
+  for (int frame = 0; frame < 2; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  Vec3 satP, earP;
+  for (const auto& body : app.m_sceneManager->getBodies()) {
+    if (!body.def) continue;
+    if (body.def->id == "saturn") satP = body.pos;
+    if (body.def->id == "earth") earP = body.pos;
+  }
+  // Aim helper: yaw/pitch = inverse of Camera::forward() (see the
+  // screenToWorld-style inverse above: forward = (-sin y cos p, sin p,
+  // -cos y cos p)).
+  auto aimAt = [](Camera& cam, const Vec3& target) {
+    Vec3 d(target.x - cam.position.x, target.y - cam.position.y,
+           target.z - cam.position.z);
+    const double dl = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    if (dl < 1e-9) return;
+    d.x /= dl;
+    d.y /= dl;
+    d.z /= dl;
+    cam.yaw = std::atan2(-d.x, -d.z);
+    cam.pitch = std::asin(d.y);
+  };
+  if (satP.x != 0.0 || satP.z != 0.0) {
+    // Hover 5 units from Saturn on a 3/4-phase view: the sunward direction
+    // rotated 1.0 rad about Y. A head-on sunward view (v3.2.0 draft) hides
+    // the ring shadow on the planet and the planet eclipse on the rings
+    // behind the limb; at ~60 deg phase both read clearly.
+    const double a = std::atan2(satP.z, satP.x) + 3.141592653589793 + 1.0;
+    app.m_camera.position = Vec3(satP.x + 5.0 * std::cos(a),
+                                 satP.y + 2.4,
+                                 satP.z + 5.0 * std::sin(a));
+    aimAt(app.m_camera, satP);
+    for (int frame = 0; frame < 5; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+      app.drawImGui();
+      app.drawWorldLabels();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
+    std::string solCloseFile = outDir + "/sol_close.png";
+    if (app.saveScreenshot(solCloseFile)) {
+      std::cout << "Captured screenshot: " << solCloseFile << "\n";
+    }
+  }
+  if (earP.x != 0.0 || earP.z != 0.0) {
+    // Hover 2.6 units sunward of Earth, just above the equator (the sun
+    // sits at the origin, so the day side + ocean glint face the camera).
+    const double k = 1.0 - 2.6 / 14.0;
+    app.m_camera.position = Vec3(earP.x * k, earP.y * k + 0.6, earP.z * k);
+    aimAt(app.m_camera, earP);
+    for (int frame = 0; frame < 5; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+      app.drawImGui();
+      app.drawWorldLabels();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
+    std::string earthCloseFile = outDir + "/earth_close.png";
+    if (app.saveScreenshot(earthCloseFile)) {
+      std::cout << "Captured screenshot: " << earthCloseFile << "\n";
+    }
+  }
+  // 7. Editor demo (v3.2.0 helper frame, transient like *_close.png): spawns
+  // a ringed gas giant, a star and a moon through the same spawnCustom path
+  // the editor UI uses, captures the trio, then clears them. Placed at
+  // x ~ 20, z ~ 0 so the sun (world origin) lights the visible sides from
+  // behind the camera. Deterministic: zero velocities, fixed seeds.
+  {
+    CustomBody gas;
+    gas.type = 1;
+    gas.detail = 7;
+    gas.radius = 1.2f;
+    gas.color = Vec3(0.78, 0.66, 0.48);
+    gas.colorB = Vec3(0.55, 0.40, 0.28);
+    gas.ringOuter = 2.4f;
+    gas.seed = 3.0f;
+    app.m_sceneManager->spawnCustom(gas, Vec3(24.0, 0.4, 0.8), Vec3(0.0, 0.0, 0.0));
+    CustomBody star;
+    star.type = 0;
+    star.detail = 1;
+    star.radius = 1.0f;
+    star.color = Vec3(1.0, 0.85, 0.55);
+    star.colorB = Vec3(0.9, 0.3, 0.1);
+    star.seed = 1.0f;
+    app.m_sceneManager->spawnCustom(star, Vec3(21.5, 1.6, -2.2), Vec3(0.0, 0.0, 0.0));
+    CustomBody moon;
+    moon.type = 2;
+    moon.detail = 5;
+    moon.radius = 0.45f;
+    moon.color = Vec3(0.62, 0.62, 0.63);
+    moon.colorB = Vec3(0.30, 0.30, 0.32);
+    moon.seed = 7.0f;
+    app.m_sceneManager->spawnCustom(moon, Vec3(20.5, -0.2, 1.8), Vec3(0.0, 0.0, 0.0));
+    // Raised vantage (~25 deg above the ring plane): a horizontal look from
+    // the sun side would be edge-on to the 0.45-rad tilted ring.
+    app.m_camera.position = Vec3(13.0, 7.0, -2.0);
+    aimAt(app.m_camera, Vec3(23.0, 0.2, 0.5));
+    for (int frame = 0; frame < 5; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+      app.drawImGui();
+      app.drawWorldLabels();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
+    std::string editorFile = outDir + "/editor_demo.png";
+    if (app.saveScreenshot(editorFile)) {
+      std::cout << "Captured screenshot: " << editorFile << "\n";
+    }
+    app.m_sceneManager->clearCustom();
   }
 
   return 0;

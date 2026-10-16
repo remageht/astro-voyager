@@ -24,7 +24,10 @@ struct RenderSettings {
   bool diskOn = true;  // accretion disk visible by default (harness overrides)
 };
 
-// User-spawned rock (object editor, Universe-Sandbox-style v1).
+// User-spawned object (flexible object editor, v3.2.0).
+// v3.2.0 adds a surface palette: type/detail select the planet-shader look
+// (rock / rocky planet / moon / gas giant / star), colorB is the secondary
+// palette colour and ringOuter > 0 draws a scaled ring around the body.
 struct CustomBody {
   std::string id;
   std::string name;
@@ -32,6 +35,10 @@ struct CustomBody {
   Vec3 vel;
   float radius = 0.3f;
   Vec3 color{0.62, 0.58, 0.52};
+  Vec3 colorB{0.37, 0.35, 0.31};  // secondary palette colour (bands/maria)
+  int type = 2;                   // u_Type: 0 star, 1 gas, 2 rocky, 3 ice
+  int detail = 0;                 // u_Body: 0 rock, 2 rocky, 5 moon, 7 gas, 1 star
+  float ringOuter = 0.0f;         // > 0 draws a ring (world units, outer edge)
   float seed = 1.0f;
 };
 
@@ -129,8 +136,12 @@ class SceneManager {
   }
   float getTimeScale() const { return m_timeScale; }
 
-  // Object editor (custom rocks, sol station only).
+  // Object editor (custom bodies, sol station only).
   void spawnRockAt(const Vec3& p, const Vec3& v);
+  // v3.2.0 editor: spawn from a full template (id/name auto-numbered by
+  // palette prefix), live mutable access for the selected object.
+  void spawnCustom(const CustomBody& templ, const Vec3& p, const Vec3& v);
+  CustomBody* findCustom(const std::string& id);
   void deleteSelected();
   void clearCustom();
   void setCollisions(bool on) { m_collisions = on; }
