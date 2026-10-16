@@ -1,6 +1,6 @@
 #include "PostFX.h"
 
-#include <GL/glew.h>
+#include "GLCompat.h"
 
 #include <algorithm>
 #include <iostream>

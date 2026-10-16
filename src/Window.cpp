@@ -1,6 +1,6 @@
 #include "Window.h"
 
-#include <GL/glew.h>
+#include "GLCompat.h"
 #include <GLFW/glfw3.h>
 
 #include <stdexcept>

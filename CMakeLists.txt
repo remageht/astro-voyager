@@ -121,6 +121,24 @@ if(ASTROVOYAGER_ENABLE_GL)
       opengl32
     )
     target_compile_definitions(astro-voyager PRIVATE GLEW_STATIC)
+  elseif(APPLE)
+    # === macOS GL (v3.4.0) ===: системный OpenGL 3.3 core без GLEW —
+    # функции линкуются из OpenGL.framework (src/GLCompat.h даёт no-op
+    # glewInit, поэтому Window.cpp общий для всех платформ).
+    # GLFW_INCLUDE_NONE: glfw3.h не подтягивает legacy gl.h рядом с gl3.h.
+    # CoreAudio/AudioToolbox/CoreFoundation — для miniaudio, Cocoa/IOKit/
+    # CoreVideo — для GLFW.
+    find_package(OpenGL REQUIRED)
+    target_compile_definitions(astro-voyager PRIVATE GLFW_INCLUDE_NONE)
+    target_link_libraries(astro-voyager PRIVATE
+      OpenGL::GL
+      "-framework Cocoa"
+      "-framework IOKit"
+      "-framework CoreVideo"
+      "-framework CoreFoundation"
+      "-framework CoreAudio"
+      "-framework AudioToolbox"
+    )
   else()
     find_package(GLEW REQUIRED)
     find_package(OpenGL REQUIRED)

@@ -1,6 +1,6 @@
 #include "AppGL.h"
 
-#include <GL/glew.h>
+#include "GLCompat.h"
 #include <GLFW/glfw3.h>
 
 #include <cmath>
@@ -56,6 +56,8 @@ ImFont* loadCineFont() {
   static const char* kPaths[] = {
       "C:\\Windows\\Fonts\\segoeui.ttf",
       "C:\\Windows\\Fonts\\arial.ttf",
+      "/System/Library/Fonts/Supplemental/Arial.ttf",
+      "/System/Library/Fonts/Supplemental/Verdana.ttf",
       "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
       "/usr/share/fonts/TTF/DejaVuSans.ttf",
   };

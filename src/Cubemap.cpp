@@ -1,6 +1,6 @@
 #include "Cubemap.h"
 
-#include <GL/glew.h>
+#include "GLCompat.h"
 #include <cmath>
 #include <fstream>
 #include <iostream>

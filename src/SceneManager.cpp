@@ -1,7 +1,7 @@
 #include "SceneManager.h"
 #include "Constellation.h"
 
-#include <GL/glew.h>
+#include "GLCompat.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <cmath>

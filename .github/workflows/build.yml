@@ -13,9 +13,8 @@ jobs:
   build:
     strategy:
       matrix:
-        # macOS (v3.3.0): the core CLI, tests and static checks build with
-        # Apple clang. The OpenGL app port (Cocoa/OpenGL frameworks + GL
-        # loader) is a follow-up cycle.
+        # macOS: core CLI + tests + static checks (Apple clang).
+        # The full macOS OpenGL app is built by the build-macos-gl job below.
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -54,6 +53,51 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build image (no push)
         run: docker build -t astro-voyager:ci .
+
+  # === macOS GL distribution build (v3.4.0) ===: system OpenGL 3.3 core
+  # (no GLEW, src/GLCompat.h), GLFW/GLM/ImGui/stb fetched like the AppImage
+  # job. Runner is Apple Silicon (arm64) and headless: the smoke test uses
+  # the CLI paths of the GL binary; windowing is a manual check. The binary
+  # must link OpenGL.framework and contain no GLEW.
+  build-macos-gl:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Fetch GL sources (GLFW/GLM/ImGui/stb)
+        run: bash packaging/fetch-gl-deps.sh
+      - name: Configure and build (GL)
+        run: |
+          cmake -S . -B build-gl -DCMAKE_BUILD_TYPE=Release -DASTROVOYAGER_ENABLE_GL=ON
+          cmake --build build-gl -j3
+      - name: Smoke CLI of the GL binary
+        run: |
+          ./build-gl/astro-voyager --version
+          ./build-gl/astro-voyager --demo-geodesic
+          ./build-gl/astro-voyager --list | head -5
+      - name: Verify GL linkage (OpenGL.framework, no GLEW)
+        run: |
+          otool -L build-gl/astro-voyager | tee /tmp/otool.txt
+          grep -q "OpenGL.framework" /tmp/otool.txt
+          ! grep -qi "glew" /tmp/otool.txt
+      - name: Static checks
+        shell: pwsh
+        run: ./tests/test_static_checks.ps1
+      - name: Package (binary + shaders + res)
+        run: |
+          set -euo pipefail
+          stage="dist/astro-voyager-macos-arm64"
+          mkdir -p "$stage"
+          cp build-gl/astro-voyager "$stage/"
+          cp -R shaders res "$stage/"
+          tar -czf dist/astro-voyager-macos-arm64.tar.gz -C dist astro-voyager-macos-arm64
+          shasum -a 256 dist/astro-voyager-macos-arm64.tar.gz
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: astro-voyager-macos-arm64
+          path: dist/astro-voyager-macos-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 14
 
   # Linux AppImage distribution: full OpenGL build (GLFW/ImGui/GLM/stb fetched
   # from upstream releases because Dependencies/ and src/vendor/ are gitignored),

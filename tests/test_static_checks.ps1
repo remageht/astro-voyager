@@ -285,6 +285,12 @@ Check 'engine hum audio' (((Read-File 'src/audio/AudioEngine.h') -match 'setEngi
 Check 'thruster scaled trail' (($sceneCpp -match 'warpdrive::thruster') -and ($sceneCpp -match 'setThruster') -and ($appCpp -match 'warpdrive::setThruster'))
 Check 'shield impact flash' (((Read-File 'shaders/post_comp.frag') -match 'u_ShieldK') -and ($appCpp -match 'shieldFlashHit') -and ((Read-File 'src/PostFX.cpp') -match 'u_ShieldK'))
 
+# --- v3.4.0 macOS GL port pass ---
+Check 'gl compat header macos branch' (((Read-File 'src/GLCompat.h') -match 'OpenGL/gl3\.h') -and ((Read-File 'src/GLCompat.h') -match 'glewInit') -and ($appCpp -match '"GLCompat\.h"') -and ($appCpp -notmatch '#include <GL/glew\.h>'))
+Check 'cmake macos gl branch' (($cmake -match 'elseif\(APPLE\)') -and ($cmake -match 'GLFW_INCLUDE_NONE') -and ($cmake -match 'framework CoreAudio') -and ($cmake -match 'OpenGL::GL'))
+Check 'macos gl ci job' (($ci -match 'build-macos-gl') -and ($ci -match 'otool -L') -and ($ci -match 'astro-voyager-macos-arm64'))
+Check 'macos font paths' ($appCpp -match '/System/Library/Fonts/Supplemental')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
