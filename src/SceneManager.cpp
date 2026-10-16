@@ -1507,6 +1507,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                        glm::radians(m_settings.fovDegrees), aspect, velDir,
                        m_relBeta);
   }
+  // === Ship survival === (v3.3.0): 0/0 keeps the composite byte-exact.
+  m_postFx.setShipFx(m_shipChroma, m_shipStatic);
   m_postFx.setTime(time);
   m_postFx.endScene(fbWidth, fbHeight);
 }

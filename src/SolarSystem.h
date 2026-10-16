@@ -32,6 +32,7 @@ struct PlanetDef {
   int detail = 0;  // shader detail id: 0 generic, 1 sun, 2 mercury, 3 venus,
                    // 4 earth, 5 moon, 6 mars, 7 jupiter, 8 saturn, 9 uranus,
                    // 10 neptune, 11 halley head (planet.frag u_Body)
+  float mass = 0.0f;  // GM game units for ship gravity (v3.3.0)
 };
 
 struct BodyState {

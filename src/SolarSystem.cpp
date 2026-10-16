@@ -47,6 +47,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"G2V main-sequence star", "Diameter 1,392,700 km"};
     d.spinRate = 2.0f * kPi / (27.0f * 10.0f);
     d.detail = 1;
+    d.mass = 200.0f;
     list.push_back(d);
   }
   // 1: Mercury
@@ -56,6 +57,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 4,879 km", "88-day year, no moons"};
     d.spinRate = 2.0f * kPi / (58.6f * 10.0f);
     d.detail = 2;
+    d.mass = 0.2f;
     list.push_back(d);
   }
   // 2: Venus
@@ -65,6 +67,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 12,104 km", "Hottest planet 465 C, spins backwards"};
     d.spinRate = -2.0f * kPi / (243.0f * 10.0f);
     d.detail = 3;
+    d.mass = 1.0f;
     list.push_back(d);
   }
   // 3: Earth
@@ -74,6 +77,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 12,742 km", "One moon, liquid water"};
     d.spinRate = 2.0f * kPi / (1.0f * 10.0f);
     d.detail = 4;
+    d.mass = 1.2f;
     list.push_back(d);
   }
   // 4: Moon (orbits Earth)
@@ -87,6 +91,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 3,474 km", "Tidally locked to Earth"};
     d.spinRate = d.angleSpeed;  // tidally locked: spin matches orbital rate
     d.detail = 5;
+    d.mass = 0.02f;
     list.push_back(d);
   }
   // 5: Mars
@@ -96,6 +101,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 6,779 km", "Olympus Mons, tallest volcano"};
     d.spinRate = 2.0f * kPi / (1.03f * 10.0f);
     d.detail = 6;
+    d.mass = 0.35f;
     list.push_back(d);
   }
   // 6: Jupiter
@@ -105,6 +111,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 139,820 km", "Great Red Spot storm"};
     d.spinRate = 2.0f * kPi / (0.41f * 10.0f);
     d.detail = 7;
+    d.mass = 6.0f;
     list.push_back(d);
   }
   // 7-10: Galilean moons (v3.2.0). Sizes artistic (readable up close, not
@@ -117,6 +124,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 3,643 km", "400-plus active volcanoes"};
     d.spinRate = d.angleSpeed;
     d.detail = 5;
+    d.mass = 0.02f;
     list.push_back(d);
   }
   {
@@ -126,6 +134,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 3,122 km", "Ice shell over a global ocean"};
     d.spinRate = d.angleSpeed;
     d.detail = 5;
+    d.mass = 0.02f;
     list.push_back(d);
   }
   {
@@ -135,6 +144,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 5,268 km", "Largest moon in the solar system"};
     d.spinRate = d.angleSpeed;
     d.detail = 5;
+    d.mass = 0.02f;
     list.push_back(d);
   }
   {
@@ -144,6 +154,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 4,821 km", "Most cratered body known"};
     d.spinRate = d.angleSpeed;
     d.detail = 5;
+    d.mass = 0.02f;
     list.push_back(d);
   }
   // 11: Saturn
@@ -156,6 +167,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 116,460 km", "Rings: ice, Cassini Division"};
     d.spinRate = 2.0f * kPi / (0.44f * 10.0f);
     d.detail = 8;
+    d.mass = 4.0f;
     list.push_back(d);
   }
   // 12: Titan (orbits Saturn, outside the ring plane)
@@ -166,6 +178,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 5,150 km", "Thick nitrogen atmosphere"};
     d.spinRate = d.angleSpeed;
     d.detail = 5;
+    d.mass = 0.02f;
     list.push_back(d);
   }
   // 13: Uranus
@@ -183,6 +196,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 50,724 km", "Tilted 98 degrees, rolls along"};
     d.spinRate = -2.0f * kPi / (0.72f * 10.0f);
     d.detail = 9;
+    d.mass = 2.0f;
     list.push_back(d);
   }
   // 14: Neptune
@@ -192,6 +206,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 49,244 km", "Supersonic methane winds"};
     d.spinRate = 2.0f * kPi / (0.67f * 10.0f);
     d.detail = 10;
+    d.mass = 2.0f;
     list.push_back(d);
   }
   // 15: Halley (eccentric inclined comet, type 4 coma ball)
@@ -202,6 +217,7 @@ std::vector<PlanetDef> initDefs() {
     d.incl = 0.32f;
     d.facts = {"Periodic comet, 75-year orbit", "Tail grows near the Sun"};
     d.detail = 11;
+    d.mass = 0.01f;
     list.push_back(d);
   }
   // 16: Pluto (v3.2.0; dwarf planet, Kuiper belt, slight eccentric
@@ -214,6 +230,7 @@ std::vector<PlanetDef> initDefs() {
     d.facts = {"Diameter 2,377 km", "Dwarf planet, Kuiper belt"};
     d.spinRate = 0.15f;
     d.detail = 5;
+    d.mass = 0.05f;
     list.push_back(d);
   }
 

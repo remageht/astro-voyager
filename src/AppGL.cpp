@@ -247,6 +247,10 @@ int AppGL::run() {
     updateHorizonCapture(deltaTime);  // === Physics ===
     checkAchievements();
 
+    // === Ship survival === (v3.3.0): топливо/щиты/гравитация; до render(),
+    // чтобы пост-эффекты низкого щита попали в этот же кадр.
+    updateShip(deltaTime);
+
     int fbWidth = 0, fbHeight = 0;
     m_window->getFramebufferSize(fbWidth, fbHeight);
     glViewport(0, 0, fbWidth, fbHeight);
@@ -1366,6 +1370,8 @@ void AppGL::drawImGui() {
 if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   // === ModernUI ===: тема применяется один раз (флаг внутри).
   applyModernThemeOnce();
+  // === Ship survival === (v3.3.0): HUD снизу слева, вне меню.
+  if (!m_inMenu) drawShipHud();
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
@@ -1908,6 +1914,137 @@ void AppGL::teleportToStation(const std::string& id) {
   // === Cinematic === end
   checkAchievements();
 }
+
+// === Ship survival === (v3.3.0) begin.
+// Один тик выживания: гравитация к ближайшей массе, радиация пульсаров,
+// топливо у звезды, смерть и пост-эффекты низкого щита. Зовётся из run()
+// до render(); пауза (P) и нулевой dt его останавливают.
+void AppGL::updateShip(float deltaTime) {
+  if (deltaTime <= 0.0f || m_sceneManager->isPaused()) return;
+  const Station* st = m_sceneManager->getCurrentStation();
+  if (!st) return;
+
+  bool nearStar = false;
+  Vec3 gravAcc(0.0, 0.0, 0.0);
+  bool haveGrav = false;
+
+  if (st->type == StationType::SolarSystem) {
+    // Ближайшее массивное тело тянет камеру; у Солнца топливо восполняется.
+    // Тела приходят из последнего render() (m_lastBodies) — лаг в кадр ок.
+    double bestD2 = 1e30;
+    for (const auto& body : m_sceneManager->getBodies()) {
+      if (!body.def) continue;
+      const double dx = body.pos.x - m_camera.position.x;
+      const double dy = body.pos.y - m_camera.position.y;
+      const double dz = body.pos.z - m_camera.position.z;
+      const double d2 = dx * dx + dy * dy + dz * dz;
+      if (body.def->mass > 0.0f && d2 < bestD2) {
+        bestD2 = d2;
+        gravAcc = ship::gravAccelToward(body.def->mass, m_camera.position,
+                                        body.pos);
+        haveGrav = true;
+      }
+      if (body.def->id == "sun" &&
+          d2 < ship::kStarFuelRange * ship::kStarFuelRange) {
+        nearStar = true;
+      }
+    }
+  } else if (st->mass > 0.0) {
+    // Одиночный массивный центр станции (ЧД sgra/m87, квазар, пульсары):
+    // начало координат — центр станции.
+    gravAcc = ship::gravAccelToward(st->mass, m_camera.position,
+                                    Vec3(0.0, 0.0, 0.0));
+    haveGrav = true;
+  }
+
+  // Радиация пульсара: опасно ближе пяти его радиусов от центра.
+  bool inRadZone = false;
+  if (st->type == StationType::Pulsar) {
+    const double d =
+        std::sqrt(m_camera.position.x * m_camera.position.x +
+                  m_camera.position.y * m_camera.position.y +
+                  m_camera.position.z * m_camera.position.z);
+    inRadZone = d < ship::kPulsarRadius * ship::kPulsarDamageRadii;
+  }
+
+  ship::updateFuel(m_ship, deltaTime, nearStar);
+  ship::applyRadiation(m_ship, deltaTime, inRadZone);
+  if (haveGrav && !m_jumpCine) {
+    m_camera.applyGravityStep(m_ship.gravVel, gravAcc, deltaTime);
+    if (st->type == StationType::BlackHole) {
+      // Дрейф не должен утаскивать под горизонт — тот же клэмп, что в run().
+      m_camera.clampNearHorizon(m_sceneManager->getSettings().rs);
+    }
+  }
+
+  // Пустой бак: одноразовый тост + постоянная строка в HUD (см. drawShipHud).
+  if (m_ship.fuel <= 0.0f && !m_ship.fuelNoticeShown) {
+    m_ship.fuelNoticeShown = true;
+    Toast t;
+    t.title = uiRu("Топливо исчерпано", "Out of fuel");
+    t.desc = uiRu("Дрейф к ближайшей звезде для дозаправки.",
+                  "Drift to the nearest star to refuel.");
+    t.time = static_cast<float>(glfwGetTime());
+    m_toasts.push_back(t);
+  } else if (m_ship.fuel > 0.0f) {
+    m_ship.fuelNoticeShown = false;
+  }
+
+  // Смерть: щиты пробиты — аварийный прыжок к Солнцу и баланс респавна.
+  if (ship::isDead(m_ship) && !m_jumpCine && !m_captureAnim) {
+    teleportToStation("sol");
+    ship::respawn(m_ship);
+    m_shipNotice = uiRu("Щиты уничтожены. Аварийный прыжок к Солнцу.",
+                        "Shields destroyed. Emergency jump to the Sun.");
+    m_shipNoticeT = 5.0f;
+  }
+
+  if (m_shipNoticeT > 0.0f) m_shipNoticeT -= deltaTime;
+
+  // Низкий щит: хроматика (<30) и помехи (<10). Ноль при полном щите —
+  // композит остаётся байт-в-байт на скриншот-харнессе.
+  m_sceneManager->setShipFx(ship::chromaK(m_ship.shield),
+                            ship::staticK(m_ship.shield));
+}
+
+// Нижний левый HUD: полосы топлива (оранжевая) и щитов (синяя) + нотисы.
+void AppGL::drawShipHud() {
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2(12.0f, io.DisplaySize.y - 94.0f),
+                          ImGuiCond_Always);
+  ImGui::SetNextWindowBgAlpha(0.55f);
+  if (ImGui::Begin("##shipHud", nullptr,
+                   ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                       ImGuiWindowFlags_AlwaysAutoResize |
+                       ImGuiWindowFlags_NoFocusOnAppearing |
+                       ImGuiWindowFlags_NoNav |
+                       ImGuiWindowFlags_NoSavedSettings)) {
+    char buf[48];
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
+                          ImVec4(1.0f, 0.55f, 0.15f, 1.0f));
+    std::snprintf(buf, sizeof(buf), "%s %.0f", uiRu("Топливо", "Fuel"),
+                  m_ship.fuel);
+    ImGui::ProgressBar(m_ship.fuel / 100.0f, ImVec2(180.0f, 12.0f), buf);
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
+                          ImVec4(0.25f, 0.6f, 1.0f, 1.0f));
+    std::snprintf(buf, sizeof(buf), "%s %.0f", uiRu("Щиты", "Shields"),
+                  m_ship.shield);
+    ImGui::ProgressBar(m_ship.shield / 100.0f, ImVec2(180.0f, 12.0f), buf);
+    ImGui::PopStyleColor();
+    if (m_shipNoticeT > 0.0f && !m_shipNotice.empty()) {
+      ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s",
+                         m_shipNotice.c_str());
+    } else if (m_ship.fuel <= 0.0f) {
+      ImGui::TextColored(
+          ImVec4(1.0f, 0.55f, 0.15f, 1.0f), "%s",
+          uiRu("Топливо исчерпано. Дрейф к ближайшей звезде...",
+               "Out of fuel. Drifting to the nearest star..."));
+    }
+  }
+  ImGui::End();
+}
+// === Ship survival === end.
 
 void AppGL::exportJourney() {
   std::filesystem::create_directories("routes");
@@ -2913,6 +3050,13 @@ void AppGL::startWarpJump(const std::string& id) {
   if (!m_warpOn || m_warpStatus != 1) return;  // только из Cruise
   if (id.empty() || (cur && cur->id == id)) return;
   if (!findStation(id)) return;
+  // === Ship survival === (v3.3.0): без пяти единиц топлива прыжок не летит.
+  if (!ship::canJump(m_ship)) {
+    m_shipNotice = uiRu("Недостаточно топлива (нужно 5)",
+                        "Not enough fuel (5 needed)");
+    m_shipNoticeT = 3.0f;
+    return;
+  }
   // === WarpJump === (агент J): прыжок идёт через кино-контроллер поверх
   // статусов (Charge->Pullback->Burst->Travel->Arrival->Pushin->Cooldown).
   // Старый прямой путь Charging(3с)/Jump(4с) ниже остаётся fallback'ом
@@ -3008,6 +3152,7 @@ bool AppGL::updateWarp(float deltaTime) {
         const std::string tgt = m_warpJumpTarget;
         m_warpJumpTarget.clear();
         teleportToStation(tgt);  // штатный телепорт под вспышкой
+        ship::spendJumpFuel(m_ship);  // === Ship survival ===: цена прыжка
         m_warpStatus = 4;        // Cooldown
         m_warpStateT = 0.0f;
         m_warpFlash = 1.0f;  // вспышка прибытия
@@ -3212,6 +3357,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
     m_jumpDidTeleport = true;
     m_warpStatus = 3;
     teleportToStation(m_jumpTarget);
+    ship::spendJumpFuel(m_ship);  // === Ship survival ===: цена прыжка
     m_jumpShipPos = m_camera.position;
     m_jumpShipDir = m_camera.forward();
     m_jumpFpPos = m_camera.position;

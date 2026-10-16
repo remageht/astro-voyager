@@ -263,6 +263,15 @@ Check 'selected object live lookup' (($sceneH -match 'findCustom') -and ($appCpp
 Check 'custom surface mapping in render' (($sceneCpp -match 'custom\.detail') -and ($sceneCpp -match 'custom\.type'))
 Check 'planet close-range detail nearK' ($planetFrag -match 'nearK')
 
+# --- v3.3.0 ship survival pass ---
+Check 'ship state in Types core' (((Read-File 'src/Types.h') -match 'struct ShipState') -and ((Read-File 'src/Types.h') -match 'float fuel') -and ((Read-File 'src/Types.h') -match 'float shield'))
+Check 'camera includes types' (($cameraH -match 'Types\.h') -and ($cameraCpp -match 'applyGravityStep'))
+Check 'warp jump fuel gate' (($appCpp -match 'ship::canJump') -and ($appCpp -match 'ship::spendJumpFuel'))
+Check 'pulsar radiation zone' (($appCpp -match 'applyRadiation') -and ($appCpp -match 'kPulsarDamageRadii'))
+Check 'low shield postfx' (((Read-File 'shaders/post_comp.frag') -match 'u_ChromaK') -and ((Read-File 'shaders/post_comp.frag') -match 'u_StaticK') -and ((Read-File 'src/PostFX.cpp') -match 'setShipFx'))
+Check 'gravity mass fields' (($catalogH -match 'double mass') -and ((Read-File 'src/SolarSystem.h') -match 'float mass') -and ($appCpp -match 'gravAccelToward'))
+Check 'ship hud and respawn' (($appCpp -match 'drawShipHud') -and ($appCpp -match 'ImGui::ProgressBar') -and ($appCpp -match 'teleportToStation\("sol"\)'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

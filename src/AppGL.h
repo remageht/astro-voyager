@@ -8,6 +8,7 @@
 #include "Camera.h"
 #include "SceneManager.h"
 #include "Tour.h"
+#include "Types.h"
 #include "Window.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
@@ -326,6 +327,19 @@ class AppGL {
   void updateOrbit(float deltaTime);  // вызывать в processInput до WASD
   void drawPhotoPopup();              // вызывать в drawImGui при m_photoMode
   // === Beauty === end
+
+  // === Ship survival === (v3.3.0) begin.
+  // Топливо 0..100 (−5 за варп-прыжок, регенерация у звезды), щиты 0..100
+  // (−10/с в зоне пульсара), гравитационный дрейф, респавн на "sol".
+  // updateShip зовётся из run() до render(); харнесс run() не вызывает —
+  // сцена и пост-эффекты на дефолтах остаются байт-в-байт (меняется только
+  // gui.png: снизу слева появляется HUD корабля на 100/100).
+  ShipState m_ship;
+  std::string m_shipNotice;    // короткий нотис в HUD (нехватка топлива и т.п.)
+  float m_shipNoticeT = 0.0f;  // сек; >0 — нотис виден
+  void updateShip(float deltaTime);
+  void drawShipHud();
+  // === Ship survival === end
 };
 
 // Связь AppGL -> SceneManager без правок SceneManager.h:

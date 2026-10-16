@@ -34,6 +34,10 @@ uniform float u_Aspect;
 uniform vec3 u_VelDir;
 uniform float u_Beta;
 
+// === Ship survival === (v3.3.0): low-shield screen effects (0 = exact pass).
+uniform float u_ChromaK;  // chromatic aberration amount 0..1
+uniform float u_StaticK;  // interference: noise + vignette 0..1
+
 void main() {
   vec4 sceneT = texelFetch(u_Scene, ivec2(gl_FragCoord.xy), 0);
   vec3 bloom = texture(u_Bloom0, v_TexCoord).rgb * 0.30 +
@@ -42,6 +46,13 @@ void main() {
                texture(u_Bloom3, v_TexCoord).rgb * 0.15 +
                texture(u_Bloom4, v_TexCoord).rgb * 0.10;
   vec3 col = sceneT.rgb + bloom * u_BloomStrength;
+  if (u_ChromaK > 0.0001) {
+    // texture() lives only inside this branch: the amount==0 path must stay
+    // texelFetch-exact (no filtering, no extra samples).
+    vec2 cabOff = (v_TexCoord - 0.5) * 0.012 * u_ChromaK;
+    col = vec3(texture(u_Scene, v_TexCoord + cabOff).r, col.g,
+               texture(u_Scene, v_TexCoord - cabOff).b);
+  }
   if (u_Beta > 0.001) {
     vec2 ndc = v_TexCoord * 2.0 - 1.0;
     float t = tan(u_FovY * 0.5);
@@ -60,5 +71,12 @@ void main() {
   col = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
   // Single post-tonemap grain (replaces the per-shader grains).
   col += (compHash(gl_FragCoord.xy + fract(u_Time) * 100.0) - 0.5) * 0.012;
+  if (u_StaticK > 0.0001) {
+    // Interference wash + edge vignette (loops in the existing compHash).
+    float sN = compHash(gl_FragCoord.xy * 0.371 + fract(u_Time) * 97.0);
+    float sVig = smoothstep(0.35, 0.85, length(v_TexCoord - 0.5));
+    col = mix(col, vec3(sN) * 0.5, u_StaticK * 0.5);
+    col *= 1.0 - 0.65 * sVig * u_StaticK;
+  }
   FragColor = vec4(col, sceneT.a);
 }

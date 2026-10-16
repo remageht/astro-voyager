@@ -24,6 +24,7 @@ struct Station {
   // per-body rules apply instead). BlackHole: rs*1.05 (capture shell),
   // quasar: core-touch radius for slide + flash hint.
   double collisionRadius = 0.0;
+  double mass = 0.0;  // GM game units for ship gravity (v3.3.0)
 };
 
 const std::vector<Station>& builtinCatalog();

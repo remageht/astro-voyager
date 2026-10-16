@@ -199,6 +199,11 @@ void PostFX::setFlight(const float camFwd[3], const float camRight[3],
   m_beta = beta;
 }
 
+void PostFX::setShipFx(float chromaK, float staticK) {
+  m_shipChroma = chromaK;
+  m_shipStaticK = staticK;
+}
+
 void PostFX::endScene(int width, int height) {
   if (!m_active) return;
   m_active = false;
@@ -243,6 +248,10 @@ void PostFX::endScene(int width, int height) {
   m_compShader->setUniform1f("u_Aspect", m_aspect);
   m_compShader->setUniform3f("u_VelDir", m_velDir[0], m_velDir[1], m_velDir[2]);
   m_compShader->setUniform1f("u_Beta", m_beta);
+  // === Ship survival === (v3.3.0): низкий щит — хрома-аберрация и помехи;
+  // 0 => обе ветки в post_comp.frag пропускаются, кадр байт-в-байт.
+  m_compShader->setUniform1f("u_ChromaK", m_shipChroma);
+  m_compShader->setUniform1f("u_StaticK", m_shipStaticK);
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_sceneTex);

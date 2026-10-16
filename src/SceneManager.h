@@ -129,6 +129,13 @@ class SceneManager {
   void setShowBelt(bool on) { m_showBelt = on; }
   bool showBelt() const { return m_showBelt; }
 
+  // === Ship survival === (v3.3.0): low-shield postfx amounts (0 = off;
+  // the screenshot harness never calls this, so its PNGs stay byte-exact).
+  void setShipFx(float chromaK, float staticK) {
+    m_shipChroma = chromaK;
+    m_shipStatic = staticK;
+  }
+
   void togglePause() { m_paused = !m_paused; }
   bool isPaused() const { return m_paused; }
   void setTimeScale(float s) {
@@ -206,6 +213,10 @@ class SceneManager {
   Vec3 m_relDir{0.0, 0.0, 1.0};
   float m_relTime = -1.0f;
   float m_relBeta = 0.0f;
+
+  // === Ship survival === (v3.3.0) low-shield FX amounts (см. setShipFx).
+  float m_shipChroma = 0.0f;
+  float m_shipStatic = 0.0f;
 
   std::unique_ptr<ScreenQuad> m_screenQuad;
   // === PostFX === scene FBO + композит (см. PostFX.h).

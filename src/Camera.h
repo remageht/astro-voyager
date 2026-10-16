@@ -1,14 +1,8 @@
 #pragma once
 
-namespace astro {
+#include "Types.h"
 
-// Minimal 3D vector to keep core buildable without GLM.
-// GL renderer will use glm::vec3; conversion is 1:1.
-struct Vec3 {
-  double x = 0.0, y = 0.0, z = 0.0;
-  Vec3() = default;
-  Vec3(double x_, double y_, double z_) : x(x_), y(y_), z(z_) {}
-};
+namespace astro {
 
 struct Camera {
   Vec3 position{0.0, 0.0, 10.0};
@@ -24,6 +18,11 @@ struct Camera {
   void moveForward(double dt, bool forward);
   void moveRight(double dt, bool right);
   void clampNearHorizon(double rs);
+
+  // === Ship survival === (v3.3.0): gravitational drift.
+  // Integrates a damped, capped drift velocity driven by accel and moves the
+  // camera by driftVel * dt. Free-flight controls stay untouched.
+  void applyGravityStep(Vec3& driftVel, const Vec3& accel, double dt);
 };
 
 }  // namespace astro

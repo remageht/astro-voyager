@@ -36,6 +36,29 @@ void Camera::moveRight(double dt, bool rgt) {
                   position.z + r.z * s);
 }
 
+// === Ship survival === (v3.3.0): gravitational drift.
+// Drift velocity integrates the pull, is damped and capped, and moves the
+// camera: a gentle "being pulled" feel without fighting the free-flight
+// controls (they keep modifying position directly, as before).
+void Camera::applyGravityStep(Vec3& driftVel, const Vec3& accel, double dt) {
+  driftVel = Vec3(driftVel.x + accel.x * dt, driftVel.y + accel.y * dt,
+                  driftVel.z + accel.z * dt);
+  const double damp = 1.0 - ship::kGravDampPerSec * dt;
+  const double k = damp < 0.0 ? 0.0 : damp;
+  double vx = driftVel.x * k, vy = driftVel.y * k, vz = driftVel.z * k;
+  const double v =
+      std::sqrt(vx * vx + vy * vy + vz * vz);
+  if (v > ship::kGravVelMax && v > 1e-9) {
+    const double s = ship::kGravVelMax / v;
+    vx *= s;
+    vy *= s;
+    vz *= s;
+  }
+  driftVel = Vec3(vx, vy, vz);
+  position = Vec3(position.x + vx * dt, position.y + vy * dt,
+                  position.z + vz * dt);
+}
+
 void Camera::clampNearHorizon(double rs) {
   const double minR = rs * 1.05;
   const double r =

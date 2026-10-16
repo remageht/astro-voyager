@@ -7,63 +7,72 @@
       "name": "Sgr A*",
       "description": "Galactic center black hole. Schwarzschild lensing, Rs=1.0.",
       "spawnDistanceRs": 10.0,
-      "params": { "rs": 1.0, "shellRadius": 30.0, "step": 0.05, "maxSteps": 600 }
+      "params": { "rs": 1.0, "shellRadius": 30.0, "step": 0.05, "maxSteps": 600 },
+      "mass": 40.0
     },
     {
       "id": "qso-3c273",
       "type": "quasar",
       "name": "3C 273",
       "description": "Bright quasar: disk + jets + glow billboard.",
-      "spawnDistanceRs": 25.0
+      "spawnDistanceRs": 25.0,
+      "mass": 15.0
     },
     {
       "id": "ori",
       "type": "constellation",
       "name": "Orion",
       "description": "Orion lines (Betelgeuse-Rigel belt).",
-      "spawnDistanceRs": 50.0
+      "spawnDistanceRs": 50.0,
+      "mass": 0.0
     },
     {
       "id": "uma",
       "type": "constellation",
       "name": "Ursa Major",
       "description": "Big Dipper lines.",
-      "spawnDistanceRs": 50.0
+      "spawnDistanceRs": 50.0,
+      "mass": 0.0
     },
     {
       "id": "m31",
       "type": "galaxy",
       "name": "Andromeda (M31)",
       "description": "Spiral galaxy impostor sprite.",
-      "spawnDistanceRs": 80.0
+      "spawnDistanceRs": 80.0,
+      "mass": 0.0
     },
     {
       "id": "m51",
       "type": "galaxy",
       "name": "Whirlpool (M51)",
       "description": "Whirlpool spiral: two open arms.",
-      "spawnDistanceRs": 90.0
+      "spawnDistanceRs": 90.0,
+      "mass": 0.0
     },
     {
       "id": "m104",
       "type": "galaxy",
       "name": "Sombrero (M104)",
       "description": "Sombrero: bright bulge, dark dust lane.",
-      "spawnDistanceRs": 85.0
+      "spawnDistanceRs": 85.0,
+      "mass": 0.0
     },
     {
       "id": "m1",
       "type": "nebula",
       "name": "Crab Nebula (M1)",
       "description": "Supernova remnant impostor sprite.",
-      "spawnDistanceRs": 60.0
+      "spawnDistanceRs": 60.0,
+      "mass": 0.0
     },
     {
       "id": "sol",
       "type": "solar_system",
       "name": "Solar System",
       "description": "Sun + 8 planets + Moon, rings, belt.",
-      "spawnDistanceRs": 70.0
+      "spawnDistanceRs": 70.0,
+      "mass": 0.0
     },
     {
       "id": "m87",
@@ -71,49 +80,56 @@
       "name": "M87*",
       "description": "Supermassive black hole with relativistic jet.",
       "spawnDistanceRs": 14.0,
-      "params": { "rs": 1.5, "shellRadius": 30.0, "step": 0.05, "maxSteps": 600 }
+      "params": { "rs": 1.5, "shellRadius": 30.0, "step": 0.05, "maxSteps": 600 },
+      "mass": 60.0
     },
     {
       "id": "psr-vela",
       "type": "pulsar",
       "name": "Vela Pulsar",
       "description": "Young neutron star: tilted dipole beams, lighthouse pulse.",
-      "spawnDistanceRs": 35.0
+      "spawnDistanceRs": 35.0,
+      "mass": 3.0
     },
     {
       "id": "psr-crab",
       "type": "pulsar",
       "name": "Crab Pulsar",
       "description": "33 ms rotator in supernova remnant M1. Pair with station m1.",
-      "spawnDistanceRs": 35.0
+      "spawnDistanceRs": 35.0,
+      "mass": 3.0
     },
     {
       "id": "sgr-1806",
       "type": "pulsar",
       "name": "SGR 1806-20",
       "description": "Magnetar: 1e15 G field, starquake giant flares.",
-      "spawnDistanceRs": 40.0
+      "spawnDistanceRs": 40.0,
+      "mass": 3.0
     },
     {
       "id": "psr-b1913",
       "type": "pulsar",
       "name": "PSR B1913+16",
       "description": "Hulse-Taylor binary: orbital decay proved gravitational waves.",
-      "spawnDistanceRs": 38.0
+      "spawnDistanceRs": 38.0,
+      "mass": 3.0
     },
     {
       "id": "mw",
       "type": "galaxy",
       "name": "Milky Way",
       "description": "Our galaxy from outside. Find the Sun, fly close to go home.",
-      "spawnDistanceRs": 45.0
+      "spawnDistanceRs": 45.0,
+      "mass": 0.0
     },
     {
       "id": "m13",
       "type": "star_cluster",
       "name": "Hercules Cluster (M13)",
       "description": "Globular cluster: 300000 ancient stars. Fly between them.",
-      "spawnDistanceRs": 20.0
+      "spawnDistanceRs": 20.0,
+      "mass": 0.0
     }
   ]
 }
