@@ -272,6 +272,14 @@ Check 'low shield postfx' (((Read-File 'shaders/post_comp.frag') -match 'u_Chrom
 Check 'gravity mass fields' (($catalogH -match 'double mass') -and ((Read-File 'src/SolarSystem.h') -match 'float mass') -and ($appCpp -match 'gravAccelToward'))
 Check 'ship hud and respawn' (($appCpp -match 'drawShipHud') -and ($appCpp -match 'ImGui::ProgressBar') -and ($appCpp -match 'teleportToStation\("sol"\)'))
 
+# --- v3.3.0 speed fx + camera views pass ---
+Check 'view modes core in Types' (((Read-File 'src/Types.h') -match 'ViewMode') -and ((Read-File 'src/Types.h') -match 'nextView') -and ((Read-File 'src/Types.h') -match 'offsetCameraPos') -and ((Read-File 'src/Types.h') -match 'speedFx'))
+Check 'V key camera views' (($appCpp -match 'GLFW_KEY_V') -and ($appCpp -match 'view::nextView') -and ($appCpp -match 'resetRelativity'))
+Check 'render camera offset' (($appCpp -match 'applyViewCamera') -and ($appCpp -match 'view::offsetCameraPos') -and ($appCpp -match 'm_renderCam'))
+Check 'speed fx composite streak' (((Read-File 'shaders/post_comp.frag') -match 'u_SpeedK') -and ((Read-File 'src/PostFX.cpp') -match 'setSpeedFx') -and ((Read-File 'src/PostFX.h') -match 'setSpeedFx'))
+Check 'speed fx boosts relativity' (($sceneCpp -match 'setSpeedFx') -and ($sceneCpp -match 'betaEff') -and ($sceneH -match 'm_speedBeta'))
+Check 'warp streak stability' (((Read-File 'shaders/warp.frag') -match 'smoothstep\(0\.0, 0\.06') -and ((Read-File 'shaders/warp.frag') -match '0\.9965') -and ($appCpp -match 'updateSpeedFx'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

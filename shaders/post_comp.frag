@@ -37,6 +37,8 @@ uniform float u_Beta;
 // === Ship survival === (v3.3.0): low-shield screen effects (0 = exact pass).
 uniform float u_ChromaK;  // chromatic aberration amount 0..1
 uniform float u_StaticK;  // interference: noise + vignette 0..1
+// === Speed FX === (v3.3.0): motion streaks, 0 = exact pass (harness).
+uniform float u_SpeedK;  // 0..1 speed amount
 
 void main() {
   vec4 sceneT = texelFetch(u_Scene, ivec2(gl_FragCoord.xy), 0);
@@ -52,6 +54,25 @@ void main() {
     vec2 cabOff = (v_TexCoord - 0.5) * 0.012 * u_ChromaK;
     col = vec3(texture(u_Scene, v_TexCoord + cabOff).r, col.g,
                texture(u_Scene, v_TexCoord - cabOff).b);
+  }
+  if (u_SpeedK > 0.001) {
+    // Motion streaks: bright scene pixels smear backwards along the velocity
+    // (3 taps, texture() only inside this gate => amount==0 stays texel-exact).
+    vec2 sp = v_TexCoord - 0.5;
+    vec2 vd = vec2(dot(u_VelDir, u_CamRight), dot(u_VelDir, u_CamUp));
+    float vl = length(vd);
+    if (vl > 1e-4) {
+      vd /= vl;
+      float align = max(dot(normalize(sp + vec2(1e-4)), vd), 0.0);
+      float env = smoothstep(0.12, 0.62, length(sp)) * align * u_SpeedK;
+      vec3 acc = col;
+      for (int i = 1; i <= 3; ++i) {
+        float t = 0.022 * float(i) * u_SpeedK;
+        acc = max(acc, texture(u_Scene, v_TexCoord - vd * t).rgb +
+                          bloom * u_BloomStrength);
+      }
+      col = mix(col, acc, clamp(env * 0.6, 0.0, 0.75));
+    }
   }
   if (u_Beta > 0.001) {
     vec2 ndc = v_TexCoord * 2.0 - 1.0;

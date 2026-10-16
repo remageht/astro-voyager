@@ -101,4 +101,35 @@ inline float staticK(float shield) {
 
 }  // namespace ship
 
+// === Camera views === (v3.3.0): cockpit / behind the ship / far overview.
+// Toggled with V; pure helpers live here so the core tests cover them too.
+namespace view {
+enum class ViewMode { Cockpit = 0, Chase = 1, Overview = 2 };
+
+inline ViewMode nextView(ViewMode v) {
+  return static_cast<ViewMode>((static_cast<int>(v) + 1) % 3);
+}
+
+constexpr double kChaseBack = 4.5;  // world units behind the ship
+constexpr double kChaseUp = 1.1;
+constexpr double kFarBack = 9.0;
+constexpr double kFarUp = 2.2;
+
+// Render-camera position for a view mode (Cockpit = the camera itself).
+inline Vec3 offsetCameraPos(const Vec3& pos, const Vec3& fwd, ViewMode v) {
+  if (v == ViewMode::Cockpit) return pos;
+  const double back = (v == ViewMode::Chase) ? kChaseBack : kFarBack;
+  const double up = (v == ViewMode::Chase) ? kChaseUp : kFarUp;
+  return Vec3(pos.x - fwd.x * back, pos.y - fwd.y * back + up,
+              pos.z - fwd.z * back);
+}
+
+// Speed FX amount 0..1 from a speed (units/s) against a reference speed.
+inline float speedFx(float speed, float ref) {
+  if (ref <= 0.0f) return 0.0f;
+  const float k = speed / ref;
+  return k < 0.0f ? 0.0f : (k > 1.0f ? 1.0f : k);
+}
+}  // namespace view
+
 }  // namespace astro

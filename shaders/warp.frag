@@ -15,6 +15,7 @@ uniform float u_Flash;   // 0..1 white flash envelope (0 = neutral)
 uniform float u_Burst;   // 0..1 shockwave envelope, агент J (0 = neutral)
 uniform float u_Aspect;  // viewport aspect (width / height)
 uniform float u_Time;    // wall seconds (streak flow only)
+// v3.3.0: streak stability pass (long tails, capped burst flow, softened rim).
 
 float hash11(float p) {
   p = fract(p * 0.1031);
@@ -26,11 +27,12 @@ float hash11(float p) {
 // One band of radial streaks: angular hash picks sparse "star lines",
 // the fract() ramp slides them outward over time (outward flow:
 // constant phase needs r growing with u_Time).
+// v3.3.0: long comet tail (was a short dash) => no temporal strobing.
 float streakBand(float ang01, float r, float density, float seed) {
   float id = floor(ang01 * density + seed);
   float h = hash11(id * 1.37 + seed * 7.0);
   float rr = fract(r * 1.7 - u_Time * (0.6 + 1.8 * h) + h * 11.0);
-  float pulse = smoothstep(0.0, 0.10, rr) * (1.0 - smoothstep(0.10, 0.55, rr));
+  float pulse = smoothstep(0.0, 0.06, rr) * (1.0 - smoothstep(0.06, 0.85, rr));
   return pulse * step(0.30, h);
 }
 
@@ -41,7 +43,7 @@ float streakBandB(float ang01, float r, float density, float seed, float t) {
   float id = floor(ang01 * density + seed);
   float h = hash11(id * 1.37 + seed * 7.0);
   float rr = fract(r * 1.7 - t * (0.6 + 1.8 * h) + h * 11.0);
-  float pulse = smoothstep(0.0, 0.10, rr) * (1.0 - smoothstep(0.10, 0.55, rr));
+  float pulse = smoothstep(0.0, 0.06, rr) * (1.0 - smoothstep(0.06, 0.85, rr));
   return pulse * step(0.30, h);
 }
 
@@ -58,14 +60,15 @@ void main() {
 
   // Per-channel radial scales fake chromatic aberration at the rim
   // (no scene texture here, so the fringe is synthesized on the lines).
-  float bR = streakBand(ang01, rs * 0.994, 170.0, 1.0);
+  float bR = streakBand(ang01, rs * 0.9965, 170.0, 1.0);
   float bG = streakBand(ang01, rs * 1.000, 170.0, 1.0);
-  float bB = streakBand(ang01, rs * 1.006, 170.0, 1.0);
+  float bB = streakBand(ang01, rs * 1.0035, 170.0, 1.0);
   vec3 streak = vec3(bR, bG, bB) * env;
+  streak *= 1.0 - 0.30 * smoothstep(0.55, 1.0, r);  // v3.3.0: soften the rim
 
   // Finer second layer: density grows visibly with warp intensity.
-  float fine = streakBand(ang01 + 0.003, rs * 1.002, 340.0, 5.0);
-  streak += vec3(0.55, 0.70, 1.0) * fine * env * k;
+  float fine = streakBand(ang01 + 0.003, rs * 1.002, 220.0, 5.0);
+  streak += vec3(0.45, 0.70, 1.0) * fine * env * k;
 
   // Cool rim fringe + hot core glow (tunnel feel at high k).
   float rim = smoothstep(0.45, 0.95, r);
@@ -91,11 +94,12 @@ void main() {
     col += vec3(0.70, 0.85, 1.00) * ring * 2.0;
     // Chromatic aberration x(1+3B): radial channel scales spread apart;
     // streak drift x(1+4B) via explicit flow time.
-    float chromaK = 1.0 + 3.0 * burst;
-    float flowT = u_Time * (1.0 + 4.0 * burst);
-    float cR = streakBandB(ang01, rs * (1.0 + (0.994 - 1.0) * chromaK), 170.0, 1.0, flowT);
+    // v3.3.0: capped flow/chroma spread => lines stay coherent at max speed.
+    float chromaK = 1.0 + 1.5 * burst;
+    float flowT = u_Time * (1.0 + 1.8 * burst);
+    float cR = streakBandB(ang01, rs * (1.0 + (0.9965 - 1.0) * chromaK), 170.0, 1.0, flowT);
     float cG = streakBandB(ang01, rs * 1.000, 170.0, 1.0, flowT);
-    float cB = streakBandB(ang01, rs * (1.0 + (1.006 - 1.0) * chromaK), 170.0, 1.0, flowT);
+    float cB = streakBandB(ang01, rs * (1.0 + (1.0035 - 1.0) * chromaK), 170.0, 1.0, flowT);
     col += vec3(cR, cG, cB) * env * burst;
     // Flash peak 2.2*B*(1-r): hot centre over the regular u_Flash below.
     col += vec3(1.0, 0.97, 0.92) * (2.2 * burst * (1.0 - smoothstep(0.0, 1.0, r)));

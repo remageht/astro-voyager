@@ -251,12 +251,27 @@ int AppGL::run() {
     // чтобы пост-эффекты низкого щита попали в этот же кадр.
     updateShip(deltaTime);
 
+    // === Camera views + speed FX === (v3.3.0): скорость камеры/варпа =>
+    // доплер+стрики+микро-FOV; камера кадра со сносом вида; корабль в кадре.
+    updateSpeedFx(deltaTime);
+    applyViewCamera(m_renderCam);
+    if (!m_jumpCine) {
+      if (m_viewMode != view::ViewMode::Cockpit && !m_inMenu) {
+        warpdrive::setShip(true, static_cast<float>(m_camera.position.x),
+                           static_cast<float>(m_camera.position.y),
+                           static_cast<float>(m_camera.position.z),
+                           static_cast<float>(m_camera.yaw));
+      } else {
+        warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+      }
+    }
+
     int fbWidth = 0, fbHeight = 0;
     m_window->getFramebufferSize(fbWidth, fbHeight);
     glViewport(0, 0, fbWidth, fbHeight);
 
     // Render active scene
-    m_sceneManager->render(m_camera, fbWidth, fbHeight, currentTime);
+    m_sceneManager->render(m_renderCam, fbWidth, fbHeight, currentTime);
 
     // === WarpDrive === (снять тряску камеры после render()).
     finishWarpFrame();
@@ -336,6 +351,25 @@ void AppGL::processInput(float deltaTime) {
     m_sceneManager->togglePause();
   }
   m_prevPPressed = pDown;
+
+  // === Camera views === (v3.3.0): V цикл кабина -> за кормой -> обзор.
+  // Во время катсцены прыжка вид не трогаем (камерой владеет updateJumpCine).
+  const bool vDown = (glfwGetKey(win, GLFW_KEY_V) == GLFW_PRESS);
+  if (vDown && !m_prevVPressed && !io.WantCaptureKeyboard && !m_jumpCine) {
+    m_viewMode = view::nextView(m_viewMode);
+    // Снос камеры меняет камеру кадра: без сброса рел. скорости был бы
+    // ложный скачок beta (доплер-вспышка) на кадр переключения.
+    m_sceneManager->resetRelativity();
+    static const char* kViewNameRu[] = {"Кабина", "За кормой", "Дальний обзор"};
+    static const char* kViewNameEn[] = {"Cockpit", "Behind", "Overview"};
+    const int vi = static_cast<int>(m_viewMode);
+    Toast vt;
+    vt.title = uiRu("Вид камеры", "Camera view");
+    vt.desc = uiRu(kViewNameRu[vi], kViewNameEn[vi]);
+    vt.time = static_cast<float>(glfwGetTime());
+    m_toasts.push_back(vt);
+  }
+  m_prevVPressed = vDown;
 
   // Time pace: - steps down, = (or +) steps up the preset list.
   // Slash is reserved for station search focus, so it is not reused here.
@@ -784,9 +818,10 @@ std::string AppGL::pickCustomAt(double px, double py) {
   float fov = m_sceneManager->getSettings().fovDegrees;
   float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
   glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1e7f);
-  Vec3 cp = m_camera.position;
-  Vec3 cf = m_camera.forward();
-  Vec3 cu = m_camera.up();
+  // Виды (v3.3.0): пикинг объектов — по камере кадра (снос вида 2/3).
+  Vec3 cp = m_renderCam.position;
+  Vec3 cf = m_renderCam.forward();
+  Vec3 cu = m_renderCam.up();
   glm::vec3 eye(static_cast<float>(cp.x), static_cast<float>(cp.y),
                 static_cast<float>(cp.z));
   glm::vec3 fwd(static_cast<float>(cf.x), static_cast<float>(cf.y),
@@ -881,9 +916,10 @@ void AppGL::flyToObjectAt(double px, double py) {
   float fov = m_sceneManager->getSettings().fovDegrees;
   float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
   glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1e7f);
-  Vec3 cp = m_camera.position;
-  Vec3 cf = m_camera.forward();
-  Vec3 cu = m_camera.up();
+  // Виды (v3.3.0): пикинг — по камере кадра (учёт сноса вида 2/3).
+  Vec3 cp = m_renderCam.position;
+  Vec3 cf = m_renderCam.forward();
+  Vec3 cu = m_renderCam.up();
   glm::vec3 eye(static_cast<float>(cp.x), static_cast<float>(cp.y),
                 static_cast<float>(cp.z));
   glm::vec3 fwd(static_cast<float>(cf.x), static_cast<float>(cf.y),
@@ -2032,6 +2068,14 @@ void AppGL::drawShipHud() {
                   m_ship.shield);
     ImGui::ProgressBar(m_ship.shield / 100.0f, ImVec2(180.0f, 12.0f), buf);
     ImGui::PopStyleColor();
+    // Вид камеры (v3.3.0): строка-подсказка для клавиши V.
+    {
+      static const char* kViewRu[3] = {"Кабина", "За кормой", "Обзор"};
+      static const char* kViewEn[3] = {"Cockpit", "Behind", "Overview"};
+      const int vi = static_cast<int>(m_viewMode);
+      ImGui::TextColored(ImVec4(0.6f, 0.75f, 0.9f, 1.0f), "%s: %s",
+                         uiRu("Вид", "View"), uiRu(kViewRu[vi], kViewEn[vi]));
+    }
     if (m_shipNoticeT > 0.0f && !m_shipNotice.empty()) {
       ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s",
                          m_shipNotice.c_str());
@@ -2045,6 +2089,69 @@ void AppGL::drawShipHud() {
   ImGui::End();
 }
 // === Ship survival === end.
+
+// === Camera views + speed FX === (v3.3.0) begin.
+// Камера кадра: в меню и катсцене — как есть; в видах 2/3 — снос назад
+// вдоль курса и чуть выше. Логическая m_camera не меняется (движение,
+// коллизии, ачивки и sun-link считаются по ней).
+void AppGL::applyViewCamera(Camera& out) {
+  out = m_camera;
+  m_renderCamValid = true;
+  if (m_jumpCine || m_inMenu) return;
+  if (m_viewMode == view::ViewMode::Cockpit) return;
+  out.position =
+      view::offsetCameraPos(m_camera.position, m_camera.forward(), m_viewMode);
+  const Station* st = m_sceneManager->getCurrentStation();
+  if (st && st->type == StationType::BlackHole) {
+    // Снос не должен затаскивать камеру кадра под горизонт.
+    out.clampNearHorizon(m_sceneManager->getSettings().rs);
+  }
+}
+
+// Скорость: реальная (u/s, сглаженная) и варп-фактор дают boost beta для
+// доплера/абберации (setSpeedFx), стрики в композите (u_SpeedK) и микро-FOV.
+// Варп: туннель не двигает камеру — без этого «скорость» не чувствуется.
+void AppGL::updateSpeedFx(float deltaTime) {
+  if (deltaTime > 0.0f && deltaTime < 0.5f) {
+    const double dx = m_camera.position.x - m_prevSpeedPos.x;
+    const double dy = m_camera.position.y - m_prevSpeedPos.y;
+    const double dz = m_camera.position.z - m_prevSpeedPos.z;
+    const double inst = std::sqrt(dx * dx + dy * dy + dz * dz) / deltaTime;
+    m_prevSpeedPos = m_camera.position;
+    if (inst < 1500.0) {  // телепорт не считаем скоростью
+      const float k = 1.0f - std::exp(-deltaTime * 5.0f);
+      m_camSpeed += (static_cast<float>(inst) - m_camSpeed) * k;
+      if (inst > 0.5) {
+        m_speedDir = Vec3(dx / inst, dy / inst, dz / inst);
+      }
+    } else {
+      m_camSpeed = 0.0f;
+    }
+  }
+  // Полный мировой эффект от 12 u/s; варп — по фактору (m_warpK 0..1).
+  const float worldK = view::speedFx(m_camSpeed, 12.0f);
+  const float warpK =
+      m_warpOn ? (m_warpK < 0.0f ? 0.0f : (m_warpK > 1.0f ? 1.0f : m_warpK))
+               : 0.0f;
+  const float speedK = worldK > warpK ? worldK : warpK;
+  const float betaWorld = worldK * 0.40f;
+  const float betaWarp = warpK * 0.65f;
+  const float betaBoost = betaWorld > betaWarp ? betaWorld : betaWarp;
+  Vec3 dir = m_speedDir;
+  if (warpK > worldK) {
+    dir = m_camera.forward();  // в туннеле «летим» по курсу
+  }
+  m_sceneManager->setSpeedFx(betaBoost, speedK, dir.x, dir.y, dir.z);
+  // Микро-FOV: +3° на полном эффекте поверх варп-кривой (+10° * m_warpK).
+  auto& st = m_sceneManager->getSettings();
+  if (m_warpBaseFov <= 1.0f) m_warpBaseFov = st.fovDegrees;  // ленивая база
+  const float want = m_warpBaseFov + 10.0f * m_warpK + 3.0f * speedK;
+  if (std::fabs(st.fovDegrees - want) > 0.05f) {
+    st.fovDegrees = want;
+    m_warpLastFov = want;  // не спутать с ручной правкой слайдера FOV
+  }
+}
+// === Camera views + speed FX === end.
 
 void AppGL::exportJourney() {
   std::filesystem::create_directories("routes");
@@ -2128,6 +2235,7 @@ void AppGL::checkAchievements() {
 
 void AppGL::drawHelpContent() {
   ImGui::BulletText("WASD move, Space / Shift up / down");
+  ImGui::BulletText("V camera view: cockpit / behind / overview");  // v3.3.0
   ImGui::BulletText("Drag mouse to look around");
   ImGui::BulletText("/ focus station search");
   ImGui::BulletText("F5 export journey, F6 import journey");
@@ -2302,6 +2410,10 @@ void AppGL::drawWorldLabels() {
 
   ImDrawList* drawList = ImGui::GetForegroundDrawList();
   if (!drawList) return;
+  // Виды (v3.3.0): метки считаем по камере кадра (учёт сноса в видах 2/3).
+  // В меню и в harнесс-снимках (камера кадра не обновлялась) — по m_camera.
+  const Camera& cam =
+      (!m_inMenu && m_renderCamValid) ? m_renderCam : m_camera;
 
   ImVec2 displaySize = ImGui::GetIO().DisplaySize;
   if (displaySize.x <= 0.0f || displaySize.y <= 0.0f) return;
@@ -2318,9 +2430,9 @@ void AppGL::drawWorldLabels() {
     const float fovM = m_sceneManager->getSettings().fovDegrees;
     const glm::mat4 projM =
         glm::perspective(glm::radians(fovM), aspectM, 0.1f, 1e7f);
-    const Vec3 cpM = m_camera.position;
-    const Vec3 cfM = m_camera.forward();
-    const Vec3 cuM = m_camera.up();
+    const Vec3 cpM = cam.position;
+    const Vec3 cfM = cam.forward();
+    const Vec3 cuM = cam.up();
     const glm::vec3 eyeM(static_cast<float>(cpM.x), static_cast<float>(cpM.y),
                          static_cast<float>(cpM.z));
     const glm::vec3 fwdM(static_cast<float>(cfM.x), static_cast<float>(cfM.y),
@@ -2351,9 +2463,9 @@ void AppGL::drawWorldLabels() {
     float fov = m_sceneManager->getSettings().fovDegrees;
     glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1e7f);
 
-    Vec3 cp = m_camera.position;
-    Vec3 cf = m_camera.forward();
-    Vec3 cu = m_camera.up();
+    Vec3 cp = cam.position;
+    Vec3 cf = cam.forward();
+    Vec3 cu = cam.up();
 
     glm::vec3 eye(cp.x, cp.y, cp.z);
     glm::vec3 fwd(cf.x, cf.y, cf.z);
@@ -2430,9 +2542,9 @@ void AppGL::drawWorldLabels() {
       float fov = m_sceneManager->getSettings().fovDegrees;
       glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1e7f);
 
-      Vec3 cp = m_camera.position;
-      Vec3 cf = m_camera.forward();
-      Vec3 cu = m_camera.up();
+      Vec3 cp = cam.position;
+      Vec3 cf = cam.forward();
+      Vec3 cu = cam.up();
 
       glm::vec3 eye(cp.x, cp.y, cp.z);
       glm::vec3 fwd(cf.x, cf.y, cf.z);
@@ -2507,7 +2619,7 @@ void AppGL::drawWorldLabels() {
       }
     }
   } else if (curSt->type == StationType::Galaxy) {
-    Vec3 cp = m_camera.position;
+    Vec3 cp = cam.position;
     double dist = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
     double spawn = curSt->spawnDistanceRs > 0.0 ? curSt->spawnDistanceRs : 80.0;
     double ratio = dist / spawn;
@@ -2620,8 +2732,8 @@ void AppGL::drawWorldLabels() {
       glm::mat4 m31Proj = glm::perspective(glm::radians(m31Fov), m31Aspect, 0.1f, 1e7f);
       glm::vec3 m31Eye(static_cast<float>(cp.x), static_cast<float>(cp.y),
                        static_cast<float>(cp.z));
-      Vec3 m31Cf = m_camera.forward();
-      Vec3 m31Cu = m_camera.up();
+      Vec3 m31Cf = cam.forward();
+      Vec3 m31Cu = cam.up();
       glm::vec3 m31Fwd(static_cast<float>(m31Cf.x), static_cast<float>(m31Cf.y),
                        static_cast<float>(m31Cf.z));
       glm::vec3 m31Up(static_cast<float>(m31Cu.x), static_cast<float>(m31Cu.y),

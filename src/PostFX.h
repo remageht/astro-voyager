@@ -39,6 +39,9 @@ class PostFX {
   // === Ship survival === (v3.3.0): low-shield chroma/static amounts (0 = off).
   void setShipFx(float chromaK, float staticK);
 
+  // === Speed FX === (v3.3.0): motion-streak amount 0..1 (0 = off).
+  void setSpeedFx(float speedK);
+
  private:
   void ensureTargets(int width, int height);
   void release();
@@ -74,6 +77,9 @@ class PostFX {
   // Ship survival low-shield FX state (see setShipFx); 0 = off.
   float m_shipChroma = 0.0f;
   float m_shipStaticK = 0.0f;
+
+  // Speed FX motion-streak state (see setSpeedFx); 0 = off.
+  float m_speedK = 0.0f;
 
   std::unique_ptr<Shader> m_compShader;
   std::unique_ptr<Shader> m_downShader;

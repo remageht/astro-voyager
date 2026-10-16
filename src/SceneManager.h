@@ -136,6 +136,22 @@ class SceneManager {
     m_shipStatic = staticK;
   }
 
+  // === Speed FX === (v3.3.0): gameplay speed boost for relativity
+  // (варп/разгон не двигают камеру). beta 0..0.95, k 0..1, dir — нормаль.
+  // Ноль по умолчанию => харнесс байт-в-байт.
+  void setSpeedFx(float beta, float k, float dx, float dy, float dz) {
+    m_speedBeta = beta;
+    m_speedFx = k;
+    m_speedDir = Vec3(dx, dy, dz);
+  }
+  // Сброс релятивистской скорости (смена вида камеры/телепорт):
+  // следующий render() не даёт ложного скачка beta от сноса камеры.
+  void resetRelativity() {
+    m_relTime = -1.0f;
+    m_relVel = Vec3(0.0, 0.0, 0.0);
+    m_relBeta = 0.0f;
+  }
+
   void togglePause() { m_paused = !m_paused; }
   bool isPaused() const { return m_paused; }
   void setTimeScale(float s) {
@@ -217,6 +233,11 @@ class SceneManager {
   // === Ship survival === (v3.3.0) low-shield FX amounts (см. setShipFx).
   float m_shipChroma = 0.0f;
   float m_shipStatic = 0.0f;
+
+  // === Speed FX === (v3.3.0): boost поверх рел. скорости (0 = выкл).
+  float m_speedBeta = 0.0f;
+  float m_speedFx = 0.0f;
+  Vec3 m_speedDir{0.0, 0.0, 1.0};
 
   std::unique_ptr<ScreenQuad> m_screenQuad;
   // === PostFX === scene FBO + композит (см. PostFX.h).

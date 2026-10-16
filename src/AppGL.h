@@ -340,6 +340,22 @@ class AppGL {
   void updateShip(float deltaTime);
   void drawShipHud();
   // === Ship survival === end
+
+  // === Camera views + speed FX === (v3.3.0) begin.
+  // V: кабина -> за кормой -> дальний обзор. В видах 2/3 рисуется корабль,
+  // камера кадра сносится назад (логика/коллизии остаются на m_camera).
+  // Скорость (реальная + варп-фактор) масштабирует доплер/абберацию света,
+  // стрики в композите и микро-FOV (+3°). Дефолты 0 => харнесс байт-в-байт.
+  view::ViewMode m_viewMode = view::ViewMode::Cockpit;
+  bool m_prevVPressed = false;
+  Camera m_renderCam;  // камера кадра (со сносом вида); метки/пикинг — по ней
+  bool m_renderCamValid = false;  // false в меню/харнессе => метки по m_camera
+  Vec3 m_prevSpeedPos;
+  Vec3 m_speedDir{0.0, 0.0, 1.0};
+  float m_camSpeed = 0.0f;  // сглаженная |v| камеры, u/s
+  void updateSpeedFx(float deltaTime);
+  void applyViewCamera(Camera& out);
+  // === Camera views + speed FX === end
 };
 
 // Связь AppGL -> SceneManager без правок SceneManager.h:

@@ -204,6 +204,10 @@ void PostFX::setShipFx(float chromaK, float staticK) {
   m_shipStaticK = staticK;
 }
 
+void PostFX::setSpeedFx(float speedK) {
+  m_speedK = speedK;
+}
+
 void PostFX::endScene(int width, int height) {
   if (!m_active) return;
   m_active = false;
@@ -252,6 +256,9 @@ void PostFX::endScene(int width, int height) {
   // 0 => обе ветки в post_comp.frag пропускаются, кадр байт-в-байт.
   m_compShader->setUniform1f("u_ChromaK", m_shipChroma);
   m_compShader->setUniform1f("u_StaticK", m_shipStaticK);
+  // === Speed FX === (v3.3.0): спид-стрики вдоль вектора движения;
+  // 0 => ветка в post_comp.frag пропускается, кадр байт-в-байт.
+  m_compShader->setUniform1f("u_SpeedK", m_speedK);
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_sceneTex);

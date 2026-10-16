@@ -653,6 +653,16 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     }
   }
 
+  // === Speed FX === (v3.3.0): игровой разгон/варп — камера в варпе почти не
+  // движется, поэтому доплер/абберацию масштабируем внешним boost'ом.
+  // По умолчанию 0 => betaEff == m_relBeta (харнесс байт-в-байт).
+  float betaEff = m_relBeta;
+  Vec3 dirEff = m_relDir;
+  if (m_speedBeta > betaEff) {
+    betaEff = m_speedBeta;
+    dirEff = m_speedDir;
+  }
+
   if (m_currentStation->type == StationType::BlackHole) {
     // Sgr A* Schwarzschild Raytracing
     m_bhShader->bind();
@@ -690,10 +700,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_Exposure", m_exposure);
     m_bhShader->setUniform1i("u_Skybox", 0);
     // === Relativity === абберация направления на звёзды при быстром полёте.
-    m_bhShader->setUniform3f("u_VelDir", static_cast<float>(m_relDir.x),
-                             static_cast<float>(m_relDir.y),
-                             static_cast<float>(m_relDir.z));
-    m_bhShader->setUniform1f("u_Beta", m_relBeta);
+    m_bhShader->setUniform3f("u_VelDir", static_cast<float>(dirEff.x),
+                             static_cast<float>(dirEff.y),
+                             static_cast<float>(dirEff.z));
+    m_bhShader->setUniform1f("u_Beta", betaEff);
 
     m_skyboxDeep->bind(0);
     m_screenQuad->draw();
@@ -992,10 +1002,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_skyShader->setUniform1f("u_FovY", glm::radians(m_settings.fovDegrees));
     m_skyShader->setUniform1i("u_Sky", 0);
     // === Relativity === абберация направления на звёзды при быстром полёте.
-    m_skyShader->setUniform3f("u_VelDir", static_cast<float>(m_relDir.x),
-                              static_cast<float>(m_relDir.y),
-                              static_cast<float>(m_relDir.z));
-    m_skyShader->setUniform1f("u_Beta", m_relBeta);
+    m_skyShader->setUniform3f("u_VelDir", static_cast<float>(dirEff.x),
+                              static_cast<float>(dirEff.y),
+                              static_cast<float>(dirEff.z));
+    m_skyShader->setUniform1f("u_Beta", betaEff);
     m_skyShader->setUniform1f("u_Exposure", m_exposure);
     m_skyboxLocal->bind(0);
     glDepthMask(GL_FALSE);
@@ -1500,15 +1510,17 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                static_cast<float>(cr.z)};
     const float camUp[3] = {static_cast<float>(cu.x), static_cast<float>(cu.y),
                             static_cast<float>(cu.z)};
-    const float velDir[3] = {static_cast<float>(m_relDir.x),
-                             static_cast<float>(m_relDir.y),
-                             static_cast<float>(m_relDir.z)};
+    const float velDir[3] = {static_cast<float>(dirEff.x),
+                             static_cast<float>(dirEff.y),
+                             static_cast<float>(dirEff.z)};
     m_postFx.setFlight(camFwd, camRight, camUp,
                        glm::radians(m_settings.fovDegrees), aspect, velDir,
-                       m_relBeta);
+                       betaEff);
   }
   // === Ship survival === (v3.3.0): 0/0 keeps the composite byte-exact.
   m_postFx.setShipFx(m_shipChroma, m_shipStatic);
+  // === Speed FX === (v3.3.0): стрики скорости в композите (0 = выкл).
+  m_postFx.setSpeedFx(m_speedFx);
   m_postFx.setTime(time);
   m_postFx.endScene(fbWidth, fbHeight);
 }

@@ -122,6 +122,47 @@ int main() {
   AssertNear(static_cast<float>(astro::ship::gravAccel(40.0, 0.1)), 160.0f,
              0.0001f, "GM/r^2 clamps singular distance");
 
+  // Test 11 (v3.3.0): V-цикл видов камеры 0 -> 1 -> 2 -> 0.
+  astro::view::ViewMode vm = astro::view::ViewMode::Cockpit;
+  vm = astro::view::nextView(vm);
+  if (vm != astro::view::ViewMode::Chase) {
+    std::cerr << "first V toggle must switch to Chase\n";
+    return 1;
+  }
+  vm = astro::view::nextView(vm);
+  if (vm != astro::view::ViewMode::Overview) {
+    std::cerr << "second V toggle must switch to Overview\n";
+    return 1;
+  }
+  vm = astro::view::nextView(vm);
+  if (vm != astro::view::ViewMode::Cockpit) {
+    std::cerr << "third V toggle must wrap back to Cockpit\n";
+    return 1;
+  }
+
+  // Test 12 (v3.3.0): смещение камеры кадра для видов (Cockpit = identity).
+  const astro::Vec3 camPos(1.0, 2.0, 3.0);
+  const astro::Vec3 camFwd(0.0, 0.0, 1.0);
+  const astro::Vec3 cockpit = astro::view::offsetCameraPos(
+      camPos, camFwd, astro::view::ViewMode::Cockpit);
+  AssertNear(static_cast<float>(cockpit.x), 1.0f, 0.0001f, "cockpit x");
+  AssertNear(static_cast<float>(cockpit.y), 2.0f, 0.0001f, "cockpit y");
+  AssertNear(static_cast<float>(cockpit.z), 3.0f, 0.0001f, "cockpit z");
+  const astro::Vec3 chase = astro::view::offsetCameraPos(
+      camPos, camFwd, astro::view::ViewMode::Chase);
+  AssertNear(static_cast<float>(chase.y), 3.1f, 0.0001f, "chase up offset");
+  AssertNear(static_cast<float>(chase.z), -1.5f, 0.0001f, "chase back offset");
+  const astro::Vec3 far = astro::view::offsetCameraPos(
+      camPos, camFwd, astro::view::ViewMode::Overview);
+  AssertNear(static_cast<float>(far.y), 4.2f, 0.0001f, "overview up offset");
+  AssertNear(static_cast<float>(far.z), -6.0f, 0.0001f, "overview back offset");
+
+  // Test 13 (v3.3.0): масштаб эффекта скорости (кламп 0..1, защита ref).
+  AssertNear(astro::view::speedFx(6.0f, 12.0f), 0.5f, 0.0001f, "half ref speed");
+  AssertNear(astro::view::speedFx(24.0f, 12.0f), 1.0f, 0.0001f, "speed clamp");
+  AssertNear(astro::view::speedFx(0.0f, 12.0f), 0.0f, 0.0001f, "zero speed");
+  AssertNear(astro::view::speedFx(5.0f, 0.0f), 0.0f, 0.0001f, "ref guard");
+
   std::cout << "All BlackHoleInteraction tests passed!\n";
   return 0;
 }
