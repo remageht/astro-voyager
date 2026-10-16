@@ -11,7 +11,7 @@
 
 ### 3D-приложение: чёрные дыры, квазары, галактики, планеты и созвездия
 
-![Sgr A*](docs/screens/sgra.png)
+![Sgr A*](docs/screens/pub/sgra.png)
 *Sgr A*: численное линзирование в метрике Шварцшильда — тень, фотонное кольцо, тонкий диск*
 
 Идея наследована от `RuCatGH/blackHole`: не картинка, а численная физика
@@ -43,7 +43,7 @@ FBO с **bloom** (5 уровней яркости) и **релятивистск
   </tr>
   <tr>
     <td><img src="docs/screens/m31.png" alt="Andromeda (M31)" width="100%"><br><sub><b>Andromeda (M31)</b>: рукава из звёзд-частиц, LOD-зум, приливной поток</sub></td>
-    <td><img src="docs/screens/m87.png" alt="M87*" width="100%"><br><sub><b>M87*</b>: гигантская ЧД с релятивистским джетом и движущимися узлами HST-1</sub></td>
+    <td><img src="docs/screens/pub/m87.png" alt="M87*" width="100%"><br><sub><b>M87*</b>: гигантская ЧД с релятивистским джетом и движущимися узлами HST-1</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screens/m51.png" alt="Whirlpool (M51)" width="100%"><br><sub><b>Whirlpool (M51)</b>: широкие рукава, яркий балдж и компаньон NGC 5195</sub></td>

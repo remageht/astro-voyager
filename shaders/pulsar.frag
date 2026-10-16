@@ -46,14 +46,18 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float gain) {
   vec2 g = uv * scale;
   vec2 id = floor(g);
   vec2 f = fract(g) - vec2(0.5);
-  float h0 = hash21(id);
+  // v3.5.0: sin-based lattice hash (hash2) instead of hash21: the latter
+  // clusters on integer lattices, which aligned the star offsets into
+  // visible dotted columns. Jitter is near-full-cell so the field reads
+  // Poisson-like.
+  float h0 = hash2(id);
   float mask = step(thresh, h0);
-  vec2 off = vec2(hash21(id + vec2(7.13)), hash21(id + vec2(3.71))) - vec2(0.5);
-  float d = length(f - off * 0.8);
+  vec2 off = vec2(hash2(id + vec2(7.13, 1.37)), hash2(id + vec2(3.71, 9.41))) - vec2(0.5);
+  float d = length(f - off * 0.9);
   float glow = exp(-d * d * 42.0);
-  float h1 = hash21(id + vec2(9.17));
+  float h1 = hash2(id + vec2(9.17, 2.53));
   float bright = pow(h1, 12.0) * gain;
-  vec3 tint = mix(vec3(0.65, 0.75, 1.0), vec3(1.0, 0.85, 0.65), hash21(id + vec2(5.31)));
+  vec3 tint = mix(vec3(0.65, 0.75, 1.0), vec3(1.0, 0.85, 0.65), hash2(id + vec2(5.31, 0.71)));
   return mask * glow * bright * tint;
 }
 

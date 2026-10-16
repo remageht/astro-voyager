@@ -16,6 +16,10 @@ uniform float u_Exposure;
 uniform float u_QCoreK;  // quasar core gain (default 1.0; qso 1.5): core+ring+corona up, host down
 uniform float u_QZoom;  // close-up magnification from camera distance (neutral 1.0)
 
+float hash2(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
 float hash21(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 45.32);
@@ -75,14 +79,18 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float gain) {
   vec2 g = uv * scale;
   vec2 id = floor(g);
   vec2 f = fract(g) - vec2(0.5);
-  float h0 = hash21(id);
+  // v3.5.0: sin-based lattice hash (hash2) instead of hash21: the latter
+  // clusters on integer lattices, which aligned the star offsets into
+  // visible dotted columns. Jitter is near-full-cell so the field reads
+  // Poisson-like.
+  float h0 = hash2(id);
   float mask = step(thresh, h0);
-  vec2 off = vec2(hash21(id + vec2(7.13)), hash21(id + vec2(3.71))) - vec2(0.5);
-  float d = length(f - off * 0.8);
+  vec2 off = vec2(hash2(id + vec2(7.13, 1.37)), hash2(id + vec2(3.71, 9.41))) - vec2(0.5);
+  float d = length(f - off * 0.9);
   float glow = exp(-d * d * 42.0);
-  float h1 = hash21(id + vec2(9.17));
+  float h1 = hash2(id + vec2(9.17, 2.53));
   float bright = pow(h1, 12.0) * gain;
-  vec3 tint = mix(vec3(0.65, 0.75, 1.0), vec3(1.0, 0.85, 0.65), hash21(id + vec2(5.31)));
+  vec3 tint = mix(vec3(0.65, 0.75, 1.0), vec3(1.0, 0.85, 0.65), hash2(id + vec2(5.31, 0.71)));
   return mask * glow * bright * tint;
 }
 
@@ -167,8 +175,8 @@ void main() {
   float grav = sqrt(max(1.0 - 1.0 / rq, 0.02));
   float Tobs = clamp(21000.0 * pow(3.0 / rq, 0.85) * dop * grav, 1000.0, 40000.0);
   vec3 dcol = bbody(Tobs);
-  float inten = pow(Tobs / 8500.0, 2.8);
-  vec3 diskTerm = dcol * (inten * densEff * 0.13) * edge * shadow;
+  float inten = pow(Tobs / 8500.0, 2.2);
+  vec3 diskTerm = dcol * (inten * densEff * 0.34) * edge * shadow;
   diskTerm *= mix(1.0, 0.55, qCloseK);
   col += diskTerm;
 

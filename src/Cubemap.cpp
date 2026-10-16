@@ -159,30 +159,50 @@ void Cubemap::regenerate(float starThreshold, float mwStrength, unsigned seed) {
         float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(faceSize) * 2.0f - 1.0f;
         glm::vec3 dir = getDirectionForFace(face, u, v);
 
-        // Neutral deep-space base plus subtle warm-grey Milky-Way band.
+        // Deep-space base plus a granular Milky-Way band. The band keeps the
+        // exp(-|y|*5) profile that sky.frag/bh.frag bandW gain (u_BandK)
+        // assumes; clump harmonics + an off-plane dust lane break the
+        // perfectly smooth ramp of the old field into a real galactic band.
         float az = std::atan2(dir.z, dir.x);
-        float lenMod = 0.75f + 0.25f * std::sin(2.0f * az + 1.3f);
-        float mw = std::exp(-std::abs(dir.y) * 5.0f) * mwStrength * lenMod;
-        float r = 0.008f + mw * 0.22f;
-        float g = 0.009f + mw * 0.21f;
-        float b = 0.014f + mw * 0.20f;
+        float bandW = std::exp(-std::abs(dir.y) * 5.0f);
+        float clump = 0.62f + 0.24f * std::sin(2.0f * az + 1.3f) +
+                      0.14f * std::sin(5.0f * az + 4.2f);
+        float laneQ = (std::abs(dir.y) - 0.035f) / 0.018f;
+        float laneK = 1.0f - 0.55f * std::exp(-laneQ * laneQ) *
+                                (0.5f + 0.5f * std::sin(3.0f * az + 2.1f));
+        float mw = bandW * mwStrength * clump * laneK;
+        float r = 0.006f + mw * 0.26f;
+        float g = 0.007f + mw * 0.24f;
+        float b = 0.012f + mw * 0.19f;
 
-        // Discrete star field, dense fine grid, HDR power-law brightness.
+        // Discrete star field, sparse two-tier population (v3.5.0). The old
+        // field held ~23k stars with a fat bright tail (pow9*8): a confetti
+        // sky that gravitational lensing at the BH stretched into a speckle
+        // tunnel. Now ~5-7k faint stars plus a small bright tail (two-tier
+        // power law), tighter Gaussian points, white-leaning color mix.
         // Stars sit at JITTERED sub-cell positions (not cell centers): a
         // coarse grid would lens into regularly dotted columns near the
         // photon ring. Neighbor search + Gaussian points give Poisson-like
-        // randomness while staying fully deterministic run to run.
-        const float kStarInv = 1.0f / 350.0f;
-        const float kStarSig = 0.45f * kStarInv;
+        // randomness while staying fully deterministic run to run. Star
+        // presence is boosted near the Milky-Way plane (cell-center y in
+        // cube space), so the band reads as a dense faint sprinkle.
+        const float kStarInv = 1.0f / 450.0f;
+        const float kStarSig = 0.60f * kStarInv;
         const float kStarSig2 = kStarSig * kStarSig;
-        int ccx = static_cast<int>(std::floor(dir.x * 350.0f));
-        int ccy = static_cast<int>(std::floor(dir.y * 350.0f));
-        int ccz = static_cast<int>(std::floor(dir.z * 350.0f));
+        int ccx = static_cast<int>(std::floor(dir.x * 450.0f));
+        int ccy = static_cast<int>(std::floor(dir.y * 450.0f));
+        int ccz = static_cast<int>(std::floor(dir.z * 450.0f));
         for (int ox = -1; ox <= 1; ++ox) {
           for (int oy = -1; oy <= 1; ++oy) {
             for (int oz = -1; oz <= 1; ++oz) {
               int nx = ccx + ox, ny = ccy + oy, nz = ccz + oz;
-              if (hashCell01(nx, ny, nz, 0u + seedOff) <= starThreshold) continue;
+              // Presence: base (1 - starThreshold) of cells, boosted up to
+              // ~6x inside the band (|cell y| < ~0.14).
+              float cy = (static_cast<float>(ny) + 0.5f) * kStarInv;
+              float p = (1.0f - starThreshold) *
+                        (1.0f + 5.0f * std::exp(-(cy * cy) / 0.02f));
+              if (p <= 0.0f) continue;
+              if (hashCell01(nx, ny, nz, 0u + seedOff) < 1.0f - p) continue;
               float jx = hashCell01(nx, ny, nz, 1u + seedOff);
               float jy = hashCell01(nx, ny, nz, 2u + seedOff);
               float jz = hashCell01(nx, ny, nz, 3u + seedOff);
@@ -193,32 +213,45 @@ void Cubemap::regenerate(float starThreshold, float mwStrength, unsigned seed) {
               float d2 = dx * dx + dy * dy + dz * dz;
               if (d2 > 9.0f * kStarSig2) continue;
               float w = std::exp(-d2 / (2.0f * kStarSig2));
-              float bhash = hashCell01(nx, ny, nz, 4u + seedOff);
-              float intensity = std::pow(bhash, 9.0f) * 8.0f * w;
+              // Two-tier brightness: ~97% faint stars, 3% bright tail.
+              float tier = hashCell01(nx, ny, nz, 4u + seedOff);
+              float hI = hashCell01(nx, ny, nz, 6u + seedOff);
+              bool isBright = tier > 0.97f;
+              float intensity = isBright
+                                    ? (1.2f + 7.0f * std::pow(hI, 8.0f))
+                                    : (0.04f + 0.34f * std::pow(hI, 3.0f));
+              intensity *= w;
+              if (isBright) {
+                // Bright stars carry a soft halo (wider Gaussian) and are
+                // dimmed inside the band so it stays a subtle glow, not a
+                // row of hot dots.
+                intensity += std::exp(-d2 / (6.0f * kStarSig2)) * 0.10f;
+                intensity *= 1.0f - 0.65f * std::exp(-std::abs(py) * 5.0f);
+              }
               float starColorVar = hashCell01(nx, ny, nz, 5u + seedOff);
               float sr = 1.0f;
               float sg = 1.0f;
               float sb = 1.0f;
-              if (starColorVar > 0.88f) {
-                sr = 0.68f;
-                sg = 0.80f;
-                sb = 1.0f;  // blue-white, 12%
-              } else if (starColorVar > 0.73f) {
-                sr = 0.95f;
-                sg = 0.96f;
-                sb = 1.0f;  // white, 15%
-              } else if (starColorVar > 0.53f) {
-                sr = 1.0f;
+              if (starColorVar > 0.84f) {
+                sr = 0.82f;
                 sg = 0.88f;
-                sb = 0.70f;  // yellow, 20%
-              } else if (starColorVar > 0.28f) {
+                sb = 1.0f;  // blue-white, 16%
+              } else if (starColorVar > 0.58f) {
                 sr = 1.0f;
-                sg = 0.68f;
-                sb = 0.42f;  // orange, 25%
+                sg = 0.93f;
+                sb = 0.82f;  // warm white, 26%
+              } else if (starColorVar > 0.33f) {
+                sr = 1.0f;
+                sg = 0.97f;
+                sb = 0.90f;  // white, 25%
+              } else if (starColorVar > 0.13f) {
+                sr = 1.0f;
+                sg = 0.74f;
+                sb = 0.52f;  // orange, 20%
               } else {
                 sr = 1.0f;
-                sg = 0.48f;
-                sb = 0.28f;  // red, 28%
+                sg = 0.58f;
+                sb = 0.42f;  // red, 13%
               }
               r += intensity * sr;
               g += intensity * sg;
@@ -230,10 +263,10 @@ void Cubemap::regenerate(float starThreshold, float mwStrength, unsigned seed) {
         // Galactic core glow towards (1, 0, 0), softened.
         float coreAngle = glm::dot(dir, glm::vec3(1.0f, 0.0f, 0.0f));
         if (coreAngle > 0.0f) {
-          float coreGlow = std::pow(coreAngle, 8.0f) * 0.35f;
-          r += coreGlow * 1.1f;
-          g += coreGlow * 0.8f;
-          b += coreGlow * 0.6f;
+          float coreGlow = std::pow(coreAngle, 6.0f) * 0.30f;
+          r += coreGlow * 1.15f;
+          g += coreGlow * 0.85f;
+          b += coreGlow * 0.55f;
         }
 
         int idx = (y * faceSize + x) * 3;

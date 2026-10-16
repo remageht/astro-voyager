@@ -21,7 +21,7 @@ class Cubemap {
   void regenerate(float starThreshold, float mwStrength, unsigned seed);
 
  private:
-  void generateProceduralSkybox(float starThreshold = 0.97f, float mwStrength = 0.10f,
+  void generateProceduralSkybox(float starThreshold = 0.9985f, float mwStrength = 0.40f,
                                 unsigned seed = 0u);
   bool loadHdrSkybox(const std::string& path);
 

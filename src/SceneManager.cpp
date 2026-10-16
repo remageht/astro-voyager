@@ -83,7 +83,7 @@ SceneManager::SceneManager() {
   m_skyShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/sky.frag");
   m_skyboxDeep = std::make_unique<Cubemap>();
   m_skyboxLocal = std::make_unique<Cubemap>();
-  m_skyboxLocal->regenerate(0.985f, 0.05f, 1234u);
+  m_skyboxLocal->regenerate(0.9985f, 0.40f, 1234u);
 
   initConstellationOrion();
   initConstellationUma();
@@ -708,7 +708,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     const bool isM87 = (m_currentStation->id == "m87");
     m_bhShader->setUniform1f("u_BHRingK", isSgra ? 1.8f : (isM87 ? 1.25f : 1.0f));
     m_bhShader->setUniform1f("u_ThinDisk", isSgra ? 1.0f : 0.0f);
-    m_bhShader->setUniform1f("u_BandK", isSgra ? 1.7f : 1.0f);
+    m_bhShader->setUniform1f("u_BandK", isSgra ? 1.3f : 1.0f);
     // Close-camera distance in Rs: drives disk-detail smoothing and pole
     // damping in bh.frag (u_CamDist <= 0 means far/legacy on shader side).
     {

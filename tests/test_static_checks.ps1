@@ -1,4 +1,4 @@
-# Static checks for astro-voyager v1.0.0 (ASCII only).
+﻿# Static checks for astro-voyager v1.0.0 (ASCII only).
 # Run: powershell -ExecutionPolicy Bypass -File tests/test_static_checks.ps1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -169,7 +169,7 @@ Check 'bh capture horizon black' ($bh -match 'if \(r <= u_Rs \* 1\.001\)')
 Check 'bh close cam disk smoothing via u_CamDist' (($bh -match 'uniform float u_CamDist') -and ($sceneCpp -match 'setUniform1f\("u_CamDist"'))
 Check 'bh ring gain sgra 1.8' (($bh -match 'u_BHRingK') -and ($sceneCpp -match 'u_BHRingK", isSgra \? 1\.8f'))
 Check 'bh novikov-thorne disk' (($bh -match 'NT_PEAK_NORM') -and ($bh -match 'blackBodyColor'))
-Check 'bh closeK full at 8Rs with wide shadow gate' (($bh -match 'smoothstep\(8\.0, 10\.0, camDistRs\)') -and ($bh -match 'smoothstep\(u_Rs \* 1\.1, u_Rs \* 2\.2, minR\)'))
+Check 'bh closeK full at 8Rs with wide shadow gate' (($bh -match 'smoothstep\(8\.0, 10\.0, camDistRs\)') -and ($bh -match 'smoothstep\(u_Rs \* 2\.2, u_Rs \* 3\.0, minR\)'))
 Check 'quasar core gain qso 2.2' (((Read-File 'shaders/quasar.frag') -match 'u_QCoreK') -and ($sceneCpp -match 'u_QCoreK'))
 Check 'sgra thin disk and band' (($bh -match 'u_ThinDisk') -and ((Read-File 'shaders/sky.frag') -match 'u_BandK') -and ($sceneCpp -match 'u_BandK'))
 Check 'warp frag exists with u_WarpK' ((Test-Path (Join-Path $root 'shaders/warp.frag')) -and ((Read-File 'shaders/warp.frag') -match 'uniform float u_WarpK'))

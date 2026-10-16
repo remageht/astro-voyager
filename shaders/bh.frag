@@ -360,7 +360,7 @@ void main() {
           float swirl = sin(phiSw * 3.0 + swirlArg) - sin(phiDisk * 3.0 + swirlArg);
           emis *= 1.0 + 0.30 * swirl;
           // Uniform exposure; beaming geometry untouched.
-          vec3 diskRgb = emis * g4 * 1.5;
+          vec3 diskRgb = emis * g4 * 1.9;
           diskRgb = clamp(diskRgb, 0.0, 12.0);
           diskRgb *= fDisk * fDisk;
           // Thin-disk mode (sgra edge-on "fishing line" look): compress the
@@ -547,8 +547,10 @@ void main() {
   }
 
   // Step budget exhausted without capture or escape: single minR gate.
-  // Near-capture rays (minR < 2.2Rs) are unconverged winding noise -> black;
-  // the rest resolve to the sky they were heading for.
+  // Near-capture rays (minR < 2.2Rs) are unconverged winding noise -> black
+  // (fbGate stays 0 there; the old 1.1 Rs cutoff let dim sky bleed through
+  // as speckles INSIDE the apparent shadow); the rest resolve to the sky
+  // they were heading for.
   vec3 fbDir = aberrateDir(fb);
   vec3 skyFallback = texture(u_Skybox, fbDir).rgb * vec3(0.18, 0.16, 0.22);
   float bandWFb = exp(-abs(fbDir.y) * 5.0);
@@ -563,7 +565,7 @@ void main() {
     float glowFFb = smoothstep(0.2, 0.8, glowLumaFb);
     colFallback += mix(mix(colFallback, vec3(1.0), 0.3), vec3(1.0), 0.5) * glowFFb * 0.35;
   }
-  float fbGate = smoothstep(u_Rs * 1.1, u_Rs * 2.2, minR);
+  float fbGate = smoothstep(u_Rs * 2.2, u_Rs * 3.0, minR);
   colFallback = mix(vec3(0.0), colFallback, fbGate);
   // Far marker, same profile as the escape branch (see above): missed
   // rays toward a distant hole still leave a bright point. Zero unless far.

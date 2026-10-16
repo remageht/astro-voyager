@@ -3302,6 +3302,40 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
       std::cout << "Captured screenshot: " << earthCloseFile << "\n";
     }
   }
+  // 7. Public README shots (v3.5.0): the gate references above are captured
+  //    with the disk off (the doppler gate subtracts them from the disk-on
+  //    run), so the accretion disk never appears on docs/screens/*.png. The
+  //    pub set renders the same stations with the disk ON and the camera
+  //    lifted above the disk plane (the classic lensed-disk framing).
+  //    Committed to docs/screens/pub/ and used by the README gallery.
+  {
+    app.m_sceneManager->getSettings().diskOn = true;
+    struct PubShot {
+      const char* id;
+      double spawn;  // camera distance (Rs units for BH stations)
+      double elev;   // elevation angle above the disk plane (rad)
+    };
+    const std::vector<PubShot> pubShots = {
+        {"sgra", 10.0, 0.22},
+        {"m87", 14.0, 0.20},
+    };
+    for (const auto& shot : pubShots) {
+      app.m_sceneManager->teleportTo(shot.id, app.m_camera);
+      app.m_camera.position = Vec3(0.0, shot.spawn * std::sin(shot.elev),
+                                   shot.spawn * std::cos(shot.elev));
+      aimAt(app.m_camera, Vec3(0.0, 0.0, 0.0));
+      for (int frame = 0; frame < 5; ++frame) {
+        app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+        app.m_window->swapBuffers();
+        app.m_window->pollEvents();
+      }
+      std::string outFile =
+          outDir + "/pub/" + std::string(shot.id) + ".png";
+      if (app.saveScreenshot(outFile)) {
+        std::cout << "Captured pub screenshot: " << outFile << "\n";
+      }
+    }
+  }
   // 7. Editor demo (v3.2.0 helper frame, transient like *_close.png): spawns
   // a ringed gas giant, a star and a moon through the same spawnCustom path
   // the editor UI uses, captures the trio, then clears them. Placed at
