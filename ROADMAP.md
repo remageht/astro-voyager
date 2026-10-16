@@ -46,10 +46,10 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 - RU: Спектрометр и анализ тел, энциклопедия-кодекс, награды за открытия, связка с журналом путешествия.
 - Gates: тесты модели данных, полнота кодекса в static checks.
 
-### v4.0 — Campaign "Voyage"
-- EN: 6–8 main chapters with cine scenes (reuse Tour/WarpJump), finale and credits.
-- RU: 6–8 глав кампании с катсценами (движки Tour/WarpJump), финал и титры.
-- Gates: тесты стейт-машины глав, скриптованный полный прогон (smoke).
+### v4.0 — Two modes: Adventure & Sandbox / Два режима: приключение и песочница
+- EN: The game splits into two modes. **Sandbox** = today's free exploration (unrestricted, separate save profile). **Adventure** = story campaign (prototype premise: the Sun is dying — telescopes confirm the star will not survive; humanity has one window left, and we are sent as the expedition to find a new habitable planet before the deadline. The countdown is the meta-mechanic: every detour costs time, the galaxy map hides candidates that must be scouted, analyzed and chosen). 6–8 chapters with cine scenes (reuse Tour/WarpJump), finale and credits. Mode select on start; saves are per mode.
+- RU: Игра делится на два режима. **Песочница** = текущий свободный полёт (без ограничений, отдельный профиль сохранения). **Приключение** = сюжетная кампания (прототипный замысел: Солнце умирает — наблюдения подтверждают, что звезда не выживет; у человечества остаётся одно окно, и нас отправляют в экспедицию — найти новую пригодную планету до срока. Обратный отсчёт — мета-механика: любой крюк стоит времени, карта галактики скрывает кандидатов, которых нужно разведать, проанализировать и выбрать). 6–8 глав с катсценами (движки Tour/WarpJump), финал и титры. Выбор режима на старте; сохранения раздельные по режимам.
+- Gates: тесты стейт-машины глав и таймера кампании, раздельные профили сохранений, скриптованный полный прогон (smoke).
 
 ## Stage 3 — Production values / Продакшн-ценности (v4.1–v4.5)
 
