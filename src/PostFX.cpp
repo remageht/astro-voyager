@@ -199,9 +199,10 @@ void PostFX::setFlight(const float camFwd[3], const float camRight[3],
   m_beta = beta;
 }
 
-void PostFX::setShipFx(float chromaK, float staticK) {
+void PostFX::setShipFx(float chromaK, float staticK, float flashK) {
   m_shipChroma = chromaK;
   m_shipStaticK = staticK;
+  m_shipFlashK = flashK;
 }
 
 void PostFX::setSpeedFx(float speedK) {
@@ -256,6 +257,7 @@ void PostFX::endScene(int width, int height) {
   // 0 => обе ветки в post_comp.frag пропускаются, кадр байт-в-байт.
   m_compShader->setUniform1f("u_ChromaK", m_shipChroma);
   m_compShader->setUniform1f("u_StaticK", m_shipStaticK);
+  m_compShader->setUniform1f("u_ShieldK", m_shipFlashK);
   // === Speed FX === (v3.3.0): спид-стрики вдоль вектора движения;
   // 0 => ветка в post_comp.frag пропускается, кадр байт-в-байт.
   m_compShader->setUniform1f("u_SpeedK", m_speedK);

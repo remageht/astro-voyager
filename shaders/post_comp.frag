@@ -39,6 +39,8 @@ uniform float u_ChromaK;  // chromatic aberration amount 0..1
 uniform float u_StaticK;  // interference: noise + vignette 0..1
 // === Speed FX === (v3.3.0): motion streaks, 0 = exact pass (harness).
 uniform float u_SpeedK;  // 0..1 speed amount
+// === Ship survival === (v3.3.0): shield impact flash, 0 = exact pass.
+uniform float u_ShieldK;  // 0..1 impact amount (cold blue edge glow)
 
 void main() {
   vec4 sceneT = texelFetch(u_Scene, ivec2(gl_FragCoord.xy), 0);
@@ -73,6 +75,11 @@ void main() {
       }
       col = mix(col, acc, clamp(env * 0.6, 0.0, 0.75));
     }
+  }
+  if (u_ShieldK > 0.001) {
+    // Shield hit: cold blue edge glow + soft wash (0 => exact pass).
+    float sEdge = smoothstep(0.30, 1.0, length(v_TexCoord - 0.5));
+    col += vec3(0.30, 0.55, 1.10) * u_ShieldK * (0.18 + 0.82 * sEdge);
   }
   if (u_Beta > 0.001) {
     vec2 ndc = v_TexCoord * 2.0 - 1.0;

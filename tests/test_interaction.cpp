@@ -163,6 +163,16 @@ int main() {
   AssertNear(astro::view::speedFx(0.0f, 12.0f), 0.0f, 0.0001f, "zero speed");
   AssertNear(astro::view::speedFx(5.0f, 0.0f), 0.0f, 0.0001f, "ref guard");
 
+  // Test 14 (v3.3.0): вспышка щита — импульс от урона и затухание.
+  AssertNear(astro::ship::shieldFlashHit(0.0f, 1.2f), 0.42f, 0.0001f,
+             "flash impulse scales with damage");
+  AssertNear(astro::ship::shieldFlashHit(0.9f, 1.0f), 1.0f, 0.0001f,
+             "flash impulse clamps at one");
+  AssertNear(astro::ship::shieldFlashDecay(1.0f, 0.0f), 1.0f, 0.0001f,
+             "flash decays only with dt");
+  AssertNear(astro::ship::shieldFlashDecay(1.0f, 1.0f), 0.049787f, 0.001f,
+             "flash decay exp(-3)");
+
   std::cout << "All BlackHoleInteraction tests passed!\n";
   return 0;
 }

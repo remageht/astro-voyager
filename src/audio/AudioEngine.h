@@ -53,6 +53,8 @@ class AudioEngine {
   void playWhoosh();   // телепорт: sweep шума 0.6с
   void setWarpLevel(float k);  // 0..1: коричневый шум + суб-синус,
                                // сам же дакает музыку (-8 дБ при K=1)
+  void setEngineLevel(float k);  // v3.3.0: гул двигателя от скорости 0..1
+                                 // (тон 52-82 Гц + обертон + шум-дыхание)
   void playJump();     // варп-прыжок: sine-drop 200->30 Гц + шум
   void playChime();    // ачивка: 3 щипка
   void playBlip();     // ошибка/тур: короткий blip
@@ -92,6 +94,8 @@ class AudioEngine {
   std::atomic<bool> m_muted{false};
   std::atomic<float> m_warpTarget{0.0f};
   std::atomic<float> m_warpCurrent{0.0f};
+  std::atomic<float> m_engineTarget{0.0f};
+  std::atomic<float> m_engineCurrent{0.0f};
   std::atomic<uint64_t> m_samples{0};  // счётчик сэмплов (live: колбэк)
 
   std::mutex m_mutex;

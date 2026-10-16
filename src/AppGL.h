@@ -353,6 +353,8 @@ class AppGL {
   Vec3 m_prevSpeedPos;
   Vec3 m_speedDir{0.0, 0.0, 1.0};
   float m_camSpeed = 0.0f;  // сглаженная |v| камеры, u/s
+  float m_speedK = 0.0f;        // итоговый эффект скорости 0..1 (аудио/тяга)
+  float m_shieldFlashK = 0.0f;  // вспышка щита при уроне 0..1 (v3.3.0)
   void updateSpeedFx(float deltaTime);
   void applyViewCamera(Camera& out);
   // === Camera views + speed FX === end
@@ -367,6 +369,7 @@ void setState(float k, float flash);
 void setBurst(float b);
 void setShip(bool v, float x, float y, float z, float yaw);
 void setShipStyle(int s);  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle
+void setThruster(float k);  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
 }  // namespace warpdrive
 
 }  // namespace astro

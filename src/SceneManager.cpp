@@ -33,6 +33,7 @@ float g_burst = 0.0f;
 bool g_shipVisible = false;
 float g_shipPos[3] = {0.0f, 0.0f, 0.0f};
 float g_shipYaw = 0.0f;
+float g_shipThruster = 0.7f;  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
 int g_shipStyle = 0;  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle
 }  // namespace
 void setState(float k, float flash) {
@@ -57,6 +58,12 @@ float shipZ() { return g_shipPos[2]; }
 float shipYaw() { return g_shipYaw; }
 void setShipStyle(int s) { g_shipStyle = (s < 0 || s > 2) ? 0 : s; }
 int shipStyle() { return g_shipStyle; }
+void setThruster(float k) {
+  if (k < 0.0f) k = 0.0f;
+  if (k > 1.0f) k = 1.0f;
+  g_shipThruster = k;
+}
+float thruster() { return g_shipThruster; }
 }  // namespace warpdrive
 
 SceneManager::SceneManager() {
@@ -1467,11 +1474,18 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glDepthMask(GL_FALSE);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        // v3.3.0: тяга растягивает ленту за кормой и разжигает её цвет.
+        const float thr = warpdrive::thruster();
+        const glm::mat4 trailModel =
+            shipModel *
+            glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f + 2.2f * thr));
         m_linesShader->bind();
         m_linesShader->setUniformMat4f("u_MVP", mvp);
-        m_linesShader->setUniformMat4f("u_Model", shipModel);
+        m_linesShader->setUniformMat4f("u_Model", trailModel);
         m_linesShader->setUniform1f("u_Time", time);
-        m_linesShader->setUniform3f("u_LineColor", 0.25f, 0.45f, 0.70f);
+        m_linesShader->setUniform3f("u_LineColor", 0.25f * (0.55f + 1.7f * thr),
+                                    0.45f * (0.55f + 1.5f * thr),
+                                    0.70f * (0.55f + 1.2f * thr));
         s_trail.drawLines();
         m_linesShader->unbind();
         // Движок: 1 крупная пульсирующая КРАСНАЯ точка за кормой.
@@ -1479,7 +1493,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           const float sy = warpdrive::shipYaw();
           const float ex = warpdrive::shipX() + 0.55f * std::sin(sy);
           const float ez = warpdrive::shipZ() + 0.55f * std::cos(sy);
-          const float mag = 0.1f + 0.35f * std::sin(time * 18.0f);
+          // v3.3.0: яркость и размер движка растут с тягой.
+          const float thr2 = warpdrive::thruster();
+          const float mag = (0.1f + 0.35f * std::sin(time * 18.0f)) *
+                            (0.55f + 1.45f * thr2);
           s_engine.setStars({glm::vec3(ex, warpdrive::shipY(), ez)}, {mag});
           const float pixelScale = static_cast<float>(fbHeight) /
               (2.0f * std::tan(glm::radians(m_settings.fovDegrees) * 0.5f));
@@ -1487,7 +1504,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           m_starShader->setUniformMat4f("u_MVP", mvp);
           m_starShader->setUniformMat4f("u_MV", view);
           m_starShader->setUniform1f("u_PixelScale", pixelScale);
-          m_starShader->setUniform1f("u_SizeK", 0.22f);
+          m_starShader->setUniform1f("u_SizeK", 0.22f * (0.75f + 0.75f * thr2));
           m_starShader->setUniform1f("u_Time", time);
           m_starShader->setUniform3f("u_Tint", 1.0f, 0.22f, 0.10f);
           s_engine.draw();
@@ -1517,8 +1534,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                        glm::radians(m_settings.fovDegrees), aspect, velDir,
                        betaEff);
   }
-  // === Ship survival === (v3.3.0): 0/0 keeps the composite byte-exact.
-  m_postFx.setShipFx(m_shipChroma, m_shipStatic);
+  // === Ship survival === (v3.3.0): 0/0/0 keeps the composite byte-exact.
+  m_postFx.setShipFx(m_shipChroma, m_shipStatic, m_shipFlash);
   // === Speed FX === (v3.3.0): стрики скорости в композите (0 = выкл).
   m_postFx.setSpeedFx(m_speedFx);
   m_postFx.setTime(time);

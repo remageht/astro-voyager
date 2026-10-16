@@ -99,6 +99,16 @@ inline float staticK(float shield) {
   return (kLowShieldStatic - shield) / kLowShieldStatic;
 }
 
+// Shield impact flash (v3.3.0): вспышка при уроне щиту — импульс и затухание.
+constexpr float kShieldFlashDecayPerSec = 3.0f;
+inline float shieldFlashHit(float f, float dmg) {
+  const float v = f + dmg * 0.35f;
+  return v > 1.0f ? 1.0f : v;
+}
+inline float shieldFlashDecay(float f, float dt) {
+  return f * std::exp(-dt * kShieldFlashDecayPerSec);
+}
+
 }  // namespace ship
 
 // === Camera views === (v3.3.0): cockpit / behind the ship / far overview.

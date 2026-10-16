@@ -131,9 +131,10 @@ class SceneManager {
 
   // === Ship survival === (v3.3.0): low-shield postfx amounts (0 = off;
   // the screenshot harness never calls this, so its PNGs stay byte-exact).
-  void setShipFx(float chromaK, float staticK) {
+  void setShipFx(float chromaK, float staticK, float flashK = 0.0f) {
     m_shipChroma = chromaK;
     m_shipStatic = staticK;
+    m_shipFlash = flashK;
   }
 
   // === Speed FX === (v3.3.0): gameplay speed boost for relativity
@@ -233,6 +234,7 @@ class SceneManager {
   // === Ship survival === (v3.3.0) low-shield FX amounts (см. setShipFx).
   float m_shipChroma = 0.0f;
   float m_shipStatic = 0.0f;
+  float m_shipFlash = 0.0f;  // вспышка щита при уроне
 
   // === Speed FX === (v3.3.0): boost поверх рел. скорости (0 = выкл).
   float m_speedBeta = 0.0f;

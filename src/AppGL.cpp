@@ -2004,7 +2004,14 @@ void AppGL::updateShip(float deltaTime) {
   }
 
   ship::updateFuel(m_ship, deltaTime, nearStar);
+  const float shieldBefore = m_ship.shield;
   ship::applyRadiation(m_ship, deltaTime, inRadZone);
+  // Вспышка щита (v3.3.0): импульс от потери щита + экспоненциальное затухание.
+  if (m_ship.shield < shieldBefore) {
+    m_shieldFlashK =
+        ship::shieldFlashHit(m_shieldFlashK, shieldBefore - m_ship.shield);
+  }
+  m_shieldFlashK = ship::shieldFlashDecay(m_shieldFlashK, deltaTime);
   if (haveGrav && !m_jumpCine) {
     m_camera.applyGravityStep(m_ship.gravVel, gravAcc, deltaTime);
     if (st->type == StationType::BlackHole) {
@@ -2040,7 +2047,7 @@ void AppGL::updateShip(float deltaTime) {
   // Низкий щит: хроматика (<30) и помехи (<10). Ноль при полном щите —
   // композит остаётся байт-в-байт на скриншот-харнессе.
   m_sceneManager->setShipFx(ship::chromaK(m_ship.shield),
-                            ship::staticK(m_ship.shield));
+                            ship::staticK(m_ship.shield), m_shieldFlashK);
 }
 
 // Нижний левый HUD: полосы топлива (оранжевая) и щитов (синяя) + нотисы.
@@ -2129,7 +2136,8 @@ void AppGL::updateSpeedFx(float deltaTime) {
     }
   }
   // Полный мировой эффект от 12 u/s; варп — по фактору (m_warpK 0..1).
-  const float worldK = view::speedFx(m_camSpeed, 12.0f);
+  // Во время катсцены прыжка камерой владеет cine: мир-скорость = 0.
+  const float worldK = m_jumpCine ? 0.0f : view::speedFx(m_camSpeed, 12.0f);
   const float warpK =
       m_warpOn ? (m_warpK < 0.0f ? 0.0f : (m_warpK > 1.0f ? 1.0f : m_warpK))
                : 0.0f;
@@ -2142,6 +2150,9 @@ void AppGL::updateSpeedFx(float deltaTime) {
     dir = m_camera.forward();  // в туннеле «летим» по курсу
   }
   m_sceneManager->setSpeedFx(betaBoost, speedK, dir.x, dir.y, dir.z);
+  m_speedK = speedK;
+  // v3.3.0: тяга масштабирует шлейф/движок корабля и гул в audioUpdate.
+  warpdrive::setThruster(speedK);
   // Микро-FOV: +3° на полном эффекте поверх варп-кривой (+10° * m_warpK).
   auto& st = m_sceneManager->getSettings();
   if (m_warpBaseFov <= 1.0f) m_warpBaseFov = st.fovDegrees;  // ленивая база
@@ -4264,6 +4275,8 @@ void AppGL::audioUpdate(float deltaTime) {
 
   // Варп-хук polling-ом (без правок WarpDrive): уровень + дакинг внутри.
   m_audio.setWarpLevel(m_warpK);
+  // Гул двигателя (v3.3.0): от скорости полёта; в меню всегда тихо.
+  m_audio.setEngineLevel(m_inMenu ? 0.0f : m_speedK);
 
   // Телепорт-whoosh polling-ом: смена станции любым путём
   // (меню/поиск/варп-прыжок/тур) — без правок teleportToStation.

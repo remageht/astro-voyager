@@ -150,6 +150,15 @@ void AudioEngine::update(float dt) {
   if (cur > 1.0f) cur = 1.0f;
   m_warpCurrent.store(cur);
 
+  // Гул двигателя (v3.3.0): сглаживание цели (~0.2с), читает аудиопоток.
+  const float engTarget = m_engineTarget.load();
+  float eng = m_engineCurrent.load();
+  const float ea = 1.0f - std::exp(-dt * 5.0f);
+  eng += (engTarget - eng) * ea;
+  if (eng < 0.0f) eng = 0.0f;
+  if (eng > 1.0f) eng = 1.0f;
+  m_engineCurrent.store(eng);
+
   if (!m_live) {
     // Null-backend: двигаем виртуальное время, чистим голоса по нему.
     uint64_t adv = static_cast<uint64_t>(static_cast<double>(dt) * kSampleRate);
@@ -193,6 +202,12 @@ void AudioEngine::setWarpLevel(float k) {
   if (k < 0.0f) k = 0.0f;
   if (k > 1.0f) k = 1.0f;
   m_warpTarget.store(k);
+}
+
+void AudioEngine::setEngineLevel(float k) {
+  if (k < 0.0f) k = 0.0f;
+  if (k > 1.0f) k = 1.0f;
+  m_engineTarget.store(k);
 }
 
 void AudioEngine::playClick() {
@@ -401,17 +416,30 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
     }
 
     // WarpRumble: коричневый шум + суб-синус, громкость от уровня варпа.
+    const float engK = m_engineCurrent.load();
     float rumble = 0.0f;
-    if (warpK > 0.001f) {
+    if (warpK > 0.001f || engK > 0.001f) {
       const float w = whiteNoise(m_rng);
       m_brown = (m_brown + 0.02f * w) / 1.02f;
+    }
+    if (warpK > 0.001f) {
       const float sub =
           static_cast<float>(std::sin(2.0 * kPi * 43.0 * tAbs)) * 0.5f +
           static_cast<float>(std::sin(2.0 * kPi * 86.5 * tAbs + 1.1)) * 0.25f;
       rumble = (m_brown * 3.0f * 0.8f + sub * 0.6f) * warpK * 0.5f;
     }
 
-    float mix = (music + sfx + rumble) * vol;
+    // Engine hum (v3.3.0): тон 52-82 Гц по скорости + обертон + дыхание шума.
+    float engine = 0.0f;
+    if (engK > 0.001f) {
+      const float f = 52.0f + 30.0f * engK;
+      const float tone =
+          static_cast<float>(std::sin(2.0 * kPi * f * tAbs)) +
+          0.35f * static_cast<float>(std::sin(2.0 * kPi * 2.0 * f * tAbs + 0.7));
+      engine = (tone * 0.16f + m_brown * 1.2f) * engK;
+    }
+
+    float mix = (music + sfx + rumble + engine) * vol;
     // Мягкий лимитер tanh на мастере.
     mix = std::tanh(mix * 1.1f);
     out[i * 2 + 0] = mix;

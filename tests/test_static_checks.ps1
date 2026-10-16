@@ -280,6 +280,11 @@ Check 'speed fx composite streak' (((Read-File 'shaders/post_comp.frag') -match 
 Check 'speed fx boosts relativity' (($sceneCpp -match 'setSpeedFx') -and ($sceneCpp -match 'betaEff') -and ($sceneH -match 'm_speedBeta'))
 Check 'warp streak stability' (((Read-File 'shaders/warp.frag') -match 'smoothstep\(0\.0, 0\.06') -and ((Read-File 'shaders/warp.frag') -match '0\.9965') -and ($appCpp -match 'updateSpeedFx'))
 
+# --- v3.3.0 flight feel pass: engine hum, thruster trail, shield flash ---
+Check 'engine hum audio' (((Read-File 'src/audio/AudioEngine.h') -match 'setEngineLevel') -and ((Read-File 'src/audio/AudioEngine.cpp') -match 'm_engineCurrent') -and ($appCpp -match 'setEngineLevel'))
+Check 'thruster scaled trail' (($sceneCpp -match 'warpdrive::thruster') -and ($sceneCpp -match 'setThruster') -and ($appCpp -match 'warpdrive::setThruster'))
+Check 'shield impact flash' (((Read-File 'shaders/post_comp.frag') -match 'u_ShieldK') -and ($appCpp -match 'shieldFlashHit') -and ((Read-File 'src/PostFX.cpp') -match 'u_ShieldK'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
