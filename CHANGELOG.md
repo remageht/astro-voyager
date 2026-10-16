@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 3.3.0 - 2026-10-16
+
+## What's new / Что нового
+- EN: Ship survival mode — fuel (a jump costs 5, refuel near stars), shields (pulsar radiation 10/s), Newtonian gravity drift from stations and planets, emergency respawn at the Sun; HUD fuel/shield bars plus low-shield chromatic aberration and interference FX.
+- EN: Speed effect and camera views — real speed and warp factor now drive the relativistic Doppler light shift, radial motion streaks and a micro-FOV boost (the warp tunnel never moves the camera, hence the boost); warp streak lines are stable at high speed; V cycles cockpit / behind-the-tail / far-overview views with the ship rendered in frame.
+- EN: Flight feel — procedural engine hum tied to speed, thruster-scaled trail ribbon and engine glow, cold-blue shield impact flash on damage.
+- RU: Режим выживания — топливо (прыжок −5, дозаправка у звёзд), щиты (радиация пульсаров 10/с), ньютоновский гравитационный дрейф у станций и планет, аварийный респавн у Солнца; HUD-полосы топлива/щитов + хроматика и помехи при низком щите.
+- RU: Эффект скорости и виды камеры — реальная скорость и варп-фактор управляют доплер-сдвигом света, радиальными стриками и микро-FOV (варп-туннель не двигает камеру — отсюда буст); стрики варп-туннеля стабильны на высокой скорости; V переключает кабину / за кормой / дальний обзор, корабль виден в кадре.
+- RU: Ощущения полёта — процедурный гул двигателя по скорости, шлейф и свечение сопла от тяги, холодно-синяя вспышка щита при уроне.
+- Gates / Гейты: ctest 3/3, static checks 224, doppler 3.111 PASS.
+
 ## 3.2.0 - 2026-10-16
 
 ## What's new / Что нового

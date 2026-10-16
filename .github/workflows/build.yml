@@ -13,7 +13,10 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        # macOS (v3.3.0): the core CLI, tests and static checks build with
+        # Apple clang. The OpenGL app port (Cocoa/OpenGL frameworks + GL
+        # loader) is a follow-up cycle.
+        os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
