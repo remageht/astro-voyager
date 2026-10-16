@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "Camera.h"
+#include "SaveGame.h"
 #include "SceneManager.h"
 #include "Tour.h"
 #include "Types.h"
@@ -358,6 +359,23 @@ class AppGL {
   void updateSpeedFx(float deltaTime);
   void applyViewCamera(Camera& out);
   // === Camera views + speed FX === end
+
+  // === SaveGame === (v3.4.0) begin.
+  // JSON-профиль: settings.json (глобально: пресет/звук/вид) +
+  // save-sandbox.json (прогресс, объекты редактора, сессия; слот adventure
+  // зарезервирован под v4.0). F9/F10 — быстрое сохранение/загрузка, автосейв
+  // на выходе, кнопки в меню. Файловый ввод-вывод — только в интерактивном
+  // run(): харнесс (captureAllScreenshots) run() не зовёт и профиль не трогает
+  // (m_saveInteractive=false), PNG остаются байт-в-байт.
+  bool m_saveInteractive = false;
+  bool m_prevF9Pressed = false;
+  bool m_prevF10Pressed = false;
+  std::string m_saveStatus;  // последняя операция (строка в меню)
+  void saveProfileNow(bool quiet);
+  void loadProfileNow(bool quiet = false);
+  void applySaveSettings(const SaveSettings& s);
+  void applySaveGame(const SaveGame& g);
+  // === SaveGame === end
 };
 
 // Связь AppGL -> SceneManager без правок SceneManager.h:

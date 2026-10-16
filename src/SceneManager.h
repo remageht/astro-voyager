@@ -165,6 +165,10 @@ class SceneManager {
   // v3.2.0 editor: spawn from a full template (id/name auto-numbered by
   // palette prefix), live mutable access for the selected object.
   void spawnCustom(const CustomBody& templ, const Vec3& p, const Vec3& v);
+  // v3.4.0 (save system): восстановление объекта из профиля — id/name/seed
+  // сохраняются как есть, m_customSeq поднимается выше занятых номеров,
+  // чтобы новые объекты редактора не столкнулись с загруженными id.
+  void addLoadedCustom(const CustomBody& b);
   CustomBody* findCustom(const std::string& id);
   void deleteSelected();
   void clearCustom();

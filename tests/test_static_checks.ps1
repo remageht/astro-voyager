@@ -291,6 +291,14 @@ Check 'cmake macos gl branch' (($cmake -match 'elseif\(APPLE\)') -and ($cmake -m
 Check 'macos gl ci job' (($ci -match 'build-macos-gl') -and ($ci -match 'otool -L') -and ($ci -match 'astro-voyager-macos-arm64'))
 Check 'macos font paths' ($appCpp -match '/System/Library/Fonts/Supplemental')
 
+# --- v3.4.0 save profiles pass ---
+Check 'savegame core module' (((Read-File 'src/SaveGame.h') -match 'kSaveSchema') -and ((Read-File 'src/SaveGame.cpp') -match 'saveDeserialize') -and ($cmake -match 'src/SaveGame\.cpp'))
+Check 'save slot file names' (((Read-File 'src/SaveGame.cpp') -match 'save-sandbox\.json') -and ((Read-File 'src/SaveGame.cpp') -match 'save-adventure\.json') -and ((Read-File 'src/SaveGame.cpp') -match 'settings\.json'))
+Check 'save quick keys and autosave' (($appCpp -match 'GLFW_KEY_F9') -and ($appCpp -match 'GLFW_KEY_F10') -and ($appCpp -match 'saveProfileNow\(true\)'))
+Check 'save customs exact restore' (($sceneH -match 'addLoadedCustom') -and ($sceneCpp -match 'SceneManager::addLoadedCustom') -and ($sceneCpp -match 'from_chars'))
+Check 'save settings apply' (($appCpp -match 'applySaveSettings') -and ($appCpp -match 'm_userOverrodePreset = true') -and ($appCpp -match 'saveUtcNowISO8601'))
+Check 'save test wired' (($cmake -match 'tests/test_save\.cpp') -and ($cmake -match 'add_test\(NAME test_save'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

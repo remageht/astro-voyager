@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
+#include <charconv>
 #include <string>
 
 namespace astro {
@@ -213,6 +214,20 @@ void SceneManager::deleteSelected() {
 void SceneManager::clearCustom() {
   m_custom.clear();
   m_selectedId.clear();
+}
+
+void SceneManager::addLoadedCustom(const CustomBody& b) {
+  m_custom.push_back(b);
+  const size_t dash = b.id.rfind('-');
+  if (dash != std::string::npos && dash + 1 < b.id.size()) {
+    int n = 0;
+    const char* first = b.id.data() + dash + 1;
+    const char* last = b.id.data() + b.id.size();
+    const auto res = std::from_chars(first, last, n);
+    if (res.ec == std::errc() && n > m_customSeq) {
+      m_customSeq = n;
+    }
+  }
 }
 
 void SceneManager::updateCustom(float dt) {

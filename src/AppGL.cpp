@@ -107,6 +107,11 @@ AppGL::~AppGL() {
 }
 
 int AppGL::run() {
+  // === SaveGame === (v3.4.0): интерактивный старт — грузим настройки и
+  // профиль песочницы (тихо). Харнесс скриншотов сюда не заходит:
+  // m_saveInteractive остаётся false, файлы профиля не читаются/не пишутся.
+  m_saveInteractive = true;
+  loadProfileNow(true);
   float lastTime = static_cast<float>(glfwGetTime());
   static float menuAngle = 0.0f;
 
@@ -305,6 +310,9 @@ int AppGL::run() {
     m_window->swapBuffers();
   }
 
+  // === SaveGame === (v3.4.0): автосейв на выходе (тихий, без тоста).
+  saveProfileNow(true);
+
   return 0;
 }
 
@@ -347,6 +355,19 @@ void AppGL::processInput(float deltaTime) {
     importJourney();
   }
   m_prevF6Pressed = f6Down;
+
+  // === SaveGame === (v3.4.0): F9 — быстрое сохранение, F10 — загрузка.
+  const bool f9Down = (glfwGetKey(win, GLFW_KEY_F9) == GLFW_PRESS);
+  if (f9Down && !m_prevF9Pressed && !io.WantCaptureKeyboard) {
+    saveProfileNow(false);
+  }
+  m_prevF9Pressed = f9Down;
+
+  const bool f10Down = (glfwGetKey(win, GLFW_KEY_F10) == GLFW_PRESS);
+  if (f10Down && !m_prevF10Pressed && !io.WantCaptureKeyboard) {
+    loadProfileNow(false);
+  }
+  m_prevF10Pressed = f10Down;
 
   const bool pDown = (glfwGetKey(win, GLFW_KEY_P) == GLFW_PRESS);
   if (pDown && !m_prevPPressed && !io.WantCaptureKeyboard) {
@@ -2151,7 +2172,9 @@ void AppGL::updateSpeedFx(float deltaTime) {
   if (warpK > worldK) {
     dir = m_camera.forward();  // в туннеле «летим» по курсу
   }
-  m_sceneManager->setSpeedFx(betaBoost, speedK, dir.x, dir.y, dir.z);
+  m_sceneManager->setSpeedFx(betaBoost, speedK, static_cast<float>(dir.x),
+                             static_cast<float>(dir.y),
+                             static_cast<float>(dir.z));
   m_speedK = speedK;
   // v3.3.0: тяга масштабирует шлейф/движок корабля и гул в audioUpdate.
   warpdrive::setThruster(speedK);
@@ -2222,6 +2245,196 @@ void AppGL::importJourney() {
   }
   checkAchievements();
 }
+
+// === SaveGame === (v3.4.0) begin.
+// JSON-профиль: настройки (settings.json) + песочница (save-sandbox.json).
+// Конверсия редакторских объектов CustomBody <-> SaveCustom — поле в поле.
+namespace {
+SaveCustom toSaveCustom(const CustomBody& c) {
+  SaveCustom s;
+  s.id = c.id;
+  s.name = c.name;
+  s.pos = c.pos;
+  s.vel = c.vel;
+  s.radius = c.radius;
+  s.color = c.color;
+  s.colorB = c.colorB;
+  s.type = c.type;
+  s.detail = c.detail;
+  s.ringOuter = c.ringOuter;
+  s.seed = c.seed;
+  return s;
+}
+
+CustomBody toCustomBody(const SaveCustom& s) {
+  CustomBody c;
+  c.id = s.id;
+  c.name = s.name;
+  c.pos = s.pos;
+  c.vel = s.vel;
+  c.radius = s.radius;
+  c.color = s.color;
+  c.colorB = s.colorB;
+  c.type = s.type;
+  c.detail = s.detail;
+  c.ringOuter = s.ringOuter;
+  c.seed = s.seed;
+  return c;
+}
+}  // namespace
+
+void AppGL::applySaveSettings(const SaveSettings& s) {
+  const int preset = std::min(std::max(s.perfPreset, 0), 3);
+  m_sceneManager->applyPreset(static_cast<PerfPreset>(preset));
+  m_userOverrodePreset = true;  // сохранённый пресет не перебивается бенчмарком
+  m_audioVolume = std::min(std::max(s.audioVolume, 0), 100);
+  m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+  if (s.muted != m_audio.isMuted()) m_audio.toggleMute();
+  m_viewMode = static_cast<view::ViewMode>(std::min(std::max(s.viewMode, 0), 2));
+  m_renderCamValid = false;
+}
+
+void AppGL::applySaveGame(const SaveGame& g) {
+  // Объекты редактора: заменяем текущие загруженными (id/имена сохраняются).
+  m_sceneManager->clearCustom();
+  for (const SaveCustom& c : g.customs) {
+    m_sceneManager->addLoadedCustom(toCustomBody(c));
+  }
+  // Прогресс и ачивки.
+  m_visited = g.progress.visited;
+  m_unlockedIds.clear();
+  for (const std::string& id : g.progress.unlocked) m_unlockedIds.insert(id);
+  m_trophyKnown = m_unlockedIds;  // загруженные ачивки не вспыхивают заново
+  m_minBhDistance = g.progress.minBhDistance;
+  m_journeyExported = g.progress.exported;
+  m_journeyImported = g.progress.imported;
+  m_capturedHorizon = g.progress.capturedHorizon;
+  // Станция и камера. teleportToStation сам добавит станцию в маршрут и
+  // visited — перезаписываем их профильными значениями.
+  if (findStation(g.session.station)) {
+    teleportToStation(g.session.station);
+    m_route = g.progress.route;
+    m_visited = g.progress.visited;
+  }
+  m_camera.position = g.session.camPos;
+  m_camera.yaw = g.session.yaw;
+  m_camera.pitch = g.session.pitch;
+  m_sceneManager->setTimeScale(g.session.timeScale);
+  // Корабль и стиль.
+  m_ship.fuel = g.session.fuel;
+  m_ship.shield = g.session.shield;
+  m_ship.gravVel = Vec3{};
+  m_shipNoticeT = 0.0f;
+  m_shipStyle = std::min(std::max(g.session.shipStyle, 0), 2);
+  warpdrive::setShipStyle(m_shipStyle);
+  // Скоростные эффекты: после прыжка камеры не меряем «скачок скорости»
+  // (иначе ложный доплер/стрики на первом кадре).
+  m_prevSpeedPos = m_camera.position;
+  m_camSpeed = 0.0f;
+  m_renderCamValid = false;
+  m_sceneManager->resetRelativity();
+}
+
+void AppGL::saveProfileNow(bool quiet) {
+  if (!m_saveInteractive) return;
+  std::string err;
+
+  SaveSettings st;
+  st.perfPreset = static_cast<int>(m_sceneManager->getPreset());
+  st.audioVolume = m_audioVolume;
+  st.muted = m_audio.isMuted();
+  st.viewMode = static_cast<int>(m_viewMode);
+  const bool settingsOk =
+      saveWriteFile(saveSettingsFilePath(), saveSerializeSettings(st), err);
+
+  SaveGame g;
+  g.mode = SaveMode::Sandbox;
+  g.savedUtc = saveUtcNowISO8601();
+  g.progress.visited = m_visited;
+  g.progress.unlocked.assign(m_unlockedIds.begin(), m_unlockedIds.end());
+  g.progress.route = m_route;
+  g.progress.minBhDistance = m_minBhDistance;
+  g.progress.exported = m_journeyExported;
+  g.progress.imported = m_journeyImported;
+  g.progress.capturedHorizon = m_capturedHorizon;
+  for (const CustomBody& c : m_sceneManager->getCustoms()) {
+    g.customs.push_back(toSaveCustom(c));
+  }
+  if (const Station* cur = m_sceneManager->getCurrentStation()) {
+    g.session.station = cur->id;
+  }
+  g.session.camPos = m_camera.position;
+  g.session.yaw = m_camera.yaw;
+  g.session.pitch = m_camera.pitch;
+  g.session.timeScale = m_sceneManager->getTimeScale();
+  g.session.fuel = m_ship.fuel;
+  g.session.shield = m_ship.shield;
+  g.session.shipStyle = m_shipStyle;
+  const bool saveOk =
+      saveWriteFile(saveFilePath(SaveMode::Sandbox), saveSerialize(g), err);
+
+  if (saveOk && settingsOk) {
+    m_saveStatus = uiRu("Профиль сохранён", "Profile saved");
+    if (!quiet) {
+      m_audio.playClick();
+      Toast t;
+      t.title = uiRu("Сохранение", "Save");
+      t.desc = uiRu("Песочница записана (F10 — загрузить).",
+                    "Sandbox written to the profile (F10 to load).");
+      t.time = static_cast<float>(glfwGetTime());
+      m_toasts.push_back(t);
+    }
+  } else {
+    m_saveStatus = std::string(uiRu("Ошибка сохранения", "Save failed")) +
+                   ": " + err;
+    if (!quiet) m_audio.playBlip();
+  }
+}
+
+void AppGL::loadProfileNow(bool quiet) {
+  if (!m_saveInteractive) return;
+  std::string text;
+  std::string err;
+
+  // Настройки — не критично: нет файла, остаются текущие значения.
+  SaveSettings st;
+  if (saveReadFile(saveSettingsFilePath(), text, err) &&
+      saveDeserializeSettings(text, st, err)) {
+    applySaveSettings(st);
+  }
+
+  const std::string path = saveFilePath(SaveMode::Sandbox);
+  if (!saveFileExists(path)) {
+    m_saveStatus = uiRu("Профиль не найден (первый запуск)",
+                        "No profile yet (first run)");
+    return;
+  }
+  if (!saveReadFile(path, text, err)) {
+    m_saveStatus = std::string(uiRu("Ошибка чтения", "Read failed")) + ": " + err;
+    if (!quiet) m_audio.playBlip();
+    return;
+  }
+  SaveGame g;
+  if (!saveDeserialize(text, g, err)) {
+    m_saveStatus =
+        std::string(uiRu("Ошибка профиля", "Profile error")) + ": " + err;
+    if (!quiet) m_audio.playBlip();
+    return;
+  }
+  applySaveGame(g);
+  m_saveStatus = std::string(uiRu("Профиль загружен", "Profile loaded")) +
+                 ": " + g.session.station;
+  if (!quiet) {
+    m_audio.playChime();
+    Toast t;
+    t.title = uiRu("Загрузка", "Load");
+    t.desc = uiRu("Состояние восстановлено из профиля.",
+                  "State restored from the profile.");
+    t.time = static_cast<float>(glfwGetTime());
+    m_toasts.push_back(t);
+  }
+}
+// === SaveGame === end
 
 void AppGL::checkAchievements() {
   AchievementState st;
@@ -2357,6 +2570,26 @@ void AppGL::drawMenu() {
     if (ImGui::Button("Exit", ImVec2(menuBtnW, 0.0f))) {
       glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
     }
+
+    // === SaveGame === (v3.4.0): профиль песочницы — кнопки в меню
+    // (харнесс меню не рисует, PNG не затронуты).
+    ImGui::Separator();
+    const float saveBtnW = (menuAvail - ImGui::GetStyle().ItemSpacing.x) / 2.0f;
+    if (ImGui::Button("Save game", ImVec2(saveBtnW, 0.0f))) {
+      saveProfileNow(false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Load game", ImVec2(saveBtnW, 0.0f))) {
+      loadProfileNow(false);
+    }
+    ImGui::SetWindowFontScale(0.85f);
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+                       "F9 save | F10 load | autosave on exit");
+    if (!m_saveStatus.empty()) {
+      ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.55f, 1.0f), "%s",
+                         m_saveStatus.c_str());
+    }
+    ImGui::SetWindowFontScale(1.0f);
 
     ImGui::Separator();
     ImGui::SetWindowFontScale(0.85f);

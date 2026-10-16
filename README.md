@@ -99,6 +99,19 @@ FBO с **bloom** (5 уровней яркости) и **релятивистск
 | `M` | Звук: мьют (процедурный эмбиент + эффекты, громкость в панели) |
 | `H` / `F1` | Скрыть панель / помощь |
 | F5 / F6 | Экспорт / импорт маршрута |
+| F9 / F10 | Быстрое сохранение / загрузка профиля (автосейв при выходе) |
+
+## Сохранения (v3.4.0)
+
+Профиль игрока — JSON в пользовательской директории: Windows
+`%APPDATA%\astro-voyager\`, Linux `~/.config/astro-voyager/`, macOS
+`~/Library/Application Support/astro-voyager/`. Файлы: `save-sandbox.json`
+(прогресс, ачивки, история маршрута, объекты редактора, сессия — станция,
+камера, время, топливо/щиты) и `settings.json` (пресет производительности,
+звук, вид камеры). F9/F10 — быстрое сохранение/загрузка, кнопки Save/Load
+в меню, автосейв при выходе; слот сюжетного режима `save-adventure.json`
+зарезервирован под v4.0. Файлы человекочитаемые (pretty JSON) — можно
+править руками; схема версионируется, неизвестные поля игнорируются.
 
 ## Физическая модель и ограничения (Limits & Assumptions)
 
@@ -137,12 +150,12 @@ GLFW/GLM/ImGui локально, см. `docs/BUILD.md`. macOS: системны�
 ```
 astro-voyager/
   CMakeLists.txt
-  src/            # Catalog, Camera, Geodesic, Interaction, SceneManager, PostFX, AppGL
+  src/            # Catalog, Camera, Geodesic, Interaction, SceneManager, PostFX, AppGL, SaveGame
   shaders/        # quad.vert, bh.frag, quasar.frag, lines.vert, galaxy.frag,
                   # nebula.frag, sky.frag, post_comp/bright/blur.frag, warp.frag, ...
   res/catalog.json# каталог станций (зеркало Catalog.cpp)
   docs/           # ARCHITECTURE, BUILD, CATALOG, ROADMAP, RELEASE, screens
-  tests/          # test_static_checks.ps1, test_interaction.cpp, test_doppler_side.ps1
+  tests/          # test_static_checks.ps1, test_interaction.cpp, test_save.cpp, test_doppler_side.ps1
   .github/workflows/build.yml
   Dockerfile      # reproducible build
   .env.example    # ASTRO_* переменные

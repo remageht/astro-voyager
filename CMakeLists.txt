@@ -20,6 +20,7 @@ add_executable(astro-voyager
   src/Journey.cpp
   src/Achievements.cpp
   src/Tour.cpp
+  src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -78,6 +79,20 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_achievements.cpp")
     target_compile_options(test_achievements PRIVATE /W4 /permissive-)
   else()
     target_compile_options(test_achievements PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_save.cpp")
+  add_executable(test_save
+    tests/test_save.cpp
+    src/SaveGame.cpp
+  )
+  target_include_directories(test_save PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+  if(MSVC)
+    target_compile_options(test_save PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_save PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
 
@@ -208,6 +223,9 @@ if(TARGET test_journey)
 endif()
 if(TARGET test_achievements)
   add_test(NAME test_achievements COMMAND test_achievements)
+endif()
+if(TARGET test_save)
+  add_test(NAME test_save COMMAND test_save)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):
