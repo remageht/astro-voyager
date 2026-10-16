@@ -6,6 +6,7 @@
 ![OpenGL](https://img.shields.io/badge/OpenGL-3.3-green)
 ![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)
+![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)
 ![MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ### 3D-приложение: чёрные дыры, квазары, галактики, планеты и созвездия
@@ -32,6 +33,35 @@ FBO с **bloom** (5 уровней яркости) и **релятивистск
 Название: `astro-voyager` — коротко, GitHub/Docker-friendly, покрывает все типы
 объектов (не только дыру). Отвергнуты: `event-horizon` (только ЧД),
 `cosmo-traveler` (длинно), `starhopper` (ассоциация с игрой).
+
+## Галерея объектов
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screens/sol.png" alt="Solar System" width="100%"><br><sub><b>Солнечная система</b>: Сатурн с делением Кассини и тенью колец, Большое красное пятно Юпитера, пояс астероидов</sub></td>
+    <td width="50%"><img src="docs/screens/qso-3c273.png" alt="Quasar 3C 273" width="100%"><br><sub><b>Квазар 3C 273</b>: светящееся ядро, аккреционный диск, полярные релятивистские джеты</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/m31.png" alt="Andromeda (M31)" width="100%"><br><sub><b>Andromeda (M31)</b>: рукава из звёзд-частиц, LOD-зум, приливной поток</sub></td>
+    <td><img src="docs/screens/m87.png" alt="M87*" width="100%"><br><sub><b>M87*</b>: гигантская ЧД с релятивистским джетом и движущимися узлами HST-1</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/m51.png" alt="Whirlpool (M51)" width="100%"><br><sub><b>Whirlpool (M51)</b>: широкие рукава, яркий балдж и компаньон NGC 5195</sub></td>
+    <td><img src="docs/screens/m104.png" alt="Sombrero (M104)" width="100%"><br><sub><b>Sombrero (M104)</b>: тёмная пылевая полоса вдоль диска и крупный балдж</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/mw.png" alt="Milky Way" width="100%"><br><sub><b>Milky Way</b>: наша Галактика снаружи — найдите Солнце и подлетите ближе 3 единиц</sub></td>
+    <td><img src="docs/screens/m1.png" alt="Crab Nebula (M1)" width="100%"><br><sub><b>Crab Nebula (M1)</b>: пульсар-маяк со стробом, wisps-дуги, синхротронные волокна</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/m13.png" alt="Hercules Cluster (M13)" width="100%"><br><sub><b>Hercules Cluster (M13)</b>: тысячи древних звёзд — между ними можно летать</sub></td>
+    <td><img src="docs/screens/ori.png" alt="Orion" width="100%"><br><sub><b>Orion</b>: 16 вершин, пояс из 9 отрезков, Бетельгейзе и Ригель + звёзды Hipparcos</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/uma.png" alt="Ursa Major" width="100%"><br><sub><b>Ursa Major</b>: астеризм Большого Ковша с центрированной проекцией</sub></td>
+    <td><img src="docs/screens/psr-vela.png" alt="Vela Pulsar" width="100%"><br><sub><b>Vela Pulsar</b>: наклонный дипольный маяк, горячие полюса, дуги магнитосферы, тик 89 мс</sub></td>
+  </tr>
+</table>
 
 ## Станции каталога
 
@@ -97,7 +127,10 @@ cmake --build build --config Release
 ```
 
 Полный 3D-рендер (OpenGL) — опция `ASTROVOYAGER_ENABLE_GL=ON`, требует
-GLFW/GLEW/GLM/ImGui локально, см. `docs/BUILD.md`. В CI собирается только core.
+GLFW/GLM/ImGui локально, см. `docs/BUILD.md`. macOS: системный OpenGL 3.3
+(без GLEW — `src/GLCompat.h`), сборка `bash packaging/fetch-gl-deps.sh` +
+`-DASTROVOYAGER_ENABLE_GL=ON`. CI собирает core на Windows/Linux/macOS,
+полный GL — Linux AppImage и macOS (arm64).
 
 ## Структура
 
@@ -126,7 +159,7 @@ res/textures/starmap_2020_4k_gal.hdr  # любой equirect HDR, в git не в�
 powershell -ExecutionPolicy Bypass -File tests/test_static_checks.ps1
 ```
 
-CI: сборка Windows + Linux, static checks, сборка Docker-образа.
+CI: сборка Windows/Linux/macOS, static checks, AppImage, macOS-архив, Docker-образ.
 Контракт каталога: `docs/CATALOG.md`. Архитектура: `docs/ARCHITECTURE.md`. Релиз: `docs/RELEASE.md`.
 
 ## Версии
