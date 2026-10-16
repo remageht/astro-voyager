@@ -61,6 +61,8 @@ jobs:
   # must link OpenGL.framework and contain no GLEW.
   build-macos-gl:
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       - name: Fetch GL sources (GLFW/GLM/ImGui/stb)
@@ -98,6 +100,14 @@ jobs:
           path: dist/astro-voyager-macos-arm64.tar.gz
           if-no-files-found: error
           retention-days: 14
+      - name: Attach macOS archive to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${GITHUB_REF_NAME}" dist/astro-voyager-macos-arm64.tar.gz --clobber
+          gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name'
 
   # Linux AppImage distribution: full OpenGL build (GLFW/ImGui/GLM/stb fetched
   # from upstream releases because Dependencies/ and src/vendor/ are gitignored),

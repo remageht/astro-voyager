@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 3.4.0 - 2026-10-16
+
+## What's new / Что нового
+- EN: macOS support — the full OpenGL app now builds on Apple Silicon: system OpenGL 3.3 core via <OpenGL/gl3.h> (src/GLCompat.h makes GLEW calls no-ops, so Window.cpp stays shared), Cocoa/IOKit/CoreVideo/CoreAudio frameworks, macOS font paths; new CI job build-macos-gl verifies the linkage with otool (OpenGL.framework present, no GLEW), smokes the CLI and ships an astro-voyager-macos-arm64.tar.gz artifact, attached to releases on tags.
+- EN: Save profiles — human-readable pretty JSON in the user directory (Windows %APPDATA%, Linux ~/.config, macOS Application Support): settings.json (perf preset, volume/mute, camera view) plus save-sandbox.json (progress, achievements, route history, editor objects with exact ids, session: station, camera, time pace, fuel/shields, ship style); adventure slot reserved for v4.0. F9/F10 quicksave/quickload, Save/Load menu buttons, silent autosave on exit; versioned schema, unknown fields ignored; own dependency-free mini JSON parser + serializer in pure C++17 (builds in the core target, covered by 12 round-trip tests).
+- RU: Поддержка macOS — полное OpenGL-приложение собирается на Apple Silicon: системный OpenGL 3.3 core через <OpenGL/gl3.h> (src/GLCompat.h превращает вызовы GLEW в no-op, Window.cpp остаётся общим), фреймворки Cocoa/IOKit/CoreVideo/CoreAudio, macOS-пути шрифтов; новая CI-джоба build-macos-gl проверяет линковку через otool (OpenGL.framework есть, GLEW нет), гоняет CLI-смоук и собирает артефакт astro-voyager-macos-arm64.tar.gz — на тегах прикрепляется к релизу.
+- RU: Профили сохранений — человекочитаемый pretty JSON в пользовательской директории (Windows %APPDATA%, Linux ~/.config, macOS Application Support): settings.json (пресет производительности, громкость/мьют, вид камеры) и save-sandbox.json (прогресс, ачивки, история маршрута, объекты редактора с точными id, сессия: станция, камера, темп времени, топливо/щиты, стиль корабля); слот сюжетного режима зарезервирован под v4.0. F9/F10 — быстрое сохранение/загрузка, кнопки Save/Load в меню, тихий автосейв при выходе; схема версионируется, неизвестные поля игнорируются; собственный мини-парсер JSON без зависимостей на чистом C++17 (собирается в core-таргете, 12 round-trip тестов).
+- Gates / Гейты: ctest 4/4, static checks 234, screenshots 17/17, doppler 3.111 PASS.
+
 ## 3.3.0 - 2026-10-16
 
 ## What's new / Что нового
