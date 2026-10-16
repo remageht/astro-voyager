@@ -369,6 +369,16 @@ void AppGL::processInput(float deltaTime) {
   }
   m_prevF10Pressed = f10Down;
 
+  // === StoryJournal === (v3.5.0): J — открыть/закрыть бортовой журнал.
+  // Открытие помечает записи прочитанными (счётчик "новых" в статус-строке
+  // обнуляется при первом же показе панели).
+  const bool jDown = (glfwGetKey(win, GLFW_KEY_J) == GLFW_PRESS);
+  if (jDown && !m_prevJPressed && !io.WantCaptureKeyboard) {
+    m_storyOpen = !m_storyOpen;
+    if (m_storyOpen) m_story.markAllRead();
+  }
+  m_prevJPressed = jDown;
+
   const bool pDown = (glfwGetKey(win, GLFW_KEY_P) == GLFW_PRESS);
   if (pDown && !m_prevPPressed && !io.WantCaptureKeyboard) {
     m_sceneManager->togglePause();
@@ -1255,6 +1265,20 @@ void AppGL::drawModernStatusBar() {
     ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.00f), "%s", soundTxt);
+    // === StoryJournal === (v3.5.0): счётчик новых записей журнала.
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.00f), "|");
+    ImGui::SameLine();
+    const int storyNew = m_story.unreadCount();
+    if (storyNew > 0) {
+      char storyBuf[16];
+      std::snprintf(storyBuf, sizeof(storyBuf), "%d", storyNew);
+      ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.00f), "%s: %s",
+                         uiRu("Журнал", "journal"), storyBuf);
+    } else {
+      ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.00f), "%s: %s",
+                         uiRu("Журнал", "journal"), uiRu("нет новых", "no news"));
+    }
     // === Beauty === часы гравитационного замедления у ЧД:
     // dτ/dt = sqrt(1 − Rs/r), r = |camPos| в единицах Rs станции.
     if (st && st->type == StationType::BlackHole) {
@@ -1278,6 +1302,38 @@ void AppGL::drawModernStatusBar() {
                          "%s %s @ %.1f Rs",
                          uiRu("часы", "clock"), clockBuf,
                          static_cast<double>(ratioRs));
+    }
+  }
+  ImGui::End();
+  if (pushed) ImGui::PopFont();
+}
+
+void AppGL::drawStoryPanel() {
+  // === StoryJournal === (v3.5.0): панель бортового журнала (клавиша J).
+  // Правый край, фиксированная высота; открытые записи — заголовок янтарным,
+  // текст светло-серым; закрытые не показываются вовсе.
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowPos(ImVec2(disp.x - 20.0f, 64.0f), ImGuiCond_FirstUseEver,
+                          ImVec2(1.0f, 0.0f));
+  ImGui::SetNextWindowSize(ImVec2(430.0f, disp.y * 0.60f), ImGuiCond_FirstUseEver);
+  const bool pushed = modernPushFont();
+  if (ImGui::Begin(uiRu("Бортовой журнал (J)", "Story Journal (J)"), &m_storyOpen)) {
+    int shown = 0;
+    for (const auto& e : m_story.entries()) {
+      if (!e.unlocked) continue;
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.75f, 0.30f, 1.00f));
+      ImGui::TextUnformatted(uiRu(e.titleRu.c_str(), e.titleEn.c_str()));
+      ImGui::PopStyleColor();
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.78f, 0.80f, 0.85f, 1.00f));
+      ImGui::TextWrapped("%s", uiRu(e.textRu.c_str(), e.textEn.c_str()));
+      ImGui::PopStyleColor();
+      ImGui::Spacing();
+      ++shown;
+    }
+    if (shown == 0) {
+      ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.00f), "%s",
+                         uiRu("Записи открываются по мере путешествия.",
+                              "Entries unlock as you travel."));
     }
   }
   ImGui::End();
@@ -1431,6 +1487,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   applyModernThemeOnce();
   // === Ship survival === (v3.3.0): HUD снизу слева, вне меню.
   if (!m_inMenu) drawShipHud();
+  // === StoryJournal === (v3.5.0): панель журнала поверх сцены (в меню скрыта).
+  if (m_storyOpen && !m_inMenu) drawStoryPanel();
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
@@ -2445,6 +2503,17 @@ void AppGL::checkAchievements() {
   st.exported = m_journeyExported;
   st.imported = m_journeyImported;
 
+  // === StoryJournal === (v3.5.0): журнал обновляется из того же снапшота
+  // прогресса; вызовы checkAchievements покрывают все точки прогресса
+  // (старт, телепорт, прыжки, горизонт, экспорт/импорт).
+  StoryJournal::Progress sp;
+  sp.visited = st.visited;
+  sp.minBhDistance = st.minBhDistance;
+  sp.exported = st.exported;
+  sp.imported = st.imported;
+  sp.capturedHorizon = st.capturedHorizon;
+  m_story.refresh(sp);
+
   std::vector<std::string> unlocked = achievementsCheck(st);
   float now = static_cast<float>(glfwGetTime());
   for (const auto& id : unlocked) {
@@ -2465,6 +2534,7 @@ void AppGL::drawHelpContent() {
   ImGui::BulletText("Drag mouse to look around");
   ImGui::BulletText("/ focus station search");
   ImGui::BulletText("F5 export journey, F6 import journey");
+  ImGui::BulletText("J story journal (bilingual)");  // v3.5.0
   ImGui::BulletText("P pause / resume time");
   ImGui::BulletText("X warp drive on / off");
   ImGui::BulletText("- / = time pace down / up");

@@ -299,6 +299,12 @@ Check 'save customs exact restore' (($sceneH -match 'addLoadedCustom') -and ($sc
 Check 'save settings apply' (($appCpp -match 'applySaveSettings') -and ($appCpp -match 'm_userOverrodePreset = true') -and ($appCpp -match 'saveUtcNowISO8601'))
 Check 'save test wired' (($cmake -match 'tests/test_save\.cpp') -and ($cmake -match 'add_test\(NAME test_save'))
 
+# --- v3.5.0 story journal pass ---
+Check 'story journal module' (((Read-File 'src/StoryJournal.h') -match 'class StoryJournal') -and ((Read-File 'src/StoryJournal.cpp') -match 'storyCatalog') -and ($cmake -match 'src/StoryJournal\.cpp'))
+Check 'story journal HUD panel' (($appCpp -match 'drawStoryPanel') -and ($appCpp -match 'm_storyOpen') -and ($appCpp -match 'GLFW_KEY_J') -and ($appCpp -match 'm_prevJPressed'))
+Check 'story journal refresh hook' (($appCpp -match 'StoryJournal::Progress') -and ($appCpp -match 'm_story\.refresh\(sp\)'))
+Check 'story journal test wired' (($cmake -match 'tests/test_story\.cpp') -and ($cmake -match 'add_test\(NAME test_story'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

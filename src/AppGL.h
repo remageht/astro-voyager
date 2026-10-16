@@ -8,6 +8,7 @@
 #include "Camera.h"
 #include "SaveGame.h"
 #include "SceneManager.h"
+#include "StoryJournal.h"
 #include "Tour.h"
 #include "Types.h"
 #include "Window.h"
@@ -51,6 +52,7 @@ class AppGL {
   void drawHelpContent();
   void drawHelpOverlay();
   void drawWorldLabels();
+  void drawStoryPanel();
   void teleportToStation(const std::string& id);
   void flyToObjectAt(double px, double py);
   std::string pickCustomAt(double px, double py);
@@ -114,6 +116,12 @@ class AppGL {
   bool m_journeyExported = false;
   bool m_journeyImported = false;
   std::vector<Toast> m_toasts;
+
+  // === StoryJournal === (v3.5.0): бортовой журнал (J), анлоки выводятся
+  // из того же прогресса, что и ачивки/сейв — без изменений схемы сейва.
+  StoryJournal m_story;
+  bool m_storyOpen = false;
+  bool m_prevJPressed = false;
 
   // === Physics === (horizon capture / slide state)
   bool m_captureAnim = false;
