@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 3.5.0 - 2026-10-17
+
+## What's new / Что нового
+- EN: Visual realism pass — reworked starfield (hash-based layers, banding gone), a sharper Milky Way band with a dust lane, physically brighter lensed accretion disks (black hole and quasar), refreshed README hero shots (sgra/m87).
+- EN: Ship's journal — a bilingual story journal (key J): 10 entries unlocked by real progress (first jump, visited objects, horizon crossed, close approach, route archive, grand tour), an unread counter in the status bar, read-state preserved across sessions; 10 unit tests.
+- EN: Live cosmos main menu — a fullscreen shader backdrop (nebula, Milky Way band, three parallax star layers, vignette) behind a glass panel with a gold title, main button and destination grid; menu.png hero reference in the harness.
+- EN: Expedition mode — the story campaign you asked for: an intro cinematic told in 7 illustrated slides (Mia Sato dreams of space, the Sun starts dimming, humanity sets out to find a new home), then a 6-chapter chain across Sgr A*, M87*, 3C 273 and M13 with finish-of-chapter slides, an in-game chapter card, a chapter map (key N), expedition state saved to expedition.json; new Intro reference frame; the menu now offers "Begin Expedition" and "Free Visit" (free flight).
+- RU: Пасс реализма — переработанное звёздное поле (hash-слои, полосы убраны), более чёткая полоса Млечного Пути с пылевой дорожкой, физически более яркие линзированные диски (ЧД и квазар), обновлённые hero-кадры README (sgra/m87).
+- RU: Бортовой журнал корабля — двуязычный сюжетный журнал (клавиша J): 10 записей, открываются реальным прогрессом (первый прыжок, посещённые объекты, пересечение горизонта, близкий проход, архив маршрута, гранд-тур), счётчик непрочитанного в статус-баре, прочитанность сохраняется между сессиями; 10 юнит-тестов.
+- RU: Живое космическое меню — фуллскрин-шейдерный фон (туманность, полоса Галактики, три параллакс-слоя звёзд, виньетка) за стеклянной панелью с золотым заголовком, главной кнопкой и сеткой направлений; hero-референс menu.png в харнессе.
+- RU: Режим экспедиции — сюжетная кампания по вашему запросу: вводная катсцена из 7 иллюстрированных слайдов (Мия Сато мечтает о космосе, Солнце начинает гаснуть, человечество отправляется искать новый дом), затем цепочка из 6 глав по Sgr A*, M87*, 3C 273 и M13 со слайдами-итогами, карточка главы в игре, карта глав (клавиша N), состояние сохраняется в expedition.json; новый референс-кадр intro.png; в меню — «Начать экспедицию» и «Свободный визит» (свободный полёт).
+- Gates / Гейты: ctest 6/6, static checks all pass, screenshots 17/17 byte-identical + menu.png/intro.png refs, doppler 3.111 PASS.
+
 ## 3.4.0 - 2026-10-16
 
 ## What's new / Что нового
