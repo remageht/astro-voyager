@@ -2907,10 +2907,11 @@ void AppGL::drawMenu() {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.28f, 0.19f, 0.05f, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.42f, 0.29f, 0.08f, 1.00f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.34f, 0.09f, 1.00f));
-    if (ImGui::Button("Play", ImVec2(-1.0f, 42.0f))) {
-      // === Expedition === (v3.5.0): Play = сюжетная экспедиция. Первый
-      // запуск — вводные слайды (человек на Земле → решение улететь), затем
-      // высадка в Солнечной системе; повторные — сразу полёт.
+    if (ImGui::Button(uiRu("Начать экспедицию", "Begin Expedition"),
+                      ImVec2(-1.0f, 42.0f))) {
+      // === Expedition === (v3.5.0): сюжетный режим. Первый запуск — вводные
+      // слайды (человек на Земле → решение улететь), затем высадка в
+      // Солнечной системе; повторные — сразу полёт.
       if (!m_expedition.introSeen && m_expedition.chapterIndex == 0) {
         startExpeditionIntro();
       } else {
@@ -2920,6 +2921,19 @@ void AppGL::drawMenu() {
     if (ImGui::IsItemHovered()) {
       ImGui::SetTooltip(m_expedition.introSeen ? "Resume your journey"
                                                : "Begin the expedition");
+    }
+    ImGui::PopStyleColor(3);
+
+    // === Expedition === (v3.5.0): свободный полёт — без пролога и сюжета.
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.12f, 0.17f, 0.90f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.16f, 0.19f, 0.26f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.24f, 0.32f, 1.00f));
+    if (ImGui::Button(uiRu("Свободный визит", "Free Visit"),
+                      ImVec2(-1.0f, 32.0f))) {
+      m_inMenu = false;
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Free flight, no story scenes");
     }
     ImGui::PopStyleColor(3);
 
