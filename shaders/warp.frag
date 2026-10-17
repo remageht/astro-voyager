@@ -68,18 +68,19 @@ void main() {
 
   // Finer second layer: density grows visibly with warp intensity.
   float fine = streakBand(ang01 + 0.003, rs * 1.002, 220.0, 5.0);
-  streak += vec3(0.45, 0.70, 1.0) * fine * env * k;
+  streak += vec3(0.45, 0.70, 1.0) * fine * env * k * 0.65;
 
   // Cool rim fringe + hot core glow (tunnel feel at high k).
   float rim = smoothstep(0.45, 0.95, r);
-  vec3 fringe = vec3(0.30, 0.55, 1.00) * rim * 0.30;
+  vec3 fringe = vec3(0.30, 0.55, 1.00) * rim * 0.22;
   float core = 1.0 - smoothstep(0.0, 0.55, r);
-  vec3 glow = vec3(0.65, 0.80, 1.00) * core * core * 0.55;
+  vec3 glow = vec3(0.65, 0.80, 1.00) * core * core * 0.38;
 
-  vec3 col = (streak * vec3(0.75, 0.85, 1.0) * 0.85 + fringe + glow) * k;
+  // v3.6.0: общая интенсивность оверлея снижена (комфорт для глаз).
+  vec3 col = (streak * vec3(0.75, 0.85, 1.0) * 0.62 + fringe + glow) * k;
 
   // Own exposure lift (SceneManager m_exposure is never touched).
-  col *= 1.0 + 0.25 * k;
+  col *= 1.0 + 0.12 * k;
 
   // WarpJump bang (агент J): shockwave ring + burst chromaticism + flash peak.
   // Gated by u_Burst > 0 (default 0 = this block is skipped, frame below

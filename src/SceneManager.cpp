@@ -1685,9 +1685,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                        betaEff);
     // === Warp field === (v3.6.0): экранная позиция корабля + экранное
     // направление курса для линз-эффекта в композите. Скрытый корабль или
-    // нулевая скорость => u_WarpK = 0 (точный проход, эталоны без изменений).
-    const float lensK =
-        m_warpFx > m_speedFx * 0.35f ? m_warpFx : m_speedFx * 0.35f;
+    // нулевой варп => u_WarpK = 0 (точный проход, эталоны без изменений).
+    // v3.6.0: линза пространства — ЯВЛЕНИЕ ТОЛЬКО ВАРП-ДВИГАТЕЛЯ; обычное
+    // ускорение ограничено стриками (u_SpeedK) — намеренно разные эффекты.
+    const float lensK = m_warpFx;
     if (warpdrive::shipVisible() && lensK > 0.001f) {
       const glm::vec3 eyeF(static_cast<float>(cp.x), static_cast<float>(cp.y),
                            static_cast<float>(cp.z));

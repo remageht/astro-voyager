@@ -367,6 +367,11 @@ Check 'embedded shaders generator' ((Test-Path (Join-Path $root 'packaging/embed
 Check 'shader embedded fallback' ((Read-File 'src/Shader.cpp') -match 'embeddedShader')
 Check 'windows portable release job' (($ci -match 'build-windows-gl') -and ($ci -match 'astro-voyager\.exe') -and ($ci -match 'windows-x86_64\.zip'))
 
+# --- fx split pass v3.6.0: ускорение и варп — разные явления, мягче ---
+Check 'menu unique button ids' (($appCpp -match '##dest-') -and ($appCpp -match '##recent-'))
+Check 'warp lens only for warp drive' (($sceneCpp -match 'const float lensK = m_warpFx;') -and ((Read-File 'shaders/post_comp.frag') -match '0\.18 \* k'))
+Check 'fx amplitudes softened' (((Read-File 'shaders/post_comp.frag') -match '0\.40, 0\.0, 0\.50') -and ((Read-File 'shaders/warp.frag') -match '0\.62 \+ fringe'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

@@ -57,6 +57,8 @@ void main() {
   if (u_WarpK > 0.001) {
     // Warp field: локальная деформация пространства вокруг корабля.
     // texture() только внутри гейта => u_WarpK==0 остаётся texelFetch-точным.
+    // v3.6.0: амплитуды снижены (мягкая линза), рябь медленнее и мельче —
+    // комфорт для глаз; явление визуально не похоже на спид-стрики.
     vec2 wp = v_TexCoord - u_WarpUv;
     float wr = length(wp);
     const float WR = 0.40;  // радиус пузыря по экрану
@@ -69,25 +71,25 @@ void main() {
       float along = dot(wp, wdir);
       // Шлейф позади корабля (против курса): смаз тянет звёзды вдоль оси.
       float wake = 1.0 - smoothstep(0.0, 0.60, max(-along, 0.0));
-      vec2 off = -wp * (0.30 * k) - wdir * (0.10 * k * wake);
-      // Анимированная рябь: бежит от корабля вдоль шлейфа.
-      float rip = sin(wr * 26.0 - u_Time * 7.0);
-      off += wdir * (0.030 * k * wake * rip) +
-             (wp / (wr + 1e-5)) * (0.014 * k * rip);
+      vec2 off = -wp * (0.18 * k) - wdir * (0.06 * k * wake);
+      // Анимированная рябь: бежит от корабля вдоль шлейфа (мягкая, редкая).
+      float rip = sin(wr * 18.0 - u_Time * 4.5);
+      off += wdir * (0.014 * k * wake * rip) +
+             (wp / (wr + 1e-5)) * (0.007 * k * rip);
       // Лёгкий хроматический разлёт по краям пузыря.
-      vec3 warped = vec3(texture(u_Scene, v_TexCoord + off * 1.04).r,
+      vec3 warped = vec3(texture(u_Scene, v_TexCoord + off * 1.02).r,
                          texture(u_Scene, v_TexCoord + off).g,
-                         texture(u_Scene, v_TexCoord + off * 0.96).b);
+                         texture(u_Scene, v_TexCoord + off * 0.98).b);
       if (k * wake > 0.01) {
         // Дуплет вдоль курса: звёзды в шлейфе превращаются в лучи.
         for (int i = 1; i <= 2; ++i) {
-          float t = 0.022 * float(i) * k * wake;
+          float t = 0.016 * float(i) * k * wake;
           warped = max(warped,
                        texture(u_Scene, v_TexCoord + off + wdir * t).rgb);
         }
       }
       col = mix(col, warped + bloom * u_BloomStrength,
-                clamp(k * 1.5, 0.0, 1.0));
+                clamp(k * 1.1, 0.0, 1.0));
     }
   }
   if (u_ChromaK > 0.0001) {
@@ -100,6 +102,7 @@ void main() {
   if (u_SpeedK > 0.001) {
     // Motion streaks: bright scene pixels smear backwards along the velocity
     // (3 taps, texture() only inside this gate => amount==0 stays texel-exact).
+    // v3.6.0: смаз короче и мягче (комфортный «разгон», без стробоскопа).
     vec2 sp = v_TexCoord - 0.5;
     vec2 vd = vec2(dot(u_VelDir, u_CamRight), dot(u_VelDir, u_CamUp));
     float vl = length(vd);
@@ -109,11 +112,11 @@ void main() {
       float env = smoothstep(0.12, 0.62, length(sp)) * align * u_SpeedK;
       vec3 acc = col;
       for (int i = 1; i <= 3; ++i) {
-        float t = 0.022 * float(i) * u_SpeedK;
+        float t = 0.016 * float(i) * u_SpeedK;
         acc = max(acc, texture(u_Scene, v_TexCoord - vd * t).rgb +
                           bloom * u_BloomStrength);
       }
-      col = mix(col, acc, clamp(env * 0.6, 0.0, 0.75));
+      col = mix(col, acc, clamp(env * 0.40, 0.0, 0.50));
     }
   }
   if (u_ShieldK > 0.001) {

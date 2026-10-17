@@ -2980,7 +2980,10 @@ void AppGL::drawMenu() {
           static_cast<float>(gridCols);
       for (const auto& station : builtinCatalog()) {
         if (gridCol > 0) ImGui::SameLine();
-        if (ImGui::Button(station.name.c_str(), ImVec2(cellW, 0.0f))) {
+        // Имя станции дублируется в "Recent" — уникальный ID через ##id
+        // (иначе Dear ImGui: "2 visible items with conflicting ID").
+        const std::string destLabel = station.name + "##dest-" + station.id;
+        if (ImGui::Button(destLabel.c_str(), ImVec2(cellW, 0.0f))) {
           teleportToStation(station.id);
           m_inMenu = false;
         }
@@ -3022,6 +3025,8 @@ void AppGL::drawMenu() {
         for (const auto& rid : recentIds) {
           const Station* rst = findStation(rid);
           std::string recentLabel = rst ? rst->name : rid;
+          // Уникальный ID: "Milky Way" есть и в Destinations выше (##recent-).
+          recentLabel += "##recent-" + rid;
           if (gridCol > 0) ImGui::SameLine();
           if (ImGui::Button(recentLabel.c_str(), ImVec2(cellW, 0.0f))) {
             teleportToStation(rid);
@@ -4058,7 +4063,7 @@ void AppGL::disengageWarp() {
   m_warpStatus = 0;
   m_warpJumpTarget.clear();
   warpRetarget(0.0f);
-  m_warpFlash = 0.7f;  // вспышка выхода
+  m_warpFlash = 0.35f;  // v3.6.0: мягкая вспышка выхода (комфорт для глаз)
 }
 
 void AppGL::setShipStyleNow(int style) {
@@ -4138,7 +4143,7 @@ bool AppGL::updateWarp(float deltaTime) {
         m_warpLastFov = m_warpBaseFov;
         m_warpFovDirty = true;
         warpRetarget(warpTargetK(m_warpFactor));
-        m_warpFlash = 0.9f;  // вспышка входа
+        m_warpFlash = 0.4f;  // v3.6.0: мягкая вспышка входа (комфорт для глаз)
       } else if (m_warpStatus == 1 || m_warpStatus == 4) {
         disengageWarp();  // в Charging/Jump игнор — катсцену досматриваем
       }
@@ -4195,7 +4200,7 @@ bool AppGL::updateWarp(float deltaTime) {
         ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK);
         m_warpStatus = 4;        // Cooldown
         m_warpStateT = 0.0f;
-        m_warpFlash = 1.0f;  // вспышка прибытия
+        m_warpFlash = 0.5f;  // v3.6.0: мягкая вспышка прибытия (комфорт для глаз)
         warpRetarget(warpTargetK(m_warpFactor));
       }
     } else if (m_warpStatus == 4) {  // Cooldown 2с
