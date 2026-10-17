@@ -24,6 +24,8 @@
 #include "Interaction.h"
 #include "Journey.h"
 #include "Achievements.h"
+#include "Mesh.h"
+#include "Shader.h"
 #include "Version.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -151,8 +153,30 @@ int AppGL::run() {
       m_window->getFramebufferSize(menuFbW, menuFbH);
       glViewport(0, 0, menuFbW, menuFbH);
 
-      // Render active scene
-      m_sceneManager->render(m_camera, menuFbW, menuFbH, currentTime);
+      // === MenuSky === (v3.5.0): живой космос за меню — собственный
+      // фуллскрин-шейдер (туманность + MW-полоса + параллакс-звёзды),
+      // лениво инициализируется при первом кадре меню. Показ не зависит
+      // от того, какая станция осталась в профиле (uma/mw/m31 = пустой
+      // фон), свежий запуск и загруженный профиль видят одинаковый hero-вид.
+      if (!m_menuSkyTried) {
+        m_menuSkyTried = true;
+        m_menuSkyShader =
+            std::make_unique<Shader>("shaders/quad.vert", "shaders/menu.frag");
+        m_menuSkyQuad = std::make_unique<ScreenQuad>();
+      }
+      if (m_menuSkyShader && m_menuSkyQuad) {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_BLEND);
+        m_menuSkyShader->bind();
+        m_menuSkyShader->setUniform1f("u_Time", currentTime);
+        m_menuSkyShader->setUniform2f("u_Res", static_cast<float>(menuFbW),
+                                      static_cast<float>(menuFbH));
+        m_menuSkyQuad->draw();
+        m_menuSkyShader->unbind();
+      } else {
+        // Fallback: прежняя орбита вокруг текущей станции.
+        m_sceneManager->render(m_camera, menuFbW, menuFbH, currentTime);
+      }
 
       // Render ImGui UI
       ImGui_ImplOpenGL3_NewFrame();
@@ -2562,71 +2586,138 @@ void AppGL::drawMenu() {
   ImGuiIO& io = ImGui::GetIO();
   ImVec2 menuCenter(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
   ImGui::SetNextWindowPos(menuCenter, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(460.0f, 0.0f), ImGuiCond_Always);
   ImGuiWindowFlags menuFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+
+  // === MenuStyle === (v3.5.0): стеклянная панель поверх живого космоса —
+  // тёмное стекло с золотой кромкой, hover-кнопки теплеют.
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.72f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.20f));
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.060f, 0.105f, 0.160f, 0.78f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.110f, 0.190f, 0.290f, 0.92f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.150f, 0.240f, 0.360f, 1.00f));
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.82f, 0.86f, 0.92f, 1.00f));
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(1.00f, 0.75f, 0.28f, 0.28f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22.0f, 18.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(9.0f, 5.0f));
   ImGui::Begin("MainMenu", nullptr, menuFlags);
 
   if (m_menuPage == 0) {
-    ImGui::SetWindowFontScale(2.0f);
-    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "ASTRO-VOYAGER");
-    ImGui::SetWindowFontScale(1.0f);
+    // Title: чёрная тень + золотое свечение + золотая строка (DrawList).
+    {
+      ImDrawList* tdl = ImGui::GetWindowDrawList();
+      const char* titleText = "ASTRO-VOYAGER";
+      ImGui::SetWindowFontScale(2.0f);
+      const ImVec2 tpos = ImGui::GetCursorScreenPos();
+      const float tsize = ImGui::GetFontSize();
+      tdl->AddText(ImGui::GetFont(), tsize, ImVec2(tpos.x + 2.0f, tpos.y + 3.0f),
+                   IM_COL32(0, 0, 0, 200), titleText);
+      tdl->AddText(ImGui::GetFont(), tsize + 2.0f, ImVec2(tpos.x - 1.0f, tpos.y - 1.0f),
+                   IM_COL32(255, 191, 71, 60), titleText);
+      tdl->AddText(ImGui::GetFont(), tsize, tpos, IM_COL32(255, 196, 77, 255), titleText);
+      ImGui::Dummy(ImVec2(0.0f, tsize + 6.0f));
+      ImGui::SetWindowFontScale(1.0f);
+    }
     ImGui::SetWindowFontScale(0.85f);
-    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "A journey through curved spacetime");
+    ImGui::TextColored(ImVec4(0.6f, 0.62f, 0.68f, 1.0f),
+                       "A journey through curved spacetime");
     ImGui::SetWindowFontScale(1.0f);
 
-    if (ImGui::Button("Play", ImVec2(-1.0f, 40.0f))) {
+    // Gold gradient divider (левый край ярче).
+    auto menuGlow = [&]() {
+      ImDrawList* gdl = ImGui::GetWindowDrawList();
+      const ImVec2 gp = ImGui::GetCursorScreenPos();
+      const float gw = ImGui::GetContentRegionAvail().x;
+      gdl->AddRectFilledMultiColor(gp, ImVec2(gp.x + gw, gp.y + 1.0f),
+                                   IM_COL32(255, 191, 71, 150), IM_COL32(255, 191, 71, 0),
+                                   IM_COL32(255, 191, 71, 0), IM_COL32(255, 191, 71, 150));
+      ImGui::Dummy(ImVec2(gw, 2.0f));
+    };
+
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.28f, 0.19f, 0.05f, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.42f, 0.29f, 0.08f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.34f, 0.09f, 1.00f));
+    if (ImGui::Button("Play", ImVec2(-1.0f, 42.0f))) {
       m_inMenu = false;
     }
     if (ImGui::IsItemHovered()) {
       ImGui::SetTooltip("Resume your journey");
     }
+    ImGui::PopStyleColor(3);
 
-    ImGui::Separator();
-    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Destinations:");
-    for (const auto& station : builtinCatalog()) {
-      std::string destLabel = station.name + " (" + station.id + ")";
-      if (ImGui::Button(destLabel.c_str(), ImVec2(-1.0f, 0.0f))) {
-        teleportToStation(station.id);
-        m_inMenu = false;
-      }
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s", station.description.c_str());
-      }
-    }
-
-    ImGui::Separator();
-    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Recent:");
-    const Station* menuCur = m_sceneManager->getCurrentStation();
-    std::string menuCurId = menuCur ? menuCur->id : "";
-    std::vector<std::string> recentIds;
-    std::set<std::string> recentSeen;
-    for (size_t i = m_route.size(); i-- > 0;) {
-      const std::string& rid = m_route[i];
-      if (rid == menuCurId) continue;
-      if (!findStation(rid)) continue;
-      if (recentSeen.find(rid) != recentSeen.end()) continue;
-      recentSeen.insert(rid);
-      recentIds.push_back(rid);
-      if (recentIds.size() >= 5) break;
-    }
-    if (recentIds.empty()) {
-      ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(empty)");
-    } else {
-      for (const auto& rid : recentIds) {
-        const Station* rst = findStation(rid);
-        std::string recentLabel = rst ? (rst->name + " (" + rst->id + ")") : rid;
-        if (ImGui::Button(recentLabel.c_str(), ImVec2(-1.0f, 0.0f))) {
-          teleportToStation(rid);
+    menuGlow();
+    ImGui::TextColored(ImVec4(1.00f, 0.75f, 0.28f, 1.0f), "Destinations");
+    ImGui::SetWindowFontScale(0.95f);
+    {
+      const int gridCols = 2;
+      int gridCol = 0;
+      const float cellW =
+          (ImGui::GetContentRegionAvail().x -
+           static_cast<float>(gridCols - 1) * ImGui::GetStyle().ItemSpacing.x) /
+          static_cast<float>(gridCols);
+      for (const auto& station : builtinCatalog()) {
+        if (gridCol > 0) ImGui::SameLine();
+        if (ImGui::Button(station.name.c_str(), ImVec2(cellW, 0.0f))) {
+          teleportToStation(station.id);
           m_inMenu = false;
         }
-        if (rst && ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("%s", rst->description.c_str());
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("%s\n%s", station.id.c_str(),
+                            station.description.c_str());
+        }
+        gridCol = (gridCol + 1) % gridCols;
+      }
+    }
+    ImGui::SetWindowFontScale(1.0f);
+
+    menuGlow();
+    ImGui::TextColored(ImVec4(1.00f, 0.75f, 0.28f, 1.0f), "Recent");
+    ImGui::SetWindowFontScale(0.95f);
+    {
+      const int gridCols = 2;
+      int gridCol = 0;
+      const float cellW =
+          (ImGui::GetContentRegionAvail().x -
+           static_cast<float>(gridCols - 1) * ImGui::GetStyle().ItemSpacing.x) /
+          static_cast<float>(gridCols);
+      const Station* menuCur = m_sceneManager->getCurrentStation();
+      std::string menuCurId = menuCur ? menuCur->id : "";
+      std::vector<std::string> recentIds;
+      std::set<std::string> recentSeen;
+      for (size_t i = m_route.size(); i-- > 0;) {
+        const std::string& rid = m_route[i];
+        if (rid == menuCurId) continue;
+        if (!findStation(rid)) continue;
+        if (recentSeen.find(rid) != recentSeen.end()) continue;
+        recentSeen.insert(rid);
+        recentIds.push_back(rid);
+        if (recentIds.size() >= 5) break;
+      }
+      if (recentIds.empty()) {
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(empty)");
+      } else {
+        for (const auto& rid : recentIds) {
+          const Station* rst = findStation(rid);
+          std::string recentLabel = rst ? rst->name : rid;
+          if (gridCol > 0) ImGui::SameLine();
+          if (ImGui::Button(recentLabel.c_str(), ImVec2(cellW, 0.0f))) {
+            teleportToStation(rid);
+            m_inMenu = false;
+          }
+          if (rst && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", rst->description.c_str());
+          }
+          gridCol = (gridCol + 1) % gridCols;
         }
       }
     }
+    ImGui::SetWindowFontScale(1.0f);
 
-    ImGui::Separator();
+    menuGlow();
     float menuAvail = ImGui::GetContentRegionAvail().x;
     float menuBtnW = (menuAvail - 2.0f * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
     if (ImGui::Button("Settings", ImVec2(menuBtnW, 0.0f))) {
@@ -2641,9 +2732,8 @@ void AppGL::drawMenu() {
       glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
     }
 
-    // === SaveGame === (v3.4.0): профиль песочницы — кнопки в меню
-    // (харнесс меню не рисует, PNG не затронуты).
-    ImGui::Separator();
+    // === SaveGame === (v3.4.0): профили сохраняются между запусками.
+    menuGlow();
     const float saveBtnW = (menuAvail - ImGui::GetStyle().ItemSpacing.x) / 2.0f;
     if (ImGui::Button("Save game", ImVec2(saveBtnW, 0.0f))) {
       saveProfileNow(false);
@@ -2661,7 +2751,7 @@ void AppGL::drawMenu() {
     }
     ImGui::SetWindowFontScale(1.0f);
 
-    ImGui::Separator();
+    menuGlow();
     ImGui::SetWindowFontScale(0.85f);
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "WASD fly | drag look | / search | dbl-click go");
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "P time | F1 help | H hide UI | ESC menu");
@@ -2717,6 +2807,8 @@ void AppGL::drawMenu() {
   }
 
   ImGui::End();
+  ImGui::PopStyleVar(4);
+  ImGui::PopStyleColor(7);
 }
 
 void AppGL::drawWorldLabels() {
@@ -3205,6 +3297,40 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   if (app.saveScreenshot(guiFile)) {
     std::cout << "Captured screenshot: " << guiFile << "\n";
   }
+
+  // === MenuSky === (v3.5.0): menu.png — hero-вид главного меню (живой
+  // космос + стеклянная панель). u_Time фиксирован => кадр детерминирован,
+  // PNG ловит регресс шейдера меню и стиля панели байт-в-байт.
+  app.m_inMenu = true;
+  if (!app.m_menuSkyTried) {
+    app.m_menuSkyTried = true;
+    app.m_menuSkyShader =
+        std::make_unique<Shader>("shaders/quad.vert", "shaders/menu.frag");
+    app.m_menuSkyQuad = std::make_unique<ScreenQuad>();
+  }
+  for (int frame = 0; frame < 3; ++frame) {
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    app.m_menuSkyShader->bind();
+    app.m_menuSkyShader->setUniform1f("u_Time", 12.0f);
+    app.m_menuSkyShader->setUniform2f("u_Res", static_cast<float>(fbWidth),
+                                      static_cast<float>(fbHeight));
+    app.m_menuSkyQuad->draw();
+    app.m_menuSkyShader->unbind();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawMenu();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string menuFile = outDir + "/menu.png";
+  if (app.saveScreenshot(menuFile)) {
+    std::cout << "Captured screenshot: " << menuFile << "\n";
+  }
+  app.m_inMenu = false;
 
   // Capture close-up progressive detail shots:
   // 1. M31 Andromeda Galaxy close-up inside the starfield (D = 8:

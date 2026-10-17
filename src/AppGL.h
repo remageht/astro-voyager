@@ -26,6 +26,10 @@ struct ImFont;
 
 namespace astro {
 
+// === MenuSky ===: forward-decls (Shader/ScreenQuad отвечаются в .cpp).
+class Shader;
+class ScreenQuad;
+
 struct Toast {
   std::string title;
   std::string desc;
@@ -122,6 +126,13 @@ class AppGL {
   StoryJournal m_story;
   bool m_storyOpen = false;
   bool m_prevJPressed = false;
+
+  // === MenuSky === (v3.5.0): "живой космос" за главным меню — фуллскрин-
+  // шейдерный бэкдроп (туманность + MW-полоса + параллакс-звёзды), ленивая
+  // инициализация при первом кадре меню; не зависит от текущей станции.
+  std::unique_ptr<Shader> m_menuSkyShader;
+  std::unique_ptr<ScreenQuad> m_menuSkyQuad;
+  bool m_menuSkyTried = false;
 
   // === Physics === (horizon capture / slide state)
   bool m_captureAnim = false;
