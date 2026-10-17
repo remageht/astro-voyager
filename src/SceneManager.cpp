@@ -1511,6 +1511,19 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           parts.push_back({{0.52f, 0.0f, 0.46f}, {0.036f, 0.036f, 0.018f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
           parts.push_back({{-0.585f, 0.0f, -0.10f}, {0.018f, 0.018f, 0.018f}, navRed, 0, 0.0f, 0.60f, navRed});
           parts.push_back({{0.585f, 0.0f, -0.10f}, {0.018f, 0.018f, 0.018f}, navGreen, 0, 0.0f, 0.60f, navGreen});
+          // Shuttle v2 (v3.6.0): боковые окна кабины (слабое свечение),
+          // хвостовой киль, входные патрубки гондол, шов грузового люка.
+          parts.push_back({{0.0f, 0.14f, 0.40f}, {0.018f, 0.12f, 0.16f}, wingCol, 0, 0.72f, 0.45f});
+          for (int s = -1; s <= 1; s += 2) {
+            for (float wz : {-0.34f, -0.22f}) {
+              parts.push_back({{0.35f * static_cast<float>(s), 0.05f, wz},
+                               {0.012f, 0.020f, 0.045f}, glassCol, 0, 0.70f, 0.08f,
+                               glm::vec3(0.03f, 0.05f, 0.08f)});
+            }
+            parts.push_back({{0.52f * static_cast<float>(s), 0.0f, -0.16f},
+                             {0.045f, 0.045f, 0.030f}, nozzleCol, 0, 0.95f, 0.30f});
+          }
+          parts.push_back({{0.0f, 0.055f, 0.50f}, {0.30f, 0.010f, 0.018f}, nozzleCol, 0, 0.95f, 0.30f});
         } else {
           // Dart: заострённый фюзеляж + крыло + киль + кабина.
           parts.push_back({{0.0f, 0.0f, -0.10f}, {0.13f, 0.11f, 0.82f}, hullCol, 0, 0.90f, 0.32f});
@@ -1522,6 +1535,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           parts.push_back({{0.0f, 0.0f, 0.83f}, {0.050f, 0.050f, 0.022f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
           parts.push_back({{-0.79f, -0.02f, 0.22f}, {0.018f, 0.018f, 0.018f}, navRed, 0, 0.0f, 0.60f, navRed});
           parts.push_back({{0.79f, -0.02f, 0.22f}, {0.018f, 0.018f, 0.018f}, navGreen, 0, 0.0f, 0.60f, navGreen});
+          // Dart v2 (v3.6.0): дорсальный гребень, подфюзеляжный
+          // воздухозаборник, хвостовые стабилизаторы на крыле.
+          parts.push_back({{0.0f, 0.095f, -0.04f}, {0.028f, 0.030f, 0.34f}, hullCol, 0, 0.90f, 0.32f});
+          parts.push_back({{0.0f, -0.10f, -0.34f}, {0.055f, 0.038f, 0.14f}, nozzleCol, 0, 0.95f, 0.30f});
+          parts.push_back({{-0.15f, 0.03f, 0.50f}, {0.012f, 0.12f, 0.16f}, wingCol, 0, 0.72f, 0.45f});
+          parts.push_back({{0.15f, 0.03f, 0.50f}, {0.012f, 0.12f, 0.16f}, wingCol, 0, 0.72f, 0.45f});
         }
         // === Ship lighting pass (S3): ключ — доминирующий источник сцены.
         // Якорь: у mw — Солнце (sunWorldPos), иначе центр станции (origin);

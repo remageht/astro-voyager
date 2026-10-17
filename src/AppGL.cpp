@@ -2691,8 +2691,7 @@ void AppGL::applySaveGame(const SaveGame& g) {
   m_ship.shield = g.session.shield;
   m_ship.gravVel = Vec3{};
   m_shipNoticeT = 0.0f;
-  m_shipStyle = std::min(std::max(g.session.shipStyle, 0), 2);
-  warpdrive::setShipStyle(m_shipStyle);
+  setShipStyleNow(g.session.shipStyle);  // v3.6.0: с учётом варп-ролей
   // Скоростные эффекты: после прыжка камеры не меряем «скачок скорости»
   // (иначе ложный доплер/стрики на первом кадре).
   m_prevSpeedPos = m_camera.position;
@@ -3120,8 +3119,9 @@ void AppGL::drawMenu() {
 
     ImGui::SeparatorText("Ship");
     const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle"};
-    if (ImGui::Combo("Hull", &m_shipStyle, hullNames, 3)) {
-      warpdrive::setShipStyle(m_shipStyle);
+    int hullSel = m_shipStyle;
+    if (ImGui::Combo("Hull", &hullSel, hullNames, 3)) {
+      setShipStyleNow(hullSel);
     }
     const char* engineNames[] = {"Red", "Ion", "Emerald", "Plasma"};
     ImGui::Combo("Engine", &menuSettings.enginePalette, engineNames, 4);
@@ -4061,11 +4061,29 @@ void AppGL::disengageWarp() {
   m_warpFlash = 0.7f;  // вспышка выхода
 }
 
+void AppGL::setShipStyleNow(int style) {
+  m_shipStyle = std::min(std::max(style, 0), 2);
+  warpdrive::setShipStyle(m_shipStyle);
+  // Shuttle без варп-двигателя: если варп был активен (Cruise/Cooldown),
+  // гасим его; посреди катсцены не трогаем (досматриваем).
+  if (!ship::styleCanWarp(m_shipStyle) && m_warpOn && !m_jumpCine &&
+      (m_warpStatus == 1 || m_warpStatus == 4)) {
+    disengageWarp();
+  }
+}
+
 void AppGL::startWarpJump(const std::string& id) {
   const Station* cur = m_sceneManager->getCurrentStation();
   if (!m_warpOn || m_warpStatus != 1) return;  // только из Cruise
   if (id.empty() || (cur && cur->id == id)) return;
   if (!findStation(id)) return;
+  // v3.6.0: варп-роли корпусов — без варп-двигателя прыжок не летит.
+  if (!ship::styleCanWarp(m_shipStyle)) {
+    m_shipNotice = uiRu("У этого корпуса нет варп-двигателя (Shuttle)",
+                        "This hull has no warp drive (Shuttle)");
+    m_shipNoticeT = 3.0f;
+    return;
+  }
   // === Ship survival === (v3.3.0): без пяти единиц топлива прыжок не летит.
   // v3.6.0: цена зависит от сложности (Hard x1.6, Easy x0.6).
   const DifficultyTuning jtune = difficultyTuning(m_difficulty);
@@ -4577,23 +4595,39 @@ void AppGL::drawWarpPanel() {
   }
   const Station* curSt = m_sceneManager->getCurrentStation();
   const std::string tgtId = cat[static_cast<size_t>(m_warpSel)].id;
+  // v3.6.0: дистанция до цели (св. годы) и упрощённая оценка времени
+  // перелёта по классической шкале v = f^3 c — «пустота космоса» в цифрах.
+  {
+    const Station& tgt = cat[static_cast<size_t>(m_warpSel)];
+    ImGui::Text("Distance: %s", formatDistanceLy(tgt.distanceLy).c_str());
+    if (tgt.distanceLy > 0.0) {
+      ImGui::Text("ETA at Warp %d: ~%s", m_warpFactor,
+                  formatEtaYears(warpEtaYears(tgt.distanceLy, m_warpFactor))
+                      .c_str());
+    }
+  }
+  const bool warpCap = ship::styleCanWarp(m_shipStyle);
+  if (!warpCap) {
+    ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.35f, 1.0f),
+                       "No warp drive on this hull (Shuttle)");
+  }
   const bool canJump =
-      (m_warpStatus == 1 && curSt && curSt->id != tgtId);
+      (m_warpStatus == 1 && curSt && curSt->id != tgtId && warpCap);
   // Выбор корпуса корабля (смена вида).
   {
-    static const char* kShipStyles[] = {"Dart", "Ring Ship", "Shuttle"};
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-    if (ImGui::BeginCombo("Hull", kShipStyles[m_shipStyle])) {
-      for (int n = 0; n < 3; ++n) {
-        const bool sel = (n == m_shipStyle);
-        if (ImGui::Selectable(kShipStyles[n], sel)) {
-          m_shipStyle = n;
-          warpdrive::setShipStyle(n);
-        }
-        if (sel) ImGui::SetItemDefaultFocus();
+  const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle"};
+  int hullSel = m_shipStyle;
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+  if (ImGui::BeginCombo("Hull", hullNames[hullSel])) {
+    for (int n = 0; n < 3; ++n) {
+      const bool sel = (n == hullSel);
+      if (ImGui::Selectable(hullNames[n], sel)) {
+        setShipStyleNow(n);
       }
-      ImGui::EndCombo();
+      if (sel) ImGui::SetItemDefaultFocus();
     }
+    ImGui::EndCombo();
+  }
   }
   if (!canJump) ImGui::BeginDisabled();
   if (ImGui::Button("Engage Jump", ImVec2(-1.0f, 0.0f))) {

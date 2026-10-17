@@ -44,6 +44,10 @@ inline bool canJump(const ShipState& s, float costK = 1.0f) {
   return s.fuel >= kJumpFuelCost * costK;
 }
 
+// v3.6.0: варп-роли корпусов. Dart (0) и Ring Ship (1) несут варп-двигатель,
+// Shuttle (2) — локальный корабль: прыжок недоступен.
+inline bool styleCanWarp(int style) { return style != 2; }
+
 inline bool spendJumpFuel(ShipState& s, float costK = 1.0f) {
   const float cost = kJumpFuelCost * costK;
   if (s.fuel < cost) return false;

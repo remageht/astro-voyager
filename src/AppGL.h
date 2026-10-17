@@ -289,6 +289,9 @@ class AppGL {
   float m_warpShakePitch = 0.0f;
   void warpRetarget(float to);
   void disengageWarp();
+  // v3.6.0: смена корпуса с учётом варп-ролей: если у нового корпуса нет
+  // варп-двигателя (Shuttle), варп-режим аккуратно гасится.
+  void setShipStyleNow(int style);
   void startWarpJump(const std::string& id);
   // Возвращает true, если кадр consumed (катсцена прыжка: WASD глушим,
   // осмотр мышью живёт). Вызывать в начале processInput().

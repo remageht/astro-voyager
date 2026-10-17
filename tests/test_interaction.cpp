@@ -1,9 +1,11 @@
+#include "../src/Catalog.h"  // v3.6.0: distance/ETA helpers
 #include "../src/Interaction.h"
 #include "../src/Types.h"  // v3.3.0: ShipState / astro::ship balance logic
 
 #include <cmath>
 #include <iostream>
 #include <cstdlib>
+#include <string>
 
 namespace {
 
@@ -129,6 +131,38 @@ int main() {
   refuelShip.fuel = 50.0f;
   astro::ship::updateFuel(refuelShip, 2.0f, true, easy.starFuelK);
   AssertNear(refuelShip.fuel, 56.4f, 0.0001f, "easy star refuel x1.6");
+
+  // Test 8c (v3.6.0): варп-роли корпусов и дистанция/ETA в варп-панели.
+  if (!astro::ship::styleCanWarp(0) || !astro::ship::styleCanWarp(1)) {
+    std::cerr << "Dart and Ring Ship must be warp-capable\n";
+    return 1;
+  }
+  if (astro::ship::styleCanWarp(2)) {
+    std::cerr << "Shuttle must not be warp-capable\n";
+    return 1;
+  }
+  // Классическая шкала v = f^3 c: 26000 ly на Warp 9 => ~35.7 лет.
+  AssertNear(static_cast<float>(astro::warpEtaYears(26000.0, 9)), 35.6653f,
+             0.001f, "eta sgra at warp 9");
+  AssertNear(static_cast<float>(astro::warpEtaYears(0.0, 9)), 0.0f, 0.0001f,
+             "eta zero distance");
+  AssertNear(static_cast<float>(astro::warpEtaYears(1344.0, 7)), 3.9184f,
+             0.001f, "eta orion at warp 7");
+  if (astro::formatDistanceLy(2.54e6) != "2.54 Mly") {
+    std::cerr << "formatDistanceLy Mly wrong\n";
+    return 1;
+  }
+  if (astro::formatDistanceLy(26000.0) != "26.0 kly" ||
+      astro::formatDistanceLy(0.0) != "local") {
+    std::cerr << "formatDistanceLy kly/local wrong\n";
+    return 1;
+  }
+  if (astro::formatEtaYears(35.6653) != "35.7 y" ||
+      astro::formatEtaYears(0.5) != "6.0 mo" ||
+      astro::formatEtaYears(0.0) != "-") {
+    std::cerr << "formatEtaYears wrong\n";
+    return 1;
+  }
 
   // Test 9 (v3.3.0): death triggers the respawn balance (50 shield / 30 fuel).
   astro::ShipState deadShip;
