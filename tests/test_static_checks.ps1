@@ -349,6 +349,11 @@ Check 'ship reflections uniform' ((Read-File 'shaders/ship.frag') -match 'u_Refl
 Check 'difficulty tuning multipliers' (((Read-File 'src/Types.h') -match 'jumpCostK = 1\.6f') -and ((Read-File 'src/Types.h') -match 't\.hints = false'))
 Check 'ring ship v2 bow spike and cluster' (($sceneCpp -match 'Ring Ship v2') -and ($sceneCpp -match '-1\.38f') -and ($sceneCpp -match '1\.0471976f'))
 
+# --- warp field pass v3.6.0: пространство искривляется за кораблём ---
+Check 'warp field shader lens' (((Read-File 'shaders/post_comp.frag') -match 'u_WarpUv') -and ((Read-File 'shaders/post_comp.frag') -match 'u_WarpK') -and ((Read-File 'shaders/post_comp.frag') -match 'wake'))
+Check 'warp field screen anchor' (($sceneCpp -match 'setWarpLens') -and ($sceneCpp -match 'm_warpFx'))
+Check 'warp field gated by warp amount' (($appCpp -match 'warpK\);') -and ((Read-File 'src/SceneManager.h') -match 'float warpK = 0\.0f'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

@@ -1664,6 +1664,38 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_postFx.setFlight(camFwd, camRight, camUp,
                        glm::radians(m_settings.fovDegrees), aspect, velDir,
                        betaEff);
+    // === Warp field === (v3.6.0): экранная позиция корабля + экранное
+    // направление курса для линз-эффекта в композите. Скрытый корабль или
+    // нулевая скорость => u_WarpK = 0 (точный проход, эталоны без изменений).
+    const float lensK =
+        m_warpFx > m_speedFx * 0.35f ? m_warpFx : m_speedFx * 0.35f;
+    if (warpdrive::shipVisible() && lensK > 0.001f) {
+      const glm::vec3 eyeF(static_cast<float>(cp.x), static_cast<float>(cp.y),
+                           static_cast<float>(cp.z));
+      const glm::vec3 fwdF(static_cast<float>(cf.x), static_cast<float>(cf.y),
+                           static_cast<float>(cf.z));
+      const glm::vec3 upF(static_cast<float>(cu.x), static_cast<float>(cu.y),
+                          static_cast<float>(cu.z));
+      const glm::vec3 shipPos(static_cast<float>(warpdrive::shipX()),
+                              static_cast<float>(warpdrive::shipY()),
+                              static_cast<float>(warpdrive::shipZ()));
+      const glm::mat4 lensProj = glm::perspective(
+          glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1000.0f);
+      const glm::vec4 clip = lensProj * glm::lookAt(eyeF, eyeF + fwdF, upF) *
+                             glm::vec4(shipPos, 1.0f);
+      const float sdx = static_cast<float>(cr.x * dirEff.x + cr.y * dirEff.y +
+                                           cr.z * dirEff.z);
+      const float sdy = static_cast<float>(cu.x * dirEff.x + cu.y * dirEff.y +
+                                           cu.z * dirEff.z);
+      if (clip.w > 0.001f) {
+        m_postFx.setWarpLens(clip.x / clip.w * 0.5f + 0.5f,
+                             clip.y / clip.w * 0.5f + 0.5f, sdx, sdy, lensK);
+      } else {
+        m_postFx.setWarpLens(0.5f, 0.5f, sdx, sdy, 0.0f);
+      }
+    } else {
+      m_postFx.setWarpLens(0.5f, 0.5f, 0.0f, 1.0f, 0.0f);
+    }
   }
   // === Ship survival === (v3.3.0): 0/0/0 keeps the composite byte-exact.
   m_postFx.setShipFx(m_shipChroma, m_shipStatic, m_shipFlash);

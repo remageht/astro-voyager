@@ -38,6 +38,13 @@ uniform float u_ChromaK;  // chromatic aberration amount 0..1
 uniform float u_StaticK;  // interference: noise + vignette 0..1
 // === Speed FX === (v3.3.0): motion streaks, 0 = exact pass (harness).
 uniform float u_SpeedK;  // 0..1 speed amount
+// === Warp field === (v3.6.0): искривление пространства за кораблём —
+// локальный «пузырь» у экранной позиции корабля: радиальное линзирование
+// фона, анизотропный смаз вдоль курса (звёзды тянутся шлейфом) и бегущая
+// рябь; всё анимировано через u_Time. u_WarpK == 0 => точный проход.
+uniform vec2 u_WarpUv;   // экранная позиция корабля (0..1, y вверх)
+uniform vec2 u_WarpDir;  // экранное направление курса (не нормировано)
+uniform float u_WarpK;   // 0..1 сила варп-поля
 // === Ship survival === (v3.3.0): shield impact flash, 0 = exact pass.
 uniform float u_ShieldK;  // 0..1 impact amount (cold blue edge glow)
 
@@ -47,6 +54,42 @@ void main() {
                texture(u_Streak, v_TexCoord).rgb *
                    (u_StreakK * vec3(0.55, 0.75, 1.0));
   vec3 col = sceneT.rgb + bloom * u_BloomStrength;
+  if (u_WarpK > 0.001) {
+    // Warp field: локальная деформация пространства вокруг корабля.
+    // texture() только внутри гейта => u_WarpK==0 остаётся texelFetch-точным.
+    vec2 wp = v_TexCoord - u_WarpUv;
+    float wr = length(wp);
+    const float WR = 0.40;  // радиус пузыря по экрану
+    if (wr < WR + 0.30) {
+      float fall = 1.0 - smoothstep(0.0, WR, wr);
+      float k = u_WarpK * fall * fall;
+      vec2 wdir = u_WarpDir;
+      float wl = length(wdir);
+      wdir = (wl > 1e-4) ? (wdir / wl) : vec2(0.0, 1.0);
+      float along = dot(wp, wdir);
+      // Шлейф позади корабля (против курса): смаз тянет звёзды вдоль оси.
+      float wake = 1.0 - smoothstep(0.0, 0.60, max(-along, 0.0));
+      vec2 off = -wp * (0.30 * k) - wdir * (0.10 * k * wake);
+      // Анимированная рябь: бежит от корабля вдоль шлейфа.
+      float rip = sin(wr * 26.0 - u_Time * 7.0);
+      off += wdir * (0.030 * k * wake * rip) +
+             (wp / (wr + 1e-5)) * (0.014 * k * rip);
+      // Лёгкий хроматический разлёт по краям пузыря.
+      vec3 warped = vec3(texture(u_Scene, v_TexCoord + off * 1.04).r,
+                         texture(u_Scene, v_TexCoord + off).g,
+                         texture(u_Scene, v_TexCoord + off * 0.96).b);
+      if (k * wake > 0.01) {
+        // Дуплет вдоль курса: звёзды в шлейфе превращаются в лучи.
+        for (int i = 1; i <= 2; ++i) {
+          float t = 0.022 * float(i) * k * wake;
+          warped = max(warped,
+                       texture(u_Scene, v_TexCoord + off + wdir * t).rgb);
+        }
+      }
+      col = mix(col, warped + bloom * u_BloomStrength,
+                clamp(k * 1.5, 0.0, 1.0));
+    }
+  }
   if (u_ChromaK > 0.0001) {
     // texture() lives only inside this branch: the amount==0 path must stay
     // texelFetch-exact (no filtering, no extra samples).

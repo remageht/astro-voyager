@@ -45,6 +45,17 @@ class PostFX {
   // === Speed FX === (v3.3.0): motion-streak amount 0..1 (0 = off).
   void setSpeedFx(float speedK);
 
+  // === Warp field === (v3.6.0): искривление пространства вокруг корабля.
+  // uv — экранная позиция корабля (0..1, y вверх), dir — экранное направление
+  // курса (нормализует шейдер), k 0..1; k == 0 => композит байт-в-байт.
+  void setWarpLens(float uvx, float uvy, float dirx, float diry, float k) {
+    m_warpUv[0] = uvx;
+    m_warpUv[1] = uvy;
+    m_warpDir[0] = dirx;
+    m_warpDir[1] = diry;
+    m_warpK = k;
+  }
+
   // FXAA 3.11 после композита (по умолчанию включён; выкл. для отладки).
   void setFxaa(bool on) { m_fxaaOn = on; }
 
@@ -95,6 +106,11 @@ class PostFX {
 
   // Speed FX motion-streak state (see setSpeedFx); 0 = off.
   float m_speedK = 0.0f;
+
+  // Warp field lens state (see setWarpLens); k 0 = off.
+  float m_warpUv[2] = {0.5f, 0.5f};
+  float m_warpDir[2] = {0.0f, 1.0f};
+  float m_warpK = 0.0f;
 
   std::unique_ptr<Shader> m_compShader;
   std::unique_ptr<Shader> m_downShader;    // post_down13.frag

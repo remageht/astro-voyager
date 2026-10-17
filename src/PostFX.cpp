@@ -315,6 +315,10 @@ void PostFX::endScene(int width, int height) {
   // === Speed FX === (v3.3.0): спид-стрики вдоль вектора движения;
   // 0 => ветка в post_comp.frag пропускается.
   m_compShader->setUniform1f("u_SpeedK", m_speedK);
+  // === Warp field === (v3.6.0): локальный линз-эффект у корабля (0 = выкл).
+  m_compShader->setUniform2f("u_WarpUv", m_warpUv[0], m_warpUv[1]);
+  m_compShader->setUniform2f("u_WarpDir", m_warpDir[0], m_warpDir[1]);
+  m_compShader->setUniform1f("u_WarpK", m_warpK);
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_sceneTex);

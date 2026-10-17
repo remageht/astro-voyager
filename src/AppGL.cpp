@@ -2525,7 +2525,7 @@ void AppGL::updateSpeedFx(float deltaTime) {
   }
   m_sceneManager->setSpeedFx(betaBoost, speedK, static_cast<float>(dir.x),
                              static_cast<float>(dir.y),
-                             static_cast<float>(dir.z));
+                             static_cast<float>(dir.z), warpK);
   m_speedK = speedK;
   // v3.3.0: тяга масштабирует шлейф/движок корабля и гул в audioUpdate.
   warpdrive::setThruster(speedK);

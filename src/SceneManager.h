@@ -144,11 +144,14 @@ class SceneManager {
 
   // === Speed FX === (v3.3.0): gameplay speed boost for relativity
   // (варп/разгон не двигают камеру). beta 0..0.95, k 0..1, dir — нормаль.
+  // v3.6.0: warpK 0..1 — отдельная «варпность» для линз-эффекта у корабля.
   // Ноль по умолчанию => харнесс байт-в-байт.
-  void setSpeedFx(float beta, float k, float dx, float dy, float dz) {
+  void setSpeedFx(float beta, float k, float dx, float dy, float dz,
+                  float warpK = 0.0f) {
     m_speedBeta = beta;
     m_speedFx = k;
     m_speedDir = Vec3(dx, dy, dz);
+    m_warpFx = warpK < 0.0f ? 0.0f : (warpK > 1.0f ? 1.0f : warpK);
   }
   // Сброс релятивистской скорости (смена вида камеры/телепорт):
   // следующий render() не даёт ложного скачка beta от сноса камеры.
@@ -248,6 +251,8 @@ class SceneManager {
   // === Speed FX === (v3.3.0): boost поверх рел. скорости (0 = выкл).
   float m_speedBeta = 0.0f;
   float m_speedFx = 0.0f;
+  // v3.6.0: варпность для линз-эффекта пространства у корабля (0 = выкл).
+  float m_warpFx = 0.0f;
   Vec3 m_speedDir{0.0, 0.0, 1.0};
 
   std::unique_ptr<ScreenQuad> m_screenQuad;
