@@ -1381,8 +1381,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           }
         }
         if (!s_shipInit) {
-          s_shipSphere.setSphere(14, 28);
-          s_shipRing.setRing(0.30f, 0.44f, 40);
+          s_shipSphere.setSphere(22, 44);  // S4: гладкий силуэт корпуса
+          s_shipRing.setRing(0.30f, 0.44f, 64);
           // Трейл-лента: 44 поперечных пары за кормой (z 0.55 -> 2.75,
           // полуширина 0.16 -> 0.02) + 2 продольных ребра. Плотные узкие
           // рунги читаются гладким следом вместо «лестницы» на малой тяге.
@@ -1429,7 +1429,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glEnable(GL_DEPTH_TEST);
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
-        // Часть корпуса: {pos, scale, baseColor, ring?, metal, rough}
+        // Часть корпуса: {pos, scale, baseColor, ring?, metal, rough, emissive?}
+        // S5/S8: emissive — линейный HDR-довесок (сопла, навигационные огни).
         struct ShipPart {
           glm::vec3 pos;
           glm::vec3 scale;
@@ -1437,10 +1438,15 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           int ring;
           float metal;
           float rough;
+          glm::vec3 emissive{0.0f, 0.0f, 0.0f};
         };
         const glm::vec3 hullCol(0.84f, 0.88f, 0.94f);
         const glm::vec3 glassCol(0.35f, 0.55f, 0.80f);
         const glm::vec3 wingCol(0.62f, 0.70f, 0.82f);
+        const glm::vec3 nozzleCol(0.16f, 0.17f, 0.20f);  // тёмный металл сопла
+        const glm::vec3 engineEmi(2.40f, 0.50f, 0.20f);  // раскалённое горло
+        const glm::vec3 navRed(1.80f, 0.16f, 0.12f);
+        const glm::vec3 navGreen(0.16f, 1.60f, 0.55f);
         std::vector<ShipPart> parts;
         const int style = warpdrive::shipStyle();
         if (style == 1) {
@@ -1450,18 +1456,43 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           parts.push_back({{0.0f, 0.0f, 0.68f}, {0.12f, 0.12f, 0.12f}, wingCol, 0, 0.72f, 0.45f});
           parts.push_back({{0.0f, 0.0f, -0.34f}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
           parts.push_back({{0.0f, 0.0f, 0.30f}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
+          // S4: кольца крепятся к фюзеляжу крестом из 4 пилонов (±x/±y,
+          // без поворотов) — иначе кольца «висят» в воздухе отдельно.
+          for (float ringZ : {-0.34f, 0.30f}) {
+            parts.push_back({{0.20f, 0.0f, ringZ}, {0.115f, 0.014f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
+            parts.push_back({{-0.20f, 0.0f, ringZ}, {0.115f, 0.014f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
+            parts.push_back({{0.0f, 0.20f, ringZ}, {0.014f, 0.115f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
+            parts.push_back({{0.0f, -0.20f, ringZ}, {0.014f, 0.115f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
+          }
+          // S5: сопло на кормовом обтекателе (z+ = корма) + S8 навогни.
+          parts.push_back({{0.0f, 0.0f, 0.80f}, {0.075f, 0.075f, 0.09f}, nozzleCol, 0, 0.95f, 0.30f});
+          parts.push_back({{0.0f, 0.0f, 0.88f}, {0.045f, 0.045f, 0.022f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
+          parts.push_back({{-0.44f, 0.0f, 0.30f}, {0.020f, 0.020f, 0.020f}, navRed, 0, 0.0f, 0.60f, navRed});
+          parts.push_back({{0.44f, 0.0f, 0.30f}, {0.020f, 0.020f, 0.020f}, navGreen, 0, 0.0f, 0.60f, navGreen});
         } else if (style == 2) {
           // Shuttle: широкий корпус + кабина + 2 мотогондолы.
           parts.push_back({{0.0f, 0.0f, 0.0f}, {0.48f, 0.10f, 0.55f}, hullCol, 0, 0.90f, 0.32f});
           parts.push_back({{0.0f, 0.07f, -0.32f}, {0.11f, 0.08f, 0.15f}, glassCol, 0, 0.70f, 0.08f});
           parts.push_back({{-0.52f, 0.0f, 0.10f}, {0.07f, 0.07f, 0.28f}, wingCol, 0, 0.72f, 0.45f});
           parts.push_back({{0.52f, 0.0f, 0.10f}, {0.07f, 0.07f, 0.28f}, wingCol, 0, 0.72f, 0.45f});
+          // S5: сопла мотогондол + S8 навогни на законцовках.
+          parts.push_back({{-0.52f, 0.0f, 0.40f}, {0.058f, 0.058f, 0.055f}, nozzleCol, 0, 0.95f, 0.30f});
+          parts.push_back({{0.52f, 0.0f, 0.40f}, {0.058f, 0.058f, 0.055f}, nozzleCol, 0, 0.95f, 0.30f});
+          parts.push_back({{-0.52f, 0.0f, 0.46f}, {0.036f, 0.036f, 0.018f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
+          parts.push_back({{0.52f, 0.0f, 0.46f}, {0.036f, 0.036f, 0.018f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
+          parts.push_back({{-0.585f, 0.0f, -0.10f}, {0.018f, 0.018f, 0.018f}, navRed, 0, 0.0f, 0.60f, navRed});
+          parts.push_back({{0.585f, 0.0f, -0.10f}, {0.018f, 0.018f, 0.018f}, navGreen, 0, 0.0f, 0.60f, navGreen});
         } else {
           // Dart: заострённый фюзеляж + крыло + киль + кабина.
           parts.push_back({{0.0f, 0.0f, -0.10f}, {0.13f, 0.11f, 0.82f}, hullCol, 0, 0.90f, 0.32f});
-          parts.push_back({{0.0f, 0.02f, -0.48f}, {0.09f, 0.08f, 0.16f}, glassCol, 0, 0.70f, 0.08f});
+          parts.push_back({{0.0f, 0.02f, -0.48f}, {0.09f, 0.08f, 0.16f}, glassCol, 0, 0.70f, 0.08f, glm::vec3(0.045f, 0.06f, 0.09f)});
           parts.push_back({{0.0f, -0.02f, 0.22f}, {0.78f, 0.035f, 0.34f}, wingCol, 0, 0.72f, 0.45f});
           parts.push_back({{0.0f, 0.15f, 0.28f}, {0.035f, 0.22f, 0.30f}, wingCol, 0, 0.72f, 0.45f});
+          // S5: сопло фюзеляжа + раскалённое горло; S8 навогни на законцовках.
+          parts.push_back({{0.0f, 0.0f, 0.74f}, {0.085f, 0.085f, 0.10f}, nozzleCol, 0, 0.95f, 0.30f});
+          parts.push_back({{0.0f, 0.0f, 0.83f}, {0.050f, 0.050f, 0.022f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
+          parts.push_back({{-0.79f, -0.02f, 0.22f}, {0.018f, 0.018f, 0.018f}, navRed, 0, 0.0f, 0.60f, navRed});
+          parts.push_back({{0.79f, -0.02f, 0.22f}, {0.018f, 0.018f, 0.018f}, navGreen, 0, 0.0f, 0.60f, navGreen});
         }
         // === Ship lighting pass (S3): ключ — доминирующий источник сцены.
         // Якорь: у mw — Солнце (sunWorldPos), иначе центр станции (origin);
@@ -1524,6 +1555,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_shipShader->setUniform3f("u_BaseColor", p.color);
             s_shipShader->setUniform1f("u_Metal", p.metal);
             s_shipShader->setUniform1f("u_Rough", p.rough);
+            s_shipShader->setUniform3f("u_Emissive", p.emissive.x, p.emissive.y,
+                                       p.emissive.z);
             if (p.ring == 1) {
               s_shipRing.draw();
             } else {

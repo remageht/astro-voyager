@@ -6,6 +6,7 @@
 // Output is linear HDR (ACES + bloom live in the composite).
 in vec3 v_Normal;
 in vec3 v_WorldPos;
+in vec3 v_PartPos;
 out vec4 FragColor;
 uniform vec3 u_CamPos;
 uniform vec3 u_BaseColor;
@@ -13,6 +14,7 @@ uniform vec3 u_KeyDir;    // surface -> dominant scene light
 uniform vec3 u_KeyColor;  // color * intensity
 uniform float u_Metal;
 uniform float u_Rough;
+uniform vec3 u_Emissive;  // линейное HDR-свечение (сопла, навогни, кабина)
 uniform samplerCube u_Env;
 uniform float u_EnvMaxLod;
 
@@ -37,6 +39,20 @@ void main() {
   float NoV = max(dot(n, V), 1e-4);
   float rough = clamp(u_Rough, 0.05, 1.0);
   vec3 albedo = pow(max(u_BaseColor, vec3(0.0)), vec3(2.2));
+
+  // S7: панельные линии и вариация плит — только металлический корпус
+  // (u_Metal >= 0.85; стекло/крылья/свечения остаются гладкими). Сетка в
+  // объектном пространстве части: узкие швы + лёгкий разброс тона плит.
+  if (u_Metal >= 0.85) {
+    vec3 pp = (v_PartPos + vec3(0.13, -0.07, 0.21)) * 5.0;
+    vec3 g = abs(fract(pp) - 0.5);
+    float seam = min(min(g.x, g.y), g.z);
+    float panel = smoothstep(0.02, 0.06, seam);
+    float cell = dot(floor(pp), vec3(12.9898, 78.233, 37.719));
+    float h = fract(sin(cell) * 43758.5453);
+    albedo *= mix(0.80, 1.0, panel) * (0.95 + 0.09 * h);
+    rough = clamp(rough + (1.0 - panel) * 0.12, 0.05, 1.0);
+  }
   vec3 f0 = mix(vec3(0.04), albedo, u_Metal);
   vec3 kd = (vec3(1.0) - f0) * (1.0 - u_Metal);
 
@@ -62,5 +78,6 @@ void main() {
   vec3 fEnv = f0 + (max(vec3(1.0 - rough), f0) - f0) * pow(1.0 - NoV, 5.0);
   col += envDiff * albedo * kd * 2.6;  // ambient gain: sky is dim HDR
   col += envSpec * fEnv * (1.0 - 0.55 * rough);
+  col += u_Emissive;  // S5/S8: сопла, навогни, подсветка кабины
   FragColor = vec4(col, 1.0);
 }

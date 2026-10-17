@@ -3653,7 +3653,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   // === Ship lighting pass: ship.png — герой-кадр корабля (PBR-lite + IBL
   // скайбокса + ключевой свет станции). Камера на дефолтной позиции sgra,
   // u_Time фиксирован => кадр детерминирован. HUD не рисуем.
-  warpdrive::setShip(true, 1.70f, -1.30f, 4.60f, 2.35f);
+  warpdrive::setShip(true, 1.28f, -0.98f, 5.95f, 2.35f);
   warpdrive::setThruster(0.45f);
   for (int frame = 0; frame < 4; ++frame) {
     app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);

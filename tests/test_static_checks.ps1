@@ -333,6 +333,12 @@ Check 'scene key light per station type' (($sceneCpp -match 'u_KeyColor') -and (
 Check 'ship hero shot ref' (($appCpp -match 'ship\.png') -and ($appCpp -match 'warpdrive::setShip\(true'))
 Check 'ship ref committed' (Test-Path (Join-Path $root 'docs/screens/ship.png'))
 
+# --- ship geometry/details pass: nozzles + nav lights + panel lines ---
+Check 'ship nozzle emissive geometry' (($sceneCpp -match 'nozzleCol') -and ($sceneCpp -match 'engineEmi'))
+Check 'ship nav lights' (($sceneCpp -match 'navRed') -and ($sceneCpp -match 'navGreen'))
+Check 'ship panel line shading' (((Read-File 'shaders/ship.frag') -match 'u_Emissive') -and ((Read-File 'shaders/ship.frag') -match 'fract') -and ((Read-File 'shaders/ship.vert') -match 'v_PartPos'))
+Check 'ring ship ring pylons' (($sceneCpp -match 'ringZ') -and ($sceneCpp -match '0\.115f, 0\.014f'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
