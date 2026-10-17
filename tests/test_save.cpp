@@ -115,6 +115,15 @@ int main() {
     s.audioVolume = 41;
     s.muted = true;
     s.viewMode = 1;
+    // v3.6.0: расширенные настройки (сложность/AA/палитра/кастомный рендер).
+    s.difficulty = 2;
+    s.aaMode = 0;
+    s.shipReflections = false;
+    s.enginePalette = 3;
+    s.renderScale = 0.85f;
+    s.shellRadius = 42.0f;
+    s.stepSize = 0.033f;
+    s.maxSteps = 900;
     const std::string text = astro::saveSerializeSettings(s);
     astro::SaveSettings out;
     std::string err;
@@ -123,7 +132,14 @@ int main() {
       return 1;
     }
     if (out.perfPreset != s.perfPreset || out.audioVolume != s.audioVolume ||
-        out.muted != s.muted || out.viewMode != s.viewMode) {
+        out.muted != s.muted || out.viewMode != s.viewMode ||
+        out.difficulty != s.difficulty || out.aaMode != s.aaMode ||
+        out.shipReflections != s.shipReflections ||
+        out.enginePalette != s.enginePalette ||
+        !close(out.renderScale, s.renderScale, 1e-5) ||
+        !close(out.shellRadius, s.shellRadius, 1e-4) ||
+        !close(out.stepSize, s.stepSize, 1e-5) ||
+        out.maxSteps != s.maxSteps) {
       std::cerr << "Test 2 failed: settings mismatch\n";
       return 1;
     }
@@ -321,6 +337,26 @@ int main() {
         !close(out.session.yaw, g.session.yaw) ||
         !close(out.session.fuel, g.session.fuel, 1e-5)) {
       std::cerr << "Test 12 failed: numeric round-trip\n";
+      return 1;
+    }
+  }
+
+  // Test 13 (v3.6.0): старый файл настроек без новых полей - дефолты.
+  {
+    const std::string text =
+        "{\"schema\":1,\"perfPreset\":2,\"audioVolume\":50,\"muted\":false,"
+        "\"viewMode\":1}";
+    astro::SaveSettings out;
+    std::string err;
+    if (!astro::saveDeserializeSettings(text, out, err)) {
+      std::cerr << "Test 13 failed: " << err << '\n';
+      return 1;
+    }
+    if (out.perfPreset != 2 || out.difficulty != 1 || out.aaMode != 1 ||
+        !out.shipReflections || out.enginePalette != 0 ||
+        out.renderScale != 0.0f || out.shellRadius != 0.0f ||
+        out.stepSize != 0.0f || out.maxSteps != 0) {
+      std::cerr << "Test 13 failed: defaults for missing fields\n";
       return 1;
     }
   }

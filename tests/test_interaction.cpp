@@ -93,6 +93,43 @@ int main() {
   astro::ship::applyRadiation(zoneShip, 5.0f, true);
   AssertNear(zoneShip.shield, 0.0f, 0.0001f, "shield floors at zero");
 
+  // Test 8b (v3.6.0): сложность масштабирует цену прыжка, заправку и радиацию.
+  const astro::DifficultyTuning easy = astro::difficultyTuning(0);
+  const astro::DifficultyTuning normal = astro::difficultyTuning(1);
+  const astro::DifficultyTuning hard = astro::difficultyTuning(2);
+  AssertNear(easy.jumpCostK, 0.6f, 0.0001f, "easy jump cost");
+  AssertNear(normal.jumpCostK, 1.0f, 0.0001f, "normal jump cost");
+  AssertNear(hard.jumpCostK, 1.6f, 0.0001f, "hard jump cost");
+  if (!easy.hints || !normal.hints || hard.hints) {
+    std::cerr << "difficulty hints flags wrong\n";
+    return 1;
+  }
+  astro::ShipState hardShip;
+  hardShip.fuel = 6.0f;  // Normal бы пустил (5), Hard требует 8
+  if (astro::ship::canJump(hardShip) ==
+      astro::ship::canJump(hardShip, hard.jumpCostK)) {
+    std::cerr << "hard canJump must differ from normal at 6 fuel\n";
+    return 1;
+  }
+  if (astro::ship::canJump(hardShip, hard.jumpCostK)) {
+    std::cerr << "6 fuel must not cover the hard jump (8)\n";
+    return 1;
+  }
+  astro::ShipState easyShip;
+  easyShip.fuel = 4.0f;  // Easy стоит 3
+  if (!astro::ship::spendJumpFuel(easyShip, easy.jumpCostK)) {
+    std::cerr << "easy spend at 4 fuel must succeed\n";
+    return 1;
+  }
+  AssertNear(easyShip.fuel, 1.0f, 0.0001f, "easy fuel after jump");
+  astro::ShipState radShip;
+  astro::ship::applyRadiation(radShip, 2.0f, true, hard.radiationK);
+  AssertNear(radShip.shield, 70.0f, 0.0001f, "hard radiation x1.5");
+  astro::ShipState refuelShip;
+  refuelShip.fuel = 50.0f;
+  astro::ship::updateFuel(refuelShip, 2.0f, true, easy.starFuelK);
+  AssertNear(refuelShip.fuel, 56.4f, 0.0001f, "easy star refuel x1.6");
+
   // Test 9 (v3.3.0): death triggers the respawn balance (50 shield / 30 fuel).
   astro::ShipState deadShip;
   deadShip.shield = 0.0f;

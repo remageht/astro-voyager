@@ -22,6 +22,9 @@ struct RenderSettings {
   int maxSteps = 600;
   float fovDegrees = 60.0f;
   bool diskOn = true;  // accretion disk visible by default (harness overrides)
+  // === v3.6.0: расширенные настройки (вкладка Settings) ===
+  bool shipReflections = true;  // зеркальные IBL-отражения на корпусе корабля
+  int enginePalette = 0;        // палитра выхлопа двигателя (0..3)
 };
 
 // User-spawned object (flexible object editor, v3.2.0).
@@ -124,6 +127,8 @@ class SceneManager {
 
   void setExposure(float e) { m_exposure = e; }
   float getExposure() const { return m_exposure; }
+  // === v3.6.0: сглаживание из настроек (Off/FXAA у пост-стека).
+  void setFxaa(bool on) { m_postFx.setFxaa(on); }
   void setShowOrbits(bool on) { m_showOrbits = on; }
   bool showOrbits() const { return m_showOrbits; }
   void setShowBelt(bool on) { m_showBelt = on; }

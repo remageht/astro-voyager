@@ -1444,31 +1444,60 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         const glm::vec3 glassCol(0.35f, 0.55f, 0.80f);
         const glm::vec3 wingCol(0.62f, 0.70f, 0.82f);
         const glm::vec3 nozzleCol(0.16f, 0.17f, 0.20f);  // тёмный металл сопла
-        const glm::vec3 engineEmi(2.40f, 0.50f, 0.20f);  // раскалённое горло
         const glm::vec3 navRed(1.80f, 0.16f, 0.12f);
         const glm::vec3 navGreen(0.16f, 1.60f, 0.55f);
+        // v3.6.0: палитра выхлопа из настроек. Индекс 0 — исторический
+        // красно-оранжевый (эталон ship.png не меняется), далее ион/изумруд/плазма.
+        static const glm::vec3 kEngineEmi[4] = {
+            {2.40f, 0.50f, 0.20f},
+            {0.55f, 1.30f, 2.60f},
+            {0.55f, 2.20f, 1.00f},
+            {1.90f, 0.85f, 2.60f}};
+        static const glm::vec3 kGlowTint[4] = {
+            {1.00f, 0.22f, 0.10f},
+            {0.35f, 0.60f, 1.00f},
+            {0.25f, 1.00f, 0.50f},
+            {0.90f, 0.55f, 1.00f}};
+        static const glm::vec3 kTrailBase[4] = {
+            {0.25f, 0.45f, 0.70f},
+            {0.30f, 0.50f, 1.00f},
+            {0.25f, 0.85f, 0.55f},
+            {0.70f, 0.45f, 1.00f}};
+        const int pal = std::min(std::max(m_settings.enginePalette, 0), 3);
+        const glm::vec3 engineEmi = kEngineEmi[pal];
         std::vector<ShipPart> parts;
         const int style = warpdrive::shipStyle();
         if (style == 1) {
-          // Ring Ship (IXS Enterprise): цилиндр-фюзеляж + 2 кольца.
-          parts.push_back({{0.0f, 0.0f, -0.05f}, {0.10f, 0.10f, 0.80f}, hullCol, 0, 0.90f, 0.32f});
-          parts.push_back({{0.0f, 0.0f, -0.92f}, {0.08f, 0.08f, 0.14f}, hullCol, 0, 0.90f, 0.32f});
-          parts.push_back({{0.0f, 0.0f, 0.68f}, {0.12f, 0.12f, 0.12f}, wingCol, 0, 0.72f, 0.45f});
-          parts.push_back({{0.0f, 0.0f, -0.34f}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
-          parts.push_back({{0.0f, 0.0f, 0.30f}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
-          // S4: кольца крепятся к фюзеляжу крестом из 4 пилонов (±x/±y,
-          // без поворотов) — иначе кольца «висят» в воздухе отдельно.
-          for (float ringZ : {-0.34f, 0.30f}) {
-            parts.push_back({{0.20f, 0.0f, ringZ}, {0.115f, 0.014f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
-            parts.push_back({{-0.20f, 0.0f, ringZ}, {0.115f, 0.014f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
-            parts.push_back({{0.0f, 0.20f, ringZ}, {0.014f, 0.115f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
-            parts.push_back({{0.0f, -0.20f, ringZ}, {0.014f, 0.115f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
+          // Ring Ship v2 (v3.6.0): по образцу владельца (Tripo) — три кольца,
+          // носовое копьё, многодюзовый кластер кормы. Всё из единичных сфер
+          // и плоских колец: детерминизм, без новых мешей и текстур.
+          parts.push_back({{0.0f, 0.0f, -0.02f}, {0.095f, 0.095f, 0.72f}, hullCol, 0, 0.90f, 0.32f});
+          // Носовое копьё: база, стержень, острие (нос = -z).
+          parts.push_back({{0.0f, 0.0f, -0.82f}, {0.075f, 0.075f, 0.20f}, hullCol, 0, 0.90f, 0.32f});
+          parts.push_back({{0.0f, 0.0f, -1.10f}, {0.030f, 0.030f, 0.30f}, hullCol, 0, 0.90f, 0.32f});
+          parts.push_back({{0.0f, 0.0f, -1.38f}, {0.013f, 0.013f, 0.10f}, wingCol, 0, 0.72f, 0.45f});
+          // Три кольца, каждое на кресте из 4 пилонов (±x/±y, без поворотов).
+          for (float ringZ : {-0.44f, 0.0f, 0.44f}) {
+            parts.push_back({{0.0f, 0.0f, ringZ}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
+            parts.push_back({{0.20f, 0.0f, ringZ}, {0.13f, 0.014f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
+            parts.push_back({{-0.20f, 0.0f, ringZ}, {0.13f, 0.014f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
+            parts.push_back({{0.0f, 0.20f, ringZ}, {0.014f, 0.13f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
+            parts.push_back({{0.0f, -0.20f, ringZ}, {0.014f, 0.13f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
           }
-          // S5: сопло на кормовом обтекателе (z+ = корма) + S8 навогни.
-          parts.push_back({{0.0f, 0.0f, 0.80f}, {0.075f, 0.075f, 0.09f}, nozzleCol, 0, 0.95f, 0.30f});
-          parts.push_back({{0.0f, 0.0f, 0.88f}, {0.045f, 0.045f, 0.022f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
-          parts.push_back({{-0.44f, 0.0f, 0.30f}, {0.020f, 0.020f, 0.020f}, navRed, 0, 0.0f, 0.60f, navRed});
-          parts.push_back({{0.44f, 0.0f, 0.30f}, {0.020f, 0.020f, 0.020f}, navGreen, 0, 0.0f, 0.60f, navGreen});
+          // Корма: обтекатель + центральное сопло с горлом + венец из 6 сопел.
+          parts.push_back({{0.0f, 0.0f, 0.62f}, {0.135f, 0.135f, 0.16f}, hullCol, 0, 0.90f, 0.32f});
+          parts.push_back({{0.0f, 0.0f, 0.76f}, {0.060f, 0.060f, 0.10f}, nozzleCol, 0, 0.95f, 0.30f});
+          parts.push_back({{0.0f, 0.0f, 0.85f}, {0.040f, 0.040f, 0.022f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
+          for (int k = 0; k < 6; ++k) {
+            const float a = static_cast<float>(k) * 1.0471976f;  // 60 градусов
+            const float cx = 0.088f * std::cos(a);
+            const float cy = 0.088f * std::sin(a);
+            parts.push_back({{cx, cy, 0.74f}, {0.030f, 0.030f, 0.055f}, nozzleCol, 0, 0.95f, 0.30f});
+            parts.push_back({{cx, cy, 0.80f}, {0.019f, 0.019f, 0.014f}, engineEmi, 0, 0.0f, 0.60f, engineEmi});
+          }
+          // Навогни на кормовом кольце (z+ = корма).
+          parts.push_back({{-0.44f, 0.0f, 0.44f}, {0.020f, 0.020f, 0.020f}, navRed, 0, 0.0f, 0.60f, navRed});
+          parts.push_back({{0.44f, 0.0f, 0.44f}, {0.020f, 0.020f, 0.020f}, navGreen, 0, 0.0f, 0.60f, navGreen});
         } else if (style == 2) {
           // Shuttle: широкий корпус + кабина + 2 мотогондолы.
           parts.push_back({{0.0f, 0.0f, 0.0f}, {0.48f, 0.10f, 0.55f}, hullCol, 0, 0.90f, 0.32f});
@@ -1536,6 +1565,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           // IBL: мипованный локальный скайбокс (S1), 512 => 9 мипов.
           s_shipShader->setUniform1i("u_Env", 0);
           s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
+          // v3.6.0: тумблер зеркальных отражений из настроек (по умолчанию 1.0
+          // — эталон ship.png не меняется, умножение на 1.0f точное).
+          s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
           glActiveTexture(GL_TEXTURE0);
           m_skyboxLocal->bind(0);
           for (const ShipPart& p : parts) {
@@ -1579,9 +1611,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_linesShader->setUniformMat4f("u_MVP", mvp);
         m_linesShader->setUniformMat4f("u_Model", trailModel);
         m_linesShader->setUniform1f("u_Time", time);
-        m_linesShader->setUniform3f("u_LineColor", 0.25f * (0.55f + 1.7f * thr),
-                                    0.45f * (0.55f + 1.5f * thr),
-                                    0.70f * (0.55f + 1.2f * thr));
+        // Цвет следа — база палитры * тяга (пал 0 — исторические коэффициенты).
+        const glm::vec3 trailThrK(1.70f, 1.50f, 1.20f);
+        const glm::vec3 trailCol = kTrailBase[pal] * (0.55f + trailThrK * thr);
+        m_linesShader->setUniform3f("u_LineColor", trailCol.x, trailCol.y,
+                                    trailCol.z);
         s_trail.drawLines();
         m_linesShader->unbind();
         // Движок: 1 крупная пульсирующая КРАСНАЯ точка за кормой.
@@ -1602,7 +1636,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           m_starShader->setUniform1f("u_PixelScale", pixelScale);
           m_starShader->setUniform1f("u_SizeK", 0.22f * (0.75f + 0.75f * thr2));
           m_starShader->setUniform1f("u_Time", time);
-          m_starShader->setUniform3f("u_Tint", 1.0f, 0.22f, 0.10f);
+          m_starShader->setUniform3f("u_Tint", kGlowTint[pal].x, kGlowTint[pal].y,
+                                     kGlowTint[pal].z);
           s_engine.draw();
           m_starShader->unbind();
         }

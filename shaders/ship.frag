@@ -17,6 +17,7 @@ uniform float u_Rough;
 uniform vec3 u_Emissive;  // линейное HDR-свечение (сопла, навогни, кабина)
 uniform samplerCube u_Env;
 uniform float u_EnvMaxLod;
+uniform float u_ReflK;  // v3.6.0: 0 = зеркальные отражения выключены (настройки)
 
 const float kPi = 3.14159265;
 
@@ -77,7 +78,7 @@ void main() {
   vec3 envDiff = textureLod(u_Env, n, u_EnvMaxLod).rgb;
   vec3 fEnv = f0 + (max(vec3(1.0 - rough), f0) - f0) * pow(1.0 - NoV, 5.0);
   col += envDiff * albedo * kd * 2.6;  // ambient gain: sky is dim HDR
-  col += envSpec * fEnv * (1.0 - 0.55 * rough);
+  col += envSpec * fEnv * (1.0 - 0.55 * rough) * u_ReflK;
   col += u_Emissive;  // S5/S8: сопла, навогни, подсветка кабины
   FragColor = vec4(col, 1.0);
 }

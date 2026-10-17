@@ -211,7 +211,7 @@ Check 'post composite texelfetch passthrough' ((Read-File 'shaders/post_comp.fra
 Check 'relativity doppler wired' ((((Read-File 'shaders/post_comp.frag') -match 'u_Beta') -and ((Read-File 'shaders/sky.frag') -match 'u_VelDir')) -and (($sceneCpp) -match 'm_postFx\.setFlight'))
 Check 'spin angle uniform driven by simTime' (($planetFrag -match 'uniform float u_SpinAngle') -and ($sceneCpp -match 'setUniform1f\("u_SpinAngle"') -and ($solarCpp -match 'spinRate'))
 Check 'time pace presets up to 1000x' (($appCpp -match '300x') -and ($appCpp -match '1000x') -and ($sceneH -match '1000\.0f') -and ($appCpp -match 'Logarithmic'))
-Check 'ship hull switchable 3 styles' ((($appCpp) -match 'Ring Ship \(IXS\)') -and ($sceneCpp -match 'setShipStyle') -and ($sceneCpp -match 'shipStyle'))
+Check 'ship hull switchable 3 styles' ((($appCpp) -match 'Ring Ship') -and ($appCpp -match 'Shuttle') -and ($sceneCpp -match 'setShipStyle') -and ($sceneCpp -match 'shipStyle'))
 Check 'warp engine red tint' ((Read-File 'shaders/star.frag') -match 'u_Tint') -and ($sceneCpp -match 'u_Tint", 1\.0f, 0\.22f, 0\.10f')
 Check 'solid ship shader' (((Test-Path (Join-Path $root 'shaders/ship.vert')) -and (Test-Path (Join-Path $root 'shaders/ship.frag'))) -and ($sceneCpp -match 'shaders/ship\.vert'))
 Check 'disk default on' ($sceneH -match 'diskOn = true')
@@ -337,7 +337,17 @@ Check 'ship ref committed' (Test-Path (Join-Path $root 'docs/screens/ship.png'))
 Check 'ship nozzle emissive geometry' (($sceneCpp -match 'nozzleCol') -and ($sceneCpp -match 'engineEmi'))
 Check 'ship nav lights' (($sceneCpp -match 'navRed') -and ($sceneCpp -match 'navGreen'))
 Check 'ship panel line shading' (((Read-File 'shaders/ship.frag') -match 'u_Emissive') -and ((Read-File 'shaders/ship.frag') -match 'fract') -and ((Read-File 'shaders/ship.vert') -match 'v_PartPos'))
-Check 'ring ship ring pylons' (($sceneCpp -match 'ringZ') -and ($sceneCpp -match '0\.115f, 0\.014f'))
+Check 'ring ship ring pylons' (($sceneCpp -match 'ringZ') -and ($sceneCpp -match '0\.13f, 0\.014f'))
+
+# --- settings pass v3.6.0: raytracing quality + AA + ship + difficulty ---
+Check 'settings ray tracing section' (($appCpp -match 'Ray quality') -and ($appCpp -match 'Shell radius'))
+Check 'settings anti-aliasing toggle' (($appCpp -match 'AA mode') -and ($appCpp -match 'setFxaa'))
+Check 'settings difficulty combo' (($appCpp -match 'Difficulty') -and ($appCpp -match 'difficultyTuning'))
+Check 'settings ship hull and engine combos' (($appCpp -match 'engineNames') -and ($appCpp -match 'Emerald'))
+Check 'settings persisted fields' (((Read-File 'src/SaveGame.cpp') -match 'shipReflections') -and ((Read-File 'src/SaveGame.cpp') -match 'enginePalette') -and ((Read-File 'src/SaveGame.cpp') -match 'aaMode'))
+Check 'ship reflections uniform' ((Read-File 'shaders/ship.frag') -match 'u_ReflK')
+Check 'difficulty tuning multipliers' (((Read-File 'src/Types.h') -match 'jumpCostK = 1\.6f') -and ((Read-File 'src/Types.h') -match 't\.hints = false'))
+Check 'ring ship v2 bow spike and cluster' (($sceneCpp -match 'Ring Ship v2') -and ($sceneCpp -match '-1\.38f') -and ($sceneCpp -match '1\.0471976f'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

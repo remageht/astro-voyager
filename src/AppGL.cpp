@@ -2373,9 +2373,12 @@ void AppGL::updateShip(float deltaTime) {
     inRadZone = d < ship::kPulsarRadius * ship::kPulsarDamageRadii;
   }
 
-  ship::updateFuel(m_ship, deltaTime, nearStar);
+  // v3.6.0: сложность масштабирует баланс (Easy: быстрая заправка и мягкая
+  // радиация; Hard: наоборот). K=1 в difficultyTuning(Normal) - дефолт.
+  const DifficultyTuning dtune = difficultyTuning(m_difficulty);
+  ship::updateFuel(m_ship, deltaTime, nearStar, dtune.starFuelK);
   const float shieldBefore = m_ship.shield;
-  ship::applyRadiation(m_ship, deltaTime, inRadZone);
+  ship::applyRadiation(m_ship, deltaTime, inRadZone, dtune.radiationK);
   // Вспышка щита (v3.3.0): импульс от потери щита + экспоненциальное затухание.
   if (m_ship.shield < shieldBefore) {
     m_shieldFlashK =
@@ -2446,7 +2449,8 @@ void AppGL::drawShipHud() {
     ImGui::ProgressBar(m_ship.shield / 100.0f, ImVec2(180.0f, 12.0f), buf);
     ImGui::PopStyleColor();
     // Вид камеры (v3.3.0): строка-подсказка для клавиши V.
-    {
+    // v3.6.0: сложность Hard отключает подсказки (difficultyTuning().hints).
+    if (difficultyTuning(m_difficulty).hints) {
       static const char* kViewRu[3] = {"Кабина", "За кормой", "Обзор"};
       static const char* kViewEn[3] = {"Cockpit", "Behind", "Overview"};
       const int vi = static_cast<int>(m_viewMode);
@@ -2638,6 +2642,21 @@ void AppGL::applySaveSettings(const SaveSettings& s) {
   m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
   if (s.muted != m_audio.isMuted()) m_audio.toggleMute();
   m_viewMode = static_cast<view::ViewMode>(std::min(std::max(s.viewMode, 0), 2));
+  // === Settings v3.6.0 ===: сложность, сглаживание, палитра и кастомный
+  // рейтмарчинг. Параметры с sentinel 0 восстанавливаются только для
+  // Custom-пресета (иначе действуют значения пресета).
+  m_difficulty = std::min(std::max(s.difficulty, 0), 2);
+  m_aaMode = std::min(std::max(s.aaMode, 0), 1);
+  m_sceneManager->setFxaa(m_aaMode == 1);
+  RenderSettings& rs = m_sceneManager->getSettings();
+  rs.shipReflections = s.shipReflections;
+  rs.enginePalette = std::min(std::max(s.enginePalette, 0), 3);
+  if (preset == 3) {
+    if (s.renderScale > 0.0f) rs.rs = s.renderScale;
+    if (s.shellRadius > 0.0f) rs.shellRadius = s.shellRadius;
+    if (s.stepSize > 0.0f) rs.stepSize = s.stepSize;
+    if (s.maxSteps > 0) rs.maxSteps = s.maxSteps;
+  }
   m_renderCamValid = false;
 }
 
@@ -2691,6 +2710,19 @@ void AppGL::saveProfileNow(bool quiet) {
   st.audioVolume = m_audioVolume;
   st.muted = m_audio.isMuted();
   st.viewMode = static_cast<int>(m_viewMode);
+  // === Settings v3.6.0 ===
+  st.difficulty = m_difficulty;
+  st.aaMode = m_aaMode;
+  const RenderSettings& rsNow = m_sceneManager->getSettings();
+  st.shipReflections = rsNow.shipReflections;
+  st.enginePalette = rsNow.enginePalette;
+  if (st.perfPreset == static_cast<int>(PerfPreset::Custom)) {
+    // Кастомный рейтмарчинг; sentinel 0 означает «параметр не менялся».
+    st.renderScale = rsNow.rs;
+    st.shellRadius = rsNow.shellRadius;
+    st.stepSize = rsNow.stepSize;
+    st.maxSteps = rsNow.maxSteps;
+  }
   const bool settingsOk =
       saveWriteFile(saveSettingsFilePath(), saveSerializeSettings(st), err);
 
@@ -3047,20 +3079,68 @@ void AppGL::drawMenu() {
     ImGui::SetWindowFontScale(1.0f);
   } else if (m_menuPage == 1) {
     ImGui::Text("Settings");
-    const char* presetNames[] = {"Low", "Med", "Ultra", "Custom"};
-    int menuPreset = static_cast<int>(m_sceneManager->getPreset());
-    if (ImGui::Combo("Preset", &menuPreset, presetNames, 4)) {
+    // === Settings v3.6.0 ===: страница выросла - скролл-область фиксированной
+    // высоты, Back остаётся внизу панели. Харнесс снимает только страницу 0
+    // (menu.png), эталон не затронут.
+    ImGui::BeginChild("##settingsScroll", ImVec2(0.0f, 424.0f));
+    RenderSettings& menuSettings = m_sceneManager->getSettings();
+    bool menuChanged = false;
+
+    ImGui::SeparatorText("Ray tracing (black holes)");
+    const char* rayNames[] = {"Low", "Med", "Ultra", "Custom"};
+    int rayPreset = static_cast<int>(m_sceneManager->getPreset());
+    if (ImGui::Combo("Ray quality", &rayPreset, rayNames, 4)) {
       m_userOverrodePreset = true;
       m_benchmarking = false;
-      if (menuPreset >= 0 && menuPreset <= 2) {
-        m_sceneManager->applyPreset(static_cast<PerfPreset>(menuPreset));
+      if (rayPreset >= 0 && rayPreset <= 2) {
+        m_sceneManager->applyPreset(static_cast<PerfPreset>(rayPreset));
       } else {
         m_sceneManager->setPreset(PerfPreset::Custom);
       }
     }
-    RenderSettings& menuSettings = m_sceneManager->getSettings();
-    bool menuChanged = false;
-    menuChanged |= ImGui::SliderFloat("FOV", &menuSettings.fovDegrees, 30.0f, 110.0f, "%.1f deg");
+    if (ImGui::SliderFloat("Shell radius", &menuSettings.shellRadius, 10.0f,
+                           60.0f, "%.0f")) {
+      menuChanged = true;
+    }
+    if (ImGui::SliderFloat("Step size", &menuSettings.stepSize, 0.01f, 0.12f,
+                           "%.3f")) {
+      menuChanged = true;
+    }
+    if (ImGui::SliderInt("Max steps", &menuSettings.maxSteps, 100, 2000)) {
+      menuChanged = true;
+    }
+    menuChanged |=
+        ImGui::Checkbox("Ship reflections", &menuSettings.shipReflections);
+
+    ImGui::SeparatorText("Anti-aliasing");
+    const char* aaNames[] = {"Off", "FXAA"};
+    if (ImGui::Combo("AA mode", &m_aaMode, aaNames, 2)) {
+      m_sceneManager->setFxaa(m_aaMode == 1);
+    }
+
+    ImGui::SeparatorText("Ship");
+    const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle"};
+    if (ImGui::Combo("Hull", &m_shipStyle, hullNames, 3)) {
+      warpdrive::setShipStyle(m_shipStyle);
+    }
+    const char* engineNames[] = {"Red", "Ion", "Emerald", "Plasma"};
+    ImGui::Combo("Engine", &menuSettings.enginePalette, engineNames, 4);
+
+    ImGui::SeparatorText("Game");
+    const char* diffNames[] = {"Easy", "Normal", "Hard"};
+    ImGui::Combo("Difficulty", &m_difficulty, diffNames, 3);
+    const DifficultyTuning menuTune = difficultyTuning(m_difficulty);
+    ImGui::SetWindowFontScale(0.85f);
+    ImGui::TextColored(
+        ImVec4(0.6f, 0.62f, 0.68f, 1.0f),
+        "Jump cost x%.1f, star refuel x%.1f, radiation x%.1f, hints %s",
+        menuTune.jumpCostK, menuTune.starFuelK, menuTune.radiationK,
+        menuTune.hints ? "on" : "off");
+    ImGui::SetWindowFontScale(1.0f);
+
+    ImGui::SeparatorText("View and audio");
+    menuChanged |= ImGui::SliderFloat("FOV", &menuSettings.fovDegrees, 30.0f,
+                                      110.0f, "%.1f deg");
     float menuExposure = m_sceneManager->getExposure();
     if (ImGui::SliderFloat("Exposure", &menuExposure, 0.3f, 2.0f, "%.2f")) {
       m_sceneManager->setExposure(menuExposure);
@@ -3078,11 +3158,19 @@ void AppGL::drawMenu() {
       m_sceneManager->setShowBelt(menuBelt);
       menuChanged = true;
     }
+    if (ImGui::SliderInt("Volume", &m_audioVolume, 0, 100)) {
+      m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+    }
+    bool menuMuted = m_audio.isMuted();
+    if (ImGui::Checkbox("Mute", &menuMuted)) {
+      m_audio.toggleMute();
+    }
     if (menuChanged) {
       m_userOverrodePreset = true;
       m_benchmarking = false;
       m_sceneManager->setPreset(PerfPreset::Custom);
     }
+    ImGui::EndChild();
     if (ImGui::Button("Back", ImVec2(-1.0f, 0.0f))) {
       m_menuPage = 0;
     }
@@ -3979,9 +4067,15 @@ void AppGL::startWarpJump(const std::string& id) {
   if (id.empty() || (cur && cur->id == id)) return;
   if (!findStation(id)) return;
   // === Ship survival === (v3.3.0): без пяти единиц топлива прыжок не летит.
-  if (!ship::canJump(m_ship)) {
-    m_shipNotice = uiRu("Недостаточно топлива (нужно 5)",
-                        "Not enough fuel (5 needed)");
+  // v3.6.0: цена зависит от сложности (Hard x1.6, Easy x0.6).
+  const DifficultyTuning jtune = difficultyTuning(m_difficulty);
+  if (!ship::canJump(m_ship, jtune.jumpCostK)) {
+    char need[64];
+    std::snprintf(need, sizeof(need),
+                  uiRu("Недостаточно топлива (нужно %.0f)",
+                       "Not enough fuel (%.0f needed)"),
+                  static_cast<double>(ship::kJumpFuelCost * jtune.jumpCostK));
+    m_shipNotice = need;
     m_shipNoticeT = 3.0f;
     return;
   }
@@ -4080,7 +4174,7 @@ bool AppGL::updateWarp(float deltaTime) {
         const std::string tgt = m_warpJumpTarget;
         m_warpJumpTarget.clear();
         teleportToStation(tgt);  // штатный телепорт под вспышкой
-        ship::spendJumpFuel(m_ship);  // === Ship survival ===: цена прыжка
+        ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK);
         m_warpStatus = 4;        // Cooldown
         m_warpStateT = 0.0f;
         m_warpFlash = 1.0f;  // вспышка прибытия
@@ -4285,7 +4379,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
     m_jumpDidTeleport = true;
     m_warpStatus = 3;
     teleportToStation(m_jumpTarget);
-    ship::spendJumpFuel(m_ship);  // === Ship survival ===: цена прыжка
+    ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK);
     m_jumpShipPos = m_camera.position;
     m_jumpShipDir = m_camera.forward();
     m_jumpFpPos = m_camera.position;
@@ -4487,7 +4581,7 @@ void AppGL::drawWarpPanel() {
       (m_warpStatus == 1 && curSt && curSt->id != tgtId);
   // Выбор корпуса корабля (смена вида).
   {
-    static const char* kShipStyles[] = {"Dart", "Ring Ship (IXS)", "Shuttle"};
+    static const char* kShipStyles[] = {"Dart", "Ring Ship", "Shuttle"};
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     if (ImGui::BeginCombo("Hull", kShipStyles[m_shipStyle])) {
       for (int n = 0; n < 3; ++n) {

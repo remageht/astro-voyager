@@ -563,7 +563,16 @@ std::string saveSerializeSettings(const SaveSettings& s) {
   out += ind(1) + "\"perfPreset\": " + std::to_string(s.perfPreset) + ",\n";
   out += ind(1) + "\"audioVolume\": " + std::to_string(s.audioVolume) + ",\n";
   out += ind(1) + std::string("\"muted\": ") + (s.muted ? "true" : "false") + ",\n";
-  out += ind(1) + "\"viewMode\": " + std::to_string(s.viewMode) + "\n";
+  out += ind(1) + "\"viewMode\": " + std::to_string(s.viewMode) + ",\n";
+  out += ind(1) + "\"difficulty\": " + std::to_string(s.difficulty) + ",\n";
+  out += ind(1) + "\"aaMode\": " + std::to_string(s.aaMode) + ",\n";
+  out += ind(1) + std::string("\"shipReflections\": ") +
+         (s.shipReflections ? "true" : "false") + ",\n";
+  out += ind(1) + "\"enginePalette\": " + std::to_string(s.enginePalette) + ",\n";
+  out += ind(1) + "\"renderScale\": " + numToJson(s.renderScale) + ",\n";
+  out += ind(1) + "\"shellRadius\": " + numToJson(s.shellRadius) + ",\n";
+  out += ind(1) + "\"stepSize\": " + numToJson(s.stepSize) + ",\n";
+  out += ind(1) + "\"maxSteps\": " + std::to_string(s.maxSteps) + "\n";
   out += "}\n";
   return out;
 }
@@ -588,6 +597,14 @@ bool saveDeserializeSettings(const std::string& text, SaveSettings& out,
   out.audioVolume = readInt(root, "audioVolume", out.audioVolume);
   out.muted = readBool(root, "muted", out.muted);
   out.viewMode = readInt(root, "viewMode", out.viewMode);
+  out.difficulty = readInt(root, "difficulty", out.difficulty);
+  out.aaMode = readInt(root, "aaMode", out.aaMode);
+  out.shipReflections = readBool(root, "shipReflections", out.shipReflections);
+  out.enginePalette = readInt(root, "enginePalette", out.enginePalette);
+  out.renderScale = readFloat(root, "renderScale", out.renderScale);
+  out.shellRadius = readFloat(root, "shellRadius", out.shellRadius);
+  out.stepSize = readFloat(root, "stepSize", out.stepSize);
+  out.maxSteps = readInt(root, "maxSteps", out.maxSteps);
   return true;
 }
 

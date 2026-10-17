@@ -40,26 +40,29 @@ constexpr float kGravDampPerSec = 0.35f;    // drift velocity damping
 constexpr float kGravVelMax = 2.0f;         // drift speed cap (units/s)
 constexpr float kGravMinDist = 0.5f;        // avoids the r->0 singularity
 
-inline bool canJump(const ShipState& s) { return s.fuel >= kJumpFuelCost; }
+inline bool canJump(const ShipState& s, float costK = 1.0f) {
+  return s.fuel >= kJumpFuelCost * costK;
+}
 
-inline bool spendJumpFuel(ShipState& s) {
-  if (!canJump(s)) return false;
-  s.fuel -= kJumpFuelCost;
+inline bool spendJumpFuel(ShipState& s, float costK = 1.0f) {
+  const float cost = kJumpFuelCost * costK;
+  if (s.fuel < cost) return false;
+  s.fuel -= cost;
   if (s.fuel < 0.0f) s.fuel = 0.0f;
   return true;
 }
 
 // Fuel regenerates while the camera stays near a star (sun at the origin).
-inline void updateFuel(ShipState& s, float dt, bool nearStar) {
+inline void updateFuel(ShipState& s, float dt, bool nearStar, float rateK = 1.0f) {
   if (nearStar && s.fuel < 100.0f) {
-    s.fuel += kStarFuelPerSec * dt;
+    s.fuel += kStarFuelPerSec * rateK * dt;
     if (s.fuel > 100.0f) s.fuel = 100.0f;
   }
 }
 
-inline void applyRadiation(ShipState& s, float dt, bool inZone) {
+inline void applyRadiation(ShipState& s, float dt, bool inZone, float dmgK = 1.0f) {
   if (!inZone) return;
-  s.shield -= kPulsarDamagePerSec * dt;
+  s.shield -= kPulsarDamagePerSec * dmgK * dt;
   if (s.shield < 0.0f) s.shield = 0.0f;
 }
 
@@ -110,6 +113,31 @@ inline float shieldFlashDecay(float f, float dt) {
 }
 
 }  // namespace ship
+
+// === Difficulty === (v3.6.0): пресет сложности из настроек. Множители
+// передаются в canJump/spendJumpFuel/updateFuel/applyRadiation (K=1 —
+// базовая балансировка, дефолт Normal). hints=false — минимум подсказок.
+struct DifficultyTuning {
+  float jumpCostK = 1.0f;
+  float starFuelK = 1.0f;
+  float radiationK = 1.0f;
+  bool hints = true;
+};
+
+inline DifficultyTuning difficultyTuning(int difficulty) {
+  DifficultyTuning t;
+  if (difficulty <= 0) {  // Easy: дешёвый прыжок, быстрая заправка, мягкая радиация
+    t.jumpCostK = 0.6f;
+    t.starFuelK = 1.6f;
+    t.radiationK = 0.6f;
+  } else if (difficulty >= 2) {  // Hard: дорогой прыжок, злая радиация, без подсказок
+    t.jumpCostK = 1.6f;
+    t.starFuelK = 0.7f;
+    t.radiationK = 1.5f;
+    t.hints = false;
+  }
+  return t;
+}
 
 // === Camera views === (v3.3.0): cockpit / behind the ship / far overview.
 // Toggled with V; pure helpers live here so the core tests cover them too.

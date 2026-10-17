@@ -27,6 +27,15 @@ struct SaveSettings {
   int audioVolume = 70;  // 0..100
   bool muted = false;
   int viewMode = 0;      // view::ViewMode: 0 Cockpit, 1 Behind, 2 Overview
+  // === v3.6.0: расширенные настройки (сложность/AA/трассировка/корабль) ===
+  int difficulty = 1;           // 0 Easy, 1 Normal, 2 Hard
+  int aaMode = 1;               // 0 Off, 1 FXAA
+  bool shipReflections = true;  // зеркальные IBL-отражения на корпусе
+  int enginePalette = 0;        // палитра выхлопа: 0 Red, 1 Ion, 2 Emerald, 3 Plasma
+  float renderScale = 0.0f;     // 0 = по пресету (кастомный r_s)
+  float shellRadius = 0.0f;     // 0 = по пресету
+  float stepSize = 0.0f;        // 0 = по пресету
+  int maxSteps = 0;             // 0 = по пресету
 };
 
 struct SaveCustom {
