@@ -1,5 +1,7 @@
 #include "StorySlides.h"
 
+#include <cmath>
+
 #include <imgui.h>
 
 namespace {
