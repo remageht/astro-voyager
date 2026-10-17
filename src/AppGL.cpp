@@ -9,6 +9,7 @@
 #include <ctime>
 #include <filesystem>
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <algorithm>
 #include <cstdio>
@@ -114,6 +115,7 @@ int AppGL::run() {
   // m_saveInteractive остаётся false, файлы профиля не читаются/не пишутся.
   m_saveInteractive = true;
   loadProfileNow(true);
+  loadExpeditionFileNow();  // === Expedition === (v3.5.0): свой сейв арки.
   float lastTime = static_cast<float>(glfwGetTime());
   static float menuAngle = 0.0f;
 
@@ -334,8 +336,9 @@ int AppGL::run() {
     m_window->swapBuffers();
   }
 
-  // === SaveGame === (v3.4.0): автосейв на выходе (тихий, без тоста).
+  // === SaveGame === (v3.4.0): автосейв при выходе (тихо, без тостов).
   saveProfileNow(true);
+  saveExpeditionFileNow();  // === Expedition === (v3.5.0).
 
   return 0;
 }
@@ -357,8 +360,14 @@ void AppGL::processInput(float deltaTime) {
   // === Cinematic === end
 
   const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard) {
-    m_inMenu = true;
+  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard && !m_slidesOpen) {
+    // === Expedition === (v3.5.0): Esc сначала закрывает карту глав; на
+    // слайдах Esc обрабатывает сам оверлей (там же — «досмотреть»).
+    if (m_expeditionMapOpen) {
+      m_expeditionMapOpen = false;
+    } else {
+      m_inMenu = true;
+    }
   }
   m_prevEscPressed = escDown;
 
@@ -402,6 +411,15 @@ void AppGL::processInput(float deltaTime) {
     if (m_storyOpen) m_story.markAllRead();
   }
   m_prevJPressed = jDown;
+
+  // === Expedition === (v3.5.0): N — карта глав экспедиции (M занят
+  // audio-mute; в прологе и меню не мешает).
+  const bool nDown = (glfwGetKey(win, GLFW_KEY_N) == GLFW_PRESS);
+  if (nDown && !m_prevNPressed && !io.WantCaptureKeyboard && !m_inMenu &&
+      m_slidesCurrent.empty()) {
+    m_expeditionMapOpen = !m_expeditionMapOpen;
+  }
+  m_prevNPressed = nDown;
 
   const bool pDown = (glfwGetKey(win, GLFW_KEY_P) == GLFW_PRESS);
   if (pDown && !m_prevPPressed && !io.WantCaptureKeyboard) {
@@ -1364,6 +1382,233 @@ void AppGL::drawStoryPanel() {
   if (pushed) ImGui::PopFont();
 }
 
+void AppGL::startExpeditionIntro() {
+  // === Expedition === (v3.5.0): вводные слайды (идут после Play при
+  // первой игре); по завершении — высадка в Солнечной системе.
+  m_slidesCurrent = storyIntroSlides();
+  m_slidesIntro = true;
+  m_slidesIdx = 0;
+  m_slidesOpen = true;
+  m_inMenu = false;
+}
+
+void AppGL::openChapterSlide(int slideIdx) {
+  // === Expedition === (v3.5.0): одиночный слайд — итог главы поверх игры.
+  const auto& slides = storyChapterSlides();
+  if (slideIdx < 0 || slideIdx >= static_cast<int>(slides.size())) return;
+  m_slidesCurrent.assign(1, slides[slideIdx]);
+  m_slidesHead.clear();
+  for (const auto& c : expeditionChapters()) {
+    if (c.slideIdx == slideIdx) {
+      m_slidesHead = uiRu(c.titleRu.c_str(), c.titleEn.c_str());
+      break;
+    }
+  }
+  m_slidesIntro = false;
+  m_slidesIdx = 0;
+  m_slidesOpen = true;
+}
+
+void AppGL::saveExpeditionFileNow() {
+  // === Expedition === (v3.5.0): state в отдельном expedition.json рядом
+  // с профилями игры (схема SaveGame не тронута — kSaveSchema=1).
+  const std::string dir = saveProfileDir();
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  std::ofstream f(expeditionFilePathFor(dir), std::ios::binary | std::ios::trunc);
+  if (!f.is_open()) return;
+  f.write(serializeExpedition(m_expedition).c_str(),
+          static_cast<std::streamsize>(serializeExpedition(m_expedition).size()));
+}
+
+void AppGL::loadExpeditionFileNow() {
+  const std::string dir = saveProfileDir();
+  std::ifstream f(expeditionFilePathFor(dir), std::ios::binary);
+  if (!f.is_open()) return;
+  std::ostringstream buf;
+  buf << f.rdbuf();
+  ExpeditionState st;
+  if (deserializeExpedition(buf.str(), st)) {
+    m_expedition = st;
+  }
+}
+
+void AppGL::drawSlidesOverlay() {
+  // === Expedition === (v3.5.0): фуллскрин-экран слайдов: тёмное стекло,
+  // векторная миниатюра сверху, текст в центре, подсказка внизу.
+  // Space/Enter/клик — далее; Esc — досмотреть/закрыть.
+  ImGuiIO& io = ImGui::GetIO();
+  if (m_slidesIdx >= static_cast<int>(m_slidesCurrent.size())) {
+    m_slidesOpen = false;
+    m_slidesCurrent.clear();
+    return;
+  }
+  const StorySlide& sl = m_slidesCurrent[m_slidesIdx];
+  const ImVec2 disp = io.DisplaySize;
+
+  const bool advance = ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
+                       ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+                       ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false) ||
+                       ImGui::IsMouseClicked(0);
+  const bool skip = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+
+  if (m_slidesIntro && (advance || skip)) {
+    // Пролог: Space/клик листают, Esc досматривает до конца; конец ==
+    // старт миссии (teleport в sol сам завершит главу «Дом»).
+    if (skip || m_slidesIdx + 1 >= static_cast<int>(m_slidesCurrent.size())) {
+      m_expedition.introSeen = true;
+      m_slidesOpen = false;
+      m_slidesCurrent.clear();
+      saveExpeditionFileNow();
+      teleportToStation("sol");
+      return;
+    }
+    ++m_slidesIdx;
+    return;
+  }
+  if (skip || advance) {
+    // Одиночный done-слайд: любое действие закрывает.
+    m_slidesOpen = false;
+    m_slidesCurrent.clear();
+    return;
+  }
+  if (m_slidesCurrent.empty() || m_slidesOpen == false) return;
+  if (m_slidesIdx >= static_cast<int>(m_slidesCurrent.size())) return;
+
+  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+  ImGui::SetNextWindowSize(disp);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.010f, 0.014f, 0.024f, 0.90f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::Begin("##slides", nullptr,
+               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                   ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const float artSize = disp.y < 620.0f ? disp.y * 0.36f : 286.0f;
+  const ImVec2 artPos((disp.x - artSize) * 0.5f, disp.y * 0.13f);
+  drawStoryArt(dl, sl.art, artPos, artSize);
+
+  const char* headTxt =
+      m_slidesIntro ? uiRu("Экспедиция · пролог", "Expedition · Prologue")
+                    : m_slidesHead.c_str();
+  if (headTxt && headTxt[0] != '\0') {
+    ImGui::SetCursorScreenPos(ImVec2((disp.x - ImGui::CalcTextSize(headTxt).x) * 0.5f,
+                                     disp.y * 0.10f));
+    ImGui::SetWindowFontScale(1.25f);
+    ImGui::TextColored(ImVec4(1.00f, 0.75f, 0.28f, 1.0f), "%s", headTxt);
+    ImGui::SetWindowFontScale(1.0f);
+  }
+
+  const float textW = disp.x < 900.0f ? disp.x * 0.66f : 620.0f;
+  ImGui::SetCursorScreenPos(
+      ImVec2((disp.x - textW) * 0.5f, artPos.y + artSize + 26.0f));
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.86f, 0.89f, 0.94f, 1.00f));
+  ImGui::TextWrapped("%s", uiRu(sl.textRu.c_str(), sl.textEn.c_str()));
+  ImGui::PopStyleColor();
+
+  const char* hint =
+      m_slidesIntro ? uiRu("Пробел / Enter - далее, Esc - пропуск целиком",
+                           "Space / Enter - next, Esc - skip all")
+                    : uiRu("Пробел / клик - продолжить", "Space / click - continue");
+  ImGui::SetCursorScreenPos(ImVec2((disp.x - ImGui::CalcTextSize(hint).x) * 0.5f,
+                                   disp.y - 46.0f));
+  ImGui::SetWindowFontScale(0.9f);
+  ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.60f, 1.0f), "%s", hint);
+  ImGui::SetWindowFontScale(1.0f);
+
+  ImGui::End();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor();
+}
+
+void AppGL::drawExpeditionHud() {
+  // === Expedition ===: компактная карточка главы вверху по центру.
+  const ExpeditionChapter* ch = m_expedition.current();
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, 56.0f), ImGuiCond_Always,
+                          ImVec2(0.5f, 0.0f));
+  ImGui::SetNextWindowSize(ImVec2(470.0f, 0.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.58f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.18f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
+  ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+  if (!ch || ImGui::Begin("##expeditionHud", nullptr, fl)) {
+    if (ch) {
+      ImGui::TextUnformatted(uiRu(m_expedition.statusRu().c_str(),
+                                  m_expedition.statusEn().c_str()));
+      ImGui::SameLine();
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.75f, 0.30f, 1.00f));
+      ImGui::TextUnformatted(uiRu(ch->titleRu.c_str(), ch->titleEn.c_str()));
+      ImGui::PopStyleColor();
+      ImGui::SetWindowFontScale(0.88f);
+      ImGui::TextColored(ImVec4(0.62f, 0.65f, 0.72f, 1.0f), "%s",
+                         uiRu(ch->goalRu.c_str(), ch->goalEn.c_str()));
+      ImGui::SetWindowFontScale(1.0f);
+    }
+  }
+  if (ch) ImGui::End();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(2);
+}
+
+void AppGL::drawExpeditionMap() {
+  // === Expedition ===: карта глав — сделано/текущая/закрыто.
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
+                          ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(430.0f, 0.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.80f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.25f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+  ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+  if (ImGui::Begin("##expeditionMap", nullptr, fl)) {
+    const auto& chapters = expeditionChapters();
+    ImGui::TextColored(ImVec4(1.00f, 0.75f, 0.28f, 1.0f), "%s",
+                       uiRu("Карта экспедиции", "Expedition Map"));
+    ImGui::Spacing();
+    for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
+      const ExpeditionChapter& c = chapters[i];
+      const bool done = i < m_expedition.chapterIndex;
+      const bool current = i == m_expedition.chapterIndex;
+      const char* mark = done ? "OK " : (current ? ">> " : "?? ");
+      if (i > 0) ImGui::Spacing();
+      ImGui::PushStyleColor(ImGuiCol_Text, done ? ImVec4(0.55f, 0.80f, 0.55f, 1.0f)
+                               : (current ? ImVec4(0.95f, 0.75f, 0.30f, 1.0f)
+                                          : ImVec4(0.45f, 0.47f, 0.52f, 1.0f)));
+      ImGui::TextUnformatted(mark);
+      ImGui::PopStyleColor();
+      ImGui::SameLine();
+      ImGui::TextUnformatted(uiRu(c.titleRu.c_str(), c.titleEn.c_str()));
+      if (current && !m_expedition.finished()) {
+        ImGui::SetWindowFontScale(0.88f);
+        ImGui::Indent();
+        ImGui::TextColored(ImVec4(0.62f, 0.65f, 0.72f, 1.0f), "%s",
+                           uiRu(c.goalRu.c_str(), c.goalEn.c_str()));
+        ImGui::Unindent();
+        ImGui::SetWindowFontScale(1.0f);
+      }
+    }
+    if (m_expedition.finished()) {
+      ImGui::Spacing();
+      ImGui::TextColored(
+          ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
+          uiRu("Колония основана. Сюжет завершён.", "Colony founded. Story complete."));
+    }
+    ImGui::Spacing();
+    if (ImGui::Button(uiRu("Закрыть (N / Esc)", "Close (N / Esc)"))) {
+      m_expeditionMapOpen = false;
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(1);
+  ImGui::PopStyleColor(2);
+}
+
 void AppGL::drawModernTransportBar() {
   // Нижняя транспортная панель по центру (как медиаплеер): пауза, пресеты
   // времени, фактор варпа, тур, прыжок. Только кнопки-индикаторы: каждый
@@ -1509,10 +1754,21 @@ void AppGL::drawImGui() {
 if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   // === ModernUI ===: тема применяется один раз (флаг внутри).
   applyModernThemeOnce();
+  // === Expedition === (v3.5.0): слайды катсцены — поверх всего и только
+  // они (игровой HUD не засоряет кадр истории).
+  if (m_slidesOpen) {
+    drawSlidesOverlay();
+    return;
+  }
   // === Ship survival === (v3.3.0): HUD снизу слева, вне меню.
   if (!m_inMenu) drawShipHud();
   // === StoryJournal === (v3.5.0): панель журнала поверх сцены (в меню скрыта).
   if (m_storyOpen && !m_inMenu) drawStoryPanel();
+  // === Expedition === (v3.5.0): HUD-карточка главы над сценой.
+  if (!m_inMenu) {
+    drawExpeditionHud();
+    if (m_expeditionMapOpen) drawExpeditionMap();
+  }
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
@@ -2054,6 +2310,15 @@ void AppGL::teleportToStation(const std::string& id) {
   }
   // === Cinematic === end
   checkAchievements();
+
+  // === Expedition === (v3.5.0): посещение цели текущей главы прокручивает
+  // сюжет; в прологе свои слайды — главы озвучиваем только после него.
+  const int expBefore = m_expedition.chapterIndex;
+  m_expedition.markVisited(id);
+  if (m_expedition.chapterIndex > expBefore && m_expedition.introSeen) {
+    openChapterSlide(expeditionChapters()[expBefore].slideIdx);
+  }
+  saveExpeditionFileNow();
 }
 
 // === Ship survival === (v3.3.0) begin.
@@ -2559,6 +2824,7 @@ void AppGL::drawHelpContent() {
   ImGui::BulletText("/ focus station search");
   ImGui::BulletText("F5 export journey, F6 import journey");
   ImGui::BulletText("J story journal (bilingual)");  // v3.5.0
+  ImGui::BulletText("N expedition map");             // v3.5.0
   ImGui::BulletText("P pause / resume time");
   ImGui::BulletText("X warp drive on / off");
   ImGui::BulletText("- / = time pace down / up");
@@ -2642,10 +2908,18 @@ void AppGL::drawMenu() {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.42f, 0.29f, 0.08f, 1.00f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.34f, 0.09f, 1.00f));
     if (ImGui::Button("Play", ImVec2(-1.0f, 42.0f))) {
-      m_inMenu = false;
+      // === Expedition === (v3.5.0): Play = сюжетная экспедиция. Первый
+      // запуск — вводные слайды (человек на Земле → решение улететь), затем
+      // высадка в Солнечной системе; повторные — сразу полёт.
+      if (!m_expedition.introSeen && m_expedition.chapterIndex == 0) {
+        startExpeditionIntro();
+      } else {
+        m_inMenu = false;
+      }
     }
     if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Resume your journey");
+      ImGui::SetTooltip(m_expedition.introSeen ? "Resume your journey"
+                                               : "Begin the expedition");
     }
     ImGui::PopStyleColor(3);
 
@@ -2813,6 +3087,7 @@ void AppGL::drawMenu() {
 
 void AppGL::drawWorldLabels() {
   if (!m_showLabels) return;
+  if (m_slidesOpen) return;  // === Expedition ===: катсцена чистая, без меток
   const Station* curSt = m_sceneManager->getCurrentStation();
   if (!curSt) return;
 
@@ -3281,6 +3556,11 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   app.m_window->getFramebufferSize(fbWidth, fbHeight);
   glViewport(0, 0, fbWidth, fbHeight);
 
+  // === Expedition === (v3.5.0): gui.png — игровой кадр (не меню): видны
+  // HUD-карточка главы, корабельный HUD и бары; состояние свежее => PNG
+  // детерминирован, ловит регрессы игрового HUD байт-в-байт.
+  app.m_inMenu = false;
+
   for (int frame = 0; frame < 5; ++frame) {
     app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
     ImGui_ImplOpenGL3_NewFrame();
@@ -3296,6 +3576,25 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   std::string guiFile = outDir + "/gui.png";
   if (app.saveScreenshot(guiFile)) {
     std::cout << "Captured screenshot: " << guiFile << "\n";
+  }
+
+  // === Expedition === (v3.5.0): intro.png — кадр катсцены (первый слайд
+  // пролога поверх сцены Sgr A*). Детерминирован: без времени и ввода.
+  app.startExpeditionIntro();
+  for (int frame = 0; frame < 3; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawImGui();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string introFile = outDir + "/intro.png";
+  if (app.saveScreenshot(introFile)) {
+    std::cout << "Captured screenshot: " << introFile << "\n";
   }
 
   // === MenuSky === (v3.5.0): menu.png — hero-вид главного меню (живой

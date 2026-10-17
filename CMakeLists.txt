@@ -22,6 +22,7 @@ add_executable(astro-voyager
   src/Tour.cpp
   src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
   src/StoryJournal.cpp  # === StoryJournal === (v3.5.0): бортовой журнал, чистый C++17
+  src/Expedition.cpp  # === Expedition === (v3.5.0): сюжетная арка, чистый C++17
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -111,6 +112,20 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_story.cpp")
   endif()
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_expedition.cpp")
+  add_executable(test_expedition
+    tests/test_expedition.cpp
+    src/Expedition.cpp
+  )
+  target_include_directories(test_expedition PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+  if(MSVC)
+    target_compile_options(test_expedition PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_expedition PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
 if(ASTROVOYAGER_ENABLE_GL)
   message(STATUS "GL renderer enabled (expects Dependencies/ + src/vendor/ locally)")
   target_compile_definitions(astro-voyager PRIVATE ASTROVOYAGER_ENABLE_GL=1)
@@ -191,6 +206,7 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/PostFX.cpp
     src/SceneManager.cpp
     src/AppGL.cpp
+    src/StorySlides.cpp  # === Expedition === (v3.5.0): слайды + вектор-арт
     src/WarpJump.cpp  # === WarpJump === (агент J: чистая логика катсцены)
     src/vendor/imgui/imgui.cpp
     src/vendor/imgui/imgui_draw.cpp
@@ -244,6 +260,9 @@ if(TARGET test_save)
 endif()
 if(TARGET test_story)
   add_test(NAME test_story COMMAND test_story)
+endif()
+if(TARGET test_expedition)
+  add_test(NAME test_expedition COMMAND test_expedition)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):

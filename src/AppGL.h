@@ -6,9 +6,11 @@
 #include <vector>
 
 #include "Camera.h"
+#include "Expedition.h"
 #include "SaveGame.h"
 #include "SceneManager.h"
 #include "StoryJournal.h"
+#include "StorySlides.h"
 #include "Tour.h"
 #include "Types.h"
 #include "Window.h"
@@ -58,6 +60,14 @@ class AppGL {
   void drawWorldLabels();
   void drawStoryPanel();
   void teleportToStation(const std::string& id);
+  // === Expedition === (v3.5.0): сюжетная арка + вводные слайды.
+  void drawSlidesOverlay();
+  void drawExpeditionHud();
+  void drawExpeditionMap();
+  void startExpeditionIntro();
+  void openChapterSlide(int slideIdx);
+  void saveExpeditionFileNow();
+  void loadExpeditionFileNow();
   void flyToObjectAt(double px, double py);
   std::string pickCustomAt(double px, double py);
   void startObjectFlight(const Vec3& objPos, double viewDist,
@@ -126,6 +136,16 @@ class AppGL {
   StoryJournal m_story;
   bool m_storyOpen = false;
   bool m_prevJPressed = false;
+
+  // === Expedition === (v3.5.0): сюжетная арка + вводные слайды (рестайл).
+  ExpeditionState m_expedition;
+  bool m_expeditionMapOpen = false;
+  bool m_prevNPressed = false;  // N — карта глав (M занят аудио-mute)
+  std::vector<StorySlide> m_slidesCurrent;
+  std::string m_slidesHead;  // заголовок слайда главы (для done-карточек)
+  bool m_slidesOpen = false;
+  bool m_slidesIntro = false;
+  int m_slidesIdx = 0;
 
   // === MenuSky === (v3.5.0): "живой космос" за главным меню — фуллскрин-
   // шейдерный бэкдроп (туманность + MW-полоса + параллакс-звёзды), ленивая
