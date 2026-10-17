@@ -1,6 +1,7 @@
 #version 330 core
-// PostFX composite: scene (HDR-linear float16) + weighted bloom levels,
-// then ACES + gamma + grain; relativistic Doppler tint when flying.
+// PostFX composite: scene (HDR-linear float16) + bloom mip pyramid (level 0
+// already accumulates all levels) + anamorphic streak, then ACES + gamma +
+// grain; relativistic Doppler tint when flying. Output feeds FXAA (LDR).
 // u_BloomStrength == 0.0 => tonemapped scene only (stage 2a no longer
 // pixel-exact: tonemap moved here from the station shaders in v3.0.0).
 // u_Beta == 0.0 (harness / standing still) => tint block skipped.
@@ -8,11 +9,9 @@ out vec4 FragColor;
 in vec2 v_TexCoord;
 
 uniform sampler2D u_Scene;
-uniform sampler2D u_Bloom0;
-uniform sampler2D u_Bloom1;
-uniform sampler2D u_Bloom2;
-uniform sampler2D u_Bloom3;
-uniform sampler2D u_Bloom4;
+uniform sampler2D u_Bloom;   // post_down13/post_up9 pyramid, level 0
+uniform sampler2D u_Streak;  // post_streak.frag (level-2 horizontal smear)
+uniform float u_StreakK;     // streak share, cool tint below
 uniform float u_BloomStrength;
 uniform float u_Time;  // sim time for grain (fixed by the harness => PNG stable)
 
@@ -44,11 +43,9 @@ uniform float u_ShieldK;  // 0..1 impact amount (cold blue edge glow)
 
 void main() {
   vec4 sceneT = texelFetch(u_Scene, ivec2(gl_FragCoord.xy), 0);
-  vec3 bloom = texture(u_Bloom0, v_TexCoord).rgb * 0.30 +
-               texture(u_Bloom1, v_TexCoord).rgb * 0.25 +
-               texture(u_Bloom2, v_TexCoord).rgb * 0.20 +
-               texture(u_Bloom3, v_TexCoord).rgb * 0.15 +
-               texture(u_Bloom4, v_TexCoord).rgb * 0.10;
+  vec3 bloom = texture(u_Bloom, v_TexCoord).rgb +
+               texture(u_Streak, v_TexCoord).rgb *
+                   (u_StreakK * vec3(0.55, 0.75, 1.0));
   vec3 col = sceneT.rgb + bloom * u_BloomStrength;
   if (u_ChromaK > 0.0001) {
     // texture() lives only inside this branch: the amount==0 path must stay

@@ -44,7 +44,7 @@
 - `shaders/quad.vert + nebula.frag` — Крабовидная туманность (`m1`), процедурный impostor-спрайт с пульсаром и волокнами.
 - `shaders/quad.vert + pulsar.frag` — пульсары (`psr-vela`, `psr-crab`, `sgr-1806`, `psr-b1913`): наклонный дипольный маяк, дуги магнитосферы; вид параметризован per-station (`u_SpinRate/MagTilt/BeamTint/HaloGain/ArcScale`), тик с реальным периодом в аудио.
 - `m_starShader` + `StarPoints` — шаровое скопление (`m13`): детерминированная сфера Пламмера, точки со спектром по величине; между звёздами можно летать.
-- `shaders/post_bright/post_blur/post_comp.frag` — bloom-цепочка и композит; `sky.frag` — аберрация звёздного поля при быстром полёте.
+- `shaders/post_down13/post_up9/post_streak/post_comp/post_fxaa.frag` — пост-стек: bloom-пирамида Jimenez (13-tap down с Karis/soft-knee, 9-tap tent up), анаморфный стрик, ACES-композит и FXAA 3.11; `sky.frag` — аберрация звёздного поля при быстром полёте.
 - Скриншоты сохраняются в `docs/screens/`.
 
 ## Пресеты производительности (Quality / Perf Presets)

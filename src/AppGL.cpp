@@ -3610,6 +3610,11 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   if (app.saveScreenshot(introFile)) {
     std::cout << "Captured screenshot: " << introFile << "\n";
   }
+  // Пролог держим открытым только для кадра intro.png: следующие захваты
+  // (close-up, editor) идут с игровым HUD, без оверлея слайдов.
+  app.m_slidesOpen = false;
+  app.m_slidesCurrent.clear();
+  app.m_slidesIdx = 0;
 
   // === MenuSky === (v3.5.0): menu.png — hero-вид главного меню (живой
   // космос + стеклянная панель). u_Time фиксирован => кадр детерминирован,

@@ -313,6 +313,17 @@ Check 'free visit button' ($appCpp -match 'Free Visit')
 Check 'expedition map key N' (($appCpp -match 'GLFW_KEY_N') -and ($appCpp -match 'm_expeditionMapOpen'))
 Check 'expedition test wired' (($cmake -match 'tests/test_expedition\.cpp') -and ($cmake -match 'add_test\(NAME test_expedition'))
 Check 'expedition intro shot' (($appCpp -match 'intro\.png') -and ($appCpp -match 'startExpeditionIntro\(\);'))
+Check 'prologue closed after intro shot' ($appCpp -match '(?s)introFile.*m_slidesCurrent\.clear\(\)')
+
+# --- post-stack pass: bloom v2 (Jimenez) + anamorphic streak + FXAA ---
+Check 'bloom down13 shader' ((Test-Path (Join-Path $root 'shaders/post_down13.frag')) -and ((Read-File 'src/PostFX.cpp') -match 'post_down13'))
+Check 'bloom up9 shader' ((Test-Path (Join-Path $root 'shaders/post_up9.frag')) -and ((Read-File 'src/PostFX.cpp') -match 'post_up9'))
+Check 'karis firefly suppression' ((Read-File 'shaders/post_down13.frag') -match '1\.0 / \(1\.0 \+ luma')
+Check 'soft knee threshold' ((Read-File 'shaders/post_down13.frag') -match 'u_Knee')
+Check 'additive bloom upsample' ((Read-File 'src/PostFX.cpp') -match 'GL_ONE, GL_ONE')
+Check 'anamorphic streak shader' ((Test-Path (Join-Path $root 'shaders/post_streak.frag')) -and ((Read-File 'shaders/post_comp.frag') -match 'u_Streak'))
+Check 'fxaa wired after composite' ((Test-Path (Join-Path $root 'shaders/post_fxaa.frag')) -and ((Read-File 'src/PostFX.cpp') -match 'post_fxaa') -and ((Read-File 'src/PostFX.cpp') -match 'GL_RGBA8'))
+Check 'comp single bloom pyramid' ((Read-File 'shaders/post_comp.frag') -match 'u_Bloom;')
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

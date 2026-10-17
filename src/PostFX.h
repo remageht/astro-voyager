@@ -10,11 +10,14 @@ namespace astro {
 // === PostFX === (этап 2а: scene FBO + identity-компоузер, PNG байт-в-байт;
 // этап 2б: яркостный пасс + blur-цепочка + аддитивное свечение;
 // v3.0.0: scene FBO и цепочка — float16 HDR-linear, тонмаппинг ACES + гамма
-// и зерно живут только в композите, станционные шейдеры отдают линейный HDR).
+// и зерно живут только в композите, станционные шейдеры отдают линейный HDR;
+// post-stack pass: bloom v2 — 13-tap downsample с Karis/soft-knee (down) и
+// 9-tap tent (аддитивный up), анаморфный стрик от уровня 2, композит в
+// LDR-таргет и FXAA 3.11 перед HUD).
 // Рендер-петля и харнесс скриншотов идут через SceneManager::render(),
 // поэтому FBO и композит живут внутри него: beginScene() в начале render(),
-// endScene() в конце. При u_BloomStrength == 0.0 композит обязан отдавать
-// пиксель-в-пиксель исходный кадр (texelFetch, без фильтрации).
+// endScene() в конце. При u_BloomStrength == 0.0 вклада bloom/стрика нет
+// (сцена читается texelFetch без фильтрации).
 class PostFX {
  public:
   PostFX() = default;
@@ -42,6 +45,9 @@ class PostFX {
   // === Speed FX === (v3.3.0): motion-streak amount 0..1 (0 = off).
   void setSpeedFx(float speedK);
 
+  // FXAA 3.11 после композита (по умолчанию включён; выкл. для отладки).
+  void setFxaa(bool on) { m_fxaaOn = on; }
+
  private:
   void ensureTargets(int width, int height);
   void release();
@@ -54,8 +60,14 @@ class PostFX {
   static constexpr int kLevels = 5;
   unsigned int m_downFbo[kLevels] = {};
   unsigned int m_downTex[kLevels] = {};
-  unsigned int m_blurFbo[kLevels] = {};
-  unsigned int m_blurTex[kLevels] = {};
+
+  // Анаморфный стрик: горизонтальный смар уровня 2 пирамиды bloom.
+  unsigned int m_streakFbo = 0;
+  unsigned int m_streakTex = 0;
+
+  // LDR-таргет композита — вход FXAA (композит больше не пишет в окно).
+  unsigned int m_compFbo = 0;
+  unsigned int m_compTex = 0;
 
   int m_w = 0;
   int m_h = 0;
@@ -64,6 +76,8 @@ class PostFX {
   bool m_active = false;
   bool m_compOk = false;
   bool m_bloomOk = false;
+  bool m_fxaaOk = false;
+  bool m_fxaaOn = true;
   bool m_shadersTried = false;
 
   // Relativity flight state (see setFlight).
@@ -83,8 +97,10 @@ class PostFX {
   float m_speedK = 0.0f;
 
   std::unique_ptr<Shader> m_compShader;
-  std::unique_ptr<Shader> m_downShader;
-  std::unique_ptr<Shader> m_blurShader;
+  std::unique_ptr<Shader> m_downShader;    // post_down13.frag
+  std::unique_ptr<Shader> m_upShader;      // post_up9.frag
+  std::unique_ptr<Shader> m_streakShader;  // post_streak.frag
+  std::unique_ptr<Shader> m_fxaaShader;    // post_fxaa.frag
   std::unique_ptr<ScreenQuad> m_quad;
 };
 
