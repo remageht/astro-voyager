@@ -83,6 +83,9 @@ SceneManager::SceneManager() {
   m_skyShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/sky.frag");
   m_skyboxDeep = std::make_unique<Cubemap>();
   m_skyboxLocal = std::make_unique<Cubemap>();
+  // Mip-цепочка только у видимого скайбокса (IBL корабля); deep-кубемап
+  // (линзирование в bh.frag) остаётся без мипов — эталоны не меняются.
+  m_skyboxLocal->setMipmaps(true);
   m_skyboxLocal->regenerate(0.9985f, 0.40f, 1234u);
 
   initConstellationOrion();
@@ -1380,15 +1383,16 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         if (!s_shipInit) {
           s_shipSphere.setSphere(14, 28);
           s_shipRing.setRing(0.30f, 0.44f, 40);
-          // Трейл-лента: 20 поперечных пар за кормой (z 0.55 -> 2.75,
-          // полуширина 0.30 -> 0.03) + 2 продольных ребра.
+          // Трейл-лента: 44 поперечных пары за кормой (z 0.55 -> 2.75,
+          // полуширина 0.16 -> 0.02) + 2 продольных ребра. Плотные узкие
+          // рунги читаются гладким следом вместо «лестницы» на малой тяге.
           std::vector<glm::vec3> trail;
-          trail.reserve(120);
-          constexpr int kSeg = 20;
+          trail.reserve(280);
+          constexpr int kSeg = 44;
           for (int i = 0; i < kSeg; ++i) {
             const float f0 = static_cast<float>(i) / kSeg;
             const float z = 0.55f + f0 * 2.2f;
-            const float hw = 0.30f + (0.03f - 0.30f) * f0;
+            const float hw = 0.16f + (0.02f - 0.16f) * f0;
             trail.emplace_back(-hw, 0.0f, z);
             trail.emplace_back(hw, 0.0f, z);
           }
@@ -1396,8 +1400,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             for (int i = 0; i < kSeg; ++i) {
               const float f0 = static_cast<float>(i) / kSeg;
               const float f1 = static_cast<float>(i + 1) / kSeg;
-              const float hw0 = 0.30f + (0.03f - 0.30f) * f0;
-              const float hw1 = 0.30f + (0.03f - 0.30f) * f1;
+              const float hw0 = 0.16f + (0.02f - 0.16f) * f0;
+              const float hw1 = 0.16f + (0.02f - 0.16f) * f1;
               trail.emplace_back(side * hw0, 0.0f, 0.55f + f0 * 2.2f);
               trail.emplace_back(side * hw1, 0.0f, 0.55f + f1 * 2.2f);
             }
@@ -1425,12 +1429,14 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glEnable(GL_DEPTH_TEST);
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
-        // Часть корпуса: {pos, scale, baseColor, ring?}
+        // Часть корпуса: {pos, scale, baseColor, ring?, metal, rough}
         struct ShipPart {
           glm::vec3 pos;
           glm::vec3 scale;
           glm::vec3 color;
           int ring;
+          float metal;
+          float rough;
         };
         const glm::vec3 hullCol(0.84f, 0.88f, 0.94f);
         const glm::vec3 glassCol(0.35f, 0.55f, 0.80f);
@@ -1439,28 +1445,68 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         const int style = warpdrive::shipStyle();
         if (style == 1) {
           // Ring Ship (IXS Enterprise): цилиндр-фюзеляж + 2 кольца.
-          parts.push_back({{0.0f, 0.0f, -0.05f}, {0.10f, 0.10f, 0.80f}, hullCol, 0});
-          parts.push_back({{0.0f, 0.0f, -0.92f}, {0.08f, 0.08f, 0.14f}, hullCol, 0});
-          parts.push_back({{0.0f, 0.0f, 0.68f}, {0.12f, 0.12f, 0.12f}, wingCol, 0});
-          parts.push_back({{0.0f, 0.0f, -0.34f}, {1.0f, 1.0f, 1.0f}, wingCol, 1});
-          parts.push_back({{0.0f, 0.0f, 0.30f}, {1.0f, 1.0f, 1.0f}, wingCol, 1});
+          parts.push_back({{0.0f, 0.0f, -0.05f}, {0.10f, 0.10f, 0.80f}, hullCol, 0, 0.90f, 0.32f});
+          parts.push_back({{0.0f, 0.0f, -0.92f}, {0.08f, 0.08f, 0.14f}, hullCol, 0, 0.90f, 0.32f});
+          parts.push_back({{0.0f, 0.0f, 0.68f}, {0.12f, 0.12f, 0.12f}, wingCol, 0, 0.72f, 0.45f});
+          parts.push_back({{0.0f, 0.0f, -0.34f}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
+          parts.push_back({{0.0f, 0.0f, 0.30f}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
         } else if (style == 2) {
           // Shuttle: широкий корпус + кабина + 2 мотогондолы.
-          parts.push_back({{0.0f, 0.0f, 0.0f}, {0.48f, 0.10f, 0.55f}, hullCol, 0});
-          parts.push_back({{0.0f, 0.07f, -0.32f}, {0.11f, 0.08f, 0.15f}, glassCol, 0});
-          parts.push_back({{-0.52f, 0.0f, 0.10f}, {0.07f, 0.07f, 0.28f}, wingCol, 0});
-          parts.push_back({{0.52f, 0.0f, 0.10f}, {0.07f, 0.07f, 0.28f}, wingCol, 0});
+          parts.push_back({{0.0f, 0.0f, 0.0f}, {0.48f, 0.10f, 0.55f}, hullCol, 0, 0.90f, 0.32f});
+          parts.push_back({{0.0f, 0.07f, -0.32f}, {0.11f, 0.08f, 0.15f}, glassCol, 0, 0.70f, 0.08f});
+          parts.push_back({{-0.52f, 0.0f, 0.10f}, {0.07f, 0.07f, 0.28f}, wingCol, 0, 0.72f, 0.45f});
+          parts.push_back({{0.52f, 0.0f, 0.10f}, {0.07f, 0.07f, 0.28f}, wingCol, 0, 0.72f, 0.45f});
         } else {
           // Dart: заострённый фюзеляж + крыло + киль + кабина.
-          parts.push_back({{0.0f, 0.0f, -0.10f}, {0.13f, 0.11f, 0.82f}, hullCol, 0});
-          parts.push_back({{0.0f, 0.02f, -0.48f}, {0.09f, 0.08f, 0.16f}, glassCol, 0});
-          parts.push_back({{0.0f, -0.02f, 0.22f}, {0.78f, 0.035f, 0.34f}, wingCol, 0});
-          parts.push_back({{0.0f, 0.15f, 0.28f}, {0.035f, 0.22f, 0.30f}, wingCol, 0});
+          parts.push_back({{0.0f, 0.0f, -0.10f}, {0.13f, 0.11f, 0.82f}, hullCol, 0, 0.90f, 0.32f});
+          parts.push_back({{0.0f, 0.02f, -0.48f}, {0.09f, 0.08f, 0.16f}, glassCol, 0, 0.70f, 0.08f});
+          parts.push_back({{0.0f, -0.02f, 0.22f}, {0.78f, 0.035f, 0.34f}, wingCol, 0, 0.72f, 0.45f});
+          parts.push_back({{0.0f, 0.15f, 0.28f}, {0.035f, 0.22f, 0.30f}, wingCol, 0, 0.72f, 0.45f});
+        }
+        // === Ship lighting pass (S3): ключ — доминирующий источник сцены.
+        // Якорь: у mw — Солнце (sunWorldPos), иначе центр станции (origin);
+        // цвет/сила зависят от типа станции. Rim — холодный контр от
+        // обратного направления (в ship.frag), fill — IBL скайбокса.
+        glm::vec3 keyDir(0.42f, 0.70f, 0.56f);
+        glm::vec3 keyCol(1.00f, 0.95f, 0.88f);
+        if (const Station* st = getCurrentStation()) {
+          glm::vec3 anchor(0.0f);
+          glm::vec3 sunPos;
+          if (sunWorldPos(sunPos)) anchor = sunPos;
+          const glm::vec3 d = anchor - shipPos;
+          const float len = glm::length(d);
+          if (len > 1e-4f) keyDir = d / len;
+          switch (st->type) {
+            case StationType::BlackHole:  // раскалённый аккреционный диск
+              keyCol = glm::vec3(1.00f, 0.70f, 0.42f) * 1.25f; break;
+            case StationType::Quasar:  // сине-белое пекло
+              keyCol = glm::vec3(0.85f, 0.92f, 1.18f) * 1.45f; break;
+            case StationType::Pulsar:  // циановый маяк
+              keyCol = glm::vec3(0.78f, 0.90f, 1.12f) * 1.05f; break;
+            case StationType::Galaxy:
+            case StationType::StarCluster:  // суммарный звёздный свет
+              keyCol = glm::vec3(1.00f, 0.94f, 0.84f) * 0.70f; break;
+            case StationType::Nebula:
+              keyCol = glm::vec3(0.92f, 0.86f, 0.98f) * 0.60f; break;
+            case StationType::SolarSystem:  // солнце G2V
+              keyCol = glm::vec3(1.00f, 0.94f, 0.82f) * 1.45f; break;
+            case StationType::Constellation:
+              keyCol = glm::vec3(0.95f, 0.97f, 1.00f) * 0.50f; break;
+          }
+          // Лёгкий верхний уклон: плоский свет читается хуже.
+          keyDir = glm::normalize(keyDir + glm::vec3(0.0f, 0.30f, 0.0f));
         }
         if (s_shipShader) {
           s_shipShader->bind();
           s_shipShader->setUniformMat4f("u_MVP", mvp);
           s_shipShader->setUniform3f("u_CamPos", eye);
+          s_shipShader->setUniform3f("u_KeyDir", keyDir.x, keyDir.y, keyDir.z);
+          s_shipShader->setUniform3f("u_KeyColor", keyCol.x, keyCol.y, keyCol.z);
+          // IBL: мипованный локальный скайбокс (S1), 512 => 9 мипов.
+          s_shipShader->setUniform1i("u_Env", 0);
+          s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
+          glActiveTexture(GL_TEXTURE0);
+          m_skyboxLocal->bind(0);
           for (const ShipPart& p : parts) {
             glm::mat4 model = shipModel *
                               glm::translate(glm::mat4(1.0f), p.pos);
@@ -1476,6 +1522,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                        1.0f / p.scale.y, 1.0f / p.scale.z);
             s_shipShader->setUniform1i("u_FlatNormal", p.ring);
             s_shipShader->setUniform3f("u_BaseColor", p.color);
+            s_shipShader->setUniform1f("u_Metal", p.metal);
+            s_shipShader->setUniform1f("u_Rough", p.rough);
             if (p.ring == 1) {
               s_shipRing.draw();
             } else {

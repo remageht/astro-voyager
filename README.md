@@ -61,6 +61,9 @@ FBO с **bloom** (5 уровней яркости) и **релятивистск
     <td><img src="docs/screens/uma.png" alt="Ursa Major" width="100%"><br><sub><b>Ursa Major</b>: астеризм Большого Ковша с центрированной проекцией</sub></td>
     <td><img src="docs/screens/psr-vela.png" alt="Vela Pulsar" width="100%"><br><sub><b>Vela Pulsar</b>: наклонный дипольный маяк, горячие полюса, дуги магнитосферы, тик 89 мс</sub></td>
   </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screens/ship.png" alt="Warp ship" width="100%"><br><sub><b>Warp-корабль игрока</b>: PBR-материалы, IBL из скайбокса станции, ключевой свет от доминирующего источника (Sgr A*)</sub></td>
+  </tr>
 </table>
 
 ## Станции каталога

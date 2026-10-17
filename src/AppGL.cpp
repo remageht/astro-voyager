@@ -3650,6 +3650,28 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   }
   app.m_inMenu = false;
 
+  // === Ship lighting pass: ship.png — герой-кадр корабля (PBR-lite + IBL
+  // скайбокса + ключевой свет станции). Камера на дефолтной позиции sgra,
+  // u_Time фиксирован => кадр детерминирован. HUD не рисуем.
+  warpdrive::setShip(true, 1.70f, -1.30f, 4.60f, 2.35f);
+  warpdrive::setThruster(0.45f);
+  for (int frame = 0; frame < 4; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string shipFile = outDir + "/ship.png";
+  if (app.saveScreenshot(shipFile)) {
+    std::cout << "Captured screenshot: " << shipFile << "\n";
+  }
+  warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+  warpdrive::setThruster(0.7f);
+
   // Capture close-up progressive detail shots:
   // 1. M31 Andromeda Galaxy close-up inside the starfield (D = 8:
   //    volumetric M31Stars at full alpha + named bright star labels).

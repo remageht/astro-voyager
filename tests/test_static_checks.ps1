@@ -325,6 +325,14 @@ Check 'anamorphic streak shader' ((Test-Path (Join-Path $root 'shaders/post_stre
 Check 'fxaa wired after composite' ((Test-Path (Join-Path $root 'shaders/post_fxaa.frag')) -and ((Read-File 'src/PostFX.cpp') -match 'post_fxaa') -and ((Read-File 'src/PostFX.cpp') -match 'GL_RGBA8'))
 Check 'comp single bloom pyramid' ((Read-File 'shaders/post_comp.frag') -match 'u_Bloom;')
 
+# --- ship lighting pass: IBL + PBR-lite + scene key light ---
+Check 'ship pbr-lite shader' (((Read-File 'shaders/ship.frag') -match 'dGGX') -and ((Read-File 'shaders/ship.frag') -match 'u_KeyDir') -and ((Read-File 'shaders/ship.frag') -match 'textureLod\(u_Env'))
+Check 'ship ibl env uniforms' (($sceneCpp -match 'u_EnvMaxLod') -and ($sceneCpp -match 'm_skyboxLocal->bind'))
+Check 'cubemap mip support' (((Read-File 'src/Cubemap.cpp') -match 'glGenerateMipmap') -and ((Read-File 'src/Cubemap.h') -match 'setMipmaps'))
+Check 'scene key light per station type' (($sceneCpp -match 'u_KeyColor') -and ($sceneCpp -match 'StationType::Quasar') -and ($sceneCpp -match 'keyCol'))
+Check 'ship hero shot ref' (($appCpp -match 'ship\.png') -and ($appCpp -match 'warpdrive::setShip\(true'))
+Check 'ship ref committed' (Test-Path (Join-Path $root 'docs/screens/ship.png'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
