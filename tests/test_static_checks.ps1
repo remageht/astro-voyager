@@ -354,6 +354,19 @@ Check 'warp field shader lens' (((Read-File 'shaders/post_comp.frag') -match 'u_
 Check 'warp field screen anchor' (($sceneCpp -match 'setWarpLens') -and ($sceneCpp -match 'm_warpFx'))
 Check 'warp field gated by warp amount' (($appCpp -match 'warpK\);') -and ((Read-File 'src/SceneManager.h') -match 'float warpK = 0\.0f'))
 
+# --- ships v2 pass v3.6.0: детали Dart/Shuttle, варп-роли, дистанция/ETA ---
+Check 'ship hull warp roles' (((Read-File 'src/Types.h') -match 'styleCanWarp') -and ($appCpp -match 'styleCanWarp'))
+Check 'warp panel distance and eta' (($appCpp -match 'formatDistanceLy') -and ($appCpp -match 'formatEtaYears'))
+Check 'catalog station distances' (($catalogH -match 'distanceLy') -and ($catalogCpp -match '26000\.0') -and ($catalogCpp -match '2\.54e6'))
+Check 'dart v2 details' (($sceneCpp -match 'Dart v2') -and ($sceneCpp -match '0\.095f, -0\.04f'))
+Check 'shuttle v2 details' (($sceneCpp -match 'Shuttle v2') -and ($sceneCpp -match '0\.35f \* static_cast<float>\(s\)'))
+
+# --- portable release pass v3.6.0: Windows "с коробки" + вшитые шейдеры ---
+Check 'embedded shaders header' (Test-Path (Join-Path $root 'src/EmbeddedShaders.h'))
+Check 'embedded shaders generator' ((Test-Path (Join-Path $root 'packaging/embed_shaders.cmake')) -and ($cmake -match 'embed_shaders') -and ($cmake -match 'ASTRO_EMBED_CPP'))
+Check 'shader embedded fallback' ((Read-File 'src/Shader.cpp') -match 'embeddedShader')
+Check 'windows portable release job' (($ci -match 'build-windows-gl') -and ($ci -match 'astro-voyager\.exe') -and ($ci -match 'windows-x86_64\.zip'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

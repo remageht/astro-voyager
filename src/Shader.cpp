@@ -1,5 +1,6 @@
 #include "Shader.h"
 
+#include "EmbeddedShaders.h"  // v3.6.0: шейдеры, вшитые в бинарник
 #include "GLCompat.h"
 #include <glm/gtc/type_ptr.hpp>
 
@@ -97,13 +98,19 @@ std::string Shader::readFile(const std::string& filepath) {
     // Try with res/ prefix or relative to executable
     std::string fallback = "../" + filepath;
     file.open(fallback);
-    if (!file.is_open()) {
-      throw std::runtime_error("Shader::readFile - Failed to open shader file: " + filepath);
-    }
   }
-  std::stringstream ss;
-  ss << file.rdbuf();
-  return ss.str();
+  if (file.is_open()) {
+    std::stringstream ss;
+    ss << file.rdbuf();
+    return ss.str();
+  }
+  // v3.6.0 (portable release): диска нет рядом (одиночный exe «с коробки») —
+  // берём шейдер из таблицы, вшитой в бинарник на этапе configure
+  // (packaging/embed_shaders.cmake -> EmbeddedShaders.cpp).
+  if (const char* embedded = embeddedShader(filepath)) {
+    return embedded;
+  }
+  throw std::runtime_error("Shader::readFile - Failed to open shader file: " + filepath);
 }
 
 unsigned int Shader::compileShader(unsigned int type, const std::string& source) {

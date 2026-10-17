@@ -46,6 +46,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_interaction.cpp")
   add_executable(test_interaction
     tests/test_interaction.cpp
     src/Interaction.cpp
+    src/Catalog.cpp
   )
   target_include_directories(test_interaction PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
@@ -226,6 +227,24 @@ if(ASTROVOYAGER_ENABLE_GL)
     target_link_libraries(astro-voyager PRIVATE pthread dl m)
   endif()
   # === Audio === end
+
+  # === Portable release (v3.6.0) ===: все shaders/*.vert|frag вшиваются в
+  # бинарник на этапе configure (packaging/embed_shaders.cmake) — одиночный
+  # astro-voyager.exe запускается «с коробки» без папки shaders/ рядом.
+  # Shader::readFile сначала пробует диск (dev-режим), затем встроенную
+  # таблицу. Генерация на каждом configure: правки шейдеров подхватываются
+  # после любой переконфигурации.
+  set(ASTRO_EMBED_CPP "${CMAKE_BINARY_DIR}/generated/EmbeddedShaders.cpp")
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}"
+      "-DSHADER_DIR=${CMAKE_SOURCE_DIR}/shaders"
+      "-DOUT=${ASTRO_EMBED_CPP}"
+      -P "${CMAKE_SOURCE_DIR}/packaging/embed_shaders.cmake"
+    RESULT_VARIABLE astro_embed_rc)
+  if(NOT astro_embed_rc EQUAL 0)
+    message(FATAL_ERROR "embed_shaders.cmake failed (rc=${astro_embed_rc})")
+  endif()
+  target_sources(astro-voyager PRIVATE "${ASTRO_EMBED_CPP}")
 endif()
 
 # === Win32GUI === begin (агент UI): GL-приложение без консольного окна.
