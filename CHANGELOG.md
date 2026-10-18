@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 3.8.0 - 2026-10-18
+
+## What's new / Что нового
+- EN: Difficulty affects hazards - the debris-strike damage scales with the difficulty preset (Easy softer, Hard harder, Normal unchanged); the tuning struct gains hazardK and the unit tests now cover 6 difficulty multipliers.
+- EN: Ghost-jump fix - teleporting while a warp jump is mid-flight (loading a save via F10/menu, importing a route via F6, menu destinations, expedition jumps) now cleanly aborts the jump cinematic; the camera-spring and warpdrive overlays reset with it. The Burst's internal teleport explicitly keeps its own jump running.
+- EN: Regression coverage - two new static checks (hazard scaling wired, load-external-teleport aborts the cine) on top of the difficulty unit tests; logic-only pass, harness refs untouched except the menu version footer.
+- RU: Сложность влияет на угрозы - урон от столкновения с обломками масштабируется пресетом сложности (Easy мягче, Hard злее, Normal без изменений); в тюнинге появился hazardK, юнит-тесты покрывают 6 множителей сложности.
+- RU: Фикс «призрачного прыжка» - телепорт посреди варп-прыжка (загрузка сейва по F10/из меню, импорт маршрута по F6, пункты меню, экспедиция) теперь корректно прерывает катсцену прыжка; камера-пружина и warpdrive-оверлеи сбрасываются вместе с ней. Внутренний телепорт Бурста явно оставляет собственный прыжок работать.
+- RU: Регрессионное покрытие - два новых статик-чека поверх юнит-тестов сложности; чисто логический пасс, рефересы харнесса не тронуты, кроме строки версии в меню.
+- Gates / Гейты: ctest 6/6, static checks all pass, GL build OK, harness refs: menu.png updated (planned - version footer), rest byte-identical.
+
 ## 3.7.0 - 2026-10-18
 
 ## What's new / Что нового
