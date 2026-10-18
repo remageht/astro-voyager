@@ -2319,9 +2319,19 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   }
 
   ImGui::Separator();
+  // v3.7.0: сводка прогресса до ачивок.
+  ImGui::SetWindowFontScale(1.5f);
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Progress");
+  ImGui::SetWindowFontScale(1.15f);
+  ImGui::BulletText("Colonies founded: %d/2", static_cast<int>(m_colonies.size()));
+  ImGui::BulletText("Debris dodged: %d", m_asteroidDodges);
+  ImGui::BulletText("Event horizon crossed: %s",
+                    m_capturedHorizon ? "yes" : "no");
+  ImGui::BulletText("Stations visited: %d", static_cast<int>(m_visited.size()));
+  ImGui::Spacing();
   // === ModernUI ===: заголовок секции 20px.
   ImGui::SetWindowFontScale(1.5f);
-  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Achievements: %d/7", static_cast<int>(m_unlockedIds.size()));
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Achievements: %d/10", static_cast<int>(m_unlockedIds.size()));
   ImGui::SetWindowFontScale(1.15f);
   for (const auto& achId : allAchievementIds()) {
     bool unlocked = (m_unlockedIds.find(achId) != m_unlockedIds.end());
@@ -2556,6 +2566,7 @@ void AppGL::updateShip(float deltaTime) {
     m_toasts.push_back(ct);
     m_shipNotice = uiRu("Колония основана: ", "Colony established: ") + m_colonyHint;
     m_shipNoticeT = 4.0f;
+    checkAchievements();  // v3.7.0: colonist / architect
     saveProfileNow(false);
     m_colonyHint.clear();
     m_colonyHintId.clear();
@@ -2837,6 +2848,8 @@ void AppGL::applySaveGame(const SaveGame& g) {
   // v3.6.0: колонии (профиль → менеджер сцены для маркеров).
   m_colonies = g.progress.colonies;
   m_sceneManager->setColonies(m_colonies);
+  // v3.7.0: жизненный счётчик уклонений.
+  m_asteroidDodges = g.progress.asteroidDodges;
   m_colonyHint.clear();
   m_colonyHintId.clear();
   // Станция и камера. teleportToStation сам добавит станцию в маршрут и
@@ -2906,6 +2919,7 @@ void AppGL::saveProfileNow(bool quiet) {
   g.progress.unlocked.assign(m_unlockedIds.begin(), m_unlockedIds.end());
   g.progress.route = m_route;
   g.progress.colonies = m_colonies;
+  g.progress.asteroidDodges = m_asteroidDodges;  // v3.7.0
   g.progress.minBhDistance = m_minBhDistance;
   g.progress.exported = m_journeyExported;
   g.progress.imported = m_journeyImported;
@@ -2997,6 +3011,9 @@ void AppGL::checkAchievements() {
   st.capturedHorizon = m_capturedHorizon;  // === Physics ===
   st.exported = m_journeyExported;
   st.imported = m_journeyImported;
+  // v3.7.0: колонии + уклонения от обломков.
+  st.colonyCount = m_colonies.size();
+  st.asteroidDodged = (m_asteroidDodges > 0);
 
   // === StoryJournal === (v3.5.0): журнал обновляется из того же снапшота
   // прогресса; вызовы checkAchievements покрывают все точки прогресса
@@ -4556,6 +4573,10 @@ bool AppGL::updateJumpCine(float deltaTime) {
         uiRu("Манёвр выполнен: полоса обломков пройдена",
              "Dodge complete: debris field cleared");
     m_shipNoticeT = 3.0f;
+    // v3.7.0: жизненный счётчик + ачивка debris_dancer.
+    m_asteroidDodges++;
+    checkAchievements();
+    saveProfileNow(false);
   }
   if (jumpEv.asteroidHit) {
     const float shieldBefore = m_ship.shield;

@@ -70,6 +70,8 @@ struct SaveProgress {
   bool exported = false;
   bool imported = false;
   bool capturedHorizon = false;
+  // v3.7.0: успешные уклонения от обломков (жизненная статистика)
+  int asteroidDodges = 0;
 };
 
 struct SaveSession {

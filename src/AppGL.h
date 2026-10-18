@@ -225,6 +225,8 @@ class AppGL {
   bool m_prevCPressed = false;
   std::string m_colonyHint;    // имя сайта в радиусе посадки ("" = нет)
   std::string m_colonyHintId;  // id сайта для hotkey
+  // v3.7.0: жизненный счётчик успешных уклонений от обломков (ачивка + GUI).
+  int m_asteroidDodges = 0;
   // Интро-карточка ручного телепорта (3с, гаснет сама).
   bool m_cardActive = false;
   float m_cardT = 0.0f;

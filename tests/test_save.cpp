@@ -32,6 +32,7 @@ int main() {
     g.progress.exported = true;
     g.progress.imported = false;
     g.progress.capturedHorizon = true;
+    g.progress.asteroidDodges = 3;  // v3.7.0
 
     astro::SaveCustom c1;
     c1.id = "planet-3";
@@ -80,7 +81,8 @@ int main() {
         !close(out.progress.minBhDistance, g.progress.minBhDistance) ||
         out.progress.exported != g.progress.exported ||
         out.progress.imported != g.progress.imported ||
-        out.progress.capturedHorizon != g.progress.capturedHorizon) {
+        out.progress.capturedHorizon != g.progress.capturedHorizon ||
+        out.progress.asteroidDodges != 3) {
       std::cerr << "Test 1 failed: progress mismatch\n";
       return 1;
     }

@@ -440,7 +440,8 @@ std::string saveSerialize(const SaveGame& g) {
   out += ind(2) + "\"minBhDistance\": " + numToJson(g.progress.minBhDistance) + ",\n";
   out += ind(2) + std::string("\"exported\": ") + (g.progress.exported ? "true" : "false") + ",\n";
   out += ind(2) + std::string("\"imported\": ") + (g.progress.imported ? "true" : "false") + ",\n";
-  out += ind(2) + std::string("\"capturedHorizon\": ") + (g.progress.capturedHorizon ? "true" : "false") + "\n";
+  out += ind(2) + std::string("\"capturedHorizon\": ") + (g.progress.capturedHorizon ? "true" : "false") + ",\n";
+  out += ind(2) + "\"asteroidDodges\": " + std::to_string(g.progress.asteroidDodges) + "\n";
   out += ind(1) + "},\n";
 
   out += ind(1) + "\"customs\": [";
@@ -526,6 +527,7 @@ bool saveDeserialize(const std::string& text, SaveGame& out, std::string& err) {
     out.progress.exported = readBool(*pr, "exported", false);
     out.progress.imported = readBool(*pr, "imported", false);
     out.progress.capturedHorizon = readBool(*pr, "capturedHorizon", false);
+    out.progress.asteroidDodges = readInt(*pr, "asteroidDodges", 0);
   }
 
   if (const JVal* cu = findOf(root, "customs", JVal::Kind::Arr)) {

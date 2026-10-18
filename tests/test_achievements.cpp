@@ -88,11 +88,11 @@ int main() {
     }
   }
 
-  // Test 8: metadata check for all 7 achievements
+  // Test 8: metadata check for all 10 achievements
   {
     const auto& ids = astro::allAchievementIds();
-    if (ids.size() != 7) {
-      std::cerr << "Test 8 failed: expected 7 achievement IDs\n";
+    if (ids.size() != 10) {
+      std::cerr << "Test 8 failed: expected 10 achievement IDs\n";
       return 1;
     }
     for (const auto& id : ids) {
@@ -102,6 +102,53 @@ int main() {
         std::cerr << "Test 8 failed: empty title or desc for " << id << '\n';
         return 1;
       }
+    }
+  }
+
+  // Test 9 (v3.7.0): colonyCount 1 -> only colonist
+  {
+    astro::AchievementState s;
+    s.colonyCount = 1;
+    auto res = astro::achievementsCheck(s);
+    std::vector<std::string> expected = {"colonist"};
+    if (res != expected) {
+      std::cerr << "Test 9 failed: expected colonist\n";
+      return 1;
+    }
+  }
+
+  // Test 10 (v3.7.0): colonyCount 2 -> colonist + architect
+  {
+    astro::AchievementState s;
+    s.colonyCount = 2;
+    auto res = astro::achievementsCheck(s);
+    std::vector<std::string> expected = {"colonist", "architect"};
+    if (res != expected) {
+      std::cerr << "Test 10 failed: expected colonist + architect\n";
+      return 1;
+    }
+  }
+
+  // Test 11 (v3.7.0): asteroidDodged -> debris_dancer
+  {
+    astro::AchievementState s;
+    s.asteroidDodged = true;
+    auto res = astro::achievementsCheck(s);
+    std::vector<std::string> expected = {"debris_dancer"};
+    if (res != expected) {
+      std::cerr << "Test 11 failed: expected debris_dancer\n";
+      return 1;
+    }
+  }
+
+  // Test 12 (v3.7.0): zero dodge -> nothing
+  {
+    astro::AchievementState s;
+    auto res = astro::achievementsCheck(s);
+    std::vector<std::string> expected = {"colonist"};
+    if (res == expected) {
+      std::cerr << "Test 12 failed: empty state must not unlock colonist\n";
+      return 1;
     }
   }
 

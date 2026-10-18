@@ -49,6 +49,21 @@ std::vector<std::string> achievementsCheck(const AchievementState& s) {
     result.push_back("cartographer");
   }
 
+  // 8. colonist (v3.7.0): colonyCount >= 1
+  if (s.colonyCount >= 1) {
+    result.push_back("colonist");
+  }
+
+  // 9. architect (v3.7.0): colonyCount >= 2
+  if (s.colonyCount >= 2) {
+    result.push_back("architect");
+  }
+
+  // 10. debris_dancer (v3.7.0): успешный маневр в полосе обломков
+  if (s.asteroidDodged) {
+    result.push_back("debris_dancer");
+  }
+
   return result;
 }
 
@@ -60,6 +75,9 @@ const char* achievementTitle(const std::string& id) {
   if (id == "horizon_watcher") return "Горизонт событий";
   if (id == "messenger") return "Messenger";
   if (id == "cartographer") return "Cartographer";
+  if (id == "colonist") return "Первопроходец";
+  if (id == "architect") return "Архитектор сети";
+  if (id == "debris_dancer") return "Танцор обломков";
   return "";
 }
 
@@ -71,6 +89,9 @@ const char* achievementDescription(const std::string& id) {
   if (id == "horizon_watcher") return "Захвачен горизонтом событий";
   if (id == "messenger") return "Export your journey to a file";
   if (id == "cartographer") return "Import a shared journey";
+  if (id == "colonist") return "Основать первую колонию";
+  if (id == "architect") return "Основать колонии на обеих планетах";
+  if (id == "debris_dancer") return "Пройти маневром полосу обломков";
   return "";
 }
 
@@ -82,7 +103,10 @@ const std::vector<std::string>& allAchievementIds() {
     "wayfinder",
     "horizon_watcher",
     "messenger",
-    "cartographer"
+    "cartographer",
+    "colonist",
+    "architect",
+    "debris_dancer"
   };
   return kIds;
 }
