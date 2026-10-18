@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 3.6.0 - 2026-10-18
+
+## What's new / Что нового
+- EN: Colonies — found a colony on Mars (Sol) and Hercules b (M13): the approach hint [C], a gold ring marker near the founded site, colony names saved in the profile and restored on load.
+- EN: Ship inertia + orbit assist — inertial flight (thrust spools in ~3/s, decays ~0.9/s, the ship keeps its course after releasing the keys); near a massive center a tangential coast smoothly settles into a circular orbit (assist window 0.55..2.2 of circular speed); covered by a 7-case unit test.
+- EN: Controls page — mouse sensitivity (0.3..3.0) and Y inversion, five rebindable hotkeys (colony, view, map, journal, tour) with on-screen key capture; everything persisted in settings.json.
+- EN: Event-horizon interaction — the quasar core and the black-hole horizon no longer slide the ship past a wall: both run the 3.2 s capture sequence (tidal stretch and lens pop, plunge with a white flash, teleport to the entry point, shields -30 down to a floor of 5, ejection), each with its own messages; the state resets on save-load and respawn.
+- EN: Asteroid barrage (Travel) — about a quarter of warp jumps fly into a debris field: a warning, dodge by holding D/A (at least 0.25 s of steady input) inside the danger window, otherwise a strike takes 18 shield points; a conveyor of streak-rocks sweeps along the course and shifts against the input so the maneuver reads on screen; deterministic roll, one-shot events, full reset between jumps, unit-tested.
+- EN: Solar-size fix — star billboards are clamped in pixels (u_MaxPx), Hercules Prime is the bright warm core star of M13 rendered as a billboard, not a bloated planet sphere; Hercules b is a small exoplanet (radius 0.22, orbit 4.6) so nothing looks bigger than the cluster; the quasar/nebula imposters are anchored to the world (they no longer slide with the camera).
+- EN: HUD fix — while the expedition slideshow is open, the station card, top bar, trophies and hints are hidden, so nothing overlaps the chapter art.
+- RU: Колонии — основание колонии на Марсе (sol) и Hercules b (m13): подсказка [C] рядом с телом, золотое кольцо-маркер у основанного сайта, названия колоний сохраняются в профиль и восстанавливаются при загрузке.
+- RU: Инерция корабля + орбитальный ассист — инерционный полёт (тяга набирается ~3/с, спадает ~0.9/с, корабль сохраняет ход после отпускания клавиш); у массивного центра тангенциальный дрейф плавно укладывается в круговую орбиту (окно 0.55..2.2 круговой скорости); покрытие юнит-тестом на 7 кейсов.
+- RU: Страница управления — чувствительность мыши (0.3..3.0) и инверсия Y, пять переназначаемых клавиш (колония, вид, карта, журнал, тур) с захватом на экране; всё сохраняется в settings.json.
+- RU: Горизонт событий — ядро квазара и горизонт ЧД больше не «скользят» мимо стены: оба запускают катсцену захвата на 3.2с (прилив и линза, провал со вспышкой, телепорт к точке входа, щит -30 до пола 5, выброс) со своими текстами; состояние сбрасывается при загрузке и респауне.
+- RU: Астероидное поле в Travel — около четверти прыжков упирается в обломки: предупреждение, манёвр удержанием D/A (минимум 0.25с непрерывного ввода) в окне опасности, иначе удар на 18 единиц щита; конвейер стрик-камней движется вдоль курса и сдвигается против ввода, так что манёвр читается на экране; детерминированный ролл, одноразовые события, полный сброс между прыжками, юнит-тесты.
+- RU: Фикс размеров — билборды звёзд получают потолок в пикселях (u_MaxPx), Hercules Prime рисуется яркой тёплой точкой ядра M13, а не раздутой сферой-планетой; Hercules b — маленькая экзопланета (радиус 0.22, орбита 4.6), ничего не выглядит крупнее скопления; импостеры квазара и туманности привязаны к миру (не «плывут» с камерой).
+- RU: Фикс HUD — при открытых слайдах экспедиции карточка станции, верхняя панель, трофеи и подсказки скрываются и не накладываются на арт главы.
+- Gates / Гейты: ctest 6/6, static checks all pass, GL build OK, harness refs: only m13.png updated (planned), windows-zip smoke-run from the release layout.
+
 ## 3.5.0 - 2026-10-17
 
 ## What's new / Что нового
