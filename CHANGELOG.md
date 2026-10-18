@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 3.7.0 - 2026-10-18
+
+## What's new / Что нового
+- EN: Three new achievements — colonist (first colony founded), architect (both colony sites: Mars and Hercules b), debris dancer (a successful dodge in a warp-jump debris field); colony presses and dodges now refresh trophies immediately; the panel header counts to 10.
+- EN: Progress summary — the status panel gains a Progress section above achievements: colonies founded (N/2), debris dodged (lifetime counter), event horizon crossed (yes/no), stations visited.
+- EN: Persistence — the lifetime dodge counter is saved in save-sandbox.json progress (asteroidDodges) and restored on load; older saves without the field start at 0.
+- EN: Roadmap refresh — docs/ROADMAP.md now documents the shipped v0.3..v3.7 passes and the actual backlog (v4.0 adventure slot, offline science demos).
+- RU: Три новые ачивки — «Первопроходец» (первая колония), «Архитектор сети» (оба колониальных сайта: Марс и Hercules b), «Танцор обломков» (успешный манёвр в поле обломков варп-прыжка); основание колонии и манёвры обновляют трофеи сразу; счётчик в панели доходит до 10.
+- RU: Сводка прогресса — в панели над ачивками появилась секция Progress: основанные колонии (N/2), уклонения от обломков (жизненный счётчик), пересечение горизонта (да/нет), посещённые станции.
+- RU: Сохранение — жизненный счётчик уклонений пишется в прогресс save-sandbox.json (asteroidDodges) и восстанавливается при загрузке; старые сейвы без поля стартуют с нуля.
+- RU: Обновление роадмапа — docs/ROADMAP.md теперь отражает реализованные пассы v0.3..v3.7 и актуальный бэклог (слот адвенчура v4.0, офлайн научные демо).
+- Gates / Гейты: ctest 6/6, static checks all pass, GL build OK, harness refs: gui.png + menu.png updated (planned — new Progress section and the version footer), rest byte-identical.
+
 ## 3.6.0 - 2026-10-18
 
 ## What's new / Что нового
