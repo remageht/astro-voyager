@@ -13,6 +13,9 @@ AGENTS.md
 INTERNAL.md
 *.obj
 *.pdb
+# Model hull assets regenerate from the FBX via tools/fbx_ship_export.mjs:
+# the decimated .obj (covered by *.obj) and its BMP texture set.
+res/models/*.bmp
 .vs/
 x64/
 Debug/
@@ -23,3 +26,6 @@ imgui.ini
 
 docs/screens/disk/
 routes/
+
+# Blender previews/models are local build artifacts (scripts live in blender/scripts/)
+blender/out/

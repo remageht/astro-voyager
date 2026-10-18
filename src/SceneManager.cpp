@@ -2,6 +2,7 @@
 #include "Constellation.h"
 
 #include "GLCompat.h"
+#include "ObjModel.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <cmath>
@@ -35,7 +36,7 @@ bool g_shipVisible = false;
 float g_shipPos[3] = {0.0f, 0.0f, 0.0f};
 float g_shipYaw = 0.0f;
 float g_shipThruster = 0.7f;  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
-int g_shipStyle = 0;  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle
+int g_shipStyle = 0;  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model (OBJ)
 }  // namespace
 void setState(float k, float flash) {
   g_warpK = k;
@@ -57,7 +58,7 @@ float shipX() { return g_shipPos[0]; }
 float shipY() { return g_shipPos[1]; }
 float shipZ() { return g_shipPos[2]; }
 float shipYaw() { return g_shipYaw; }
-void setShipStyle(int s) { g_shipStyle = (s < 0 || s > 2) ? 0 : s; }
+void setShipStyle(int s) { g_shipStyle = (s < 0 || s > 3) ? 0 : s; }
 // v3.6.0 (пасс D): астероидное поле в Travel. Дефолт 0: харнесс не видит
 // катсцену и ни одного GL-вызова не получает — PNG остаются байт-в-байт.
 float g_astK = 0.0f;
@@ -1567,7 +1568,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         if (!s_shipFailed && !s_shipShader) {
           try {
             s_shipShader = new Shader("shaders/ship.vert", "shaders/ship.frag");
-          } catch (...) {
+          } catch (const std::exception& e) {
+            std::cerr << "[ship] shader error: " << e.what() << "\n";
             s_shipFailed = true;
           }
         }
@@ -1608,6 +1610,14 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             glm::translate(glm::mat4(1.0f), shipPos) *
             glm::rotate(glm::mat4(1.0f), warpdrive::shipYaw(),
                         glm::vec3(0.0f, 1.0f, 0.0f));
+        // Анимация корпуса: на тяге и в варпе корабль «вытягивается» вдоль
+        // курса (эффект двигателя), кольца Ring Ship при этом ещё и крутятся.
+        const float thrW = warpdrive::thruster();
+        const float warpVis = std::min(std::max(warpdrive::warpK(), 0.0f), 1.0f);
+        const float warpStretch = 1.0f + 0.06f * thrW + 0.45f * warpVis;
+        const glm::mat4 shipHullModel =
+            shipModel * glm::scale(glm::mat4(1.0f),
+                                   glm::vec3(1.0f, 1.0f, warpStretch));
         glm::mat4 proj = glm::perspective(glm::radians(m_settings.fovDegrees),
                                           aspect, 0.1f, 1000.0f);
         glm::vec3 eye(cp.x, cp.y, cp.z);
@@ -1658,7 +1668,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         const glm::vec3 engineEmi = kEngineEmi[pal];
         std::vector<ShipPart> parts;
         const int style = warpdrive::shipStyle();
-        if (style == 1) {
+        // Стиль 3 (Model OBJ) при недоступном файле откатывается на процедурный
+        // Ring Ship: разделы ниже строят тот же parts-набор, что и style 1.
+        const int styleParts = (style == 3) ? 1 : style;
+        if (styleParts == 1) {
           // Ring Ship v2 (v3.6.0): по образцу владельца (Tripo) — три кольца,
           // носовое копьё, многодюзовый кластер кормы. Всё из единичных сфер
           // и плоских колец: детерминизм, без новых мешей и текстур.
@@ -1689,7 +1702,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           // Навогни на кормовом кольце (z+ = корма).
           parts.push_back({{-0.44f, 0.0f, 0.44f}, {0.020f, 0.020f, 0.020f}, navRed, 0, 0.0f, 0.60f, navRed});
           parts.push_back({{0.44f, 0.0f, 0.44f}, {0.020f, 0.020f, 0.020f}, navGreen, 0, 0.0f, 0.60f, navGreen});
-        } else if (style == 2) {
+        } else if (styleParts == 2) {
           // Shuttle: широкий корпус + кабина + 2 мотогондолы.
           parts.push_back({{0.0f, 0.0f, 0.0f}, {0.48f, 0.10f, 0.55f}, hullCol, 0, 0.90f, 0.32f});
           parts.push_back({{0.0f, 0.07f, -0.32f}, {0.11f, 0.08f, 0.15f}, glassCol, 0, 0.70f, 0.08f});
@@ -1769,6 +1782,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         if (s_shipShader) {
           s_shipShader->bind();
           s_shipShader->setUniformMat4f("u_MVP", mvp);
+          // Скин Ring Ship живёт в пространстве корабля: передаём обратную
+          // матрицу один раз на кадр (для остальных стилей она не нужна).
+          s_shipShader->setUniformMat4f("u_ShipInv", glm::inverse(shipModel));
           s_shipShader->setUniform3f("u_CamPos", eye);
           s_shipShader->setUniform3f("u_KeyDir", keyDir.x, keyDir.y, keyDir.z);
           s_shipShader->setUniform3f("u_KeyColor", keyCol.x, keyCol.y, keyCol.z);
@@ -1780,14 +1796,101 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
           glActiveTexture(GL_TEXTURE0);
           m_skyboxLocal->bind(0);
+          bool meshDrawn = false;
+          if (style == 3) {
+            // Model hull (агент M): меш из res/models/warp_ship.obj рядом с
+            // exe. Лениво, раз за процесс; ~15 МБ текстовый парс — единичный
+            // хитч кадра. При отсутствии файла meshDrawn останется false:
+            // процедурный Ring Ship уже собран в parts (styleParts).
+            static ObjModel s_shipModel;
+            static bool s_modelTried = false;
+            if (!s_modelTried) {
+              s_modelTried = true;
+              s_shipModel.load("res/models/warp_ship.obj");
+              // PBR-набор рядом с мешом (albedo/normal/rough/metal BMP).
+              // Нет карт — остаёмся на плоском металле, ошибки не фатальны.
+              s_shipModel.loadTextures("res/models/warp_ship");
+            }
+            if (s_shipModel.ready()) {
+              s_shipShader->setUniformMat4f("u_Model", shipHullModel);
+              s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
+              s_shipShader->setUniform1i("u_FlatNormal", 0);
+              s_shipShader->setUniform1i("u_SkinOn", 0);
+              s_shipShader->setUniform3f("u_BaseColor",
+                                         glm::vec3(0.86f, 0.90f, 0.96f));
+              s_shipShader->setUniform1f("u_Metal", 0.88f);
+              s_shipShader->setUniform1f("u_Rough", 0.36f);
+              // Текстурированный путь: карты в юнитах 1..4 (0 — скайбокс).
+              const bool texOn = s_shipModel.textured();
+              s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
+              if (texOn) {
+                s_shipShader->setUniform1i("u_Albedo", 1);
+                s_shipShader->setUniform1i("u_NormalTex", 2);
+                s_shipShader->setUniform1i("u_RoughTex", 3);
+                s_shipShader->setUniform1i("u_MetalTex", 4);
+                s_shipModel.bindTextures(1);
+              }
+              // Star Trek-подсветка в варпе: линейный HDR-довесок, умеренный.
+              const float wk =
+                  std::min(std::max(warpdrive::warpK(), 0.0f), 1.0f);
+              s_shipShader->setUniform3f(
+                  "u_Emissive", glm::vec3(0.010f, 0.028f, 0.052f) * wk);
+              s_shipModel.draw();
+              if (texOn) glActiveTexture(GL_TEXTURE0);
+              meshDrawn = true;
+            }
+          }
+          if (!meshDrawn) {
+          // Процедурные части: плоский u_BaseColor, текстуры выключены
+          // (у них нет атрибута UV — location 2 не включён).
+          s_shipShader->setUniform1i("u_TexOn", 0);
+          // Сэмплеры карт всё равно обязаны смотреть в СВОИ юниты: если два
+          // сэмплера разного типа делят юнит 0 (кубмап скайбокса), драйвер
+          // вправе отбросить draw — корпус рисовался чёрным.
+          s_shipShader->setUniform1i("u_Albedo", 1);
+          s_shipShader->setUniform1i("u_NormalTex", 2);
+          s_shipShader->setUniform1i("u_RoughTex", 3);
+          s_shipShader->setUniform1i("u_MetalTex", 4);
+          // Тайловый скин Ring Ship (панели, заклёпки, потёртости):
+          // tools/make_ring_skin.mjs -> res/models/ring_skin_*.bmp.
+          static unsigned int s_skinAlbedo = 0;
+          static unsigned int s_skinRough = 0;
+          static bool s_skinTried = false;
+          if (!s_skinTried) {
+            s_skinTried = true;
+            s_skinAlbedo = loadBmpTexture("res/models/ring_skin_albedo.bmp");
+            s_skinRough = loadBmpTexture("res/models/ring_skin_rough.bmp");
+          }
+          // Панельный скин — только у процедурного Ring Ship (стиль 1);
+          // Dart и Shuttle сохраняют эталонный вид (ship.png не меняется).
+          const bool skinOn = (style == 1) && s_skinAlbedo != 0;
+          s_shipShader->setUniform1i("u_SkinOn", skinOn ? 1 : 0);
+          s_shipShader->setUniform1i("u_SkinAlbedo", 5);
+          s_shipShader->setUniform1i("u_SkinRough", 6);
+          if (skinOn) {
+            glActiveTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_2D, s_skinAlbedo);
+            glActiveTexture(GL_TEXTURE6);
+            glBindTexture(GL_TEXTURE_2D, s_skinRough);
+            glActiveTexture(GL_TEXTURE0);
+          }
+          int ringIdx = 0;
           for (const ShipPart& p : parts) {
-            glm::mat4 model = shipModel *
+            glm::mat4 model = shipHullModel *
                               glm::translate(glm::mat4(1.0f), p.pos);
             if (p.ring == 1) {
               // RingMesh лежит в XZ (нормаль +Y) — поворот в плоскость XY.
               model = model * glm::rotate(glm::mat4(1.0f),
                                           glm::radians(90.0f),
                                           glm::vec3(1.0f, 0.0f, 0.0f));
+              // Спин кольца: раскручивается тягой и варпом, соседние кольца
+              // вращаются в разные стороны (живее силуэт).
+              const float spinRate = 0.55f + 2.6f * thrW + 8.0f * warpVis;
+              const float spinDir = (ringIdx % 2 == 0) ? 1.0f : -1.0f;
+              model = model * glm::rotate(glm::mat4(1.0f),
+                                          time * spinRate * spinDir,
+                                          glm::vec3(0.0f, 0.0f, 1.0f));
+              ++ringIdx;
             }
             model = model * glm::scale(glm::mat4(1.0f), p.scale);
             s_shipShader->setUniformMat4f("u_Model", model);
@@ -1805,6 +1908,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               s_shipSphere.draw();
             }
           }
+          }  // !meshDrawn (fallback procedural parts)
           s_shipShader->unbind();
         }
         // Трейл + движок: без depth, аддитивно поверх корпуса.
@@ -1831,8 +1935,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         // Движок: 1 крупная пульсирующая КРАСНАЯ точка за кормой.
         {
           const float sy = warpdrive::shipYaw();
-          const float ex = warpdrive::shipX() + 0.55f * std::sin(sy);
-          const float ez = warpdrive::shipZ() + 0.55f * std::cos(sy);
+          // Model hull (стиль 3): хвост длиннее (полудлина 1.15), выносим
+          // точку дальше за корму, чем у процедурных корпусов (0.55).
+          const float engineBack = (style == 3) ? 1.45f : 0.55f;
+          const float ex = warpdrive::shipX() + engineBack * std::sin(sy);
+          const float ez = warpdrive::shipZ() + engineBack * std::cos(sy);
           // v3.3.0: яркость и размер движка растут с тягой.
           const float thr2 = warpdrive::thruster();
           const float mag = (0.1f + 0.35f * std::sin(time * 18.0f)) *

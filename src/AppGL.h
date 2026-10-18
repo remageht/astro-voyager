@@ -303,7 +303,7 @@ class AppGL {
   std::string m_warpJumpTarget;
   int m_warpJumpFromFactor = 1;
   int m_warpSel = 0;  // выбор пункта в варп-панели
-  int m_shipStyle = 0;  // корпус корабля: 0 Dart, 1 Ring Ship v2, 2 Shuttle
+  int m_shipStyle = 0;  // корпус корабля: 0 Dart, 1 Ring Ship v2, 2 Shuttle, 3 Model (OBJ)
   // === Settings v3.6.0 ===: пользовательские настройки (сохраняются в профиль).
   int m_difficulty = 1;  // 0 Easy, 1 Normal, 2 Hard (см. difficultyTuning)
   int m_aaMode = 1;      // 0 Off, 1 FXAA (PostFX)

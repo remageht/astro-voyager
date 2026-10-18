@@ -3322,9 +3322,9 @@ void AppGL::drawMenu() {
     }
 
     ImGui::SeparatorText("Ship");
-    const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle"};
+    const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle", "Model (OBJ)"};
     int hullSel = m_shipStyle;
-    if (ImGui::Combo("Hull", &hullSel, hullNames, 3)) {
+    if (ImGui::Combo("Hull", &hullSel, hullNames, 4)) {
       setShipStyleNow(hullSel);
     }
     const char* engineNames[] = {"Red", "Ion", "Emerald", "Plasma"};
@@ -3995,6 +3995,78 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
   warpdrive::setThruster(0.7f);
 
+  // === Ship model shot (агент M, v3.8.1): аддитивный герой-кадр стилей
+  // Model (OBJ). Эталон ship.png не трогаем: отдельный файл ship_model.png,
+  // стиль через warpdrive::setShipStyle, после кадра — откат.
+  {
+    const int styleBackup = app.m_shipStyle;
+    warpdrive::setShipStyle(3);
+    warpdrive::setShip(true, 1.28f, -0.98f, 5.95f, 2.35f);
+    warpdrive::setThruster(0.45f);
+    for (int frame = 0; frame < 6; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
+    std::string shipModelFile = outDir + "/ship_model.png";
+    if (app.saveScreenshot(shipModelFile)) {
+      std::cout << "Captured screenshot: " << shipModelFile << "\n";
+    }
+    // Close-up того же корпуса: камера смотрит в -Z, ставим корабль в 3.5 ед.
+    // перед ней — читаются карты PBR-набора (панели, нормали, металл).
+    {
+      const Vec3 cam = app.m_camera.position;
+      warpdrive::setShip(true, static_cast<float>(cam.x) + 0.52f,
+                         static_cast<float>(cam.y) - 0.40f,
+                         static_cast<float>(cam.z) - 3.6f, 2.35f);
+      for (int frame = 0; frame < 6; ++frame) {
+        app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        app.m_window->swapBuffers();
+        app.m_window->pollEvents();
+      }
+      std::string closeFile = outDir + "/ship_model_close.png";
+      if (app.saveScreenshot(closeFile)) {
+        std::cout << "Captured screenshot: " << closeFile << "\n";
+      }
+    }
+    // Ring Ship skin: тот же близкий ракурс, но процедурный корпус с
+    // панельной «обшивкой» (u_SkinOn) — отдельный кадр ship_ring.png.
+    {
+      warpdrive::setShipStyle(1);
+      const Vec3 cam = app.m_camera.position;
+      warpdrive::setShip(true, static_cast<float>(cam.x) + 0.52f,
+                         static_cast<float>(cam.y) - 0.40f,
+                         static_cast<float>(cam.z) - 3.6f, 2.35f);
+      for (int frame = 0; frame < 6; ++frame) {
+        app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        app.m_window->swapBuffers();
+        app.m_window->pollEvents();
+      }
+      std::string ringFile = outDir + "/ship_ring.png";
+      if (app.saveScreenshot(ringFile)) {
+        std::cout << "Captured screenshot: " << ringFile << "\n";
+      }
+    }
+    warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+    warpdrive::setShipStyle(app.m_shipStyle);
+    warpdrive::setThruster(0.7f);
+  }
+
   // Capture close-up progressive detail shots:
   // 1. M31 Andromeda Galaxy close-up inside the starfield (D = 8:
   //    volumetric M31Stars at full alpha + named bright star labels).
@@ -4297,7 +4369,7 @@ void AppGL::disengageWarp() {
 }
 
 void AppGL::setShipStyleNow(int style) {
-  m_shipStyle = std::min(std::max(style, 0), 2);
+  m_shipStyle = std::min(std::max(style, 0), 3);
   warpdrive::setShipStyle(m_shipStyle);
   // Shuttle без варп-двигателя: если варп был активен (Cruise/Cooldown),
   // гасим его; посреди катсцены не трогаем (досматриваем).
@@ -4920,11 +4992,11 @@ void AppGL::drawWarpPanel() {
       (m_warpStatus == 1 && curSt && curSt->id != tgtId && warpCap);
   // Выбор корпуса корабля (смена вида).
   {
-  const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle"};
+  const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle", "Model (OBJ)"};
   int hullSel = m_shipStyle;
   ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
   if (ImGui::BeginCombo("Hull", hullNames[hullSel])) {
-    for (int n = 0; n < 3; ++n) {
+    for (int n = 0; n < 4; ++n) {
       const bool sel = (n == hullSel);
       if (ImGui::Selectable(hullNames[n], sel)) {
         setShipStyleNow(n);
