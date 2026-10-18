@@ -58,6 +58,16 @@ float shipY() { return g_shipPos[1]; }
 float shipZ() { return g_shipPos[2]; }
 float shipYaw() { return g_shipYaw; }
 void setShipStyle(int s) { g_shipStyle = (s < 0 || s > 2) ? 0 : s; }
+// v3.6.0 (пасс D): астероидное поле в Travel. Дефолт 0: харнесс не видит
+// катсцену и ни одного GL-вызова не получает — PNG остаются байт-в-байт.
+float g_astK = 0.0f;
+float g_astLane = 0.0f;
+void setAsteroids(float k, float lane) {
+  g_astK = (k < 0.0f) ? 0.0f : ((k > 1.0f) ? 1.0f : k);
+  g_astLane = (lane < -1.0f) ? -1.0f : ((lane > 1.0f) ? 1.0f : lane);
+}
+float astK() { return g_astK; }
+float astLane() { return g_astLane; }
 int shipStyle() { return g_shipStyle; }
 void setThruster(float k) {
   if (k < 0.0f) k = 0.0f;
@@ -1838,6 +1848,72 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                      kGlowTint[pal].z);
           s_engine.draw();
           m_starShader->unbind();
+        }
+        // === v3.6.0 (пасс D): полоса обломков в Travel === конвейер
+        // из 24 «камней»: короткие LineMesh-стриики вдоль курса от носа
+        // корабля (-4.6 по локальному Z) до точки у ближней кромки (-0.2),
+        // где камень «пролетает мимо» и пересортируется на новый пролёт.
+        // На старте стриик тонок (около 10+ ед. от камеры), читается как
+        // точка глубины; скипается целиком при astK = 0 (харнесс чистый).
+        {
+          const float astK = warpdrive::astK();
+          if (astK > 0.0005f) {
+            static LineMesh s_astField;
+            std::vector<glm::vec3> ast;
+            ast.reserve(48);
+            std::vector<unsigned int> astIdx;
+            astIdx.reserve(48);
+            constexpr int kAstN = 24;
+            const float ay = warpdrive::shipYaw();
+            // Нос = -localZ: мирный forward (-sin, 0, -cos); правый борт =
+            // разворот localX вокруг Y: (cos, 0, -sin).
+            const float fwX = -std::sin(ay);
+            const float fwZ = -std::cos(ay);
+            const float rtX = std::cos(ay);
+            const float rtZ = -std::sin(ay);
+            const float s0 = warpdrive::shipX();
+            const float s1 = warpdrive::shipY();
+            const float s2 = warpdrive::shipZ();
+            auto hOF = [](float n) -> float {
+              return std::fmod(std::sin(n) * 43758.5453f, 1.0f) < 0.0f
+                         ? std::fmod(std::sin(n) * 43758.5453f, 1.0f) + 1.0f
+                         : std::fmod(std::sin(n) * 43758.5453f, 1.0f);
+            };
+            const float lane = warpdrive::astLane();  // -1..1 сглаженный
+            for (int i = 0; i < kAstN; ++i) {
+              const float fi = static_cast<float>(i);
+              const float off = hOF(fi * 13.79f + 17.0f);
+              const float rate = 0.8f + 0.6f * hOF(fi * 21.31f + 5.0f);
+              const float len = 2.0f + 1.5f * hOF(fi * 7.23f + 29.0f);
+              const float lat0 = (hOF(fi * 9.77f + 41.0f) - 0.5f) * 4.0f;
+              const float yOff = (hOF(fi * 11.47f + 61.0f) - 0.5f) * 1.8f;
+              // Уклонение D (lane > 0) сдвигает камни влево: проплевший
+              // между ними манёвр читается как прыжок в сторону.
+              const float lat = lat0 - lane * 1.35f;
+              const float ph = std::fmod(time * 0.36f * rate + off, 1.0f);
+              if (ph < 0.04f || ph > 0.96f) continue;  // «миг» на краях скип
+              const float zHead = -4.6f + 4.4f * ph;
+              const float zTail = zHead + len;  // хвост дальше от носа
+              const glm::vec3 head(s0 + fwX * zHead + rtX * lat,
+                                   s1 + yOff, s2 + fwZ * zHead + rtZ * lat);
+              const glm::vec3 tail(s0 + fwX * zTail + rtX * lat,
+                                   s1 + yOff, s2 + fwZ * zTail + rtZ * lat);
+              astIdx.push_back(static_cast<unsigned int>(ast.size()));
+              ast.push_back(head);
+              astIdx.push_back(static_cast<unsigned int>(ast.size()));
+              ast.push_back(tail);
+            }
+            m_linesShader->bind();
+            m_linesShader->setUniformMat4f("u_MVP", mvp);
+            m_linesShader->setUniformMat4f("u_Model", glm::mat4(1.0f));
+            m_linesShader->setUniform1f("u_Time", time);
+            const glm::vec3 astCol(0.62f * astK, 0.50f * astK, 0.38f * astK);
+            m_linesShader->setUniform3f("u_LineColor", astCol.x, astCol.y,
+                                        astCol.z);
+            s_astField.setGeometry(ast, astIdx);
+            s_astField.drawLines();
+            m_linesShader->unbind();
+          }
         }
         glDisable(GL_BLEND);
         glDepthMask(GL_TRUE);

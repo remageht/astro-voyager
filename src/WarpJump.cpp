@@ -4,7 +4,7 @@
 
 namespace astro {
 
-void WarpJump::start(const std::string& target) {
+void WarpJump::start(const std::string& target, float astRoll01) {
   if (target.empty()) {
     stop();
     return;
@@ -13,6 +13,14 @@ void WarpJump::start(const std::string& target) {
   m_phase = JumpPhase::Charge;
   m_t = 0.0f;
   m_switched = false;
+  // v3.6.0: пасс D — астероидное поле на этот прыжок (детерминированный
+  // роул от вызывающего: тест / AppGL).
+  m_astField = (astRoll01 < kAstChance);
+  m_astEntered = false;
+  m_astDodgedDone = false;
+  m_astHitDone = false;
+  m_astDodgeT = 0.0f;
+  m_dodgeAxis = 0.0f;
 }
 
 void WarpJump::stop() {
@@ -20,6 +28,18 @@ void WarpJump::stop() {
   m_t = 0.0f;
   m_target.clear();
   m_switched = false;
+  m_astField = false;
+  m_astEntered = false;
+  m_astDodgedDone = false;
+  m_astHitDone = false;
+  m_astDodgeT = 0.0f;
+  m_dodgeAxis = 0.0f;
+}
+
+void WarpJump::setDodgeAxis(float axis) {
+  if (axis < -1.0f) axis = -1.0f;
+  if (axis > 1.0f) axis = 1.0f;
+  m_dodgeAxis = axis;
 }
 
 float WarpJump::phaseDur(JumpPhase p) {
@@ -83,6 +103,32 @@ JumpEvent WarpJump::update(float dt) {
       }
       break;
     case JumpPhase::Travel:
+      // v3.6.0: полоса обломков в Travel (пасс D). Каждый астероидный
+      // флаг выдаётся ровно один раз за пролёт; уклонение копится только
+      // внутри окна опасности по суммарному времени удержания A/D.
+      if (m_astField) {
+        if (!m_astEntered && m_t >= kTravelDur * kAstEnterT) {
+          m_astEntered = true;
+          ev.asteroidEnter = true;
+        }
+        const float t01 = m_t / kTravelDur;
+        const bool inDanger =
+            (t01 >= kAstDangerStart) && (t01 <= kAstDangerEnd);
+        if (inDanger && std::fabs(m_dodgeAxis) >= 0.5f) {
+          m_astDodgeT += dt;
+          if (!m_astDodgedDone && m_astDodgeT >= kAstDodgeDwell) {
+            m_astDodgedDone = true;
+            ev.asteroidDodged = true;
+          }
+        } else if (inDanger) {
+          // Рваный ввод не копится: в поле нужно вести уклонение непрерывно.
+          m_astDodgeT = 0.0f;
+        }
+        if (!m_astDodgedDone && !m_astHitDone && t01 > kAstDangerEnd) {
+          m_astHitDone = true;
+          ev.asteroidHit = true;
+        }
+      }
       if (m_t >= kTravelDur) {
         m_phase = JumpPhase::Arrival;
         m_t = 0.0f;

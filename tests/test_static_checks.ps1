@@ -404,6 +404,12 @@ Check 'controls save round-trip test' ((Read-File 'tests/test_save.cpp') -match 
 Check 'ship inertial flight' (($appCpp -match 'm_shipVel') -and ($appCpp -match 'resp = m_moveInputActive \? 3\.0 : 0\.9'))
 Check 'orbit assist math' (((Read-File 'src/Types.h') -match 'orbitAssist') -and ((Read-File 'tests/test_interaction.cpp') -match 'orbitAssist'))
 
+# --- asteroid barrage pass D v3.6.0: поле, уклонение, урон щита ---
+Check 'warp asteroid field logic' (((Read-File 'src/WarpJump.h') -match 'kAstChance') -and ((Read-File 'src/WarpJump.cpp') -match 'asteroidEnter'))
+Check 'asteroid dodge input' (((Read-File 'src/AppGL.cpp') -match 'setDodgeAxis') -and ((Read-File 'src/AppGL.h') -match 'm_astLane'))
+Check 'asteroid shield damage' (($appCpp -match 'kAstDamage') -and ($appCpp -match 'shieldFlashHit'))
+Check 'asteroid field test' ((Read-File 'tests/test_interaction.cpp') -match 'asteroid roll 0\.9')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

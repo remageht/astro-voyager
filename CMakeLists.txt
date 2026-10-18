@@ -47,6 +47,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_interaction.cpp")
     tests/test_interaction.cpp
     src/Interaction.cpp
     src/Catalog.cpp
+    src/WarpJump.cpp
   )
   target_include_directories(test_interaction PRIVATE "${CMAKE_SOURCE_DIR}/src")
 

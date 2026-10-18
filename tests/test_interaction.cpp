@@ -1,6 +1,7 @@
 #include "../src/Catalog.h"  // v3.6.0: distance/ETA helpers
 #include "../src/Interaction.h"
 #include "../src/Types.h"  // v3.3.0: ShipState / astro::ship balance logic
+#include "../src/WarpJump.h"  // v3.6.0: asteroid barrage in Travel (pass D)
 
 #include <cmath>
 #include <iostream>
@@ -293,10 +294,115 @@ int main() {
       return 1;
     }
     // Без гравитации ассист выключен.
+    // Радиальный крейсер (vt < 0.55 vCirc): ассист держится в стороне.
     astro::Vec3 in6(0.0, 2.2, 0.0), dr6;
     if (astro::ship::orbitAssist(pos, astro::Vec3(), in6, dr6, 0.016)) {
       std::cerr << "orbit assist must stay off without gravity\n";
       return 1;
+    }
+  }
+
+  // Test 16 (v3.6.0, пасс D): астероидное обломочное поле в Travel —
+  // детерминированный ролл, уклонение по накоплению, единичный Hit.
+  {
+    using astro::JumpPhase;
+    using astro::JumpEvent;
+    using astro::WarpJump;
+    // Скаляр 1. не ниже порога 0.25... порог строго частный: equal – нет поля.
+    {
+      WarpJump jN;
+      jN.start("m13", 0.25f);
+      if (jN.asteroidField()) {
+        std::cerr << "asteroid roll == chance must NOT spawn a field\n";
+        return 1;
+      }
+      jN.start("m13", 0.9f);
+      if (jN.asteroidField()) {
+        std::cerr << "asteroid roll 0.9 must stay field-free\n";
+        return 1;
+      }
+      bool enter = false, douge = false, hit = false;
+      for (int i = 0; i < 200; ++i) {
+        if (!jN.active()) break;
+        const JumpEvent e = jN.update(0.25f);
+        enter = enter || e.asteroidEnter;
+        douge = douge || e.asteroidDodged;
+        hit = hit || e.asteroidHit;
+      }
+      if (enter || douge || hit) {
+        std::cerr << "field-free jump must emit zero asteroid events\n";
+        return 1;
+      }
+    }
+    // Поле + непрерывный манёвр: Dodged есть, Hit нет.
+    {
+      WarpJump jY;
+      jY.start("m13", 0.0f);
+      if (!jY.asteroidField()) {
+        std::cerr << "asteroid roll 0.0 must spawn a field\n";
+        return 1;
+      }
+      bool enter = false, dodge = false, hit = false;
+      for (int i = 0; i < 400; ++i) {
+        if (!jY.active()) break;
+        jY.setDodgeAxis(1.0f);
+        const JumpEvent e = jY.update(0.125f);
+        enter = enter || e.asteroidEnter;
+        dodge = dodge || e.asteroidDodged;
+        hit = hit || e.asteroidHit;
+      }
+      if (!enter || !dodge || hit) {
+        std::cerr << "dodged jump: expects enter+dodge and no hit\n";
+        return 1;
+      }
+    }
+    // Поле без манёвра: ровно один Hit после окна опасности, без Dodged.
+    {
+      WarpJump jH;
+      jH.start("m13", 0.0f);
+      bool enter = false;
+      int hits = 0, dodges = 0;
+      for (int i = 0; i < 400; ++i) {
+        if (!jH.active()) break;
+        jH.setDodgeAxis(0.0f);
+        const JumpEvent e = jH.update(0.125f);
+        enter = enter || e.asteroidEnter;
+        dodges += e.asteroidDodged ? 1 : 0;
+        hits += e.asteroidHit ? 1 : 0;
+      }
+      if (!enter || dodges != 0 || hits != 1) {
+        std::cerr << "no-dodge jump: expects one hit and zero dodges\n";
+        return 1;
+      }
+      jH.start("m13", 0.0f);  // новый прыжок с чистым состоянием
+      int hits2 = 0;
+      for (int i = 0; i < 20; ++i) {
+        if (!jH.active()) break;
+        const JumpEvent e = jH.update(0.125f);
+        hits2 += e.asteroidHit ? 1 : 0;
+      }
+      if (hits2 != 0) {
+        std::cerr << "restart must reset hit flags (charge is clean)\n";
+        return 1;
+      }
+    }
+    // Рваный манёвр (ввод через такт): накопление не дотягивает до 0.25с.
+    {
+      WarpJump jB;
+      jB.start("m13", 0.0f);
+      int hits = 0;
+      float idle = 0.0f;
+      for (int i = 0; i < 400 && jB.active(); ++i) {
+        jB.setDodgeAxis(idle <= 0.0f ? 1.0f : 0.0f);
+        const JumpEvent e = jB.update(0.125f);
+        idle += 0.125f;
+        if (idle >= 0.25f) idle = 0.0f;
+        hits += e.asteroidHit ? 1 : 0;
+      }
+      if (hits != 1) {
+        std::cerr << "irregular dodging must still end with exactly one hit\n";
+        return 1;
+      }
     }
   }
 

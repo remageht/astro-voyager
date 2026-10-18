@@ -353,6 +353,9 @@ class AppGL {
   Vec3 m_jumpPushinPos{0.0, 0.0, 10.0};  // TP-старт возврата
   double m_jumpPushinYaw = 0.0;
   double m_jumpPushinPitch = 0.0;
+  // v3.6.0 (пасс D): сглаженная полоса обломков -1..1 (сдвиг камней против
+  // ввода уклонения; дефолт 0, харнесс чистый). См. warpdrive::setAsteroids.
+  float m_astLane = 0.0f;
   // Возвращает true, если кадр consumed (катсцена держит камеру: WASD
   // глушим; в Cooldown возвращает false — управление уже у игрока).
   // Вызывать из updateWarp, пока m_jumpCine активен.
@@ -456,6 +459,10 @@ void setBurst(float b);
 void setShip(bool v, float x, float y, float z, float yaw);
 void setShipStyle(int s);  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle
 void setThruster(float k);  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
+// v3.6.0 (пасс D): астероидное поле в Travel. k 0..1 — плотность/видимость
+// (дефолт 0, харнесс чистый), lane -1..1 — сглаженный сдвиг полосы обломков
+// навстречу уклонению (D сдвигает поле влево; читается как манёвр корабля).
+void setAsteroids(float k, float lane);
 }  // namespace warpdrive
 
 }  // namespace astro

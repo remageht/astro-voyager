@@ -9,6 +9,7 @@
 #include <ctime>
 #include <filesystem>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <vector>
 #include <algorithm>
@@ -4321,7 +4322,11 @@ void AppGL::startWarpJump(const std::string& id) {
   m_jumpFpPitch = m_camera.pitch;
   m_jumpCamPos = m_camera.position;
   m_jumpCamVel = Vec3(0.0, 0.0, 0.0);
-  m_jump.start(id);
+  // v3.6.0 (пасс D): маршруливание астероидного поля — детерминированный
+  // ролл от локального генератора; логика полосы живёт в WarpJump.
+  static std::mt19937 s_astRng(std::random_device{}());
+  static std::uniform_real_distribution<float> s_astRoll01(0.0f, 1.0f);
+  m_jump.start(id, s_astRoll01(s_astRng));
   m_jumpPrevPhase = JumpPhase::Idle;
   m_jumpCine = true;
 }
@@ -4495,6 +4500,7 @@ void AppGL::abortJumpCine() {
   warpRetarget(warpTargetK(m_warpFactor));
   warpdrive::setBurst(0.0f);
   warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+  warpdrive::setAsteroids(0.0f, 0.0f);  // v3.6.0: прерванный прыжок — поле off
 }
 
 bool AppGL::updateJumpCine(float deltaTime) {
@@ -4518,11 +4524,53 @@ bool AppGL::updateJumpCine(float deltaTime) {
     m_prevEscPressed = escDown;
   }
 
+  // v3.6.0 (пасс D): ось уклонения A/D во время Travel. Копится на уровне
+  // контроллера; lane сглаживается для сдвига полосы обломков в сцене.
+  if (!io.WantCaptureKeyboard && m_jump.phase() == JumpPhase::Travel) {
+    const float dodgeAxis =
+        (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS ? 1.0f : 0.0f) -
+        (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS ? 1.0f : 0.0f);
+    m_jump.setDodgeAxis(dodgeAxis);
+    const float laneK = 1.0f - std::exp(-static_cast<double>(deltaTime) * 6.0);
+    m_astLane += (dodgeAxis - m_astLane) * laneK;
+  } else if (m_astLane != 0.0f) {
+    m_astLane *= 1.0f - std::exp(-static_cast<double>(deltaTime) * 6.0);
+    if (std::fabs(m_astLane) < 0.01f) m_astLane = 0.0f;
+  }
+
   JumpEvent jumpEv = m_jump.update(deltaTime);
   const JumpPhase ph = m_jump.phase();
   const float t01 = m_jump.phaseT01();
   const bool entered = (ph != m_jumpPrevPhase);
   m_jumpPrevPhase = ph;
+
+  // v3.6.0 (пасс D): тосты и урон щита от событий астероидного поля.
+  if (jumpEv.asteroidEnter) {
+    m_shipNotice =
+        uiRu("Обломки по курсу: удерживайте D (или A) для манёвра",
+             "Debris field ahead: hold D (or A) to dodge");
+    m_shipNoticeT = 4.5f;
+  }
+  if (jumpEv.asteroidDodged) {
+    m_shipNotice =
+        uiRu("Манёвр выполнен: полоса обломков пройдена",
+             "Dodge complete: debris field cleared");
+    m_shipNoticeT = 3.0f;
+  }
+  if (jumpEv.asteroidHit) {
+    const float shieldBefore = m_ship.shield;
+    m_ship.shield =
+        std::max(0.0f, m_ship.shield - WarpJump::kAstDamage);
+    m_shieldFlashK = ship::shieldFlashHit(m_shieldFlashK,
+                                          shieldBefore - m_ship.shield);
+    char msg[96];
+    std::snprintf(msg, sizeof(msg),
+                  uiRu("Столкновение с обломками: щит %d%%",
+                       "Debris impact: shield %d%%"),
+                  static_cast<int>(m_ship.shield));
+    m_shipNotice = msg;
+    m_shipNoticeT = 3.5f;
+  }
 
   const float cruiseK = warpTargetK(m_warpFactor);
   bool shipVisible = false;
@@ -4731,6 +4779,22 @@ bool AppGL::updateJumpCine(float deltaTime) {
   // Pullback/Travel/Arrival/Pushin; дефолт скрыт — харнесс чистый).
   warpdrive::setState(m_warpK, m_warpFlash);
   warpdrive::setBurst(m_jumpBurst);
+  // v3.6.0 (пасс D): огибающая видимости обломков в Travel (вход по
+  // kAstEnterT..kAstDangerStart, выход за 0.9). Вне Travel поле ровно 0.
+  {
+    float astK = 0.0f;
+    if (ph == JumpPhase::Travel && m_jump.asteroidField()) {
+      const float fin = (t01 - WarpJump::kAstEnterT) /
+                        (WarpJump::kAstDangerStart - WarpJump::kAstEnterT);
+      const float fout = (1.0f - t01) / 0.10f;
+      float k = fin;
+      if (fout < k) k = fout;
+      if (k < 0.0f) k = 0.0f;
+      if (k > 1.0f) k = 1.0f;
+      astK = k;
+    }
+    warpdrive::setAsteroids(astK, m_astLane);
+  }
   if (shipVisible) {
     const double shipYaw = std::atan2(-m_jumpShipDir.x, -m_jumpShipDir.z);
     warpdrive::setShip(true, static_cast<float>(m_jumpShipPos.x),
@@ -4751,6 +4815,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
     warpRetarget(cruiseK);
     warpdrive::setBurst(0.0f);
     warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+    warpdrive::setAsteroids(0.0f, 0.0f);
     return false;
   }
 

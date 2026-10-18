@@ -23,6 +23,12 @@ enum class JumpPhase {
 
 struct JumpEvent {
   bool switchStation = false;  // в этом update пора сменить станцию (пик Burst)
+  // v3.6.0: астероидное поле в Travel (~25% прыжков). Enter — предупреждение,
+  // Dodged — манёвр удался (накоплено kAstDodgeDwell секунд уклонения),
+  // Hit — окно опасности кончилось без достаточного уклонения: урон щиту.
+  bool asteroidEnter = false;
+  bool asteroidDodged = false;
+  bool asteroidHit = false;
   bool finished = false;       // катсцена завершена (конец Cooldown -> Idle)
 };
 
@@ -36,10 +42,22 @@ class WarpJump {
   static constexpr float kPushinDur = 1.2f;    // возврат камеры, с
   static constexpr float kCooldownDur = 1.5f;  // остывание, с
 
+  // === v3.6.0: астероидное поле в Travel === (пасс D). Доля прыжков с
+  // обломками; детерминированный роул 0..1 подаёт вызывающий (RetailN или
+  // тест), так что вся логика чистая и тестируется без GPU.
+  static constexpr float kAstChance = 0.25f;   // < роул => поле в прыжке
+  static constexpr float kAstEnterT = 0.14f;   // Travel t01 предупреждения
+  static constexpr float kAstDangerStart = 0.20f;  // окно опасности, t01
+  static constexpr float kAstDangerEnd = 0.62f;
+  static constexpr float kAstDodgeDwell = 0.25f;  // суммарный манёвр, с
+  static constexpr float kAstDamage = 18.0f;   // урон щиту при столкновении
+
   WarpJump() = default;
 
   // Старт прыжка к станции target. Пустой target = остаться в Idle.
-  void start(const std::string& target);
+  // astRoll01 — детерминированный ролл астероидного поля (0..1; поле
+  // стартует при значении < kAstChance). Дефолт 1.0 = поля нет.
+  void start(const std::string& target, float astRoll01 = 1.0f);
   // Мгновенное прерывание (ESC): всегда в Idle, зацикливаний нет.
   void stop();
 
@@ -47,6 +65,11 @@ class WarpJump {
   JumpPhase phase() const { return m_phase; }
   float phaseTime() const { return m_t; }
   const std::string& target() const { return m_target; }
+  // v3.6.0: астероидное поле запланировано на этот прыжок (Travel).
+  bool asteroidField() const { return m_astField; }
+  // Направление уклонения от AppGL каждый кадр (Travel): -1 = A (влево),
+  // +1 = D (вправо), 0 = без ввода. Дрейф суммируется в kAstDodgeDwell.
+  void setDodgeAxis(float axis);
 
   // 0..1, прогресс текущей фазы (Idle = 0). Длительность фазы — phaseDur().
   float phaseT01() const;
@@ -73,6 +96,15 @@ class WarpJump {
   float m_t = 0.0f;
   std::string m_target;
   bool m_switched = false;  // switchStation уже выдан за этот пролёт
+
+  // v3.6.0: состояние астероидного поля этого прыжка (все сбрасываются
+  // в start/stop и не выходят за пределы одной катсцены).
+  bool m_astField = false;
+  bool m_astEntered = false;   // предупреждение уже выдано
+  bool m_astDodgedDone = false;  // манёвр засчитан
+  bool m_astHitDone = false;   // столкновение уже засчитано
+  float m_astDodgeT = 0.0f;    // накопленное уклонение в окне опасности, с
+  float m_dodgeAxis = 0.0f;    // последний ввод игрока (см. setDodgeAxis)
 };
 
 }  // namespace astro
