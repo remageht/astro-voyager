@@ -255,6 +255,24 @@ class SceneManager {
   float m_warpFx = 0.0f;
   Vec3 m_speedDir{0.0, 0.0, 1.0};
 
+  // === Colonies === (v3.6.0): заселённые сайты.
+  public:
+  struct ColonySite {
+    std::string id;
+    std::string name;
+    std::string stationId;
+    Vec3 pos;
+    float radius;
+  };
+  std::vector<ColonySite> m_colonySites;   // каталог сайтов (заполняется в render())
+  std::vector<std::string> m_colonies;     // основанные (id)
+  const std::vector<ColonySite>& colonySites() const { return m_colonySites; }
+  void setColonies(const std::vector<std::string>& ids) { m_colonies = ids; }
+  bool hasColony(const std::string& id) const;
+
+  // === Horizon capture === (v3.6.0): приливная линза + вспышка post-composite.
+  void setHorizonFx(float k, float flash) { m_postFx.setHorizonFx(k, flash); }
+  private:
   std::unique_ptr<ScreenQuad> m_screenQuad;
   // === PostFX === scene FBO + композит (см. PostFX.h).
   PostFX m_postFx;
@@ -286,6 +304,9 @@ class SceneManager {
   // (same StarPoints infra, per-galaxy seed) + hero stars for fly-to.
   StarPoints m_m51Stars;
   StarPoints m_m104Stars;
+  // v3.6.0: яркие гиганты ядра кластера (рисуются отдельно, сбрасываются в
+  // начале каждого render()).
+  StarPoints m_clusterBright;
   StarPoints m_mwStars;
   std::vector<M31BrightStar> m_m51Bright;
   std::vector<M31BrightStar> m_m104Bright;

@@ -51,6 +51,7 @@ class StarPoints {
   StarPoints& operator=(const StarPoints&) = delete;
 
   void setStars(const std::vector<glm::vec3>& positions, const std::vector<float>& mags);
+  void clear() { m_vertexCount = 0; }
   void draw() const;
 
  private:

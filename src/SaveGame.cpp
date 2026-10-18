@@ -428,6 +428,9 @@ std::string saveSerialize(const SaveGame& g) {
   out += ind(2) + "\"visited\": ";
   writeStrArray(out, g.progress.visited);
   out += ",\n";
+  out += ind(2) + "\"colonies\": ";
+  writeStrArray(out, g.progress.colonies);
+  out += ",\n";
   out += ind(2) + "\"unlocked\": ";
   writeStrArray(out, g.progress.unlocked);
   out += ",\n";
@@ -516,6 +519,7 @@ bool saveDeserialize(const std::string& text, SaveGame& out, std::string& err) {
 
   if (const JVal* pr = findOf(root, "progress", JVal::Kind::Obj)) {
     readStrArray(*pr, "visited", out.progress.visited);
+    readStrArray(*pr, "colonies", out.progress.colonies);
     readStrArray(*pr, "unlocked", out.progress.unlocked);
     readStrArray(*pr, "route", out.progress.route);
     out.progress.minBhDistance = readNum(*pr, "minBhDistance", out.progress.minBhDistance);
@@ -572,7 +576,14 @@ std::string saveSerializeSettings(const SaveSettings& s) {
   out += ind(1) + "\"renderScale\": " + numToJson(s.renderScale) + ",\n";
   out += ind(1) + "\"shellRadius\": " + numToJson(s.shellRadius) + ",\n";
   out += ind(1) + "\"stepSize\": " + numToJson(s.stepSize) + ",\n";
-  out += ind(1) + "\"maxSteps\": " + std::to_string(s.maxSteps) + "\n";
+  out += ind(1) + "\"maxSteps\": " + std::to_string(s.maxSteps) + ",\n";
+  out += ind(1) + "\"mouseSensitivity\": " + numToJson(s.mouseSensitivity) + ",\n";
+  out += ind(1) + "\"invertY\": " + std::to_string(s.invertY) + ",\n";
+  out += ind(1) + "\"keyColony\": " + std::to_string(s.keyColony) + ",\n";
+  out += ind(1) + "\"keyView\": " + std::to_string(s.keyView) + ",\n";
+  out += ind(1) + "\"keyMap\": " + std::to_string(s.keyMap) + ",\n";
+  out += ind(1) + "\"keyJournal\": " + std::to_string(s.keyJournal) + ",\n";
+  out += ind(1) + "\"keyTour\": " + std::to_string(s.keyTour) + "\n";
   out += "}\n";
   return out;
 }
@@ -605,6 +616,13 @@ bool saveDeserializeSettings(const std::string& text, SaveSettings& out,
   out.shellRadius = readFloat(root, "shellRadius", out.shellRadius);
   out.stepSize = readFloat(root, "stepSize", out.stepSize);
   out.maxSteps = readInt(root, "maxSteps", out.maxSteps);
+  out.mouseSensitivity = readFloat(root, "mouseSensitivity", out.mouseSensitivity);
+  out.invertY = readInt(root, "invertY", out.invertY);
+  out.keyColony = readInt(root, "keyColony", out.keyColony);
+  out.keyView = readInt(root, "keyView", out.keyView);
+  out.keyMap = readInt(root, "keyMap", out.keyMap);
+  out.keyJournal = readInt(root, "keyJournal", out.keyJournal);
+  out.keyTour = readInt(root, "keyTour", out.keyTour);
   return true;
 }
 

@@ -47,6 +47,10 @@ uniform vec2 u_WarpDir;  // экранное направление курса (
 uniform float u_WarpK;   // 0..1 сила варп-поля
 // === Ship survival === (v3.3.0): shield impact flash, 0 = exact pass.
 uniform float u_ShieldK;  // 0..1 impact amount (cold blue edge glow)
+// === Horizon capture === (v3.6.0): катсцена захвата горизонта —
+// приливная линза + красное смещение + белая вспышка (0 => exact pass).
+uniform float u_HorizonK;      // прилив + красное смещение 0..1
+uniform float u_HorizonFlash;  // плавная белая вспышка 0..1
 
 void main() {
   vec4 sceneT = texelFetch(u_Scene, ivec2(gl_FragCoord.xy), 0);
@@ -112,17 +116,37 @@ void main() {
       float env = smoothstep(0.12, 0.62, length(sp)) * align * u_SpeedK;
       vec3 acc = col;
       for (int i = 1; i <= 3; ++i) {
-        float t = 0.016 * float(i) * u_SpeedK;
+        float t = 0.010 * float(i) * u_SpeedK;
         acc = max(acc, texture(u_Scene, v_TexCoord - vd * t).rgb +
                           bloom * u_BloomStrength);
       }
-      col = mix(col, acc, clamp(env * 0.40, 0.0, 0.50));
+      col = mix(col, acc, clamp(env * 0.26, 0.0, 0.32));
     }
   }
   if (u_ShieldK > 0.001) {
     // Shield hit: cold blue edge glow + soft wash (0 => exact pass).
     float sEdge = smoothstep(0.30, 1.0, length(v_TexCoord - 0.5));
     col += vec3(0.30, 0.55, 1.10) * u_ShieldK * (0.18 + 0.82 * sEdge);
+  }
+  if (u_HorizonK > 0.001 || u_HorizonFlash > 0.0001) {
+    // v3.6.0: приливная линза — тянет кадр к центру, красное смещение и
+    // тёмное кольцо «в колодец»; белая вспышка на пике провала.
+    vec2 ndc = v_TexCoord * 2.0 - 1.0;
+    float d = length(ndc);
+    float pull = 1.0 - smoothstep(0.05, 0.55, d);
+    vec2 off = -ndc * (0.22 * u_HorizonK * pull);
+    vec3 hcol = vec3(texture(u_Scene, v_TexCoord + off * 1.02).r,
+                     texture(u_Scene, v_TexCoord + off).g,
+                     texture(u_Scene, v_TexCoord + off * 0.98).b);
+    vec3 redshift = vec3(1.0 + 0.65 * u_HorizonK,
+                         1.0 - 0.12 * u_HorizonK,
+                         1.0 - 0.42 * u_HorizonK);
+    hcol *= redshift;
+    hcol *= 1.0 - 0.35 * u_HorizonK * (1.0 - smoothstep(0.05, 0.55, d));
+    col = mix(col, hcol, u_HorizonK);
+    if (u_HorizonFlash > 0.0001) {
+      col = mix(col, vec3(1.05, 1.02, 0.98), u_HorizonFlash * 0.9);
+    }
   }
   if (u_Beta > 0.001) {
     vec2 ndc = v_TexCoord * 2.0 - 1.0;

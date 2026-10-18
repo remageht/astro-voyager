@@ -244,6 +244,62 @@ int main() {
   AssertNear(astro::ship::shieldFlashDecay(1.0f, 1.0f), 0.049787f, 0.001f,
              "flash decay exp(-3)");
 
+  // Test 15 (v3.6.0): орбитальный ассист — окно скоростей и стабилизация
+  // к круговой орбите вокруг массивного центра в начале координат.
+  {
+    const astro::Vec3 pos(10.0, 0.0, 0.0);
+    const astro::Vec3 g(-0.5, 0.0, 0.0);  // a * r = 5 → vCirc ≈ 2.236
+    const double vCirc = 2.23606797749979;
+    // Круговое курсирование: ассист активен, курс не меняется.
+    astro::Vec3 in(0.0, vCirc, 0.0), dr;
+    if (!astro::ship::orbitAssist(pos, g, in, dr, 0.016)) {
+      std::cerr << "orbit assist must engage at circular speed\n";
+      return 1;
+    }
+    const double vx1 = in.x + dr.x, vy1 = in.y + dr.y;
+    AssertNear(static_cast<float>(vx1), 0.0f, 0.001f, "circular keeps radial");
+    AssertNear(static_cast<float>(vy1), static_cast<float>(vCirc), 0.001f,
+               "circular keeps tangential");
+    // Падение радиально (vr=0.8, vt=2.2): радиальная скорость гасится,
+    // тангенциальная подтягивается к круговой.
+    astro::Vec3 in2(0.8, 2.2, 0.0), dr2;
+    if (!astro::ship::orbitAssist(pos, g, in2, dr2, 0.5)) {
+      std::cerr << "orbit assist must engage on shallow infall\n";
+      return 1;
+    }
+    const double kAdj = 1.0 - std::exp(-0.5 * 1.1);
+    AssertNear(static_cast<float>(in2.x + dr2.x),
+               static_cast<float>(0.8 * (1.0 - kAdj)), 0.001f,
+               "radial drift damped");
+    AssertNear(static_cast<float>(in2.y + dr2.y),
+               static_cast<float>(2.2 + (vCirc - 2.2) * kAdj), 0.001f,
+               "tangential pulled to circular");
+    // Слишком медленно (vt < 0.55 vCirc) — ассист молчит.
+    astro::Vec3 in3(0.0, 1.0, 0.0), dr3;
+    if (astro::ship::orbitAssist(pos, g, in3, dr3, 0.016)) {
+      std::cerr << "orbit assist must not catch slow drifts\n";
+      return 1;
+    }
+    // Слишком быстро (vt > 2.2 vCirc) — пролёт не перехватывается.
+    astro::Vec3 in4(0.0, 6.0, 0.0), dr4;
+    if (astro::ship::orbitAssist(pos, g, in4, dr4, 0.016)) {
+      std::cerr << "orbit assist must not catch fast flybys\n";
+      return 1;
+    }
+    // Радиальное доминирование — не орбита, а прямой ход.
+    astro::Vec3 in5(3.0, 1.5, 0.0), dr5;
+    if (astro::ship::orbitAssist(pos, g, in5, dr5, 0.016)) {
+      std::cerr << "orbit assist must ignore radial-dominant motion\n";
+      return 1;
+    }
+    // Без гравитации ассист выключен.
+    astro::Vec3 in6(0.0, 2.2, 0.0), dr6;
+    if (astro::ship::orbitAssist(pos, astro::Vec3(), in6, dr6, 0.016)) {
+      std::cerr << "orbit assist must stay off without gravity\n";
+      return 1;
+    }
+  }
+
   std::cout << "All BlackHoleInteraction tests passed!\n";
   return 0;
 }

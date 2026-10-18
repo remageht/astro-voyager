@@ -36,6 +36,14 @@ struct SaveSettings {
   float shellRadius = 0.0f;     // 0 = по пресету
   float stepSize = 0.0f;        // 0 = по пресету
   int maxSteps = 0;             // 0 = по пресету
+  // === v3.6.0: управление (мышь + переназначение клавиш) ===
+  float mouseSensitivity = 1.0f;  // 0.3..3.0, 1 = стандарт
+  int invertY = 0;                // 1 = инвертировать вертикаль мыши
+  int keyColony = 67;             // GLFW: C — основать колонию
+  int keyView = 86;               // GLFW: V — цикл видов
+  int keyMap = 78;                // GLFW: N — карта/навигация
+  int keyJournal = 74;            // GLFW: J — журнал
+  int keyTour = 84;               // GLFW: T — кинематографический тур
 };
 
 struct SaveCustom {
@@ -56,6 +64,8 @@ struct SaveProgress {
   std::vector<std::string> visited;   // посещённые станции (ачивки)
   std::vector<std::string> unlocked;  // открытые ачивки (id)
   std::vector<std::string> route;     // история маршрута
+  // === v3.6.0: колонии ===
+  std::vector<std::string> colonies;  // id колонизированных тел (mars, hercules-b)
   double minBhDistance = 1e9;
   bool exported = false;
   bool imported = false;

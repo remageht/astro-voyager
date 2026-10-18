@@ -74,6 +74,43 @@ ImFont* loadCineFont() {
 }  // namespace
 // === Cinematic === end
 
+namespace {
+// v3.6.0: человекочитаемое имя клавиши для страницы Controls. Печатные
+// символы берём из GLFW (главный алфавит), спецклавиши — из таблицы.
+std::string keyNameForCode(int key) {
+  const char* name = glfwGetKeyName(key, 0);
+  if (name && name[0] != '\0') {
+    std::string s(name);
+    for (char& ch : s) {
+      ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    }
+    return s;
+  }
+  if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F25) {
+    return "F" + std::to_string(key - GLFW_KEY_F1 + 1);
+  }
+  switch (key) {
+    case GLFW_KEY_SPACE: return "Space";
+    case GLFW_KEY_ENTER: return "Enter";
+    case GLFW_KEY_TAB: return "Tab";
+    case GLFW_KEY_LEFT_SHIFT: return "LShift";
+    case GLFW_KEY_RIGHT_SHIFT: return "RShift";
+    case GLFW_KEY_LEFT_CONTROL: return "LCtrl";
+    case GLFW_KEY_RIGHT_CONTROL: return "RCtrl";
+    case GLFW_KEY_LEFT_ALT: return "LAlt";
+    case GLFW_KEY_RIGHT_ALT: return "RAlt";
+    case GLFW_KEY_LEFT: return "Left";
+    case GLFW_KEY_RIGHT: return "Right";
+    case GLFW_KEY_UP: return "Up";
+    case GLFW_KEY_DOWN: return "Down";
+    case GLFW_KEY_DELETE: return "Del";
+    case GLFW_KEY_ESCAPE: return "Esc";
+    default: break;
+  }
+  return "Key " + std::to_string(key);
+}
+}  // namespace
+
 namespace astro {
 
 AppGL::AppGL(int width, int height, bool visible) {
@@ -234,10 +271,15 @@ int AppGL::run() {
     }
     if (!m_captureAnim && physSt &&
         physSt->type == StationType::Quasar) {
+      // v3.6.0: ядро квазара — не «стена» (slide), а катсцена захвата и
+      // выброса: подлёт к ядру запускает ту же последовательность, что и
+      // горизонт чёрной дыры, с собственными текстами.
       double qR = physSt->collisionRadius;
       if (qR <= 0.0) qR = 2.0;
-      m_camera.position = interaction::slideOnSphere(
-          prevCamPos, m_camera.position, 0.0, 0.0, 0.0, qR);
+      const double qd = std::sqrt(m_camera.position.x * m_camera.position.x +
+                                  m_camera.position.y * m_camera.position.y +
+                                  m_camera.position.z * m_camera.position.z);
+      if (qd <= qR + 0.5) startHorizonCapture();
     }
     // === Physics === end
 
@@ -346,6 +388,9 @@ int AppGL::run() {
 void AppGL::processInput(float deltaTime) {
   GLFWwindow* win = m_window->getNativeWindow();
   ImGuiIO& io = ImGui::GetIO();
+  // v3.6.0: флаг ввода движения сбрасывается каждый кадр; блок движения ниже
+  // поднимет его, если игрок действительно жмёт WASD/Space/Shift.
+  m_moveInputActive = false;
   // === Audio === begin (агент AU: первый ввод + M mute; варп/тур ниже не тронуты).
   audioEnsureOnFirstInput();
   audioProcessKey();
@@ -405,7 +450,7 @@ void AppGL::processInput(float deltaTime) {
   // === StoryJournal === (v3.5.0): J — открыть/закрыть бортовой журнал.
   // Открытие помечает записи прочитанными (счётчик "новых" в статус-строке
   // обнуляется при первом же показе панели).
-  const bool jDown = (glfwGetKey(win, GLFW_KEY_J) == GLFW_PRESS);
+  const bool jDown = (glfwGetKey(win, m_keyJournal) == GLFW_PRESS);
   if (jDown && !m_prevJPressed && !io.WantCaptureKeyboard) {
     m_storyOpen = !m_storyOpen;
     if (m_storyOpen) m_story.markAllRead();
@@ -414,7 +459,7 @@ void AppGL::processInput(float deltaTime) {
 
   // === Expedition === (v3.5.0): N — карта глав экспедиции (M занят
   // audio-mute; в прологе и меню не мешает).
-  const bool nDown = (glfwGetKey(win, GLFW_KEY_N) == GLFW_PRESS);
+  const bool nDown = (glfwGetKey(win, m_keyMap) == GLFW_PRESS);
   if (nDown && !m_prevNPressed && !io.WantCaptureKeyboard && !m_inMenu &&
       m_slidesCurrent.empty()) {
     m_expeditionMapOpen = !m_expeditionMapOpen;
@@ -429,7 +474,7 @@ void AppGL::processInput(float deltaTime) {
 
   // === Camera views === (v3.3.0): V цикл кабина -> за кормой -> обзор.
   // Во время катсцены прыжка вид не трогаем (камерой владеет updateJumpCine).
-  const bool vDown = (glfwGetKey(win, GLFW_KEY_V) == GLFW_PRESS);
+  const bool vDown = (glfwGetKey(win, m_keyView) == GLFW_PRESS);
   if (vDown && !m_prevVPressed && !io.WantCaptureKeyboard && !m_jumpCine) {
     m_viewMode = view::nextView(m_viewMode);
     // Снос камеры меняет камеру кадра: без сброса рел. скорости был бы
@@ -543,24 +588,38 @@ void AppGL::processInput(float deltaTime) {
     m_camera.moveSpeed = want;
   }
 
-  if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) {
-    m_camera.moveForward(deltaTime, true);
+  // v3.6.0: инерционное движение — корабль плавно разгоняется и тормозит,
+  // после отпускания клавиш сохраняет ход (космический «ил»). Скорость
+  // копится в m_shipVel; гравитационный дрейф остаётся отдельным слоем,
+  // а орбитальный ассист (см. updateShip) мягко стабилизирует курс.
+  const double axisF =
+      (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS ? 1.0 : 0.0) -
+      (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS ? 1.0 : 0.0);
+  const double axisR =
+      (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS ? 1.0 : 0.0) -
+      (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS ? 1.0 : 0.0);
+  const double axisU =
+      (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ? 1.0 : 0.0) -
+      (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 1.0 : 0.0);
+  m_moveInputActive = (axisF != 0.0 || axisR != 0.0 || axisU != 0.0);
+  const Vec3 fwd = m_camera.forward();
+  const Vec3 rgt = m_camera.right();
+  const Vec3 want((fwd.x * axisF + rgt.x * axisR) * m_camera.moveSpeed,
+                  (fwd.y * axisF + axisU) * m_camera.moveSpeed,
+                  (fwd.z * axisF + rgt.z * axisR) * m_camera.moveSpeed);
+  // Разгон быстрее торможения: тяга ~3/с, свободный дрейф ~0.9/с.
+  const double resp = m_moveInputActive ? 3.0 : 0.9;
+  const double kAcc = 1.0 - std::exp(-static_cast<double>(deltaTime) * resp);
+  m_shipVel = Vec3(m_shipVel.x + (want.x - m_shipVel.x) * kAcc,
+                   m_shipVel.y + (want.y - m_shipVel.y) * kAcc,
+                   m_shipVel.z + (want.z - m_shipVel.z) * kAcc);
+  if (std::fabs(m_shipVel.x) + std::fabs(m_shipVel.y) + std::fabs(m_shipVel.z) <
+      0.01) {
+    m_shipVel = Vec3();
   }
-  if (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS) {
-    m_camera.moveForward(deltaTime, false);
-  }
-  if (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS) {
-    m_camera.moveRight(deltaTime, false);
-  }
-  if (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS) {
-    m_camera.moveRight(deltaTime, true);
-  }
-  if (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS) {
-    m_camera.position.y += m_camera.moveSpeed * deltaTime;
-  }
-  if (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-    m_camera.position.y -= m_camera.moveSpeed * deltaTime;
-  }
+  m_camera.position = Vec3(m_camera.position.x + m_shipVel.x * deltaTime,
+                           m_camera.position.y + m_shipVel.y * deltaTime,
+                           m_camera.position.z + m_shipVel.z * deltaTime);
   m_camera.moveSpeed = savedSpeed;
 }
 
@@ -734,9 +793,10 @@ void AppGL::processMouse() {
   m_lastMouseX = static_cast<float>(mouseX);
   m_lastMouseY = static_cast<float>(mouseY);
 
-  const float sensitivity = 0.003f;
+  // v3.6.0: чувствительность и инверсия вертикали из настроек (Controls).
+  const float sensitivity = 0.003f * m_mouseSensitivity;
   m_camera.yaw += xoffset * sensitivity;
-  m_camera.pitch += yoffset * sensitivity;
+  m_camera.pitch += yoffset * sensitivity * (m_invertY ? -1.0f : 1.0f);
 
   const float maxPitch = 1.55f;
   if (m_camera.pitch > maxPitch) m_camera.pitch = maxPitch;
@@ -1750,8 +1810,26 @@ void AppGL::drawModernTransportBar() {
 // === ModernUI === end
 
 void AppGL::drawImGui() {
-// Детерминизм скриншотов: в харнессе FPS-текст всегда 60.
+// Детерминизм при съёмке: в горнеле FPS-темп всегда 60.
 if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
+  // v3.6.0: захват клавиши для переназначения (страница Controls): любая
+  // клавиша записывается в выбранную строку, Esc — отмена без изменений.
+  if (m_captureKeyFor >= 0) {
+    int* keyTargets[5] = {&m_keyColony, &m_keyView, &m_keyMap, &m_keyJournal,
+                          &m_keyTour};
+    const int idx = (m_captureKeyFor < 5) ? m_captureKeyFor : 4;
+    if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(GLFW_KEY_ESCAPE), false)) {
+      m_captureKeyFor = -1;
+    } else {
+      for (int k = 32; k <= 348; ++k) {
+        if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(k), false)) {
+          *keyTargets[idx] = k;
+          m_captureKeyFor = -1;
+          break;
+        }
+      }
+    }
+  }
   // === ModernUI ===: тема применяется один раз (флаг внутри).
   applyModernThemeOnce();
   // === Expedition === (v3.5.0): слайды катсцены — поверх всего и только
@@ -2297,6 +2375,9 @@ void AppGL::teleportToStation(const std::string& id) {
   // === Cinematic === end
   m_sceneManager->teleportTo(id, m_camera);
   m_flying = false;
+  // v3.6.0: телепорт обнуляет накопленный ход и напоминание об орбите.
+  m_shipVel = Vec3();
+  m_orbitNoticeShown = false;
   if (m_route.empty() || m_route.back() != id) {
     m_route.push_back(id);
   }
@@ -2391,6 +2472,19 @@ void AppGL::updateShip(float deltaTime) {
       // Дрейф не должен утаскивать под горизонт — тот же клэмп, что в run().
       m_camera.clampNearHorizon(m_sceneManager->getSettings().rs);
     }
+    // v3.6.0: орбитальный ассист — без активного ввода вблизи массивного
+    // центра корабль сам выходит на круговое курсирование (притяжение +
+    // мягкая стабилизация тангенциальной скорости).
+    if (!m_moveInputActive && !m_captureAnim &&
+        ship::orbitAssist(m_camera.position, gravAcc, m_shipVel, m_ship.gravVel,
+                          static_cast<double>(deltaTime))) {
+      if (!m_orbitNoticeShown) {
+        m_orbitNoticeShown = true;
+        m_shipNotice = uiRu("Орбита: автокурсирование стабилизировано",
+                            "Orbit: cruise stabilized (auto)");
+        m_shipNoticeT = 3.5f;
+      }
+    }
   }
 
   // Пустой бак: одноразовый тост + постоянная строка в HUD (см. drawShipHud).
@@ -2410,6 +2504,8 @@ void AppGL::updateShip(float deltaTime) {
   if (ship::isDead(m_ship) && !m_jumpCine && !m_captureAnim) {
     teleportToStation("sol");
     ship::respawn(m_ship);
+    m_shipVel = Vec3();
+    m_orbitNoticeShown = false;
     m_shipNotice = uiRu("Щиты уничтожены. Аварийный прыжок к Солнцу.",
                         "Shields destroyed. Emergency jump to the Sun.");
     m_shipNoticeT = 5.0f;
@@ -2421,6 +2517,49 @@ void AppGL::updateShip(float deltaTime) {
   // композит остаётся байт-в-байт на скриншот-харнессе.
   m_sceneManager->setShipFx(ship::chromaK(m_ship.shield),
                             ship::staticK(m_ship.shield), m_shieldFlashK);
+
+  // === v3.6.0: колонии === подсказка у планеты-сайта и hotkey C.
+  // Сайты приходят из прошлого кадра (m_sceneManager->colonySites()
+  // заполняется в render()); дрейф позиции за кадр незаметен.
+  m_colonyHint.clear();
+  m_colonyHintId.clear();
+  if (!m_inMenu && !m_slidesOpen && !m_jumpCine && !m_captureAnim) {
+    const Station* stNow = m_sceneManager->getCurrentStation();
+    if (stNow) {
+      for (const SceneManager::ColonySite& site : m_sceneManager->colonySites()) {
+        if (site.stationId != stNow->id) continue;
+        if (m_sceneManager->hasColony(site.id)) continue;
+        const double dx = m_camera.position.x - site.pos.x;
+        const double dy = m_camera.position.y - site.pos.y;
+        const double dz = m_camera.position.z - site.pos.z;
+        const double lim = static_cast<double>(site.radius) * 8.0 + 2.5;
+        if (dx * dx + dy * dy + dz * dz < lim * lim) {
+          m_colonyHint = site.name;
+          m_colonyHintId = site.id;
+          break;
+        }
+      }
+    }
+  }
+  const bool cDown =
+      (glfwGetKey(m_window->getNativeWindow(), m_keyColony) == GLFW_PRESS);
+  ImGuiIO& colonyIo = ImGui::GetIO();
+  if (cDown && !m_prevCPressed && !colonyIo.WantCaptureKeyboard &&
+      !m_colonyHintId.empty()) {
+    m_colonies.push_back(m_colonyHintId);
+    m_sceneManager->setColonies(m_colonies);
+    Toast ct;
+    ct.title = uiRu("Колония основана", "Colony established");
+    ct.desc = m_colonyHint + uiRu(" — под вашим флагом.", " — under your flag.");
+    ct.time = static_cast<float>(glfwGetTime());
+    m_toasts.push_back(ct);
+    m_shipNotice = uiRu("Колония основана: ", "Colony established: ") + m_colonyHint;
+    m_shipNoticeT = 4.0f;
+    saveProfileNow(false);
+    m_colonyHint.clear();
+    m_colonyHintId.clear();
+  }
+  m_prevCPressed = cDown;
 }
 
 // Нижний левый HUD: полосы топлива (оранжевая) и щитов (синяя) + нотисы.
@@ -2465,6 +2604,12 @@ void AppGL::drawShipHud() {
           ImVec4(1.0f, 0.55f, 0.15f, 1.0f), "%s",
           uiRu("Топливо исчерпано. Дрейф к ближайшей звезде...",
                "Out of fuel. Drifting to the nearest star..."));
+    }
+    // v3.6.0: подсказка колонизации у планеты-сайта.
+    if (!m_colonyHint.empty()) {
+      ImGui::TextColored(ImVec4(0.45f, 0.85f, 1.0f, 1.0f), "%s %s",
+                         uiRu("[C] Основать колонию:", "[C] Colonize:"),
+                         m_colonyHint.c_str());
     }
   }
   ImGui::End();
@@ -2657,10 +2802,23 @@ void AppGL::applySaveSettings(const SaveSettings& s) {
     if (s.stepSize > 0.0f) rs.stepSize = s.stepSize;
     if (s.maxSteps > 0) rs.maxSteps = s.maxSteps;
   }
+  // v3.6.0: управление — мышь и переназначенные клавиши (с валидацией).
+  m_mouseSensitivity = std::min(std::max(s.mouseSensitivity, 0.3f), 3.0f);
+  m_invertY = (s.invertY != 0);
+  auto keyOk = [](int k) { return k >= 32 && k <= 348; };
+  m_keyColony = keyOk(s.keyColony) ? s.keyColony : 67;
+  m_keyView = keyOk(s.keyView) ? s.keyView : 86;
+  m_keyMap = keyOk(s.keyMap) ? s.keyMap : 78;
+  m_keyJournal = keyOk(s.keyJournal) ? s.keyJournal : 74;
+  m_keyTour = keyOk(s.keyTour) ? s.keyTour : 84;
   m_renderCamValid = false;
 }
 
 void AppGL::applySaveGame(const SaveGame& g) {
+  // v3.6.0: загрузка посреди катсцены горизонта недопустима — сброс.
+  m_captureAnim = false;
+  m_horizonWarped = false;
+  m_sceneManager->setHorizonFx(0.0f, 0.0f);
   // Объекты редактора: заменяем текущие загруженными (id/имена сохраняются).
   m_sceneManager->clearCustom();
   for (const SaveCustom& c : g.customs) {
@@ -2675,6 +2833,11 @@ void AppGL::applySaveGame(const SaveGame& g) {
   m_journeyExported = g.progress.exported;
   m_journeyImported = g.progress.imported;
   m_capturedHorizon = g.progress.capturedHorizon;
+  // v3.6.0: колонии (профиль → менеджер сцены для маркеров).
+  m_colonies = g.progress.colonies;
+  m_sceneManager->setColonies(m_colonies);
+  m_colonyHint.clear();
+  m_colonyHintId.clear();
   // Станция и камера. teleportToStation сам добавит станцию в маршрут и
   // visited — перезаписываем их профильными значениями.
   if (findStation(g.session.station)) {
@@ -2690,6 +2853,8 @@ void AppGL::applySaveGame(const SaveGame& g) {
   m_ship.fuel = g.session.fuel;
   m_ship.shield = g.session.shield;
   m_ship.gravVel = Vec3{};
+  m_shipVel = Vec3();
+  m_orbitNoticeShown = false;
   m_shipNoticeT = 0.0f;
   setShipStyleNow(g.session.shipStyle);  // v3.6.0: с учётом варп-ролей
   // Скоростные эффекты: после прыжка камеры не меряем «скачок скорости»
@@ -2722,6 +2887,14 @@ void AppGL::saveProfileNow(bool quiet) {
     st.stepSize = rsNow.stepSize;
     st.maxSteps = rsNow.maxSteps;
   }
+  // v3.6.0: управление — мышь и переназначенные клавиши.
+  st.mouseSensitivity = m_mouseSensitivity;
+  st.invertY = m_invertY ? 1 : 0;
+  st.keyColony = m_keyColony;
+  st.keyView = m_keyView;
+  st.keyMap = m_keyMap;
+  st.keyJournal = m_keyJournal;
+  st.keyTour = m_keyTour;
   const bool settingsOk =
       saveWriteFile(saveSettingsFilePath(), saveSerializeSettings(st), err);
 
@@ -2731,6 +2904,7 @@ void AppGL::saveProfileNow(bool quiet) {
   g.progress.visited = m_visited;
   g.progress.unlocked.assign(m_unlockedIds.begin(), m_unlockedIds.end());
   g.progress.route = m_route;
+  g.progress.colonies = m_colonies;
   g.progress.minBhDistance = m_minBhDistance;
   g.progress.exported = m_journeyExported;
   g.progress.imported = m_journeyImported;
@@ -3142,6 +3316,37 @@ void AppGL::drawMenu() {
         menuTune.jumpCostK, menuTune.starFuelK, menuTune.radiationK,
         menuTune.hints ? "on" : "off");
     ImGui::SetWindowFontScale(1.0f);
+
+    // v3.6.0: страница Controls — мышь и переназначение клавиш. Захват
+    // новой клавиши стартует кнопкой, ловится в начале drawImGui.
+    ImGui::SeparatorText("Controls");
+    ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.3f, 3.0f,
+                       "%.2f");
+    ImGui::Checkbox("Invert look Y", &m_invertY);
+    {
+      struct KeyRow {
+        const char* label;
+        int* key;
+      };
+      const KeyRow keyRows[5] = {{"Colony", &m_keyColony},
+                                 {"Camera view", &m_keyView},
+                                 {"Navigation", &m_keyMap},
+                                 {"Journal", &m_keyJournal},
+                                 {"Cine tour", &m_keyTour}};
+      for (int i = 0; i < 5; ++i) {
+        ImGui::TextUnformatted(keyRows[i].label);
+        ImGui::SameLine(150.0f);
+        const bool capturing = (m_captureKeyFor == i);
+        const std::string keyLabel =
+            keyNameForCode(*keyRows[i].key) +
+            (capturing ? " <press a key>" : "");
+        const std::string btnId =
+            keyLabel + "##keybind" + std::to_string(i);
+        if (ImGui::SmallButton(btnId.c_str())) {
+          m_captureKeyFor = capturing ? -1 : i;
+        }
+      }
+    }
 
     ImGui::SeparatorText("View and audio");
     menuChanged |= ImGui::SliderFloat("FOV", &menuSettings.fovDegrees, 30.0f,
@@ -4821,7 +5026,7 @@ bool AppGL::processCinematicInput(float deltaTime) {
   ImGuiIO& io = ImGui::GetIO();
 
   // T: старт/стоп тура (только в игре, не в строке поиска).
-  const bool tDown = (glfwGetKey(win, GLFW_KEY_T) == GLFW_PRESS);
+  const bool tDown = (glfwGetKey(win, m_keyTour) == GLFW_PRESS);
   if (tDown && !m_prevTPressed && !io.WantCaptureKeyboard && !m_inMenu) {
     if (m_tour.active())
       stopCineTour();
@@ -5350,16 +5555,26 @@ void AppGL::audioDrawPanel() {
 // === Audio === end
 
 // === Physics === begin: катсцена захвата горизонтом событий.
+// v3.6.0: полноценная последовательность вместо мгновенного деспавна —
+// фаза прилива (линза+красное смещение, затягивание), провал со вспышкой
+// и перенос к точке входа, затем фаза выброса (FOV и ослепление спадают).
 void AppGL::startHorizonCapture() {
   if (m_captureAnim) return;
   m_captureAnim = true;
+  m_horizonWarped = false;
   m_captureT = 0.0f;
   m_captureBaseFov = m_sceneManager->getSettings().fovDegrees;
   m_audio.playCapture();
-  Toast t;
-  t.title = "Захвачен горизонтом событий";
   const Station* st = m_sceneManager->getCurrentStation();
-  t.desc = (st ? st->name : "Black hole") + " — возврат на точку входа";
+  const bool quasar = st && st->type == StationType::Quasar;
+  Toast t;
+  t.title = quasar ? uiRu("Ядро квазара захватывает вас",
+                          "The quasar core seizes you")
+                   : uiRu("Захвачен горизонтом событий",
+                          "Captured by the event horizon");
+  t.desc = (st ? st->name : std::string()) +
+           uiRu(" — вас уносит приливом пространства.",
+                " — the tide of space pulls you in.");
   t.time = static_cast<float>(glfwGetTime());
   m_toasts.push_back(t);
 }
@@ -5368,27 +5583,78 @@ void AppGL::updateHorizonCapture(float dt) {
   if (!m_captureAnim) return;
   m_captureT += dt;
   RenderSettings& rset = m_sceneManager->getSettings();
-  const float k = m_captureT / 1.5f;
-  rset.fovDegrees = m_captureBaseFov + 25.0f * (k < 1.0f ? k : 1.0f);
-  if (m_captureT >= 1.5f) {
+  float hk = 0.0f;     // приливная линза + красное смещение
+  float flash = 0.0f;  // мягкая вспышка перехода
+  if (m_captureT < 1.4f) {
+    // Фаза 1 «прилив»: FOV ширится, линза растёт, камера втягивается.
+    const float k = m_captureT / 1.4f;
+    rset.fovDegrees = m_captureBaseFov + 26.0f * k;
+    hk = 0.7f * k;
+    const double pull = 1.0 - static_cast<double>(dt) * 0.9;
+    m_camera.position = Vec3(m_camera.position.x * pull,
+                             m_camera.position.y * pull,
+                             m_camera.position.z * pull);
+  } else if (m_captureT < 1.9f) {
+    // Фаза 2 «провал»: перенос к точке входа на пике вспышки.
+    if (!m_horizonWarped) {
+      m_horizonWarped = true;
+      if (const Station* st = m_sceneManager->getCurrentStation()) {
+        m_sceneManager->teleportTo(st->id, m_camera);
+      }
+      // Цена перехода: щит частично испарён (не ниже 5), топливо не трогаем.
+      m_ship.shield = std::max(5.0f, m_ship.shield - 30.0f);
+      m_ship.gravVel = Vec3{};
+      m_shipVel = Vec3();
+      m_orbitNoticeShown = false;
+      m_prevSpeedPos = m_camera.position;
+      m_camSpeed = 0.0f;
+      m_sceneManager->resetRelativity();
+      m_capturedHorizon = true;
+      checkAchievements();
+      Toast t2;
+      t2.title = uiRu("Выброшены из горизонта событий",
+                      "Ejected from the event horizon");
+      const Station* stNow = m_sceneManager->getCurrentStation();
+      t2.desc = (stNow ? stNow->name : std::string()) +
+                uiRu(": щит частично испарён, курс сброшен к точке входа.",
+                     ": shields partially evaporated, course reset to the entry point.");
+      t2.time = static_cast<float>(glfwGetTime());
+      m_toasts.push_back(t2);
+    }
+    const float pk = (m_captureT - 1.4f) / 0.5f;
+    hk = 0.7f + 0.3f * pk;
+    flash = std::sin(pk * 3.14159265f) * 0.95f;
+    rset.fovDegrees = m_captureBaseFov + 26.0f;
+  } else if (m_captureT < 3.2f) {
+    // Фаза 3 «выброс»: линза и ослепление плавно спадают.
+    const float kk = std::clamp(1.0f - (m_captureT - 1.9f) / 1.3f, 0.0f, 1.0f);
+    hk = 0.6f * kk;
+    flash = 0.85f * kk * kk;
+    rset.fovDegrees = m_captureBaseFov + 26.0f * kk;
+  } else {
     rset.fovDegrees = m_captureBaseFov;
     m_captureAnim = false;
-    m_capturedHorizon = true;
-    if (const Station* st = m_sceneManager->getCurrentStation()) {
-      m_sceneManager->teleportTo(st->id, m_camera);
-    }
-    checkAchievements();
+    m_horizonWarped = false;
+    m_sceneManager->setHorizonFx(0.0f, 0.0f);
+    return;
   }
+  m_sceneManager->setHorizonFx(hk, flash);
 }
 
 void AppGL::drawHorizonCapture(ImDrawList* dl) {
   if (!m_captureAnim || !dl) return;
-  const float a = m_captureT / 1.2f;
-  int ab = static_cast<int>((a < 1.0f ? a : 1.0f) * 255.0f);
-  if (ab < 0) ab = 0;
-  if (ab > 255) ab = 255;
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+  // Мягкое затемнение «в колодец» в фазе прилива; после вспышки гаснет.
+  float a = 0.0f;
+  if (m_captureT < 1.4f) {
+    a = 0.35f * (m_captureT / 1.4f);
+  } else if (m_captureT < 1.9f) {
+    a = 0.35f;
+  } else if (m_captureT < 3.2f) {
+    a = 0.18f * std::max(0.0f, (3.2f - m_captureT) / 1.3f);
+  }
+  int ab = static_cast<int>(std::clamp(a, 0.0f, 1.0f) * 255.0f);
   dl->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(0, 0, 0, ab));
 }
 // === Physics === end

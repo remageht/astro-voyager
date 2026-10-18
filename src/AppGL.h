@@ -159,6 +159,22 @@ class AppGL {
   float m_captureT = 0.0f;
   bool m_capturedHorizon = false;
   float m_captureBaseFov = 60.0f;
+  bool m_horizonWarped = false;  // v3.6.0: перенос к точке входа уже сделан
+  // v3.6.0: инерция движения — накопленная скорость свободного полёта и
+  // признак активного ввода WASD (для орбитального ассиста).
+  Vec3 m_shipVel;
+  bool m_moveInputActive = false;
+  bool m_orbitNoticeShown = false;
+  // v3.6.0: управление — чувствительность/инверсия мыши и переназначение
+  // клавиш (числа = дефолты GLFW; меняются на странице «Controls»).
+  float m_mouseSensitivity = 1.0f;
+  bool m_invertY = false;
+  int m_keyColony = 67;   // GLFW_KEY_C
+  int m_keyView = 86;     // GLFW_KEY_V
+  int m_keyMap = 78;      // GLFW_KEY_N
+  int m_keyJournal = 74;  // GLFW_KEY_J
+  int m_keyTour = 84;     // GLFW_KEY_T
+  int m_captureKeyFor = -1;  // идёт захват клавиши для строки (см. UI)
   void startHorizonCapture();
   void updateHorizonCapture(float dt);
   void drawHorizonCapture(ImDrawList* dl);
@@ -202,6 +218,13 @@ class AppGL {
   double m_tourBaseDist = 10.0;
   bool m_prevTPressed = false;
   bool m_prevSpacePressed = false;
+  // === v3.6.0: колонии === (Mars в sol, Hercules b в m13): подлёт к телу
+  // сайта включает подсказку [C], колония сохраняется в профиль и горит
+  // кольцом-маркером в сцене.
+  std::vector<std::string> m_colonies;
+  bool m_prevCPressed = false;
+  std::string m_colonyHint;    // имя сайта в радиусе посадки ("" = нет)
+  std::string m_colonyHintId;  // id сайта для hotkey
   // Интро-карточка ручного телепорта (3с, гаснет сама).
   bool m_cardActive = false;
   float m_cardT = 0.0f;

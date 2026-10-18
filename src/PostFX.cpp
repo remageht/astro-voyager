@@ -319,6 +319,9 @@ void PostFX::endScene(int width, int height) {
   m_compShader->setUniform2f("u_WarpUv", m_warpUv[0], m_warpUv[1]);
   m_compShader->setUniform2f("u_WarpDir", m_warpDir[0], m_warpDir[1]);
   m_compShader->setUniform1f("u_WarpK", m_warpK);
+  // === Horizon capture === (v3.6.0): приливная линза + вспышка (0 = выкл).
+  m_compShader->setUniform1f("u_HorizonK", m_horizonK);
+  m_compShader->setUniform1f("u_HorizonFlash", m_horizonFlash);
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_sceneTex);

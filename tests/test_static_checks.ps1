@@ -274,7 +274,7 @@ Check 'ship hud and respawn' (($appCpp -match 'drawShipHud') -and ($appCpp -matc
 
 # --- v3.3.0 speed fx + camera views pass ---
 Check 'view modes core in Types' (((Read-File 'src/Types.h') -match 'ViewMode') -and ((Read-File 'src/Types.h') -match 'nextView') -and ((Read-File 'src/Types.h') -match 'offsetCameraPos') -and ((Read-File 'src/Types.h') -match 'speedFx'))
-Check 'V key camera views' (($appCpp -match 'GLFW_KEY_V') -and ($appCpp -match 'view::nextView') -and ($appCpp -match 'resetRelativity'))
+Check 'V key camera views' (($appCpp -match 'm_keyView') -and ($appCpp -match 'view::nextView') -and ($appCpp -match 'resetRelativity'))
 Check 'render camera offset' (($appCpp -match 'applyViewCamera') -and ($appCpp -match 'view::offsetCameraPos') -and ($appCpp -match 'm_renderCam'))
 Check 'speed fx composite streak' (((Read-File 'shaders/post_comp.frag') -match 'u_SpeedK') -and ((Read-File 'src/PostFX.cpp') -match 'setSpeedFx') -and ((Read-File 'src/PostFX.h') -match 'setSpeedFx'))
 Check 'speed fx boosts relativity' (($sceneCpp -match 'setSpeedFx') -and ($sceneCpp -match 'betaEff') -and ($sceneH -match 'm_speedBeta'))
@@ -301,7 +301,7 @@ Check 'save test wired' (($cmake -match 'tests/test_save\.cpp') -and ($cmake -ma
 
 # --- v3.5.0 story journal pass ---
 Check 'story journal module' (((Read-File 'src/StoryJournal.h') -match 'class StoryJournal') -and ((Read-File 'src/StoryJournal.cpp') -match 'storyCatalog') -and ($cmake -match 'src/StoryJournal\.cpp'))
-Check 'story journal HUD panel' (($appCpp -match 'drawStoryPanel') -and ($appCpp -match 'm_storyOpen') -and ($appCpp -match 'GLFW_KEY_J') -and ($appCpp -match 'm_prevJPressed'))
+Check 'story journal HUD panel' (($appCpp -match 'drawStoryPanel') -and ($appCpp -match 'm_storyOpen') -and ($appCpp -match 'm_keyJournal') -and ($appCpp -match 'm_prevJPressed'))
 Check 'story journal refresh hook' (($appCpp -match 'StoryJournal::Progress') -and ($appCpp -match 'm_story\.refresh\(sp\)'))
 Check 'story journal test wired' (($cmake -match 'tests/test_story\.cpp') -and ($cmake -match 'add_test\(NAME test_story'))
 
@@ -310,7 +310,7 @@ Check 'expedition core module' (((Read-File 'src/Expedition.h') -match 'class Ex
 Check 'expedition slides module' (((Read-File 'src/StorySlides.h') -match 'storyIntroSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'drawStoryArt') -and ($cmake -match 'src/StorySlides\.cpp'))
 Check 'expedition play hook' (($appCpp -match 'startExpeditionIntro') -and ($appCpp -match 'Begin the expedition'))
 Check 'free visit button' ($appCpp -match 'Free Visit')
-Check 'expedition map key N' (($appCpp -match 'GLFW_KEY_N') -and ($appCpp -match 'm_expeditionMapOpen'))
+Check 'expedition map key N' (($appCpp -match 'm_keyMap') -and ($appCpp -match 'm_expeditionMapOpen'))
 Check 'expedition test wired' (($cmake -match 'tests/test_expedition\.cpp') -and ($cmake -match 'add_test\(NAME test_expedition'))
 Check 'expedition intro shot' (($appCpp -match 'intro\.png') -and ($appCpp -match 'startExpeditionIntro\(\);'))
 Check 'prologue closed after intro shot' ($appCpp -match '(?s)introFile.*m_slidesCurrent\.clear\(\)')
@@ -370,7 +370,39 @@ Check 'windows portable release job' (($ci -match 'build-windows-gl') -and ($ci 
 # --- fx split pass v3.6.0: ускорение и варп — разные явления, мягче ---
 Check 'menu unique button ids' (($appCpp -match '##dest-') -and ($appCpp -match '##recent-'))
 Check 'warp lens only for warp drive' (($sceneCpp -match 'const float lensK = m_warpFx;') -and ((Read-File 'shaders/post_comp.frag') -match '0\.18 \* k'))
-Check 'fx amplitudes softened' (((Read-File 'shaders/post_comp.frag') -match '0\.40, 0\.0, 0\.50') -and ((Read-File 'shaders/warp.frag') -match '0\.62 \+ fringe'))
+Check 'fx amplitudes softened' (((Read-File 'shaders/post_comp.frag') -match '0\.26, 0\.0, 0\.32') -and ((Read-File 'shaders/warp.frag') -match '0\.62 \+ fringe'))
+
+# --- colonies pass v3.6.0: M13 «система Hercules» + колонизация ---
+Check 'colony sites catalog' (($sceneCpp -match '"mars", "Mars", "sol"') -and ($sceneCpp -match '"hercules-b", "Hercules b", "m13"'))
+Check 'm13 system detail' (($sceneCpp -match '5200') -and ($sceneCpp -match 'Hercules Prime') -and ($sceneCpp -match 'm_clusterBright'))
+Check 'colony saved in profile' (((Read-File 'src/SaveGame.h') -match 'colonies') -and ((Read-File 'src/SaveGame.cpp') -match '"colonies"'))
+Check 'colonization hotkey' (($appCpp -match 'm_keyColony') -and ($appCpp -match 'Основать колонию') -and ($appCpp -match 'm_colonyHintId'))
+Check 'colony marker ring' (($sceneCpp -match 'hasColony\("hercules-b"\)') -and ($sceneCpp -match 'hasColony\("mars"\)'))
+Check 'colony save round-trip test' ((Read-File 'tests/test_save.cpp') -match 'progress\.colonies = \{"mars", "hercules-b"\}')
+
+# --- detail + cutscene pass v3.6.0: кламп звёзд, близость колоний ---
+Check 'star max px clamp' (((Read-File 'shaders/star.vert') -match 'u_MaxPx') -and ($sceneCpp -match '24\.0f') -and ($sceneCpp -match '34\.0f'))
+Check 'colony marker proximity gate' ($appCpp -match '60\.0f')
+
+# --- world-anchored imposters v3.6.0: объекты, а не картинки ---
+Check 'quasar world anchor' (((Read-File 'shaders/quasar.frag') -match 'u_ObjNdc') -and ($sceneCpp -match 'impNdcX'))
+Check 'nebula world anchor' (((Read-File 'shaders/nebula.frag') -match 'u_ObjZoom') -and ($sceneCpp -match 'u_ObjZoom'))
+
+# --- horizon cutscene v3.6.0: прилив, вспышка, выброс ---
+Check 'horizon cutscene phases' (($appCpp -match 'm_captureT < 1\.4f') -and ($appCpp -match 'm_horizonWarped') -and ($appCpp -match '3\.2f'))
+Check 'horizon postfx uniforms' (((Read-File 'shaders/post_comp.frag') -match 'u_HorizonK') -and ((Read-File 'src/PostFX.cpp') -match 'u_HorizonK'))
+Check 'quasar capture instead of slide' ($appCpp -match 'qd <= qR \+ 0\.5')
+
+# --- controls page v3.6.0: мышь + переназначение клавиш ---
+Check 'controls settings saved' (((Read-File 'src/SaveGame.h') -match 'mouseSensitivity') -and ((Read-File 'src/SaveGame.cpp') -match 'keyColony'))
+Check 'controls rebind ui' (($appCpp -match 'm_captureKeyFor') -and ($appCpp -match 'keyNameForCode'))
+Check 'mouse sensitivity applied' ($appCpp -match '0\.003f \* m_mouseSensitivity')
+Check 'rebindable hotkeys' (($appCpp -match 'm_keyJournal') -and ($appCpp -match 'm_keyMap') -and ($appCpp -match 'm_keyTour'))
+Check 'controls save round-trip test' ((Read-File 'tests/test_save.cpp') -match 'keyColony = 88')
+
+# --- ship inertia + orbit assist v3.6.0 ---
+Check 'ship inertial flight' (($appCpp -match 'm_shipVel') -and ($appCpp -match 'resp = m_moveInputActive \? 3\.0 : 0\.9'))
+Check 'orbit assist math' (((Read-File 'src/Types.h') -match 'orbitAssist') -and ((Read-File 'tests/test_interaction.cpp') -match 'orbitAssist'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

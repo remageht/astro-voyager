@@ -27,6 +27,7 @@ int main() {
     g.progress.visited = {"sol", "sgra", "m31"};
     g.progress.unlocked = {"first_flight", "bh_hunter"};
     g.progress.route = {"sol", "sgra"};
+    g.progress.colonies = {"mars", "hercules-b"};  // v3.6.0
     g.progress.minBhDistance = 2.345;
     g.progress.exported = true;
     g.progress.imported = false;
@@ -75,6 +76,7 @@ int main() {
     if (out.progress.visited != g.progress.visited ||
         out.progress.unlocked != g.progress.unlocked ||
         out.progress.route != g.progress.route ||
+        out.progress.colonies != g.progress.colonies ||
         !close(out.progress.minBhDistance, g.progress.minBhDistance) ||
         out.progress.exported != g.progress.exported ||
         out.progress.imported != g.progress.imported ||
@@ -124,6 +126,14 @@ int main() {
     s.shellRadius = 42.0f;
     s.stepSize = 0.033f;
     s.maxSteps = 900;
+    // v3.6.0: управление (мышь + переназначение клавиш).
+    s.mouseSensitivity = 1.35f;
+    s.invertY = 1;
+    s.keyColony = 88;   // X
+    s.keyView = 67;     // C
+    s.keyMap = 87;      // W
+    s.keyJournal = 81;  // Q
+    s.keyTour = 90;     // Z
     const std::string text = astro::saveSerializeSettings(s);
     astro::SaveSettings out;
     std::string err;
@@ -139,7 +149,11 @@ int main() {
         !close(out.renderScale, s.renderScale, 1e-5) ||
         !close(out.shellRadius, s.shellRadius, 1e-4) ||
         !close(out.stepSize, s.stepSize, 1e-5) ||
-        out.maxSteps != s.maxSteps) {
+        out.maxSteps != s.maxSteps ||
+        !close(out.mouseSensitivity, s.mouseSensitivity, 1e-5) ||
+        out.invertY != s.invertY || out.keyColony != s.keyColony ||
+        out.keyView != s.keyView || out.keyMap != s.keyMap ||
+        out.keyJournal != s.keyJournal || out.keyTour != s.keyTour) {
       std::cerr << "Test 2 failed: settings mismatch\n";
       return 1;
     }
@@ -205,7 +219,7 @@ int main() {
     }
     if (out.session.station != "sgra" || !close(out.session.fuel, 100.0) ||
         !close(out.session.shield, 100.0) || !out.customs.empty() ||
-        !out.progress.visited.empty()) {
+        !out.progress.visited.empty() || !out.progress.colonies.empty()) {
       std::cerr << "Test 7 failed: defaults/missing-field handling\n";
       return 1;
     }

@@ -529,9 +529,10 @@ void SceneManager::initGalaxyDisks() {
 }
 
 void SceneManager::initCluster() {
-  // v3.1.0: M13-like globular cluster — 2600 points in a puffy Plummer
+  // v3.6.0: M13-like globular cluster — 5200 points in a puffy Plummer
   // sphere (scale 2.2, capped at 8) so the additive pile-up stays a bright
   // but resolvable core. Magnitudes dimmed vs disk stars. Deterministic LCG.
+  // Plus 140 bright giants in a warm tone, drawn separately after the core.
   const float kPi = 3.14159265358979323846f;
   uint32_t state = 0xC131C131u;
   auto next01 = [&state]() -> float {
@@ -540,9 +541,9 @@ void SceneManager::initCluster() {
   };
   std::vector<glm::vec3> pos;
   std::vector<float> mags;
-  pos.reserve(2600);
-  mags.reserve(2600);
-  for (int i = 0; i < 2600; ++i) {
+  pos.reserve(5200);
+  mags.reserve(5200);
+  for (int i = 0; i < 5200; ++i) {
     float u = std::max(next01(), 1e-4f);
     float v = next01();
     float w = next01();
@@ -557,6 +558,42 @@ void SceneManager::initCluster() {
     mags.push_back(std::max(mag, 0.0f));
   }
   m_clusterStars.setStars(pos, mags);
+  // v3.6.0: 140 ярких гигантов ядра в тёплом тоне (размер 0.26, clamp 34px в
+  // шейдере через u_MaxPx). OC: они не попадают в другие станции благодаря
+  // m_clusterBright.clear() в начале render().
+  std::vector<glm::vec3> bpos;
+  std::vector<float> bmags;
+  bpos.reserve(140);
+  bmags.reserve(140);
+  uint32_t stateB = 0xB884B884u;
+  auto nextB = [&stateB]() -> float {
+    stateB = stateB * 1664525u + 1013904223u;
+    return static_cast<float>(stateB >> 8) * (1.0f / 16777216.0f);
+  };
+  for (int i = 0; i < 140; ++i) {
+    float u = std::max(nextB(), 1e-4f);
+    float v = nextB();
+    float w = nextB();
+    float r = 2.2f / std::sqrt(std::pow(u, -2.0f / 3.0f) - 1.0f);
+    r = std::min(r, 8.0f);
+    float th = 2.0f * kPi * v;
+    float ph = std::acos(std::clamp(2.0f * w - 1.0f, -1.0f, 1.0f));
+    bpos.emplace_back(r * std::sin(ph) * std::cos(th), r * std::cos(ph),
+                      r * std::sin(ph) * std::sin(th));
+    float mag = 0.4f + 1.4f * nextB() - 0.8f * (1.0f - r / 8.0f);
+    bmags.push_back(std::max(mag, 0.0f));
+  }
+  // Hercules Prime — ярчайшая звезда ядра кластера в центре (origin);
+  // рисуется билбордом (как остальные гиганты), а не сферой-планетой,
+  // чтобы не раздуваться в «боке»-пузырь при подлёте.
+  bpos.emplace_back(0.0f, 0.0f, 0.0f);
+  bmags.push_back(-0.5f);
+  m_clusterBright.setStars(bpos, bmags);
+}
+
+bool SceneManager::hasColony(const std::string& id) const {
+  return std::find(m_colonies.begin(), m_colonies.end(), id) !=
+         m_colonies.end();
 }
 
 const std::vector<SceneManager::M31BrightStar>& SceneManager::galaxyBrightStars() const {
@@ -678,6 +715,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     }
   }
 
+  // v3.6.0: сайты колоний и яркие звёзды кластера пересчитываются с нуля
+  // каждый кадр, чтобы не просачиваться между станциями.
+  m_colonySites.clear();
+  m_clusterBright.clear();
+
   // === Speed FX === (v3.3.0): игровой разгон/варп — камера в варпе почти не
   // движется, поэтому доплер/абберацию масштабируем внешним boost'ом.
   // По умолчанию 0 => betaEff == m_relBeta (харнесс байт-в-байт).
@@ -686,6 +728,31 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   if (m_speedBeta > betaEff) {
     betaEff = m_speedBeta;
     dirEff = m_speedDir;
+  }
+
+  // v3.6.0: импостеры привязаны к миру — NDC-центр объекта и ракурс камеры к
+  // нему. На спавне (камера в (0,0,d) смотрит в origin) ndc = (0,0), par = 0,
+  // => шейдерные ветки ровно как до привязки, эталонные PNG байт-в-байт.
+  float impNdcX = 0.0f, impNdcY = 0.0f;
+  float impParX = 0.0f, impParY = 0.0f, impParZ = 0.0f;
+  {
+    glm::mat4 projI =
+        glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f,
+                         1000.0f);
+    glm::vec3 eyeI(cp.x, cp.y, cp.z);
+    glm::vec3 fwdI(cf.x, cf.y, cf.z);
+    glm::vec3 upI(cu.x, cu.y, cu.z);
+    glm::mat4 viewI = glm::lookAt(eyeI, eyeI + fwdI, upI);
+    glm::mat4 mvpI = projI * viewI;
+    glm::vec4 clipI = mvpI * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    if (clipI.w > 1e-6f) {
+      impNdcX = static_cast<float>(clipI.x / clipI.w);
+      impNdcY = static_cast<float>(clipI.y / clipI.w);
+      double cl = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+      impParX = static_cast<float>(cp.x / cl);
+      impParY = static_cast<float>(cp.y / cl);
+      impParZ = static_cast<float>(cp.z / cl - 1.0);
+    }
   }
 
   if (m_currentStation->type == StationType::BlackHole) {
@@ -798,6 +865,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       float qzoom =
           static_cast<float>(std::clamp(qs / std::max(qd, 1e-3), 1.0, 40.0));
       m_quasarShader->setUniform1f("u_QZoom", qzoom);
+      m_quasarShader->setUniform2f("u_ObjNdc", impNdcX, impNdcY);
+      m_quasarShader->setUniform3f("u_CamPar", impParX, impParY, impParZ);
     }
 
     m_screenQuad->draw();
@@ -943,6 +1012,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_nebulaShader->setUniform1f("u_Time", time);
     m_nebulaShader->setUniform1f("u_Aspect", aspect);
     m_nebulaShader->setUniform1f("u_Exposure", m_exposure);
+    m_nebulaShader->setUniform2f("u_ObjNdc", impNdcX, impNdcY);
+    m_nebulaShader->setUniform1f("u_ObjZoom", 1.0f);
+    m_nebulaShader->setUniform3f("u_CamPar", impParX, impParY, impParZ);
     m_screenQuad->draw();
     m_nebulaShader->unbind();
   } else if (m_currentStation->type == StationType::Pulsar) {
@@ -995,9 +1067,85 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_starShader->setUniformMat4f("u_MVP", mvp);
     m_starShader->setUniformMat4f("u_MV", view);
     m_starShader->setUniform1f("u_PixelScale", pixelScale);
+    m_starShader->setUniform1f("u_MaxPx", 24.0f);
     m_starShader->setUniform1f("u_SizeK", 0.14f);
     m_starShader->setUniform3f("u_Tint", 1.0f, 1.0f, 1.0f);
     m_clusterStars.draw();
+    // v3.6.0: яркие гиганты ядра (тёплый оттенок, поменьше).
+    m_starShader->setUniform1f("u_MaxPx", 34.0f);
+    m_starShader->setUniform1f("u_SizeK", 0.26f);
+    m_starShader->setUniform3f("u_Tint", 1.0f, 0.88f, 0.70f);
+    m_clusterBright.draw();
+    // v3.6.0: Hercules Prime (M13) — основная звезда + планета на орбите.
+    if (m_currentStation->id == "m13") {
+      double sim = m_simTime;
+      double a = sim * 0.06 + 0.4;
+      Vec3 hbPos(3.2 * std::cos(a), 0.75 * std::sin(a * 0.7),
+                 3.2 * std::sin(a));
+      auto drawPlanet = [&](const Vec3& p, double radius, int type, int body,
+                            float seed, const Vec3& ca, const Vec3& cb) {
+        glm::vec3 bpos(static_cast<float>(p.x), static_cast<float>(p.y),
+                       static_cast<float>(p.z));
+        glm::mat4 model =
+            glm::translate(glm::mat4(1.0f), bpos) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(static_cast<float>(radius)));
+        m_planetShader->setUniformMat4f("u_Model", model);
+        m_planetShader->setUniform1i("u_Type", type);
+        m_planetShader->setUniform1i("u_Body", body);
+        m_planetShader->setUniform1f("u_Seed", seed);
+        m_planetShader->setUniform3f("u_ColA", static_cast<float>(ca.x),
+                                     static_cast<float>(ca.y),
+                                     static_cast<float>(ca.z));
+        m_planetShader->setUniform3f("u_ColB", static_cast<float>(cb.x),
+                                     static_cast<float>(cb.y),
+                                     static_cast<float>(cb.z));
+        m_planetShader->setUniform1i("u_Spot", 0);
+        m_planetShader->setUniform1i("u_Clouds", 0);
+        m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
+        m_planetShader->setUniform1f("u_Radius", static_cast<float>(radius));
+        m_planetShader->setUniform1i("u_RingOn", 0);
+        m_planetShader->setUniform1f("u_RingInner", 0.0f);
+        m_planetShader->setUniform1f("u_RingOuter", 0.0f);
+        m_planetShader->setUniform1f("u_RingTilt", 0.0f);
+        m_planetShader->setUniform1i("u_MoonOccN", 0);
+        m_sphere.draw();
+      };
+      m_planetShader->bind();
+      m_planetShader->setUniformMat4f("u_MVP", mvp);
+      m_planetShader->setUniform1f("u_Time", time);
+      m_planetShader->setUniform1f("u_Exposure", m_exposure);
+      m_planetShader->setUniform3f("u_CamPos", static_cast<float>(cp.x),
+                                   static_cast<float>(cp.y),
+                                   static_cast<float>(cp.z));
+      // v3.6.0: Hercules Prime — звезда-ядро (рисуется билбордом в
+      // m_clusterBright), здесь только планета Hercules b + кольцо колонии.
+      drawPlanet(hbPos, 0.55, 2, 2, 3.0f, Vec3(0.85, 0.8, 1.0),
+                 Vec3(0.7, 0.6, 0.9));
+      // v3.6.0: сайт колонии на Hercules b — каталог + кольцо-маркер.
+      m_colonySites.push_back(ColonySite{"hercules-b", "Hercules b", "m13", hbPos,
+                                         1.5f});
+      if (hasColony("hercules-b")) {
+        m_ringShader->bind();
+        m_ringShader->setUniformMat4f("u_MVP", mvp);
+        glm::vec3 hbp(static_cast<float>(hbPos.x), static_cast<float>(hbPos.y),
+                      static_cast<float>(hbPos.z));
+        glm::mat4 ringModel =
+            glm::translate(glm::mat4(1.0f), hbp) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / 2.7f));
+        m_ringShader->setUniformMat4f("u_Model", ringModel);
+        m_ringShader->setUniform1f("u_Seed", 2.0f);
+        m_ringShader->setUniform1f("u_Time", time);
+        m_ringShader->setUniform3f("u_Center", hbp.x, hbp.y, hbp.z);
+        m_ringShader->setUniform3f("u_ColA", 1.0f, 0.8f, 0.5f);
+        m_ringShader->setUniform1f("u_PlanetR", 0.0f);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        m_saturnRing.draw();
+        glDisable(GL_BLEND);
+        m_planetShader->bind();
+      }
+      m_planetShader->unbind();
+    }
     m_starShader->unbind();
   } else if (m_currentStation->type == StationType::SolarSystem) {
     float dt = tickSimTime(time);
@@ -1203,6 +1351,37 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       }
     }
     m_planetShader->unbind();
+
+    // v3.6.0: сайт колонии на Марсе — кольцо-маркер (виден при сближении;
+    // AppGL показывает подсказку [C] в hint-радиусе radius*8+2.5).
+    if (hasColony("mars")) {
+      for (const auto& body : m_lastBodies) {
+        if (body.def && body.def->id == "mars") {
+          glm::vec3 mpos(static_cast<float>(body.pos.x),
+                         static_cast<float>(body.pos.y),
+                         static_cast<float>(body.pos.z));
+          m_colonySites.push_back(ColonySite{"mars", "Mars", "sol",
+                                             Vec3(mpos.x, mpos.y, mpos.z),
+                                             1.5f});
+          m_ringShader->bind();
+          m_ringShader->setUniformMat4f("u_MVP", mvp);
+          glm::mat4 ringModel =
+              glm::translate(glm::mat4(1.0f), mpos) *
+              glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / 2.7f));
+          m_ringShader->setUniformMat4f("u_Model", ringModel);
+          m_ringShader->setUniform1f("u_Seed", 1.0f);
+          m_ringShader->setUniform1f("u_Time", time);
+          m_ringShader->setUniform3f("u_Center", mpos.x, mpos.y, mpos.z);
+          m_ringShader->setUniform3f("u_ColA", 1.0f, 0.8f, 0.5f);
+          m_ringShader->setUniform1f("u_PlanetR", 0.0f);
+          glEnable(GL_BLEND);
+          glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+          m_saturnRing.draw();
+          glDisable(GL_BLEND);
+          break;
+        }
+      }
+    }
 
     // Halley ion tail: additive ellipsoid oriented anti-sunward.
     {

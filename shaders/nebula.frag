@@ -7,6 +7,11 @@ in vec2 v_TexCoord;
 uniform float u_Time;
 uniform float u_Aspect;
 uniform float u_Exposure;
+// v3.6.0: мир-привязка импостера — NDC-центр объекта, зум от дистанции и
+// ракурс камеры (0/1/0 на спавне — нейтрально для эталонах).
+uniform vec2 u_ObjNdc;
+uniform float u_ObjZoom;
+uniform vec3 u_CamPar;
 
 float hash2(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -65,8 +70,12 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float gain) {
 }
 
 void main() {
-  vec2 uv = v_TexCoord * 2.0 - 1.0;
-  vec2 starUV = uv;
+  vec2 ndc = v_TexCoord * 2.0 - 1.0;
+  // Фон звёзд — экранный (не привязан к объекту).
+  vec2 starUV = ndc;
+  // Объект живёт в мире: центр из NDC, зум от дистанции спавна.
+  float nz = (u_ObjZoom <= 0.0) ? 1.0 : u_ObjZoom;
+  vec2 uv = (ndc - u_ObjNdc) / nz;
   uv.x *= u_Aspect;
 
   vec2 p = vec2(uv.x * 1.25, uv.y * 0.95);

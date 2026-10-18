@@ -42,6 +42,13 @@ class PostFX {
   // === Ship survival === (v3.3.0): low-shield chroma/static amounts (0 = off).
   void setShipFx(float chromaK, float staticK, float flashK = 0.0f);
 
+  // === Horizon capture === (v3.6.0): приливная линза + красное смещение
+  // (k) и плавная белая вспышка (flash). Оба 0 => композит байт-в-байт.
+  void setHorizonFx(float k, float flash) {
+    m_horizonK = k;
+    m_horizonFlash = flash;
+  }
+
   // === Speed FX === (v3.3.0): motion-streak amount 0..1 (0 = off).
   void setSpeedFx(float speedK);
 
@@ -103,6 +110,10 @@ class PostFX {
   float m_shipChroma = 0.0f;
   float m_shipStaticK = 0.0f;
   float m_shipFlashK = 0.0f;  // v3.3.0: вспышка щита при уроне
+
+  // Horizon capture FX state (see setHorizonFx); 0 = off.
+  float m_horizonK = 0.0f;
+  float m_horizonFlash = 0.0f;
 
   // Speed FX motion-streak state (see setSpeedFx); 0 = off.
   float m_speedK = 0.0f;

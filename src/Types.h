@@ -95,6 +95,47 @@ inline Vec3 gravAccelToward(double gm, const Vec3& pos, const Vec3& bodyPos) {
   return Vec3(dx / d * a, dy / d * a, dz / d * a);
 }
 
+// === v3.6.0: орбитальный ассист ===
+// Вблизи массивного центра при тангенциальном курсировании корабль сам
+// выходит на круговую орбиту: радиальная скорость мягко гасится, модуль
+// тангенциальной подтягивается к v = sqrt(a*r). Работает только в окне
+// скоростей (0.55..2.2 от круговой) и при недоминирующем радиальном ходе,
+// чтобы не «прилипать» на любом пролёте. Возвращает true, если ассист
+// скорректировал курс. Чистая математика — тестируется без GPU.
+inline bool orbitAssist(const Vec3& pos, const Vec3& gravAcc, Vec3& inputVel,
+                        Vec3& driftVel, double dt) {
+  if (dt <= 0.0) return false;
+  const double r = std::sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+  if (r < 1e-3) return false;
+  const double a2 =
+      gravAcc.x * gravAcc.x + gravAcc.y * gravAcc.y + gravAcc.z * gravAcc.z;
+  if (a2 < 1e-12) return false;
+  const Vec3 er(pos.x / r, pos.y / r, pos.z / r);  // от центра к кораблю
+  double vx = inputVel.x + driftVel.x;
+  double vy = inputVel.y + driftVel.y;
+  double vz = inputVel.z + driftVel.z;
+  const double vr = vx * er.x + vy * er.y + vz * er.z;
+  const double tx0 = vx - er.x * vr, ty0 = vy - er.y * vr, tz0 = vz - er.z * vr;
+  const double vt = std::sqrt(tx0 * tx0 + ty0 * ty0 + tz0 * tz0);
+  const double a = std::sqrt(a2);
+  const double vCirc = std::sqrt(a * r);
+  if (vCirc < 1e-9) return false;
+  if (vt < 0.55 * vCirc || vt > 2.2 * vCirc) return false;
+  if (std::fabs(vr) > 0.8 * vt) return false;
+  const double kAdj = 1.0 - std::exp(-dt * 1.1);
+  const double vrNew = vr * (1.0 - kAdj);
+  const double vtNew = vt + (vCirc - vt) * kAdj;
+  const double tx = tx0 / vt, ty = ty0 / vt, tz = tz0 / vt;
+  const double gx = er.x * vrNew + tx * vtNew;
+  const double gy = er.y * vrNew + ty * vtNew;
+  const double gz = er.z * vrNew + tz * vtNew;
+  // Дрейф плавно всасывается в управляемую скорость; суммарный вектор — цель.
+  driftVel = Vec3(driftVel.x * (1.0 - kAdj), driftVel.y * (1.0 - kAdj),
+                  driftVel.z * (1.0 - kAdj));
+  inputVel = Vec3(gx - driftVel.x, gy - driftVel.y, gz - driftVel.z);
+  return true;
+}
+
 // Low-shield screen effect gates (0 when the shield is healthy).
 inline float chromaK(float shield) {
   if (shield >= kLowShieldChroma) return 0.0f;

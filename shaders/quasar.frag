@@ -15,6 +15,10 @@ uniform float u_Time;
 uniform float u_Exposure;
 uniform float u_QCoreK;  // quasar core gain (default 1.0; qso 1.5): core+ring+corona up, host down
 uniform float u_QZoom;  // close-up magnification from camera distance (neutral 1.0)
+// v3.6.0: мир-привязка импостера — NDC-центр объекта (0 на спавне) и
+// ракурс камеры к нему (naked normal viewing = zero).
+uniform vec2 u_ObjNdc;
+uniform vec3 u_CamPar;
 
 float hash2(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -114,11 +118,10 @@ float diskDensity(vec2 xz, float rq, float t) {
 }
 
 void main() {
-  vec2 uv = v_TexCoord * 2.0 - 1.0;
-  // Close-up zoom driven by camera distance (SceneManager sets u_QZoom from
-  // spawn/dist, clamped >= 1). Far away qz == 1.0: framing anchored.
+  vec2 ndc = v_TexCoord * 2.0 - 1.0;
+  // Объект живёт в мире: центр из NDC, зум от дистанции спавна.
   float qz = (u_QZoom <= 0.0) ? 1.0 : u_QZoom;
-  uv /= qz;
+  vec2 uv = (ndc - u_ObjNdc) / qz;
   // Up-close detail relaxation: 0 at qz == 1.
   float qCloseK = smoothstep(2.0, 6.0, qz);
   // Harness epoch: live evolution anchored so time == 1.0 is deterministic.
@@ -201,7 +204,8 @@ void main() {
   // inclination (S-shaped sway). sin(tE * ...) is exactly zero at the
   // harness epoch (tE = 0), so reference frames stay deterministic.
   float precA = sin(tE * 0.08) * 0.028;
-  float tilt = uv.y + (0.12 + precA) * uv.x + sin(u_Time * 0.3) * 0.008;
+  float tilt = uv.y + (0.12 + precA) * uv.x + sin(u_Time * 0.3) * 0.008
+               + 0.10 * u_CamPar.y;
   float wig = 0.0020 * sin(abs(uv.x) * 18.0 - tE * 1.3);
   float rho = abs(tilt - wig);
   float s = uv.x;
