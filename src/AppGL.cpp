@@ -5368,7 +5368,9 @@ void AppGL::drawCinematic() {
       std::sqrt(m_camera.position.x * m_camera.position.x +
                 m_camera.position.y * m_camera.position.y +
                 m_camera.position.z * m_camera.position.z);
-  const bool showUi = !m_hideUI;
+  // v3.6.0: при открытых слайдах глав экспедиции HUD-оверлеи (плашка
+  // станции, трофеи, подсказки) прячем — катсцена чистая, наложений нет.
+  const bool showUi = !m_hideUI && !m_slidesOpen;
   if (showUi) drawCineTopBar(dl, font, static_cast<float>(distNow));
   if (showUi) drawCineTrophy(dl, font, now);
   if (showUi) {

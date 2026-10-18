@@ -1086,12 +1086,14 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_starShader->setUniform1f("u_SizeK", 0.26f);
     m_starShader->setUniform3f("u_Tint", 1.0f, 0.88f, 0.70f);
     m_clusterBright.draw();
-    // v3.6.0: Hercules Prime (M13) — основная звезда + планета на орбите.
-    if (m_currentStation->id == "m13") {
-      double sim = m_simTime;
-      double a = sim * 0.06 + 0.4;
-      Vec3 hbPos(3.2 * std::cos(a), 0.75 * std::sin(a * 0.7),
-                 3.2 * std::sin(a));
+      // v3.6.0: Hercules Prime (M13) — основная звезда + планета на орбите.
+      // Масштаб согласован с кластером: орбита 4.6, планета 0.22 — мелкая
+      // экзопланета, а не «тело крупнее скопления».
+      if (m_currentStation->id == "m13") {
+        double sim = m_simTime;
+        double a = sim * 0.06 + 0.4;
+        Vec3 hbPos(4.6 * std::cos(a), 0.9 * std::sin(a * 0.7),
+                   4.6 * std::sin(a));
       auto drawPlanet = [&](const Vec3& p, double radius, int type, int body,
                             float seed, const Vec3& ca, const Vec3& cb) {
         glm::vec3 bpos(static_cast<float>(p.x), static_cast<float>(p.y),
@@ -1129,7 +1131,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                    static_cast<float>(cp.z));
       // v3.6.0: Hercules Prime — звезда-ядро (рисуется билбордом в
       // m_clusterBright), здесь только планета Hercules b + кольцо колонии.
-      drawPlanet(hbPos, 0.55, 2, 2, 3.0f, Vec3(0.85, 0.8, 1.0),
+      drawPlanet(hbPos, 0.22, 2, 2, 3.0f, Vec3(0.85, 0.8, 1.0),
                  Vec3(0.7, 0.6, 0.9));
       // v3.6.0: сайт колонии на Hercules b — каталог + кольцо-маркер.
       m_colonySites.push_back(ColonySite{"hercules-b", "Hercules b", "m13", hbPos,
