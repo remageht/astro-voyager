@@ -183,10 +183,18 @@ CI: сборка Windows/Linux/macOS, static checks, AppImage, macOS-архив,
 См. `CHANGELOG.md`. Скриншоты станций — в `docs/screens/` (референсы
 прод-гейта: каждый коммит с визуальными изменениями обязан их переснять).
 
-## Антивирус: ложные срабатывания (v3.8.1)
+## SmartScreen и антивирус: ложные срабатывания (v3.8.2)
 
-Windows-сборка распространяется неподписанной, поэтому отдельные
-генерик-эвристики AV (например, MaxSecure `Trojan.Malware.300983.susgen`
+Windows-сборка распространяется неподписанной, поэтому:
+
+**SmartScreen** показывает «Система Windows защитила ваш компьютер —
+неопознанное приложение» (издатель: Неизвестный). Это не вирус, у exe просто
+нет подписи издателя и репутации загрузок. Запустить можно через
+«Подробнее → Выполнить в любом случае» либо снять блокировку один раз:
+правый клик по exe → Свойства → «Разблокировать» → ОК. С подписью диалог
+пропадает навсегда.
+
+Отдельные генерик-эвристики AV (например, MaxSecure `Trojan.Malware.300983.susgen`
 и SecureAge `Malicious` на VirusTotal у v3.8.0: 2/71) помечают exe
 эвристически. Microsoft Defender, Kaspersky, ESET, BitDefender и ещё ~67
 движков — чисто.
@@ -196,6 +204,14 @@ Windows-сборка распространяется неподписанной
   они обязаны совпадать;
 - добавьте исключение или восстановите из карантина (Windows Security →
   Protection history), либо сообщите о ложном срабатывании вендору AV или
-  через VirusTotal («Report false positive»);
-- внутри zip лежит `win-av-readme.txt` с этой памяткой (EN);
-- планируются подписанные релизы (code signing), подробнее — `docs/RELEASE.md`.
+  через VirusTotal («Report false positive»; для Microsoft —
+  https://www.microsoft.com/en-us/wdsi/filesubmission);
+- внутри zip лежит `win-av-readme.txt` с этой памяткой (EN).
+
+Гигиена, уже вшитая в бинарник: иконка и VERSIONINFO (v3.8.1), манифест
+asInvoker + supportedOS Win7..Win11 + long paths (v3.8.2). Следующий шаг —
+подпись релизов Authenticode: `packaging/sign-exe.ps1` подписывает,
+штампует временем и проверяет подпись, а релизный workflow подхватывает
+секреты `WINDOWS_CERT_PFX_BASE64` / `WINDOWS_CERT_PASSWORD`. Для мгновенного
+доверия SmartScreen нужен EV-сертификат, OV набирает репутацию со временем —
+подробнее в `docs/RELEASE.md`.

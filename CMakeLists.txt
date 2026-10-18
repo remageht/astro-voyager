@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 3.8.1 LANGUAGES CXX)
+project(astro-voyager VERSION 3.8.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,7 +20,7 @@ add_executable(astro-voyager
   src/Journey.cpp
   src/Achievements.cpp
   src/Tour.cpp
-  src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
+  src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
   src/StoryJournal.cpp  # === StoryJournal === (v3.5.0): бортовой журнал, чистый C++17
   src/Expedition.cpp  # === Expedition === (v3.5.0): сюжетная арка, чистый C++17
 )
@@ -258,6 +258,13 @@ if(ASTROVOYAGER_ENABLE_GL)
     set(AV_ICON_PATH "${CMAKE_SOURCE_DIR}/packaging/app.ico")
     file(RELATIVE_PATH AV_ICON_PATH "${CMAKE_BINARY_DIR}/generated"
          "${AV_ICON_PATH}")
+    # v3.8.2: манифест (asInvoker + supportedOS Win7..Win11 + long paths)
+    # вшивается ресурсом RT_MANIFEST: без него Windows считает exe legacy-
+    # бинарником, и SmartScreen/эвристики AV относятся к неподписанной сборке
+    # ещё подозрительнее.
+    set(AV_MANIFEST_PATH "${CMAKE_SOURCE_DIR}/packaging/app.manifest")
+    file(RELATIVE_PATH AV_MANIFEST_PATH "${CMAKE_BINARY_DIR}/generated"
+         "${AV_MANIFEST_PATH}")
     configure_file(
       "${CMAKE_SOURCE_DIR}/packaging/app.win.rc.in"
       "${CMAKE_BINARY_DIR}/generated/app.win.rc"
@@ -276,7 +283,9 @@ endif()
 option(ASTROVOYAGER_WIN32_GUI "Build GL app as Windows GUI without console" ON)
 if(ASTROVOYAGER_ENABLE_GL AND WIN32 AND ASTROVOYAGER_WIN32_GUI)
   if(MSVC)
-    target_link_options(astro-voyager PRIVATE "/SUBSYSTEM:WINDOWS" "/ENTRY:mainCRTStartup")
+    # /MANIFEST:NO — манифест уже вшит ресурсом RT_MANIFEST (app.win.rc), иначе
+    # link.exe синтезирует второй манифест и CVTRES падает с CVT1100 (duplicate).
+    target_link_options(astro-voyager PRIVATE "/SUBSYSTEM:WINDOWS" "/ENTRY:mainCRTStartup" "/MANIFEST:NO")
   else()
     target_link_options(astro-voyager PRIVATE "-mwindows")
   endif()

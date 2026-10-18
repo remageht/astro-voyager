@@ -10,6 +10,11 @@
 
 1 ICON "@AV_ICON_PATH@"
 
+// v3.8.2: application manifest (RT_MANIFEST = 24, id 1). Without it Windows
+// treats the exe as a pre-Win8 legacy binary, which makes SmartScreen and
+// generic AV heuristics noticeably more suspicious of an unsigned build.
+1 24 "@AV_MANIFEST_PATH@"
+
 1 VERSIONINFO
 FILEVERSION     @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
 PRODUCTVERSION  @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0

@@ -172,6 +172,25 @@ jobs:
           ./astro-voyager.exe --version
           ./astro-voyager.exe --demo-geodesic
           Pop-Location
+      # v3.8.2: необязательная Authenticode-подпись. Без сертификата шаг
+      # тихо скипается (сборка остаётся неподписанной, как раньше). С
+      # секретами WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD exe
+      # подписывается и штампуется временем — SmartScreen перестаёт показывать
+      # «неизвестный издатель», а генерик-эвристики AV теряют повод.
+      - name: Sign exe (optional certificate)
+        shell: pwsh
+        env:
+          CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:CERT_B64) {
+            Write-Host 'No signing certificate configured - shipping an unsigned build.'
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'astro.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_B64))
+          ./packaging/sign-exe.ps1 -Exe build-gl/Release/astro-voyager.exe -PfxPath $pfx -PfxPassword $env:CERT_PASSWORD
       - name: Package (zip + standalone exe)
         shell: pwsh
         run: |
