@@ -1,0 +1,40 @@
+// v3.8.1: icon + VERSIONINFO embedded into the exe. Unsigned binaries
+// without version metadata trip generic AV heuristics far more often
+// (VirusTotal 2/71 false positives on v3.8.0); metadata is the standard
+// hygiene fix. ASCII-only on purpose (rc.exe codepage quirks).
+// v3.8.1b: named VOS_NT_WINDOWS32/VFT_APP constants require winnt/rc headers
+// (VS18's rc.exe ships without the implicit include) — plain literals below
+// compile standalone. Icon path is ASCII-relative to build-gl/generated
+// (CMake RELATIVE_PATH) so rc.exe never sees the user name.
+// Template: configure_file() substitutes @...@ below (CMakeLists.txt).
+
+1 ICON "@AV_ICON_PATH@"
+
+1 VERSIONINFO
+FILEVERSION     @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION  @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEFLAGSMASK   0x3fL
+FILEFLAGS       0x0L
+FILEOS          0x00040004L  // VOS_NT_WINDOWS32
+FILETYPE        0x00000001L  // VFT_APP
+FILESUBTYPE     0x0L         // VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName",      "astro-voyager project"
+      VALUE "FileDescription",  "Astro Voyager - space explorer (black holes, quasars, expedition)"
+      VALUE "FileVersion",      "@PROJECT_VERSION@.0"
+      VALUE "InternalName",     "astro-voyager"
+      VALUE "LegalCopyright",   "MIT License. https://github.com/remageht/astro-voyager"
+      VALUE "OriginalFilename", "astro-voyager.exe"
+      VALUE "ProductName",      "Astro Voyager"
+      VALUE "ProductVersion",   "@PROJECT_VERSION@.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

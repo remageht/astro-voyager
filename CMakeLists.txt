@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 3.8.0 LANGUAGES CXX)
+project(astro-voyager VERSION 3.8.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -204,6 +204,7 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/Window.cpp
     src/Shader.cpp
     src/Mesh.cpp
+    src/ObjModel.cpp
     src/Cubemap.cpp
     src/PostFX.cpp
     src/SceneManager.cpp
@@ -246,6 +247,23 @@ if(ASTROVOYAGER_ENABLE_GL)
     message(FATAL_ERROR "embed_shaders.cmake failed (rc=${astro_embed_rc})")
   endif()
   target_sources(astro-voyager PRIVATE "${ASTRO_EMBED_CPP}")
+
+  # === AV hygiene (v3.8.1) ===: иконка + VERSIONINFO в exe. Генерик-эвристики
+  # AV (VirusTotal 2/71 на v3.8.0) чаще помечают неподписанный exe без
+  # метаданных; версия подставляется из project(... VERSION ...).
+  if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/packaging/app.win.rc.in")
+    # rc.exe — ANSI (не UTF-8): абсолютные пути с кириллицей пользовательской
+    # папки валят его с rc 2. В ресурс пишем ASCII-путь ОТНОСИТЕЛЬНО каталога
+    # generated/ (каталог рабочей копии компилятора ресурсов).
+    set(AV_ICON_PATH "${CMAKE_SOURCE_DIR}/packaging/app.ico")
+    file(RELATIVE_PATH AV_ICON_PATH "${CMAKE_BINARY_DIR}/generated"
+         "${AV_ICON_PATH}")
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/packaging/app.win.rc.in"
+      "${CMAKE_BINARY_DIR}/generated/app.win.rc"
+      @ONLY)
+    target_sources(astro-voyager PRIVATE "${CMAKE_BINARY_DIR}/generated/app.win.rc")
+  endif()
 endif()
 
 # === Win32GUI === begin (агент UI): GL-приложение без консольного окна.

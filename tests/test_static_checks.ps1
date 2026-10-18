@@ -414,6 +414,11 @@ Check 'asteroid field test' ((Read-File 'tests/test_interaction.cpp') -match 'as
 Check 'hazard difficulty scaling' ((($appCpp) -match 'hazardK') -and ((Read-File 'src/Types.h') -match 'hazardK'))
 Check 'load aborts ghost jump' ((((Read-File 'src/AppGL.h') -match 'stopJumpCine') -and (($appCpp) -match 'if \(m_jumpCine && stopJumpCine\)')) -and ((Read-File 'tests/test_interaction.cpp') -match 'hazard'))
 
+# v3.8.1: AV-гигиена релиза
+Check 'exe icon + versioninfo resource' ((Test-Path (Join-Path $root 'packaging/app.ico')) -and (Test-Path (Join-Path $root 'packaging/app.win.rc.in')))
+Check 'rc wired into cmake' (($cmake -match 'app\.win\.rc\.in') -and ($cmake -match 'AV_ICON_PATH'))
+Check 'av readme in zip' ((Test-Path (Join-Path $root 'packaging/win-av-readme.txt')) -and ((Read-File '.github/workflows/build.yml') -match 'CHECKSUMS\.txt'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

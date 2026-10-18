@@ -180,6 +180,11 @@ jobs:
           New-Item -ItemType Directory -Force dist/stage | Out-Null
           Copy-Item build-gl/Release/astro-voyager.exe dist/stage/
           Copy-Item README.md, LICENSE dist/stage/
+          # v3.8.1: AV-нота + контрольные суммы в zip (гигиена ложных
+          # срабатываний: неподписанный exe с метаданными и README).
+          Copy-Item packaging/win-av-readme.txt dist/stage/
+          $hash = (Get-FileHash dist/stage/astro-voyager.exe -Algorithm SHA256).Hash
+          "astro-voyager.exe SHA256 = $hash" | Set-Content dist/stage/CHECKSUMS.txt
           Compress-Archive -Path dist/stage/* -DestinationPath "dist/astro-voyager-v$ver-windows-x86_64.zip" -Force
           Copy-Item build-gl/Release/astro-voyager.exe dist/astro-voyager.exe
           Get-FileHash dist/astro-voyager-v*-windows-x86_64.zip, dist/astro-voyager.exe -Algorithm SHA256 | Format-Table -AutoSize

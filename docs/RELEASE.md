@@ -115,3 +115,23 @@ Gates / Гейты: ctest 3/3, checks 100, doppler 3.29 PASS.
 Заголовок релиза двуязычный: `vX.Y.Z — English title / Русский заголовок`.
 Старые релизы (до v2.4.0 включительно) остаются как есть — формат
 применяется начиная со следующего релиза.
+
+### 4.3. Антивирусная гигиена релиза (v3.8.1)
+
+Неподписанный exe периодически ловит 1-2 генерик-детекта на VirusTotal
+(MaxSecure `Trojan.Malware.300983.susgen`, SecureAge `Malicious` — известные
+FP-генераторы на мелких unsigned-бинарях). Чеклист:
+
+1. Exe содержит иконку + VERSIONINFO (packaging/app.win.rc.in +
+   packaging/app.ico, версия синхронизируется из project(... VERSION ...)) —
+   не удалять, это заметно снижает генерик-срабатывания.
+2. В windows zip входят `win-av-readme.txt` (EN-памятка) и `CHECKSUMS.txt`
+   (SHA256 exe) — шаг Package в .github/workflows/build.yml.
+3. При появлении новых детектов: подать false-positive заявки
+   - через VirusTotal (кнопка "Report false positive" на скане файла),
+   - напрямую вендорам среагировавших движков.
+4. Опционально (блокирует почти все FP): подпись релиза код-сертификатом
+   (Certum Open Source Developer — дёшево для опенсорса, или Azure
+   Trusted Signing) и прикрепление SHA256SUMS к релизу. Пока сертификата
+   нет — секция «Антивирус» в README объясняет пользователям проверку
+   хэшей.

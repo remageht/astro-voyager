@@ -182,3 +182,20 @@ CI: сборка Windows/Linux/macOS, static checks, AppImage, macOS-архив,
 
 См. `CHANGELOG.md`. Скриншоты станций — в `docs/screens/` (референсы
 прод-гейта: каждый коммит с визуальными изменениями обязан их переснять).
+
+## Антивирус: ложные срабатывания (v3.8.1)
+
+Windows-сборка распространяется неподписанной, поэтому отдельные
+генерик-эвристики AV (например, MaxSecure `Trojan.Malware.300983.susgen`
+и SecureAge `Malicious` на VirusTotal у v3.8.0: 2/71) помечают exe
+эвристически. Microsoft Defender, Kaspersky, ESET, BitDefender и ещё ~67
+движков — чисто.
+
+Что сделать, если сработало:
+- сверьте SHA256 в `CHECKSUMS.txt` внутри zip с хэшами на странице релиза —
+  они обязаны совпадать;
+- добавьте исключение или восстановите из карантина (Windows Security →
+  Protection history), либо сообщите о ложном срабатывании вендору AV или
+  через VirusTotal («Report false positive»);
+- внутри zip лежит `win-av-readme.txt` с этой памяткой (EN);
+- планируются подписанные релизы (code signing), подробнее — `docs/RELEASE.md`.
