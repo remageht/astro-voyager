@@ -162,10 +162,12 @@ inline float shieldFlashDecay(float f, float dt) {
 // === Difficulty === (v3.6.0): пресет сложности из настроек. Множители
 // передаются в canJump/spendJumpFuel/updateFuel/applyRadiation (K=1 —
 // базовая балансировка, дефолт Normal). hints=false — минимум подсказок.
+// v3.8.0: hazardK — множитель урона астероидного поля.
 struct DifficultyTuning {
   float jumpCostK = 1.0f;
   float starFuelK = 1.0f;
   float radiationK = 1.0f;
+  float hazardK = 1.0f;
   bool hints = true;
 };
 
@@ -175,10 +177,12 @@ inline DifficultyTuning difficultyTuning(int difficulty) {
     t.jumpCostK = 0.6f;
     t.starFuelK = 1.6f;
     t.radiationK = 0.6f;
+    t.hazardK = 0.6f;
   } else if (difficulty >= 2) {  // Hard: дорогой прыжок, злая радиация, без подсказок
     t.jumpCostK = 1.6f;
     t.starFuelK = 0.7f;
     t.radiationK = 1.5f;
+    t.hazardK = 1.6f;
     t.hints = false;
   }
   return t;

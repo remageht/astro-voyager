@@ -2380,10 +2380,17 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   drawWarpPanel();
 }
 
-void AppGL::teleportToStation(const std::string& id) {
+void AppGL::teleportToStation(const std::string& id, bool stopJumpCine) {
   // === Cinematic === begin (агент C): ручной телепорт останавливает тур.
   if (m_tour.active()) stopCineTour();
   // === Cinematic === end
+  // v3.8.0: внешние телепорты прерывают варп-катсцену — иначе загрузка
+  // профиля или импорт маршрута посреди прыжка оставляют «призрачный» полёт
+  // (контроллер WarpJump живёт дальше смазанного мира, поля не сброшены).
+  // Внутренний телепорт Бурста (stopJumpCine=false) не убивает свой прыжок.
+  if (m_jumpCine && stopJumpCine) {
+    abortJumpCine();
+  }
   m_sceneManager->teleportTo(id, m_camera);
   m_flying = false;
   // v3.6.0: телепорт обнуляет накопленный ход и напоминание об орбите.
@@ -4579,9 +4586,11 @@ bool AppGL::updateJumpCine(float deltaTime) {
     saveProfileNow(false);
   }
   if (jumpEv.asteroidHit) {
+    // v3.8.0: урон обломков масштабируется сложностью (Easy мягче, Hard злее).
+    const float damage =
+        WarpJump::kAstDamage * difficultyTuning(m_difficulty).hazardK;
     const float shieldBefore = m_ship.shield;
-    m_ship.shield =
-        std::max(0.0f, m_ship.shield - WarpJump::kAstDamage);
+    m_ship.shield = std::max(0.0f, m_ship.shield - damage);
     m_shieldFlashK = ship::shieldFlashHit(m_shieldFlashK,
                                           shieldBefore - m_ship.shield);
     char msg[96];
@@ -4675,7 +4684,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
   if (jumpEv.switchStation && !m_jumpDidTeleport) {
     m_jumpDidTeleport = true;
     m_warpStatus = 3;
-    teleportToStation(m_jumpTarget);
+    teleportToStation(m_jumpTarget, false);  // v3.8.0: свой телепорт внутри катсцены
     ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK);
     m_jumpShipPos = m_camera.position;
     m_jumpShipDir = m_camera.forward();

@@ -103,6 +103,10 @@ int main() {
   AssertNear(easy.jumpCostK, 0.6f, 0.0001f, "easy jump cost");
   AssertNear(normal.jumpCostK, 1.0f, 0.0001f, "normal jump cost");
   AssertNear(hard.jumpCostK, 1.6f, 0.0001f, "hard jump cost");
+  // v3.8.0: урон обломков тоже масштабируется сложностью.
+  AssertNear(easy.hazardK, 0.6f, 0.0001f, "easy hazard");
+  AssertNear(normal.hazardK, 1.0f, 0.0001f, "normal hazard");
+  AssertNear(hard.hazardK, 1.6f, 0.0001f, "hard hazard");
   if (!easy.hints || !normal.hints || hard.hints) {
     std::cerr << "difficulty hints flags wrong\n";
     return 1;

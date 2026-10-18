@@ -59,7 +59,9 @@ class AppGL {
   void drawHelpOverlay();
   void drawWorldLabels();
   void drawStoryPanel();
-  void teleportToStation(const std::string& id);
+  // v3.8.0: stopJumpCine=false — только для телепорта Бурста в jump-катсцене
+  // (внутренний вызов не должен убивать собственный прыжок).
+  void teleportToStation(const std::string& id, bool stopJumpCine = true);
   // === Expedition === (v3.5.0): сюжетная арка + вводные слайды.
   void drawSlidesOverlay();
   void drawExpeditionHud();
