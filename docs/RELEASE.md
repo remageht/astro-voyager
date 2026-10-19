@@ -127,9 +127,11 @@ FP-генераторы на мелких unsigned-бинарях). Чеклис
    не удалять, это заметно снижает генерик-срабатывания.
 2. В windows zip входят `win-av-readme.txt` (EN-памятка) и `CHECKSUMS.txt`
    (SHA256 exe) — шаг Package в .github/workflows/build.yml.
-3. При появлении новых детектов: подать false-positive заявки
-   - через VirusTotal (кнопка "Report false positive" на скане файла),
-   - напрямую вендорам среагировавших движков.
+3. При появлении новых детектов: подать false-positive заявки —
+   готовые шаблоны (EN/RU) с актуальными SHA256 и чеклистом лежат в
+   packaging/av-submissions/README.md (обновлять под каждый релиз);
+   подавать через VirusTotal (кнопка "Report false positive") и напрямую
+   вендорам среагировавших движков.
 4. Опционально (блокирует почти все FP): подпись релиза код-сертификатом
    (Certum Open Source Developer — дёшево для опенсорса, или Azure
    Trusted Signing) и прикрепление SHA256SUMS к релизу. Пока сертификата
