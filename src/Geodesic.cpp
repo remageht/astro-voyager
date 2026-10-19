@@ -105,6 +105,184 @@ inline double smoothstep(double edge0, double edge1, double x) {
 }
 }  // namespace
 
+bool rkf45Step(double h, double tol, SchwState& s, double rs, double& hNext) {
+  // Fehlberg 5(4): six stages, the 5th-order solution is propagated and the
+  // 4th-order weights provide the embedded error estimate. Coefficients from
+  // Fehlberg, Computing 6 (1970) 61-71, tableau for local order 5.
+  const double kPi = 3.141592653589793;
+  auto deriv = [&](const SchwState& st, SchwState& dP, SchwAccel& dDp) {
+    dP.t = st.dt;
+    dP.r = st.dr;
+    dP.theta = st.dtheta;
+    dP.phi = st.dphi;
+    dDp = geodesicAcceleration(st, rs);
+  };
+  for (int attempt = 0; attempt < 60; ++attempt) {
+    SchwState kP[6];
+    SchwAccel kD[6];
+    SchwState tmp;
+    // Stage 1
+    tmp = s;
+    deriv(tmp, kP[0], kD[0]);
+    // Stage 2 (a21 = 1/4)
+    tmp = s;
+    tmp.t += h * (1.0 / 4.0) * kP[0].t;
+    tmp.r += h * (1.0 / 4.0) * kP[0].r;
+    tmp.theta += h * (1.0 / 4.0) * kP[0].theta;
+    tmp.phi += h * (1.0 / 4.0) * kP[0].phi;
+    tmp.dt += h * (1.0 / 4.0) * kD[0].ddt;
+    tmp.dr += h * (1.0 / 4.0) * kD[0].ddr;
+    tmp.dtheta += h * (1.0 / 4.0) * kD[0].ddtheta;
+    tmp.dphi += h * (1.0 / 4.0) * kD[0].ddphi;
+    deriv(tmp, kP[1], kD[1]);
+    // Stage 3 (a31 = 3/32, a32 = 9/32)
+    tmp = s;
+    tmp.t += h * (3.0 * kP[0].t / 32.0 + 9.0 * kP[1].t / 32.0);
+    tmp.r += h * (3.0 * kP[0].r / 32.0 + 9.0 * kP[1].r / 32.0);
+    tmp.theta += h * (3.0 * kP[0].theta / 32.0 + 9.0 * kP[1].theta / 32.0);
+    tmp.phi += h * (3.0 * kP[0].phi / 32.0 + 9.0 * kP[1].phi / 32.0);
+    tmp.dt += h * (3.0 * kD[0].ddt / 32.0 + 9.0 * kD[1].ddt / 32.0);
+    tmp.dr += h * (3.0 * kD[0].ddr / 32.0 + 9.0 * kD[1].ddr / 32.0);
+    tmp.dtheta +=
+        h * (3.0 * kD[0].ddtheta / 32.0 + 9.0 * kD[1].ddtheta / 32.0);
+    tmp.dphi += h * (3.0 * kD[0].ddphi / 32.0 + 9.0 * kD[1].ddphi / 32.0);
+    deriv(tmp, kP[2], kD[2]);
+    // Stage 4 (12/13)
+    tmp = s;
+    tmp.t += h * (1932.0 * kP[0].t - 7200.0 * kP[1].t + 7296.0 * kP[2].t) / 2197.0;
+    tmp.r += h * (1932.0 * kP[0].r - 7200.0 * kP[1].r + 7296.0 * kP[2].r) / 2197.0;
+    tmp.theta += h * (1932.0 * kP[0].theta - 7200.0 * kP[1].theta +
+                      7296.0 * kP[2].theta) / 2197.0;
+    tmp.phi += h * (1932.0 * kP[0].phi - 7200.0 * kP[1].phi + 7296.0 * kP[2].phi) / 2197.0;
+    tmp.dt += h * (1932.0 * kD[0].ddt - 7200.0 * kD[1].ddt + 7296.0 * kD[2].ddt) / 2197.0;
+    tmp.dr += h * (1932.0 * kD[0].ddr - 7200.0 * kD[1].ddr + 7296.0 * kD[2].ddr) / 2197.0;
+    tmp.dtheta += h * (1932.0 * kD[0].ddtheta - 7200.0 * kD[1].ddtheta +
+                       7296.0 * kD[2].ddtheta) / 2197.0;
+    tmp.dphi += h * (1932.0 * kD[0].ddphi - 7200.0 * kD[1].ddphi + 7296.0 * kD[2].ddphi) / 2197.0;
+    deriv(tmp, kP[3], kD[3]);
+    // Stage 5 (a51 = 439/216, a52 = -8, a53 = 3680/513, a54 = -845/4104)
+    tmp = s;
+    tmp.t += h * (439.0 / 216.0 * kP[0].t - 8.0 * kP[1].t +
+                  3680.0 / 513.0 * kP[2].t - 845.0 / 4104.0 * kP[3].t);
+    tmp.r += h * (439.0 / 216.0 * kP[0].r - 8.0 * kP[1].r +
+                  3680.0 / 513.0 * kP[2].r - 845.0 / 4104.0 * kP[3].r);
+    tmp.theta += h * (439.0 / 216.0 * kP[0].theta - 8.0 * kP[1].theta +
+                      3680.0 / 513.0 * kP[2].theta - 845.0 / 4104.0 * kP[3].theta);
+    tmp.phi += h * (439.0 / 216.0 * kP[0].phi - 8.0 * kP[1].phi +
+                    3680.0 / 513.0 * kP[2].phi - 845.0 / 4104.0 * kP[3].phi);
+    tmp.dt += h * (439.0 / 216.0 * kD[0].ddt - 8.0 * kD[1].ddt +
+                   3680.0 / 513.0 * kD[2].ddt - 845.0 / 4104.0 * kD[3].ddt);
+    tmp.dr += h * (439.0 / 216.0 * kD[0].ddr - 8.0 * kD[1].ddr +
+                   3680.0 / 513.0 * kD[2].ddr - 845.0 / 4104.0 * kD[3].ddr);
+    tmp.dtheta += h * (439.0 / 216.0 * kD[0].ddtheta - 8.0 * kD[1].ddtheta +
+                       3680.0 / 513.0 * kD[2].ddtheta - 845.0 / 4104.0 * kD[3].ddtheta);
+    tmp.dphi += h * (439.0 / 216.0 * kD[0].ddphi - 8.0 * kD[1].ddphi +
+                     3680.0 / 513.0 * kD[2].ddphi - 845.0 / 4104.0 * kD[3].ddphi);
+    deriv(tmp, kP[4], kD[4]);
+    // Stage 6 (a61 = -8/27, a62 = 2, a63 = -3544/2565, a64 = 1859/4104,
+    // a65 = -11/40)
+    tmp = s;
+    tmp.t += h * (-8.0 / 27.0 * kP[0].t + 2.0 * kP[1].t -
+                  3544.0 / 2565.0 * kP[2].t + 1859.0 / 4104.0 * kP[3].t -
+                  11.0 / 40.0 * kP[4].t);
+    tmp.r += h * (-8.0 / 27.0 * kP[0].r + 2.0 * kP[1].r -
+                  3544.0 / 2565.0 * kP[2].r + 1859.0 / 4104.0 * kP[3].r -
+                  11.0 / 40.0 * kP[4].r);
+    tmp.theta += h * (-8.0 / 27.0 * kP[0].theta + 2.0 * kP[1].theta -
+                      3544.0 / 2565.0 * kP[2].theta + 1859.0 / 4104.0 * kP[3].theta -
+                      11.0 / 40.0 * kP[4].theta);
+    tmp.phi += h * (-8.0 / 27.0 * kP[0].phi + 2.0 * kP[1].phi -
+                    3544.0 / 2565.0 * kP[2].phi + 1859.0 / 4104.0 * kP[3].phi -
+                    11.0 / 40.0 * kP[4].phi);
+    tmp.dt += h * (-8.0 / 27.0 * kD[0].ddt + 2.0 * kD[1].ddt -
+                   3544.0 / 2565.0 * kD[2].ddt + 1859.0 / 4104.0 * kD[3].ddt -
+                   11.0 / 40.0 * kD[4].ddt);
+    tmp.dr += h * (-8.0 / 27.0 * kD[0].ddr + 2.0 * kD[1].ddr -
+                   3544.0 / 2565.0 * kD[2].ddr + 1859.0 / 4104.0 * kD[3].ddr -
+                   11.0 / 40.0 * kD[4].ddr);
+    tmp.dtheta += h * (-8.0 / 27.0 * kD[0].ddtheta + 2.0 * kD[1].ddtheta -
+                       3544.0 / 2565.0 * kD[2].ddtheta + 1859.0 / 4104.0 * kD[3].ddtheta -
+                       11.0 / 40.0 * kD[4].ddtheta);
+    tmp.dphi += h * (-8.0 / 27.0 * kD[0].ddphi + 2.0 * kD[1].ddphi -
+                     3544.0 / 2565.0 * kD[2].ddphi + 1859.0 / 4104.0 * kD[3].ddphi -
+                     11.0 / 40.0 * kD[4].ddphi);
+    deriv(tmp, kP[5], kD[5]);
+
+    // 5th-order solution weights b5, safe order-4 error weights b4.
+    const double b5[6] = {16.0 / 135.0, 0.0, 6656.0 / 12825.0,
+                          28561.0 / 56430.0, -9.0 / 50.0, 2.0 / 55.0};
+    const double b4[6] = {25.0 / 216.0, 0.0, 1408.0 / 2565.0,
+                          2197.0 / 4104.0, -1.0 / 5.0, 0.0};
+    SchwState o5, o4;
+    o5 = s;
+    o4 = s;
+    double err2 = 0.0;
+    for (int j = 0; j < 6; ++j) {
+      o5.t += h * b5[j] * kP[j].t;
+      o5.r += h * b5[j] * kP[j].r;
+      o5.theta += h * b5[j] * kP[j].theta;
+      o5.phi += h * b5[j] * kP[j].phi;
+      o5.dt += h * b5[j] * kD[j].ddt;
+      o5.dr += h * b5[j] * kD[j].ddr;
+      o5.dtheta += h * b5[j] * kD[j].ddtheta;
+      o5.dphi += h * b5[j] * kD[j].ddphi;
+      o4.t += h * b4[j] * kP[j].t;
+      o4.r += h * b4[j] * kP[j].r;
+      o4.theta += h * b4[j] * kP[j].theta;
+      o4.phi += h * b4[j] * kP[j].phi;
+      o4.dt += h * b4[j] * kD[j].ddt;
+      o4.dr += h * b4[j] * kD[j].ddr;
+      o4.dtheta += h * b4[j] * kD[j].ddtheta;
+      o4.dphi += h * b4[j] * kD[j].ddphi;
+    }
+    const double d[6] = {std::abs(o5.r - o4.r),        std::abs(o5.theta - o4.theta),
+                         std::abs(o5.phi - o4.phi),    std::abs(o5.dr - o4.dr),
+                         std::abs(o5.dtheta - o4.dtheta), std::abs(o5.dphi - o4.dphi)};
+    const double x[6] = {o5.r, o5.theta, o5.phi, o5.dr, o5.dtheta, o5.dphi};
+    for (int j = 0; j < 6; ++j) {
+      const double scale = std::max(std::abs(x[j]), 1.0);
+      err2 += (d[j] / scale) * (d[j] / scale);
+    }
+    const double err = std::sqrt(err2 / 6.0);
+    if (err > tol) {
+      const double fac = std::min(5.0, std::max(0.2, 0.9 * std::pow(tol / err, 0.2)));
+      h *= fac;
+      if (h < 1e-9) return false;  // avoid infinite shrinking
+      continue;
+    }
+    // Accept (propagate the order-5 solution), renormalize like rk4Step.
+    s = o5;
+    s.theta = std::min(std::max(s.theta, 0.0001), kPi - 0.0001);
+    renormalizeTime(s, rs);
+    // Step controller: classic growth on accept (larger tolerances stretch
+    // the far-field steps quickly; near-field rejections shrink above).
+    hNext = h * std::min(5.0, std::max(0.2, 0.9 * std::pow(tol / err, 0.2)));
+    return true;
+  }
+  return false;
+}
+
+int traceRayRkf45(SchwState& s, double rs, double shell, double h0, double tol,
+                  int maxSteps, bool& captured, Rkf45Stats* stats) {
+  captured = false;
+  double h = h0;
+  for (int i = 0; i < maxSteps; ++i) {
+    if (stats) stats->evals += 6;  // one trial = 6 acceleration evaluations
+    double next = 0.0;
+    if (!rkf45Step(h, tol, s, rs, next)) return i;  // shrunk to nothing
+    // Growth cap mirrors the fixed law's far-field step (hFar = 2.5*h0):
+    // larger steps stop paying because the per-step renormalizeTime()
+    // projection dominates the error at big h.
+    h = std::min(next, h0 * 2.5);
+    if (s.r <= rs * 1.001) {
+      captured = true;
+      return i + 1;
+    }
+    if (s.r >= shell) return i + 1;
+  }
+  return maxSteps;
+}
+
 int traceRay(SchwState s, double rs, double shell, double step, int maxSteps,
              bool& captured) {
   captured = false;

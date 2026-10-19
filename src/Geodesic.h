@@ -24,6 +24,24 @@ void renormalizeTime(SchwState& s, double rs);
 
 void rk4Step(double h, SchwState& s, double rs);
 
+// One adaptive RKF45 (Fehlberg 5(4)) step: advances s by a single accepted
+// step with embedded error control. h is the trial step, tol the relative
+// error tolerance. On true the step was taken, renormalizeTime() applied and
+// hNext carries the controller's suggested next trial; false means the
+// trial never converged (s left untouched).
+bool rkf45Step(double h, double tol, SchwState& s, double rs, double& hNext);
+
+// Adaptive error-controlled ray tracing until capture (r<=rs) or escape
+// (r>=shell) or maxSteps accepted-steps budget. Advances s in place so the
+// caller can inspect the endpoint. Optional stats (may be null): accepted
+// acceleration evaluations (6 per trial step; rejected trials included).
+struct Rkf45Stats {
+  long evals = 0;
+};
+
+int traceRayRkf45(SchwState& s, double rs, double shell, double h0, double tol,
+                  int maxSteps, bool& captured, Rkf45Stats* stats = nullptr);
+
 // Returns steps until capture (r<=rs) or escape (r>=shell), or maxSteps.
 int traceRay(SchwState s, double rs, double shell, double step, int maxSteps,
              bool& captured);

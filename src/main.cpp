@@ -39,7 +39,7 @@ astro::SchwState makeInwardRay(double r0, double b, double rs) {
 
 void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
-               "--demo-geodesic | --demo-binet | --demo-kerr | --test-interaction | --version";
+               "--demo-geodesic | --demo-binet | --demo-rkf45 | --demo-kerr | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --screenshot-all [--disk]";
 #endif
@@ -245,6 +245,79 @@ int main(int argc, char** argv) {
 
     std::cout << "\nBinet validation result: " << (allPassed ? "ALL PASS" : "FAIL") << "\n";
     return allPassed ? 0 : 1;
+  }
+  if (arg == "--demo-rkf45") {
+    // Validation of the adaptive RKF45 (Fehlberg 5(4)) ray tracer:
+    // (A) capture/escape parity with the fixed-step RK4 law,
+    // (B) equal-or-better endpoint accuracy with fewer acceleration
+    //     evaluations (the speedup the roadmap item is about),
+    // (C) tighter energy observables than the fixed law (dt from E/f).
+    const double rs = 1.0;
+    const double r0 = 10.0;
+    const double bCrit = 1.5 * std::sqrt(3.0) * rs;
+    std::cout << "=== RKF45 adaptive tracer validation (Rs=" << rs
+              << ", r0=" << r0 << ", b_crit=" << bCrit << ") ===\n";
+    bool okA = true, okB = true, okC = true;
+
+    // (A) Parity across the capture/escape boundary.
+    const double kBs[5] = {2.0, 2.5, 2.7, 3.0, 4.0};
+    for (double b : kBs) {
+      bool capF = false, capA = false;
+      astro::traceRay(makeInwardRay(r0, b, rs), rs, 30.0, 0.02, 8000, capF);
+      astro::SchwState rayA = makeInwardRay(r0, b, rs);
+      astro::traceRayRkf45(rayA, rs, 30.0, 0.02, 1e-10, 8000, capA);
+      const bool ok = (capF == capA) && (capA == (b < bCrit));
+      std::cout << "b=" << b << ": fixed=" << (capF ? "capture" : "escape")
+                << " rkf45=" << (capA ? "capture" : "escape") << " -> "
+                << (ok ? "PASS" : "FAIL") << "\n";
+      if (!ok) okA = false;
+    }
+
+    // (B) Endpoint accuracy vs evaluations: reference RK4 h=0.002.
+    const double bRef = 2.7;
+    astro::SchwState refS = makeInwardRay(r0, bRef, rs);
+    for (int i = 0; i < 100000; ++i) {
+      astro::rk4Step(0.002, refS, rs);
+      if (refS.r <= rs * 1.001 || refS.r >= 30.0) break;
+    }
+    astro::SchwState fixS = makeInwardRay(r0, bRef, rs);
+    long fixEvals = 0;
+    for (int i = 0; i < 100000; ++i) {
+      astro::rk4Step(0.02, fixS, rs);
+      fixEvals += 4;
+      if (fixS.r <= rs * 1.001 || fixS.r >= 30.0) break;
+    }
+    astro::SchwState rkfS = makeInwardRay(r0, bRef, rs);
+    bool capB = false;
+    astro::Rkf45Stats st;
+    astro::traceRayRkf45(rkfS, rs, 30.0, 0.02, 1e-10, 8000, capB, &st);
+    const double refPhi = refS.phi;
+    const double eFix = std::abs(fixS.phi - refPhi) / (std::abs(refPhi) + 1e-12);
+    const double eRkf = std::abs(rkfS.phi - refPhi) / (std::abs(refPhi) + 1e-12);
+    if (!(eRkf <= 2.0 * eFix) || !(st.evals <= 0.7 * fixEvals) || capB) okB = false;
+    std::cout << "b=" << bRef << ": phi rel err fixed=" << eFix
+              << " rkf45=" << eRkf << ", evals fixed=" << fixEvals
+              << " rkf45=" << st.evals << " -> "
+              << (okB ? "PASS" : "FAIL") << "\n";
+
+    // (C) Energy observable after the full trace: dt must equal
+    // E0 / (1 - Rs/r) at the escape shell (tighter than the 1e-6
+    // RK4 gate from --demo-geodesic since renormalize pins dt each step).
+    astro::SchwState cS = makeInwardRay(12.0, 4.0, rs);
+    const double E0 = (1.0 - rs / cS.r) * cS.dt;
+    bool capC = false;
+    astro::traceRayRkf45(cS, rs, 30.0, 0.02, 1e-10, 8000, capC);
+    if (cS.r >= 30.0) {
+      const double f = 1.0 - rs / cS.r;
+      const double drift = std::abs(cS.dt - E0 / f);
+      if (drift >= 1e-6) okC = false;
+      std::cout << "energy dt drift at shell: " << drift << " (< 1e-6 -> "
+                << (drift < 1e-6 ? "PASS" : "FAIL") << ")\n";
+    }
+
+    std::cout << "\nRKF45 validation result: "
+              << ((okA && okB && okC) ? "ALL PASS" : "FAIL") << "\n";
+    return (okA && okB && okC) ? 0 : 1;
   }
   if (arg == "--demo-kerr") {
     // Validation of Kerr null geodesics module (Kerr.cpp):

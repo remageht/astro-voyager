@@ -128,6 +128,20 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_expedition.cpp")
   endif()
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_rkf45.cpp")
+  add_executable(test_rkf45
+    tests/test_rkf45.cpp
+    src/Geodesic.cpp
+  )
+  target_include_directories(test_rkf45 PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+  if(MSVC)
+    target_compile_options(test_rkf45 PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_rkf45 PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
 if(ASTROVOYAGER_ENABLE_GL)
   message(STATUS "GL renderer enabled (expects Dependencies/ + src/vendor/ locally)")
   target_compile_definitions(astro-voyager PRIVATE ASTROVOYAGER_ENABLE_GL=1)
@@ -310,6 +324,10 @@ if(TARGET test_story)
 endif()
 if(TARGET test_expedition)
   add_test(NAME test_expedition COMMAND test_expedition)
+endif()
+
+if(TARGET test_rkf45)
+  add_test(NAME test_rkf45 COMMAND test_rkf45)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):
