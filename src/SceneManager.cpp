@@ -1884,11 +1884,20 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                           glm::radians(90.0f),
                                           glm::vec3(1.0f, 0.0f, 0.0f));
               // Спин кольца: раскручивается тягой и варпом, соседние кольца
-              // вращаются в разные стороны (живее силуэт).
-              const float spinRate = 0.55f + 2.6f * thrW + 8.0f * warpVis;
+              // вращаются в разные стороны (живее силуэт). База 0.55*time
+              // остаётся исторической (детерминизм харнесса), а переменную
+              // часть скорости интегрируем по кадрам: вариант time*rate
+              // давал рывок фазы ~ time*dRate — кольца «телепортировались»
+              // при включении варпа на рабочем столе минут за десять.
+              static float s_spinVar = 0.0f;
+              static float s_spinPrev = time;
+              const float dtS = time - s_spinPrev;
+              s_spinPrev = time;
+              if (dtS > 0.0f && dtS < 0.5f)
+                s_spinVar += (2.6f * thrW + 8.0f * warpVis) * dtS;
               const float spinDir = (ringIdx % 2 == 0) ? 1.0f : -1.0f;
               model = model * glm::rotate(glm::mat4(1.0f),
-                                          time * spinRate * spinDir,
+                                          spinDir * (0.55f * time + s_spinVar),
                                           glm::vec3(0.0f, 0.0f, 1.0f));
               ++ringIdx;
             }

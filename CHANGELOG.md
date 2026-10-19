@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 3.8.3 - 2026-10-19
+
+## What's new / Что нового
+- EN: Ring spin fix - the procedural Ring Ship's rings snapped/jerked whenever thrust or warp intensity changed (turning warp on after a long desktop session teleported the ring rotation by hundreds of radians per second because the angle was computed as time * rate with a time-varying rate). The variable part of the spin rate is now integrated per-frame; the 0.55 base stays on the absolute clock, so steady-state motion is identical and the transient is smooth.
+- RU: Фикс кручения колец - кольца процедурного Ring Ship рывками «телепортировались» при изменении тяги или включении варпа (угол считался как time * rate при переменной rate - после десяти минут на рабочем столе разгон ударял кольца сотнями радиан за секунду). Переменная часть скорости теперь интегрируется по кадрам; база 0.55 остаётся на абсолютном времени, установившийся режим идентичен, переход плавный.
+- Gates / Гейты: GL build OK, ctest 5/6 (test_save падает только в опеновской песочнице - среда запрещает процессу создавать каталоги в %TEMP%, на обычном десктопе 6/6), референсы: единственное плановое отличие ship_ring.png (новая фаза колец), остальные 30 снимков байт-в-байт, menu.png обновлён (футер версии).
+
 ## 3.8.2 - 2026-10-18
 
 ## What's new / Что нового
