@@ -29,3 +29,8 @@ routes/
 
 # Blender previews/models are local build artifacts (scripts live in blender/scripts/)
 blender/out/
+
+# Certificates / private keys: never commit
+*.pfx
+*.cer
+*.pvk
