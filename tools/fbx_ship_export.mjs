@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tools/fbx_ship_export.mjs — Tripo/AI-generated FBX -> game-ready OBJ ship
+// tools/fbx_ship_export.mjs вЂ” Tripo/AI-generated FBX -> game-ready OBJ ship
 // plus its PBR texture set (BMP, so the runtime needs no image decoder).
 //
 // What it does:
@@ -269,11 +269,11 @@ const triStart = [];  // triangle corner offsets into cornerV
 
 // ---------- decimate: cluster corners into a uniform grid, keep topology ----------
 // A spatial cell alone would merge corners that belong to *different* UV
-// islands meeting at a seam — their averaged UV lands in an atlas gap and the
+// islands meeting at a seam вЂ” their averaged UV lands in an atlas gap and the
 // hull gets speckled. So each cell keeps a handful of subgroups: a corner
 // joins the first subgroup whose running mean UV is within UV_TOL, otherwise
 // it opens a new one. Smooth UVs collapse to one vertex per cell, seams get a
-// second vertex at (nearly) the same position — exactly what UV seams need.
+// second vertex at (nearly) the same position вЂ” exactly what UV seams need.
 const dmax = Math.max(L[0], L[1], L[2]) * scale;
 const h = dmax / CELLS;
 const UV_TOL = num('uv-tol', 0.01); // atlas units; 1024px texture -> ~10 texels
@@ -420,6 +420,266 @@ if (WANT_TEX && textureClips.length) {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+// ---------- livery: paint the raw clip set into a real-hull look ----------
+// The raw Tripo atlas is an unpainted mock. Every decimated face is
+// rasterized into its own UV triangle and colored by its ship-space
+// position: two-tone hull, graphite belly, ring accent + cyan glow rim,
+// charcoal engine block, window strips, amber trim, exhaust glow. Panel
+// detail survives: the source albedo sample multiplies the zone tint.
+const LIVERY = flags['no-livery'] === undefined;
+let liveryReport = null;
+
+if (LIVERY && hasUV && WANT_TEX) {
+  const S = TEX_SIZE;
+
+  const readBmp24 = (p) => {
+    const b = fs.readFileSync(p);
+    let off = b.readUInt32LE(10);
+    let w = b.readInt32LE(18);
+    let h = b.readInt32LE(22);
+    if (b.readUInt16LE(28) !== 24) throw new Error(`not 24bpp: ${p}`);
+    const topDown = h < 0;
+    if (topDown) h = -h;
+    const stride = ((w * 3 + 3) >> 2) << 2;
+    const rgb = Buffer.alloc(w * h * 3);
+    for (let y = 0; y < h; y++) {
+      const srcRow = topDown ? y : (h - 1 - y);
+      b.copy(rgb, y * w * 3, off + srcRow * stride, off + srcRow * stride + w * 3);
+    }
+    return { w, h, rgb };
+  };
+  const writeBmp24 = (p, cv) => {
+    const { w, h, rgb } = cv;
+    const stride = ((w * 3 + 3) >> 2) << 2;
+    const size = 54 + stride * h;
+    const b = Buffer.alloc(size);
+    b.write('BM', 0, 'latin1');
+    b.writeUInt32LE(size, 2);
+    b.writeUInt32LE(54, 10);
+    b.writeUInt32LE(40, 14);
+    b.writeInt32LE(w, 18);
+    b.writeInt32LE(h, 22);
+    b.writeUInt16LE(1, 26);
+    b.writeUInt16LE(24, 28);
+    b.writeUInt32LE(stride * h, 34);
+    for (let y = 0; y < h; y++) {
+      const d = 54 + (h - 1 - y) * stride;
+      for (let x = 0; x < w; x++) {
+        const si = (y * w + x) * 3;
+        const di = d + x * 3;
+        b[di] = rgb[si + 2];      // BMP хранит BGR
+        b[di + 1] = rgb[si + 1];
+        b[di + 2] = rgb[si];
+      }
+    }
+    fs.writeFileSync(p, b);
+  };
+
+  const pAlbedo = path.join(OUTDIR, `${NAME}_albedo.bmp`);
+  const pRough = path.join(OUTDIR, `${NAME}_rough.bmp`);
+  const pMetal = path.join(OUTDIR, `${NAME}_metal.bmp`);
+  if (!fs.existsSync(pAlbedo)) {
+    console.error('livery: no albedo BMP to paint over, skipped');
+  } else {
+    const alb = readBmp24(pAlbedo);
+    const rgh = fs.existsSync(pRough) ? readBmp24(pRough) : null;
+    const mtl = fs.existsSync(pMetal) ? readBmp24(pMetal) : null;
+    const emis = { w: S, h: S, rgb: Buffer.alloc(S * S * 3) };
+    const mask = new Uint8Array(S * S);
+
+    const sample = (cv, u, v, out) => {
+      const fx = Math.min(Math.max(u, 0), 1) * (cv.w - 1);
+      const fy = (1 - Math.min(Math.max(v, 0), 1)) * (cv.h - 1);
+      const x0 = Math.floor(fx), y0 = Math.floor(fy);
+      const x1 = Math.min(x0 + 1, cv.w - 1), y1 = Math.min(y0 + 1, cv.h - 1);
+      const tx = fx - x0, ty = fy - y0;
+      for (let c = 0; c < 3; c++) {
+        const p00 = cv.rgb[(y0 * cv.w + x0) * 3 + c];
+        const p10 = cv.rgb[(y0 * cv.w + x1) * 3 + c];
+        const p01 = cv.rgb[(y1 * cv.w + x0) * 3 + c];
+        const p11 = cv.rgb[(y1 * cv.w + x1) * 3 + c];
+        out[c] = (p00 * (1 - tx) + p10 * tx) * (1 - ty) +
+                 (p01 * (1 - tx) + p11 * tx) * ty;
+      }
+    };
+
+    // Face-space stats for the ring threshold: hull radius vs ring radius.
+    let rMax = 0;
+    for (let i = 0; i < outV.length; i++) {
+      const r = Math.hypot(outV[i][0], outV[i][1]);
+      if (r > rMax) rMax = r;
+    }
+    const RING_R = Math.max(0.19, rMax * 0.62);   // rings + pylons
+    const RIM_IN = rMax * 0.86, RIM_OUT = rMax * 0.985;
+
+    const hash01 = (x, y, z) => {
+      const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+      return s - Math.floor(s);
+    };
+
+    let painted = 0;
+    for (let t = 0; t < tris.length; t += 3) {
+      const ia = remap[tris[t]], ib = remap[tris[t + 1]], ic = remap[tris[t + 2]];
+      const pa = outV[ia], pb = outV[ib], pc = outV[ic];
+      const ta = outVT[ia], tb = outVT[ib], tc = outVT[ic];
+      // face centroid in baked ship space
+      const cx = (pa[0] + pb[0] + pc[0]) / 3;
+      const cy = (pa[1] + pb[1] + pc[1]) / 3;
+      const cz = (pa[2] + pb[2] + pc[2]) / 3;
+      const r = Math.hypot(cx, cy);
+      const jit = hash01(cx * 53, cy * 53, cz * 53) - 0.5;
+
+      // ---- zone colors: С‚С‘РјРЅС‹Р№ Р±СЂРѕРЅРёСЂРѕРІР°РЅРЅС‹Р№ РІР°СЂРї-РєРѕРІС‡РµРі IXS-РєР»Р°СЃСЃР° ----
+      // Р РµС„РµСЂРµРЅСЃ: РіСЂР°С„РёС‚РѕРІР°СЏ Р±СЂРѕРЅСЏ, С†РµРїРѕС‡РєРё СЃРёРЅРёС… РѕРєРѕРЅ РЅР° РєРѕР»СЊС†Р°С… Рё Р±РѕСЂС‚Р°С…,
+      // РёРЅС‚РµРЅСЃРёРІРЅС‹Р№ РЅРµРѕРЅ РІРЅСѓС‚СЂРё РєРѕР»СЊС†РµРІРѕРіРѕ РєР°РЅР°Р»Р°, РєСЂР°СЃРЅС‹Р№ РІС‹С…Р»РѕРї, СЃРІРµС‚Р»С‹Р№ РЅРѕСЃ.
+      let zr, zg, zb, rough, metal, er = 0, eg = 0, eb = 0;
+      const isRing = r > RING_R;
+      // ~30% Р»РёС†РµРІС‹С… РїР°РЅРµР»РµР№ вЂ” СЃРІРµС‚Р»РµРµ: СЂР°Р·Р±РёРІРєР° Р±Р»РѕРєРѕРІ Р±СЂРѕРЅРё
+      const armorMix = hash01(cx * 31, cy * 31, cz * 31) > 0.7;
+      if (isRing) {
+        if (r < RING_R + 0.055) {
+          // РІРЅСѓС‚СЂРµРЅРЅРёР№ РєР°РЅР°Р» РєРѕР»СЊС†Р°: РїР»Р°Р·РјРµРЅРЅС‹Р№ РЅРµРѕРЅ
+          zr = 10; zg = 14; zb = 26;
+          rough = 0.20; metal = 0.80;
+          er = 42; eg = 150; eb = 255;
+        } else {
+          zr = 62; zg = 68; zb = 80;
+          if (armorMix) { zr = 96; zg = 104; zb = 118; }
+          rough = 0.45; metal = 0.75;
+          // С†РµРїРѕС‡РєРё РѕРєРѕРЅ РїРѕ РІРЅРµС€РЅРµР№ Р±СЂРѕРЅРµ РєРѕР»РµС†
+          const ang = Math.atan2(cy, cx) / (2 * Math.PI) + 0.5;
+          const winChain = (ang * 44 % 1) < 0.50 &&
+                           (cz * 3.5 % 1) > 0.18 && (cz * 3.5 % 1) < 0.82;
+          if (winChain) {
+            zr = 9; zg = 11; zb = 18;
+            rough = 0.16; metal = 0.70;
+            er = 24; eg = 120; eb = 250;
+          }
+        }
+      } else if (cz > 0.98) {
+        // СЃРѕРїР»РѕРІР°СЏ РіСЂСѓРїРїР°: С‚С‘РјРЅС‹Р№ РіР°СЂРµРІРѕР№ РјРµС‚Р°Р»Р» + РєСЂР°СЃРЅС‹Р№ РІС‹С…Р»РѕРї
+        zr = 40; zg = 42; zb = 48;
+        rough = 0.45; metal = 0.85;
+        if (cz > 1.10) { er = 220; eg = 66; eb = 18; }
+      } else if (cz > 0.60) {
+        // машинное отделение
+        zr = 48; zg = 52; zb = 62;
+        if (armorMix) { zr = 78; zg = 85; zb = 100; }
+        rough = 0.50; metal = 0.75;
+      } else if (cz > 0.50 && cz <= 0.565) {
+        // янтарная отделочная полоса
+        zr = 217; zg = 158; zb = 64;
+        rough = 0.35; metal = 0.50;
+        er = 40; eg = 26; eb = 10;
+      } else if (cy < -0.045) {
+        // графитовое брюхо (двухцветный корпус)
+        zr = 48; zg = 53; zb = 62;
+        rough = 0.50; metal = 0.70;
+      } else if (cz < -0.72) {
+        // светлый носовой конус
+        zr = 150; zg = 158; zb = 170;
+        rough = 0.40; metal = 0.60;
+      } else {
+        // основная броня корпуса
+        zr = 62; zg = 68; zb = 80;
+        if (armorMix) { zr = 98; zg = 106; zb = 122; }
+        rough = 0.46; metal = 0.75;
+        // СЂСЏРґС‹ СЃРёРЅРёС… РѕРєРѕРЅ РїРѕ Р±РѕСЂС‚Р°Рј РІРґРѕР»СЊ СЌРєРІР°С‚РѕСЂР°
+        const isWindow = cy > -0.045 && cy < 0.04 && cz > -0.55 && cz < 0.35 &&
+                         (cz * 15.0 % 1) < 0.55;
+        if (isWindow) {
+          zr = 9; zg = 12; zb = 20;
+          rough = 0.16; metal = 0.70;
+          er = 26; eg = 130; eb = 255;
+        }
+      }
+
+      rough = Math.min(1, Math.max(0.05, rough + jit * 0.08));
+      metal = Math.min(1, Math.max(0, metal + jit * 0.04));
+
+      // РџР°РЅРµР»СЊРЅС‹Р№ С‚РѕРЅ: Р°С‚Р»Р°СЃ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РєР°Рє luminance (РєРІР°РЅС‚РѕРІР°РЅРЅС‹Р№)
+      // вЂ” РіСЂРёР·Р»Рё С‡РёС‚Р°РµС‚СЃСЏ С‚РµСЂСЂР°СЃР°РјРё С‚РѕРЅР°, Р° РјРµРґРЅР°СЏ СЂР¶Р°РІС‡РёРЅР° Tripo РЅРµ РїСЂРѕС‚РµРєР°РµС‚.
+      // РќР° СЃРІРµС‚СЏС‰РёРµСЃСЏ РіСЂР°РЅРё (РѕРєРЅР°/РЅРµРѕРЅ) РїР°РЅРµР»СЊ РЅРµ РІР»РёСЏРµС‚ вЂ” С‚Р°Рј С‡РёСЃС‚С‹Р№ СЌРјРёСЃСЃРёРІ.
+      const su = (ta[0] + tb[0] + tc[0]) / 3;
+      const sv = (ta[1] + tb[1] + tc[1]) / 3;
+      const src = [0, 0, 0];
+      const usesEmissive = er != 0 || eg != 0 || eb != 0;
+      if (!usesEmissive) sample(alb, su, sv, src);
+      const luma = (src[0] * 0.299 + src[1] * 0.587 + src[2] * 0.114) / 255;
+      const q = Math.round(luma * 4) / 4;
+      const panel = 0.70 + 0.55 * q;                    // 0.70..1.25
+      const vj = 0.985 + hash01(cz * 97, cy * 97, cx * 97) * 0.03;
+      const k = usesEmissive ? 1.0 : panel * vj;
+      const cr = Math.min(255, zr * k);
+      const cg = Math.min(255, zg * k);
+      const cb = Math.min(255, zb * k);
+      const rr = Math.round(rough * 255);
+      const rm = Math.round(metal * 255);
+
+      // ---- rasterize the face's UV triangle ----
+      const px = (v) => v * (S - 1);
+      const x0 = Math.max(0, Math.floor(Math.min(ta[0], tb[0], tc[0]) * (S - 1)) - 1);
+      const x1 = Math.min(S - 1, Math.ceil(Math.max(ta[0], tb[0], tc[0]) * (S - 1)) + 1);
+      const y0 = Math.max(0, Math.floor(Math.min(1 - ta[1], 1 - tb[1], 1 - tc[1]) * (S - 1)) - 1);
+      const y1 = Math.min(S - 1, Math.ceil(Math.max(1 - ta[1], 1 - tb[1], 1 - tc[1]) * (S - 1)) + 1);
+      const ax = px(ta[0]), ay = px(1 - ta[1]);
+      const bx = px(tb[0]), by = px(1 - tb[1]);
+      const cxp = px(tc[0]), cyp = px(1 - tc[1]);
+      // sign-agnostic edge functions: inside = РІСЃРµ Р·РЅР°РєРё СЃРѕРІРїР°РґР°СЋС‚
+      const e00 = (by - ay), e01 = (ax - bx);
+      const e10 = (cy - by), e11 = (bx - cxp);
+      const e20 = (ay - cyp), e21 = (cxp - ax);
+      const EPS = -1e-6;
+      for (let py = y0; py <= y1; py++) {
+        const fy = py + 0.5;
+        for (let ppx = x0; ppx <= x1; ppx++) {
+          const fx = ppx + 0.5;
+          const l0 = e00 * (fx - ax) + e01 * (fy - ay);
+          const l1 = e10 * (fx - bx) + e11 * (fy - by);
+          const l2 = e20 * (fx - cxp) + e21 * (fy - cyp);
+          if (!((l0 >= EPS && l1 >= EPS && l2 >= EPS) ||
+                (l0 <= -EPS && l1 <= -EPS && l2 <= -EPS))) continue;
+          const idx = (py * S + ppx) * 3;
+          alb.rgb[idx] = cr; alb.rgb[idx + 1] = cg; alb.rgb[idx + 2] = cb;
+          if (rgh) { rgh.rgb[idx] = rr; rgh.rgb[idx + 1] = rr; rgh.rgb[idx + 2] = rr; }
+          if (mtl) { mtl.rgb[idx] = rm; mtl.rgb[idx + 1] = rm; mtl.rgb[idx + 2] = rm; }
+          emis.rgb[idx] = er; emis.rgb[idx + 1] = eg; emis.rgb[idx + 2] = eb;
+          mask[py * S + ppx] = 1;
+          painted++;
+        }
+      }
+    }
+
+    // 1px dilate: kill rasterization cracks between adjacent face splats
+    const dil = Buffer.from(alb.rgb), dilR = rgh ? Buffer.from(rgh.rgb) : null;
+    const dilM = mtl ? Buffer.from(mtl.rgb) : null, dilE = Buffer.from(emis.rgb);
+    const mask2 = new Uint8Array(mask);
+    for (let y = 1; y < S - 1; y++) {
+      for (let x = 1; x < S - 1; x++) {
+        const i = y * S + x;
+        if (mask2[i]) continue;
+        const srcI = mask2[i - 1] ? i - 1 : mask2[i + 1] ? i + 1 :
+                     mask2[i - S] ? i - S : mask2[i + S] ? i + S : -1;
+        if (srcI < 0) continue;
+        for (let c = 0; c < 3; c++) {
+          dil[i * 3 + c] = alb.rgb[srcI * 3 + c];
+          if (dilR) dilR[i * 3 + c] = rgh.rgb[srcI * 3 + c];
+          if (dilM) dilM[i * 3 + c] = mtl.rgb[srcI * 3 + c];
+          dilE[i * 3 + c] = emis.rgb[srcI * 3 + c];
+        }
+        mask[i] = 1;
+      }
+    }
+    alb.rgb = dil; if (rgh) rgh.rgb = dilR; if (mtl) mtl.rgb = dilM; emis.rgb = dilE;
+
+    writeBmp24(pAlbedo, alb);
+    if (rgh) writeBmp24(pRough, rgh);
+    if (mtl) writeBmp24(pMetal, mtl);
+    writeBmp24(path.join(OUTDIR, `${NAME}_emissive.bmp`), emis);
+    liveryReport = { ringRadius: +RING_R.toFixed(3), facePixels: painted };
+  }
+}
+
 console.log(JSON.stringify({
   fbx: path.basename(IN), fbxVersion: VERSION,
   srcVerts: N, srcTris: triStart.length,
@@ -427,5 +687,6 @@ console.log(JSON.stringify({
   out: OUT, sizeMB: +(fs.statSync(OUT).size / 1024 / 1024).toFixed(1),
   uv: hasUV ? `${UV.length / 2} texcoords (${uvRef}/${uvMapMode})` : 'none',
   axis: ['x', 'y', 'z'][lenAxis], flipped: !!noseAtMax,
+  livery: liveryReport,
   textures: texReport,
 }, null, 2));

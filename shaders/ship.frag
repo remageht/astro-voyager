@@ -28,6 +28,7 @@ uniform samplerCube u_Env;
 uniform float u_EnvMaxLod;
 uniform float u_ReflK;  // v3.6.0: 0 = зеркальные отражения выключены (настройки)
 uniform int u_TexOn;    // 1 = PBR-набор стиля Model подключён
+uniform int u_EmissiveOn;  // 1 = есть emissive-карта стиля Model (юнит 5)
 uniform int u_SkinOn;   // 1 = панельный скин Ring Ship (стиль 1)
 uniform mat4 u_ShipInv; // inverse(ship world) — скин живёт в пространстве корабля
 uniform sampler2D u_SkinAlbedo;  // тайловый скин Ring Ship (albedo)
@@ -36,6 +37,7 @@ uniform sampler2D u_Albedo;
 uniform sampler2D u_NormalTex;
 uniform sampler2D u_RoughTex;
 uniform sampler2D u_MetalTex;
+uniform sampler2D u_EmissiveTex;  // запечённые наклейки/окна/кольцевой неон
 
 const float kPi = 3.14159265;
 
@@ -59,15 +61,20 @@ void main() {
   vec3 albedo;
   float rough;
   float metal;
+  vec3 mapEm = vec3(0.0);  // emissive из карты стиля Model
 
   if (u_TexOn == 1) {
     // sRGB albedo -> linear; roughness/metallic maps are linear grayscale.
-    albedo = pow(max(texture(u_Albedo, v_UV).rgb, vec3(0.0)), vec3(2.2));
-    rough = clamp(texture(u_RoughTex, v_UV).r, 0.05, 1.0);
-    metal = clamp(texture(u_MetalTex, v_UV).r, 0.0, 1.0);
+    // LOD 0 принудительно: vt у Model — кластерные средние, производные UV
+    // скачут между кластерами, mip-фильтр вырождается в средний цвет атласа.
+    albedo = pow(max(textureLod(u_Albedo, v_UV, 0.0).rgb, vec3(0.0)), vec3(2.2));
+    rough = clamp(textureLod(u_RoughTex, v_UV, 0.0).r, 0.05, 1.0);
+    metal = clamp(textureLod(u_MetalTex, v_UV, 0.0).r, 0.0, 1.0);
+    if (u_EmissiveOn == 1)
+      mapEm = pow(textureLod(u_EmissiveTex, v_UV, 0.0).rgb, vec3(2.2));
     // Tangent-space normal without a tangent stream: build the cotangent
     // frame from screen-space derivatives of world position and uv.
-    vec3 nmap = texture(u_NormalTex, v_UV).xyz * 2.0 - 1.0;
+    vec3 nmap = textureLod(u_NormalTex, v_UV, 0.0).xyz * 2.0 - 1.0;
     vec3 dp1 = dFdx(v_WorldPos);
     vec3 dp2 = dFdy(v_WorldPos);
     vec2 duv1 = dFdx(v_UV);
@@ -142,7 +149,8 @@ void main() {
   vec3 envDiff = textureLod(u_Env, n, u_EnvMaxLod).rgb;
   vec3 fEnv = f0 + (max(vec3(1.0 - rough), f0) - f0) * pow(1.0 - NoV, 5.0);
   col += envDiff * albedo * kd * 2.6;  // ambient gain: sky is dim HDR
-  col += envSpec * fEnv * (1.0 - 0.55 * rough) * u_ReflK;
-  col += u_Emissive;  // S5/S8: сопла, навогни, подсветка кабины
+  col += envSpec * fEnv * (1.0 - 0.55 * rough) * u_ReflK
+       * (u_TexOn == 1 ? 0.0 : 1.0);  // DEBUG: envSpec off for Model
+  col += u_Emissive + mapEm;  // S5/S8: сопла, навогни, кабина + Model эмиссив
   FragColor = vec4(col, 1.0);
 }

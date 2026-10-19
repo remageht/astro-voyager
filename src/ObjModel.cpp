@@ -183,7 +183,8 @@ ObjModel::~ObjModel() {
   if (m_vbo != 0) glDeleteBuffers(1, &m_vbo);
   if (m_ebo != 0) glDeleteBuffers(1, &m_ebo);
   if (m_vao != 0) glDeleteVertexArrays(1, &m_vao);
-  unsigned int tex[4] = {m_texAlbedo, m_texNormal, m_texRough, m_texMetal};
+  unsigned int tex[5] = {m_texAlbedo, m_texNormal, m_texRough, m_texMetal,
+                         m_texEmissive};
   for (unsigned int t : tex) {
     if (t != 0) glDeleteTextures(1, &t);
   }
@@ -386,13 +387,18 @@ bool ObjModel::loadTextures(const std::string& base) {
   const std::string normal = base + "_normal.bmp";
   const std::string rough = base + "_rough.bmp";
   const std::string metal = base + "_metal.bmp";
+  const std::string emissive = base + "_emissive.bmp";  // опциональна
   unsigned int a = loadTextureFile(albedo);
   unsigned int n = loadTextureFile(normal);
   unsigned int r = loadTextureFile(rough);
   unsigned int m = loadTextureFile(metal);
+  unsigned int e = loadTextureFile(emissive);
+  std::printf("[ship] tex %s: albedo=%u normal=%u rough=%u metal=%u emis=%u\n",
+              base.c_str(), a, n, r, m, e);
+  std::fflush(stdout);
   if (a == 0) {
     // Без albedo набор бессмысленен: чистим частично загруженное.
-    unsigned int extra[3] = {n, r, m};
+    unsigned int extra[4] = {n, r, m, e};
     for (unsigned int t : extra) {
       if (t != 0) glDeleteTextures(1, &t);
     }
@@ -402,16 +408,19 @@ bool ObjModel::loadTextures(const std::string& base) {
   if (m_texNormal != 0) glDeleteTextures(1, &m_texNormal);
   if (m_texRough != 0) glDeleteTextures(1, &m_texRough);
   if (m_texMetal != 0) glDeleteTextures(1, &m_texMetal);
+  if (m_texEmissive != 0) glDeleteTextures(1, &m_texEmissive);
   m_texAlbedo = a;
   m_texNormal = n;
   m_texRough = r;
   m_texMetal = m;
+  m_texEmissive = e;
   return true;
 }
 
 void ObjModel::bindTextures(int firstUnit) const {
-  const unsigned int tex[4] = {m_texAlbedo, m_texNormal, m_texRough, m_texMetal};
-  for (int i = 0; i < 4; ++i) {
+  const unsigned int tex[5] = {m_texAlbedo, m_texNormal, m_texRough, m_texMetal,
+                               m_texEmissive};
+  for (int i = 0; i < 5; ++i) {
     glActiveTexture(GL_TEXTURE0 + firstUnit + i);
     glBindTexture(GL_TEXTURE_2D, tex[i]);
   }

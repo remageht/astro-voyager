@@ -1816,10 +1816,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
               s_shipShader->setUniform1i("u_FlatNormal", 0);
               s_shipShader->setUniform1i("u_SkinOn", 0);
-              s_shipShader->setUniform3f("u_BaseColor",
-                                         glm::vec3(0.86f, 0.90f, 0.96f));
-              s_shipShader->setUniform1f("u_Metal", 0.88f);
-              s_shipShader->setUniform1f("u_Rough", 0.36f);
+              // Окраску несёт livery-альбедо (запечён в экспортёре), поэтому
+              // множитель нейтральный; метал/шершавость — фолбэки, когда карт нет.
+              s_shipShader->setUniform3f("u_BaseColor", glm::vec3(1.0f));
+              s_shipShader->setUniform1f("u_Metal", 0.78f);
+              s_shipShader->setUniform1f("u_Rough", 0.42f);
               // Текстурированный путь: карты в юнитах 1..4 (0 — скайбокс).
               const bool texOn = s_shipModel.textured();
               s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
@@ -1830,6 +1831,18 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 s_shipShader->setUniform1i("u_MetalTex", 4);
                 s_shipModel.bindTextures(1);
               }
+              // Emissive-карта livery (кольцевой неон, окна, выхлоп): юнит 5.
+              const bool emOn = s_shipModel.emissive();
+              static bool s_texDbg = false;
+              if (!s_texDbg) {
+                s_texDbg = true;
+                std::printf("[ship] ready=%d texOn=%d emOn=%d\n",
+                            s_shipModel.ready() ? 1 : 0, texOn ? 1 : 0,
+                            emOn ? 1 : 0);
+                std::fflush(stdout);
+              }
+              s_shipShader->setUniform1i("u_EmissiveOn", emOn ? 1 : 0);
+              if (emOn) s_shipShader->setUniform1i("u_EmissiveTex", 5);
               // Star Trek-подсветка в варпе: линейный HDR-довесок, умеренный.
               const float wk =
                   std::min(std::max(warpdrive::warpK(), 0.0f), 1.0f);
@@ -1844,6 +1857,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           // Процедурные части: плоский u_BaseColor, текстуры выключены
           // (у них нет атрибута UV — location 2 не включён).
           s_shipShader->setUniform1i("u_TexOn", 0);
+          s_shipShader->setUniform1i("u_EmissiveOn", 0);  // не утекать из Model-пути
           // Сэмплеры карт всё равно обязаны смотреть в СВОИ юниты: если два
           // сэмплера разного типа делят юнит 0 (кубмап скайбокса), драйвер
           // вправе отбросить draw — корпус рисовался чёрным.

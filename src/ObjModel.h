@@ -33,17 +33,19 @@ class ObjModel {
   bool load(const std::string& path);
 
   // PBR-набор рядом с .obj: <base>_albedo.bmp / _normal.bmp / _rough.bmp /
-  // _metal.bmp. Возвращает false, если не нашлось ни одной карты (меш при
-  // этом остаётся годным — плоский металл).
+  // _metal.bmp / (опционально) _emissive.bmp. Возвращает false, если не
+  // нашлось ни одной карты (меш при этом остаётся годным — плоский металл).
   bool loadTextures(const std::string& base);
 
   bool ready() const { return m_indexCount > 0; }
   bool textured() const { return m_texAlbedo != 0; }
+  bool emissive() const { return m_texEmissive != 0; }
 
   // Единичный масштаб: baked экспорт сцентрирован в 0.0 и растянут в LENGTH.
   void draw() const;
 
-  // Привязка карт к юнитам firstUnit..firstUnit+3 (albedo, normal, rough, metal).
+  // Привязка карт к юнитам firstUnit..firstUnit+4 (albedo, normal, rough,
+  // metal, emissive).
   void bindTextures(int firstUnit) const;
 
   const glm::vec3& center() const { return m_center; }
@@ -58,6 +60,7 @@ class ObjModel {
   unsigned int m_texNormal = 0;
   unsigned int m_texRough = 0;
   unsigned int m_texMetal = 0;
+  unsigned int m_texEmissive = 0;
   glm::vec3 m_center{0.0f};
 };
 
