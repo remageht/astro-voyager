@@ -1799,6 +1799,15 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
           glActiveTexture(GL_TEXTURE0);
           m_skyboxLocal->bind(0);
+          // Фаза спина интегрируется раз за кадр: кольца процедурного
+          // корпуса и кольца OBJ-модели (u_RingSpin) делят одну фазу.
+          static float s_spinVar = 0.0f;
+          static float s_spinPrev = time;
+          const float dtS = time - s_spinPrev;
+          s_spinPrev = time;
+          if (dtS > 0.0f && dtS < 0.5f)
+            s_spinVar += (2.6f * thrW + 8.0f * warpVis) * dtS;
+          const float spinPhase = 0.55f * time + s_spinVar;
           bool meshDrawn = false;
           if (style == 3) {
             // Model hull (агент M): меш из res/models/warp_ship.obj рядом с
@@ -1818,6 +1827,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               s_shipShader->setUniformMat4f("u_Model", shipHullModel);
               s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
               s_shipShader->setUniform1i("u_FlatNormal", 0);
+              // Кручение колец Model-корабля (окраска едет с ободом —
+              // скин сэмплится в некрутёной позиции). Окна читаются и
+              // в простое: база 0.55*time + переменная фаза.
+              s_shipShader->setUniform1f("u_RingSpin", spinPhase);
               s_shipShader->setUniform1i("u_SkinOn", 0);
               // Окраску несёт livery-альбедо (запечён в экспортёре), поэтому
               // множитель нейтральный; метал/шершавость — фолбэки, когда карт нет.
@@ -1854,6 +1867,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           // Процедурные части: плоский u_BaseColor, текстуры выключены
           // (у них нет атрибута UV — location 2 не включён).
           s_shipShader->setUniform1i("u_TexOn", 0);
+          // Процедурным частям спин OBJ не нужен: кольца крутятся на CPU.
+          s_shipShader->setUniform1f("u_RingSpin", 0.0f);
           s_shipShader->setUniform1i("u_EmissiveOn", 0);  // не утекать из Model-пути
           // Сэмплеры карт всё равно обязаны смотреть в СВОИ юниты: если два
           // сэмплера разного типа делят юнит 0 (кубмап скайбокса), драйвер
@@ -1888,14 +1903,6 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             glBindTexture(GL_TEXTURE_2D, s_skinRough);
             glActiveTexture(GL_TEXTURE0);
           }
-          // Фаза спина интегрируется раз за кадр (раньше сидела внутри
-          // ring-ветки): кольца и их бегущие огни делят одну фазу.
-          static float s_spinVar = 0.0f;
-          static float s_spinPrev = time;
-          const float dtS = time - s_spinPrev;
-          s_spinPrev = time;
-          if (dtS > 0.0f && dtS < 0.5f)
-            s_spinVar += (2.6f * thrW + 8.0f * warpVis) * dtS;
           int ringIdx = 0;
           for (const ShipPart& p : parts) {
             glm::mat4 model = shipHullModel *
@@ -1921,12 +1928,17 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               const glm::mat4 ringCenter = model;
               for (int m = 0; m < 3; ++m) {
                 const float a = ang + static_cast<float>(m) * 2.0944f;
+                // Плоскость кольца после rotX(90°) — локальные XY: маркер
+                // катится по ободу вокруг продольной оси. Масштаб обязателен:
+                // единичная сфера иначе перекрывает весь корабль.
                 glm::mat4 dotM = ringCenter *
                     glm::translate(glm::mat4(1.0f),
-                                   glm::vec3(0.37f * std::cos(a), 0.0f,
-                                             0.37f * std::sin(a)));
+                                   glm::vec3(0.37f * std::cos(a),
+                                             0.37f * std::sin(a), 0.0f)) *
+                    glm::scale(glm::mat4(1.0f),
+                               glm::vec3(0.018f, 0.018f, 0.018f));
                 s_shipShader->setUniformMat4f("u_Model", dotM);
-                s_shipShader->setUniform3f("u_InvScale", 5.0f, 5.0f, 5.0f);
+                s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
                 s_shipShader->setUniform1f("u_FlatNormal", 0.0f);
                 s_shipShader->setUniform3f("u_BaseColor", 0.85f, 0.90f, 1.0f);
                 s_shipShader->setUniform1f("u_Metal", 0.0f);
@@ -1939,7 +1951,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 s_shipSphere.draw();
               }
               ++ringIdx;
-              continue;
+              // Далее общий хвост цикла: масштаб, юниформы и draw кольца.
             }
             model = model * glm::scale(glm::mat4(1.0f), p.scale);
             s_shipShader->setUniformMat4f("u_Model", model);

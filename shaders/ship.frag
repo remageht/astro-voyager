@@ -56,6 +56,8 @@ vec3 fSchlick(float u, vec3 f0) { return f0 + (1.0 - f0) * pow(1.0 - u, 5.0); }
 
 void main() {
   vec3 n = normalize(v_Normal);
+  vec3 geomN = n;  // rim/силуэт считают по ГЕОМЕТРИИ: нормаль-карта Model
+                   // рваная (кластерные vt), rim по ней заливает корпус
   vec3 V = normalize(u_CamPos - v_WorldPos);
   float NoV = max(dot(n, V), 1e-4);
   vec3 albedo;
@@ -138,10 +140,12 @@ void main() {
   vec3 col = (kd * albedo / kPi + spec) * u_KeyColor * NoL;
 
   // Cool rim from the anti-key direction — silhouette readability.
-  vec3 rimDir = normalize(-L + vec3(0.0, 0.45, 0.0));
-  float rimNoL = max(dot(n, rimDir), 0.0);
-  float rimFres = pow(1.0 - NoV, 3.0);
-  col += vec3(0.45, 0.62, 0.95) * rimFres * (0.30 + 0.22 * rimNoL);
+  if (u_TexOn != 1) {
+    vec3 rimDir = normalize(-L + vec3(0.0, 0.45, 0.0));
+    float rimNoL = max(dot(geomN, rimDir), 0.0);
+    float rimFres = pow(1.0 - max(dot(geomN, V), 1e-4), 3.0);
+    col += vec3(0.45, 0.62, 0.95) * rimFres * (0.30 + 0.22 * rimNoL);
+  }
 
   // Sky IBL: diffuse from the coarsest mip, reflections by roughness lod.
   vec3 R = reflect(-V, n);
@@ -149,8 +153,7 @@ void main() {
   vec3 envDiff = textureLod(u_Env, n, u_EnvMaxLod).rgb;
   vec3 fEnv = f0 + (max(vec3(1.0 - rough), f0) - f0) * pow(1.0 - NoV, 5.0);
   col += envDiff * albedo * kd * 2.6;  // ambient gain: sky is dim HDR
-  col += envSpec * fEnv * (1.0 - 0.55 * rough) * u_ReflK
-       * (u_TexOn == 1 ? 0.0 : 1.0);  // DEBUG: envSpec off for Model
+  col += envSpec * fEnv * (1.0 - 0.55 * rough) * u_ReflK;
   col += u_Emissive + mapEm;  // S5/S8: сопла, навогни, кабина + Model эмиссив
   FragColor = vec4(col, 1.0);
 }

@@ -15,19 +15,46 @@ uniform mat4 u_Model;
 uniform mat4 u_ShipInv;    // inverse of the ship world matrix (skin space)
 uniform vec3 u_InvScale;   // inverse part scale for correct ellipsoid normals
 uniform int u_FlatNormal;  // 1 = ring: local normal +Y
+uniform float u_RingSpin;  // угол кольца Obj (rad); процедурным ставится 0
 out vec3 v_Normal;
 out vec3 v_WorldPos;
 out vec3 v_PartPos;  // object-space позиция: панельные линии корпуса (S7)
 out vec3 v_ObjPos;   // ship-space позиция: скин Ring Ship
 out vec2 v_UV;
 void main() {
-  vec4 wp = u_Model * vec4(position, 1.0);
+  // Спин колец Model-корабля: классификация в локальном пространстве OBJ
+  // (совпадает с ship-space до stretch). Зоны замерены гистограммой
+  // warp_ship.obj: обод r>0.18 лежит в трёх z-срезах
+  // [-0.36..-0.14], [0.14..0.26], [0.44..0.66]; крылья и носовые детали
+  // вне срезов остаются на месте. Наружные половины пилонов крутятся
+  // вместе с кольцом (гибкий шарнир на r~0.19).
+  float k = 0.0;
+  {
+    float rxy = length(position.xy);
+    float radial = smoothstep(0.180, 0.205, rxy);
+    float z = position.z;
+    float slab = max(step(-0.36, z) * step(z, -0.14),
+                     max(step(0.14, z) * step(z, 0.26),
+                         step(0.44, z) * step(z, 0.66)));
+    k = radial * slab;
+  }
+  float ang = u_RingSpin * k;
+  float ca = cos(ang);
+  float sa = sin(ang);
+  vec4 wp = u_Model * vec4(position.x * ca - position.y * sa,
+                           position.x * sa + position.y * ca,
+                           position.z, 1.0);
   v_WorldPos = wp.xyz;
   v_PartPos = position;
-  v_ObjPos = (u_ShipInv * wp).xyz;
+  // Скин сэмплируется в НЕКРУТЁНОЙ позиции: окраска приклеена к точке
+  // материала — неон и окна едут вместе с кольцом, панели корпуса стоят.
+  vec4 wpSkin = u_Model * vec4(position, 1.0);
+  v_ObjPos = (u_ShipInv * wpSkin).xyz;
   v_UV = a_UV;
   vec3 n = (u_FlatNormal == 1) ? vec3(0.0, 1.0, 0.0)
                                 : a_Aux * u_InvScale * u_InvScale;
+  // Нормали кольцевой зоны крутятся вместе с геометрией.
+  n = vec3(n.x * ca - n.y * sa, n.x * sa + n.y * ca, n.z);
   v_Normal = mat3(u_Model) * n;
   gl_Position = u_MVP * wp;
 }

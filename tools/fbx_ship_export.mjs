@@ -347,7 +347,14 @@ for (let t = 0; t < triStart.length; t++) {
   fn[1] = uz * wx - ux * wz;
   fn[2] = ux * wy - uy * wx;
   for (const id of [a, b, c]) {
-    nSum[id][0] += fn[0]; nSum[id][1] += fn[1]; nSum[id][2] += fn[2];
+    const s = nSum[id];
+    // Гейт: противоположно-направленные грани (тонкие пластины: перед+зад)
+    // в сумме гасят друг друга — усреднённая нормаль вырождается в
+    // случайный фолбэк [0,0,1] и рвёт rim/блики. Доминирующую сторону
+    // оставляем: догасившиеся кластеры всё равно редки.
+    const cur = s[0] * fn[0] + s[1] * fn[1] + s[2] * fn[2];
+    if (cur < 0 && Math.hypot(s[0], s[1], s[2]) > 1e-12) continue;
+    s[0] += fn[0]; s[1] += fn[1]; s[2] += fn[2];
   }
   tris.push(a, b, c);
 }
@@ -517,104 +524,85 @@ if (LIVERY && hasUV && WANT_TEX) {
       return s - Math.floor(s);
     };
 
+    // Per-pixel zone decision in baked ship space: thin window chains,
+    // ring neon channel, amber trim, belly, nose, exhaust. armorMix
+    // (block breakup) stays a per-face argument.
+    const zoneAt = (x, y, z, armorMix) => {
+      const r = Math.hypot(x, y);
+      let zr, zg, zb, rough, metal, er = 0, eg = 0, eb = 0;
+      const isRing = r > RING_R;
+      if (isRing) {
+        if (r < RING_R + 0.055) {
+          zr = 10; zg = 14; zb = 26;
+          rough = 0.25; metal = 0.70;
+          er = 42; eg = 150; eb = 255;
+        } else {
+          zr = 62; zg = 68; zb = 80;
+          if (armorMix) { zr = 96; zg = 104; zb = 118; }
+          rough = 0.94; metal = 0.08;
+          const ang = Math.atan2(y, x) / (2 * Math.PI) + 0.5;
+          const zz = z * 3.5 % 1;
+          if ((ang * 44 % 1) < 0.50 && zz > 0.18 && zz < 0.82) {
+            zr = 9; zg = 11; zb = 18;
+            rough = 0.18; metal = 0.60;
+            er = 24; eg = 120; eb = 250;
+          }
+        }
+      } else if (z > 0.98) {
+        zr = 40; zg = 42; zb = 48;
+        rough = 0.94; metal = 0.08;
+        if (z > 1.10) { er = 220; eg = 66; eb = 18; }
+      } else if (z > 0.60) {
+        zr = 48; zg = 52; zb = 62;
+        if (armorMix) { zr = 78; zg = 85; zb = 100; }
+        rough = 0.94; metal = 0.08;
+      } else if (z > 0.50 && z <= 0.565) {
+        zr = 217; zg = 158; zb = 64;
+        rough = 0.65; metal = 0.20;
+        er = 40; eg = 26; eb = 10;
+      } else if (y < -0.045) {
+        zr = 48; zg = 53; zb = 62;
+        rough = 0.92; metal = 0.10;
+      } else if (z < -0.72) {
+        zr = 150; zg = 158; zb = 170;
+        rough = 0.80; metal = 0.20;
+      } else {
+        zr = 62; zg = 68; zb = 80;
+        if (armorMix) { zr = 98; zg = 106; zb = 122; }
+        rough = 0.92; metal = 0.10;
+        if (y > -0.045 && y < 0.04 && z > -0.55 && z < 0.35 &&
+            (z * 15.0 % 1) < 0.55) {
+          zr = 9; zg = 12; zb = 20;
+          rough = 0.18; metal = 0.60;
+          er = 26; eg = 130; eb = 255;
+        }
+      }
+      return { zr, zg, zb, rough, metal, er, eg, eb };
+    };
+
     let painted = 0;
     for (let t = 0; t < tris.length; t += 3) {
       const ia = remap[tris[t]], ib = remap[tris[t + 1]], ic = remap[tris[t + 2]];
       const pa = outV[ia], pb = outV[ib], pc = outV[ic];
       const ta = outVT[ia], tb = outVT[ib], tc = outVT[ic];
-      // face centroid in baked ship space
       const cx = (pa[0] + pb[0] + pc[0]) / 3;
       const cy = (pa[1] + pb[1] + pc[1]) / 3;
       const cz = (pa[2] + pb[2] + pc[2]) / 3;
-      const r = Math.hypot(cx, cy);
       const jit = hash01(cx * 53, cy * 53, cz * 53) - 0.5;
-
-      // ---- zone colors: С‚С‘РјРЅС‹Р№ Р±СЂРѕРЅРёСЂРѕРІР°РЅРЅС‹Р№ РІР°СЂРї-РєРѕРІС‡РµРі IXS-РєР»Р°СЃСЃР° ----
-      // Р РµС„РµСЂРµРЅСЃ: РіСЂР°С„РёС‚РѕРІР°СЏ Р±СЂРѕРЅСЏ, С†РµРїРѕС‡РєРё СЃРёРЅРёС… РѕРєРѕРЅ РЅР° РєРѕР»СЊС†Р°С… Рё Р±РѕСЂС‚Р°С…,
-      // РёРЅС‚РµРЅСЃРёРІРЅС‹Р№ РЅРµРѕРЅ РІРЅСѓС‚СЂРё РєРѕР»СЊС†РµРІРѕРіРѕ РєР°РЅР°Р»Р°, РєСЂР°СЃРЅС‹Р№ РІС‹С…Р»РѕРї, СЃРІРµС‚Р»С‹Р№ РЅРѕСЃ.
-      let zr, zg, zb, rough, metal, er = 0, eg = 0, eb = 0;
-      const isRing = r > RING_R;
-      // ~30% Р»РёС†РµРІС‹С… РїР°РЅРµР»РµР№ вЂ” СЃРІРµС‚Р»РµРµ: СЂР°Р·Р±РёРІРєР° Р±Р»РѕРєРѕРІ Р±СЂРѕРЅРё
       const armorMix = hash01(cx * 31, cy * 31, cz * 31) > 0.7;
-      if (isRing) {
-        if (r < RING_R + 0.055) {
-          // РІРЅСѓС‚СЂРµРЅРЅРёР№ РєР°РЅР°Р» РєРѕР»СЊС†Р°: РїР»Р°Р·РјРµРЅРЅС‹Р№ РЅРµРѕРЅ
-          zr = 10; zg = 14; zb = 26;
-          rough = 0.20; metal = 0.80;
-          er = 42; eg = 150; eb = 255;
-        } else {
-          zr = 62; zg = 68; zb = 80;
-          if (armorMix) { zr = 96; zg = 104; zb = 118; }
-          rough = 0.45; metal = 0.75;
-          // С†РµРїРѕС‡РєРё РѕРєРѕРЅ РїРѕ РІРЅРµС€РЅРµР№ Р±СЂРѕРЅРµ РєРѕР»РµС†
-          const ang = Math.atan2(cy, cx) / (2 * Math.PI) + 0.5;
-          const winChain = (ang * 44 % 1) < 0.50 &&
-                           (cz * 3.5 % 1) > 0.18 && (cz * 3.5 % 1) < 0.82;
-          if (winChain) {
-            zr = 9; zg = 11; zb = 18;
-            rough = 0.16; metal = 0.70;
-            er = 24; eg = 120; eb = 250;
-          }
-        }
-      } else if (cz > 0.98) {
-        // СЃРѕРїР»РѕРІР°СЏ РіСЂСѓРїРїР°: С‚С‘РјРЅС‹Р№ РіР°СЂРµРІРѕР№ РјРµС‚Р°Р»Р» + РєСЂР°СЃРЅС‹Р№ РІС‹С…Р»РѕРї
-        zr = 40; zg = 42; zb = 48;
-        rough = 0.45; metal = 0.85;
-        if (cz > 1.10) { er = 220; eg = 66; eb = 18; }
-      } else if (cz > 0.60) {
-        // машинное отделение
-        zr = 48; zg = 52; zb = 62;
-        if (armorMix) { zr = 78; zg = 85; zb = 100; }
-        rough = 0.50; metal = 0.75;
-      } else if (cz > 0.50 && cz <= 0.565) {
-        // янтарная отделочная полоса
-        zr = 217; zg = 158; zb = 64;
-        rough = 0.35; metal = 0.50;
-        er = 40; eg = 26; eb = 10;
-      } else if (cy < -0.045) {
-        // графитовое брюхо (двухцветный корпус)
-        zr = 48; zg = 53; zb = 62;
-        rough = 0.50; metal = 0.70;
-      } else if (cz < -0.72) {
-        // светлый носовой конус
-        zr = 150; zg = 158; zb = 170;
-        rough = 0.40; metal = 0.60;
-      } else {
-        // основная броня корпуса
-        zr = 62; zg = 68; zb = 80;
-        if (armorMix) { zr = 98; zg = 106; zb = 122; }
-        rough = 0.46; metal = 0.75;
-        // СЂСЏРґС‹ СЃРёРЅРёС… РѕРєРѕРЅ РїРѕ Р±РѕСЂС‚Р°Рј РІРґРѕР»СЊ СЌРєРІР°С‚РѕСЂР°
-        const isWindow = cy > -0.045 && cy < 0.04 && cz > -0.55 && cz < 0.35 &&
-                         (cz * 15.0 % 1) < 0.55;
-        if (isWindow) {
-          zr = 9; zg = 12; zb = 20;
-          rough = 0.16; metal = 0.70;
-          er = 26; eg = 130; eb = 255;
-        }
-      }
 
-      rough = Math.min(1, Math.max(0.05, rough + jit * 0.08));
-      metal = Math.min(1, Math.max(0, metal + jit * 0.04));
-
-      // РџР°РЅРµР»СЊРЅС‹Р№ С‚РѕРЅ: Р°С‚Р»Р°СЃ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РєР°Рє luminance (РєРІР°РЅС‚РѕРІР°РЅРЅС‹Р№)
-      // вЂ” РіСЂРёР·Р»Рё С‡РёС‚Р°РµС‚СЃСЏ С‚РµСЂСЂР°СЃР°РјРё С‚РѕРЅР°, Р° РјРµРґРЅР°СЏ СЂР¶Р°РІС‡РёРЅР° Tripo РЅРµ РїСЂРѕС‚РµРєР°РµС‚.
-      // РќР° СЃРІРµС‚СЏС‰РёРµСЃСЏ РіСЂР°РЅРё (РѕРєРЅР°/РЅРµРѕРЅ) РїР°РЅРµР»СЊ РЅРµ РІР»РёСЏРµС‚ вЂ” С‚Р°Рј С‡РёСЃС‚С‹Р№ СЌРјРёСЃСЃРёРІ.
+      // Panel tone: quantized luminance sampled from the source atlas at
+      // the face centroid — grizzly terraces survive, Tripo copper does
+      // not leak. Glowing pixels bypass the panel factor.
       const su = (ta[0] + tb[0] + tc[0]) / 3;
       const sv = (ta[1] + tb[1] + tc[1]) / 3;
       const src = [0, 0, 0];
-      const usesEmissive = er != 0 || eg != 0 || eb != 0;
-      if (!usesEmissive) sample(alb, su, sv, src);
+      sample(alb, su, sv, src);
       const luma = (src[0] * 0.299 + src[1] * 0.587 + src[2] * 0.114) / 255;
       const q = Math.round(luma * 4) / 4;
       const panel = 0.70 + 0.55 * q;                    // 0.70..1.25
       const vj = 0.985 + hash01(cz * 97, cy * 97, cx * 97) * 0.03;
-      const k = usesEmissive ? 1.0 : panel * vj;
-      const cr = Math.min(255, zr * k);
-      const cg = Math.min(255, zg * k);
-      const cb = Math.min(255, zb * k);
-      const rr = Math.round(rough * 255);
-      const rm = Math.round(metal * 255);
+      const kArmor = panel * vj;
 
       // ---- rasterize the face's UV triangle ----
       const px = (v) => v * (S - 1);
@@ -622,34 +610,66 @@ if (LIVERY && hasUV && WANT_TEX) {
       const x1 = Math.min(S - 1, Math.ceil(Math.max(ta[0], tb[0], tc[0]) * (S - 1)) + 1);
       const y0 = Math.max(0, Math.floor(Math.min(1 - ta[1], 1 - tb[1], 1 - tc[1]) * (S - 1)) - 1);
       const y1 = Math.min(S - 1, Math.ceil(Math.max(1 - ta[1], 1 - tb[1], 1 - tc[1]) * (S - 1)) + 1);
-      const ax = px(ta[0]), ay = px(1 - ta[1]);
-      const bx = px(tb[0]), by = px(1 - tb[1]);
+      const axp = px(ta[0]), ayp = px(1 - ta[1]);
+      const bxp = px(tb[0]), byp = px(1 - tb[1]);
       const cxp = px(tc[0]), cyp = px(1 - tc[1]);
-      // sign-agnostic edge functions: inside = РІСЃРµ Р·РЅР°РєРё СЃРѕРІРїР°РґР°СЋС‚
-      const e00 = (by - ay), e01 = (ax - bx);
-      const e10 = (cy - by), e11 = (bx - cxp);
-      const e20 = (ay - cyp), e21 = (cxp - ax);
+      // sign-agnostic edge functions: inside = all signs agree
+      const e00 = (byp - ayp), e01 = (axp - bxp);
+      const e10 = (cyp - byp), e11 = (bxp - cxp);
+      const e20 = (ayp - cyp), e21 = (cxp - axp);
       const EPS = -1e-6;
+      // barycentric normalization: weight of the opposite vertex is
+      // edge function / edge function at that vertex
+      const l1a = e10 * (axp - bxp) + e11 * (ayp - byp);
+      const l2b = e20 * (bxp - cxp) + e21 * (byp - cyp);
+      const l0c = e00 * (cxp - axp) + e01 * (cyp - ayp);
+      const degenerate = Math.abs(l1a) < 1e-9 || Math.abs(l2b) < 1e-9 ||
+                         Math.abs(l0c) < 1e-9;
       for (let py = y0; py <= y1; py++) {
         const fy = py + 0.5;
         for (let ppx = x0; ppx <= x1; ppx++) {
           const fx = ppx + 0.5;
-          const l0 = e00 * (fx - ax) + e01 * (fy - ay);
-          const l1 = e10 * (fx - bx) + e11 * (fy - by);
+          const l0 = e00 * (fx - axp) + e01 * (fy - ayp);
+          const l1 = e10 * (fx - bxp) + e11 * (fy - byp);
           const l2 = e20 * (fx - cxp) + e21 * (fy - cyp);
           if (!((l0 >= EPS && l1 >= EPS && l2 >= EPS) ||
                 (l0 <= -EPS && l1 <= -EPS && l2 <= -EPS))) continue;
+          let wa, wb, wc;
+          if (degenerate) {
+            wa = wb = wc = 1 / 3;
+          } else {
+            // sign-agnostic flavor: numerator and denominator share the
+            // winding sign, so the ratio is already a positive weight
+            wa = l1 / l1a; wb = l2 / l2b; wc = l0 / l0c;
+          }
+          const pxs = wa * pa[0] + wb * pb[0] + wc * pc[0];
+          const pys = wa * pa[1] + wb * pb[1] + wc * pc[1];
+          const pzs = wa * pa[2] + wb * pb[2] + wc * pc[2];
+          const zo = zoneAt(pxs, pys, pzs, armorMix);
+          const usesEm = zo.er !== 0 || zo.eg !== 0 || zo.eb !== 0;
+          const k = usesEm ? 1.0 : kArmor;
+          const rough = Math.min(1, Math.max(0.05, zo.rough + jit * 0.08));
+          const metal = Math.min(1, Math.max(0, zo.metal + jit * 0.04));
           const idx = (py * S + ppx) * 3;
-          alb.rgb[idx] = cr; alb.rgb[idx + 1] = cg; alb.rgb[idx + 2] = cb;
-          if (rgh) { rgh.rgb[idx] = rr; rgh.rgb[idx + 1] = rr; rgh.rgb[idx + 2] = rr; }
-          if (mtl) { mtl.rgb[idx] = rm; mtl.rgb[idx + 1] = rm; mtl.rgb[idx + 2] = rm; }
-          emis.rgb[idx] = er; emis.rgb[idx + 1] = eg; emis.rgb[idx + 2] = eb;
+          alb.rgb[idx] = Math.min(255, zo.zr * k);
+          alb.rgb[idx + 1] = Math.min(255, zo.zg * k);
+          alb.rgb[idx + 2] = Math.min(255, zo.zb * k);
+          if (rgh) {
+            const rr = Math.round(rough * 255);
+            rgh.rgb[idx] = rr; rgh.rgb[idx + 1] = rr; rgh.rgb[idx + 2] = rr;
+          }
+          if (mtl) {
+            const rm = Math.round(metal * 255);
+            mtl.rgb[idx] = rm; mtl.rgb[idx + 1] = rm; mtl.rgb[idx + 2] = rm;
+          }
+          emis.rgb[idx] = zo.er;
+          emis.rgb[idx + 1] = zo.eg;
+          emis.rgb[idx + 2] = zo.eb;
           mask[py * S + ppx] = 1;
           painted++;
         }
       }
     }
-
     // 1px dilate: kill rasterization cracks between adjacent face splats
     const dil = Buffer.from(alb.rgb), dilR = rgh ? Buffer.from(rgh.rgb) : null;
     const dilM = mtl ? Buffer.from(mtl.rgb) : null, dilE = Buffer.from(emis.rgb);

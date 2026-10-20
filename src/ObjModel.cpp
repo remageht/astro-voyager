@@ -393,9 +393,6 @@ bool ObjModel::loadTextures(const std::string& base) {
   unsigned int r = loadTextureFile(rough);
   unsigned int m = loadTextureFile(metal);
   unsigned int e = loadTextureFile(emissive);
-  std::printf("[ship] tex %s: albedo=%u normal=%u rough=%u metal=%u emis=%u\n",
-              base.c_str(), a, n, r, m, e);
-  std::fflush(stdout);
   if (a == 0) {
     // Без albedo набор бессмысленен: чистим частично загруженное.
     unsigned int extra[4] = {n, r, m, e};
