@@ -4,6 +4,14 @@ Astro Voyager - antivirus / SmartScreen note
 Astro Voyager is an open-source (MIT) space explorer:
   https://github.com/remageht/astro-voyager
 
+Portable usage (this zip)
+  Keep the exe together with README/LICENSE/CHECKSUMS files in one folder
+  and run astro-voyager.exe from there - the build embeds its shaders, so
+  no extra folders are required; saves go to %APPDATA% and survive moving
+  the folder anywhere.
+  An optional Inno Setup installer (Start-menu shortcuts, uninstaller)
+  is published on the GitHub Releases page for this project.
+
 The Windows build is **unsigned** (no code-signing certificate yet). Two
 consequences, both expected for unsigned software:
 

@@ -207,6 +207,17 @@ jobs:
           Compress-Archive -Path dist/stage/* -DestinationPath "dist/astro-voyager-v$ver-windows-x86_64.zip" -Force
           Copy-Item build-gl/Release/astro-voyager.exe dist/astro-voyager.exe
           Get-FileHash dist/astro-voyager-v*-windows-x86_64.zip, dist/astro-voyager.exe -Algorithm SHA256 | Format-Table -AutoSize
+          # Free Inno Setup installer built from the same staged payload as
+          # the zip, so portable zip and installer contents never diverge.
+          # ISCC is preinstalled on GitHub windows runners.
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            Write-Host 'ISCC.exe not found - installing Inno Setup via choco.'
+            choco install innosetup -y --no-progress | Out-Null
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc "/DAPP_VERSION=$ver" packaging/installer.iss
+          Get-FileHash dist/AstroVoyager-v*-setup.exe -Algorithm SHA256 | Format-Table -AutoSize
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -214,6 +225,7 @@ jobs:
           path: |
             dist/astro-voyager-v*-windows-x86_64.zip
             dist/astro-voyager.exe
+            dist/AstroVoyager-v*-setup.exe
           if-no-files-found: error
           retention-days: 14
       - name: Attach Windows assets to the GitHub Release
@@ -224,7 +236,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $zip = (Get-Item dist/astro-voyager-v*-windows-x86_64.zip).FullName
-          gh release upload "${env:GITHUB_REF_NAME}" $zip dist/astro-voyager.exe --clobber
+          $setup = (Get-Item dist/AstroVoyager-v*-setup.exe).FullName
+          gh release upload "${env:GITHUB_REF_NAME}" $zip dist/astro-voyager.exe $setup --clobber
           gh release view "${env:GITHUB_REF_NAME}" --json assets --jq '.assets[].name'
 
   # Linux AppImage distribution: full OpenGL build (GLFW/ImGui/GLM/stb fetched
