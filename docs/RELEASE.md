@@ -55,11 +55,11 @@ astro-voyager-v2.1.0-windows-x64.zip
 ```powershell
 .\build-gl\Release\astro-voyager.exe --screenshot-all
 ```
-*Критерий:* В каталоге `docs/screens/` сформированы 17 PNG-изображений:
+*Критерий:* В каталоге `docs/screens/` сформированы 19 PNG-изображений:
 `sgra.png`, `qso-3c273.png`, `ori.png`, `uma.png`, `m31.png`, `m1.png`, `sol.png`,
-`m87.png`, `m51.png`, `m104.png`, `gui.png`, `psr-vela.png`, `psr-crab.png`,
-`sgr-1806.png`, `psr-b1913.png`, `mw.png`, `m13.png` (плюс gitignored-хелперы
-`*_close.png` для проверки ближних планов, в коммит не входят).
+`m87.png`, `oj287.png`, `hyperdisk.png`, `m51.png`, `m104.png`, `gui.png`,
+`psr-vela.png`, `psr-crab.png`, `sgr-1806.png`, `psr-b1913.png`, `mw.png`,
+`m13.png` (плюс закоммиченные хелперы `*_close.png` ближних планов).
 
 ### Шаг 4. Набор статических тестов репозитория
 ```powershell

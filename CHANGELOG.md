@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 3.9.1 - 2026-10-20
+
+## What's new / Что нового
+- EN: Yegorka prologue now opens with a video slide - res/story/egor_intro frames (320x180, 12 fps, ~10 s) stream as one glitchy CRT clip with wav narration audio, auto-advancing to the next slide when the clip ends; AudioEngine gained a file-voice (playFile) backend.
+- EN: Mouse-wheel zoom in the Chase/Overview ship views (hold the wheel outside menus/views: 0.35x..2.5x, smoothed, not persisted).
+- EN: Warp cocoon restyle - the tunnel now reads like the reference: translucent blue-white chrysalis shell with fresnel rim, long coherent meridian strands, slowed drift; warp overlay adds fbm tunnel walls, red entry nebula, white-hot exit core and a subtle prismatic rim.
+- EN: Two new black hole stations: `oj287` (binary SMBH - giant disk + companion punching the disk twice per 60 s orbit with flares) and `hyperdisk` (a hole dwarfed by its 26-Rs thin disk).
+- RU: В пролог Егорки добавлен видео-слайд - res/story/egor_intro (320x180, 12 fps, ~10 с) как единый клип с сыр-выплывающей CRT-глитчем картинкой и голосовой озвучкой (wav), автопереход по окончании; в AudioEngine появился голос-файл (playFile).
+- RU: Зум колесом мыши в видах Chase/Overview (вне меню и видов: 0.35x..2.5x, сглаживание, без сохранения в сейв).
+- RU: Рестайл варп-кокона - туннель теперь читается по референсу: про-зрачная бело-голубая хризалида с френелевой кромкой, длинные стройные меридиан-струи, медленный дрейф; в оверлей добавлены fbm-стены туннеля, красная входная туманность, white-hot ядро выхода и лёгкий призматический ободок.
+- RU: Две новые станции ЧД: `oj287` (двойная сверхмассивная - гигантский диск, компаньон дважды за 60-секундный цикл прокалывает диск с вспышками) и `hyperdisk` (дыра, затмеваемая своим 26-Rs тонким диском).
+- Gates / Гейты: ctest 6/7 (test_save - известный OS-баг локального окружения, CI зелёный), static checks all pass, GL build OK; 23 station/PNG refs byte-identical, ship-family и UI-фреймы обновлены планово.
+
 ## 3.9.0 - 2026-10-20
 
 ## What's new / Что нового

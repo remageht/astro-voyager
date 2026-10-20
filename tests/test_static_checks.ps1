@@ -67,7 +67,7 @@ Check 'renormalizeTime impl' ($geoCpp -match 'void renormalizeTime\(SchwState& s
 Check 'rk4Step renormalizes' ($geoCpp -match '(?s)renormalizeTime\(s, rs\);\s*\r?\n\}')
 Check 'glsl null cone projection decl' ($bh -match 'float nullDt\(vec3 x, vec3 v, float rs\)')
 Check 'glsl projectNull in march' ($bh -match 'projectNull\(x, v, dt, u_Rs\)')
-Check 'ISCO 3 Rs' ($bh -match 'rIn = u_Rs \* 3\.0')
+Check 'ISCO 3 Rs' ($bh -match 'rIn = \(u_DiskInK > 0\.0\) \? u_DiskInK \* u_Rs : u_Rs \* 3\.0')
 Check 'novikov thorne' ($bh -match 'pow\(rIn / rDisk, 3\.0\)')
 Check 'beaming g4' ($bh -match 'g \* g \* g \* g')
 Check 'no ringMod' ($bh -cnotmatch 'ringMod')
