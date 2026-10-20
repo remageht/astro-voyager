@@ -4080,6 +4080,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
 
   const std::vector<std::string> targetStations = {
       "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104",
+      "oj287", "hyperdisk",
       "psr-vela", "psr-crab", "sgr-1806", "psr-b1913", "mw", "m13"
   };
 

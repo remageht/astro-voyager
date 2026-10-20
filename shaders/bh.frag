@@ -64,6 +64,19 @@ uniform float u_BandK;  // milky-way band gain (default 1.0; sgra 1.7)
 uniform float u_RedshiftK;  // v3.9.0: sky gravitational redshift 0/1 (0 = legacy exact)
 uniform float u_Rkf45K;  // v3.10.0: RKF45 adaptive march 0/1 (0 = legacy rk4+step law)
 uniform float u_CamDist;  // camera distance in Rs (set by SceneManager; <=0 = far/legacy)
+// v3.9.1 OJ 287 companion BH: silhouette + local weak-field deflection +
+// flare arcs where the companion's orbit crosses the disk sheet.
+// All gates neutral (u_CompK == 0) for every other station.
+uniform float u_CompK;      // 0 = off (all stations except oj287); oj287 = 1
+uniform float u_CompRs;     // secondary horizon radius, in primary Rs
+uniform float u_CompR;      // orbit radius, in Rs (disk plane family)
+uniform float u_CompInc;    // orbit inclination, rad
+uniform float u_CompOmega;  // rad per u_Time second (60 s period)
+uniform float u_CompPhase0; // angle at u_Time = 1.0 (harness epoch anchor)
+// v3.9.1 hyperdisk: disk far bigger than the hole. 0 = legacy 3/7 Rs.
+uniform float u_DiskInK;    // >0 overrides the ISCO multiplier rIn/ Rs
+uniform float u_DiskOutK;   // >0 overrides the rOut multiplier
+uniform float u_DiskGain;   // 1.0 = legacy emis gain
 // === Relativity === skybox aberration (same as sky.frag): apparent star
 // directions compress towards u_VelDir at speed. u_Beta == 0.0 returns d
 // untouched (byte-exact harness); geodesic march is NOT affected.
@@ -352,8 +365,21 @@ void main() {
   // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - the glow
   // below is a stylized photon-ring visualization at the photon sphere.
   float minR = 1e30;
-  float rIn = u_Rs * 3.0;   // ISCO: r = 6M = 3 Rs (holy, never change)
-  float rOut = u_Rs * 7.0;   // compact ring: camera at 10 Rs stays outside
+  // v3.9.1 rIn/rOut: hyperdisk override (0 = legacy 3/7 Rs; the ISCO value
+  // itself is untouched - only the station-specific multipliers move).
+  float rIn = (u_DiskInK > 0.0) ? u_DiskInK * u_Rs : u_Rs * 3.0;
+  float rOut = (u_DiskOutK > 0.0) ? u_DiskOutK * u_Rs : u_Rs * 7.0;
+
+  // v3.9.1 OJ 287 companion state (anchored to the harness epoch u_Time
+  // == 1.0, like spotPh). minC = closest approach to the companion.
+  float minC = 1e30;
+  float aC = 0.0;
+  vec3 cPos = vec3(0.0);
+  if (u_CompK > 0.5) {
+    aC = u_CompPhase0 + (u_Time - 1.0) * u_CompOmega;
+    cPos = u_CompR * vec3(cos(aC), sin(aC) * sin(u_CompInc),
+                          sin(aC) * cos(u_CompInc));
+  }
 
   // Close-camera factor: 0 far away, 1 up close (disk detail smoothed).
   // Spawn distance sgra 10 Rs gives exactly 0, so the far reference shot is
@@ -392,6 +418,19 @@ void main() {
     projectNull(x, v, dt, u_Rs);
     r = length(x);
     if (r < minR) minR = r;
+    // v3.9.1 companion BH: closest approach + weak-field radial transverse
+    // kick (same central-force shape as cartAccel,COMP Rs' own horizon).
+    // Gated by u_CompK: no effect on other stations.
+    if (u_CompK > 0.5) {
+      vec3 xC = x - cPos;
+      float bC = length(xC);
+      if (bC < minC) minC = bC;
+      if (bC < 6.0 * u_CompRs && bC > 1e-4) {
+        float rnC = dot(xC, v) / bC;
+        float trC = dot(v, v) - rnC * rnC;
+        v -= (hUse * u_CompRs * trC / max(bC * bC * bC, 1e-4)) * xC;
+      }
+    }
     fb = normalize(v);
 
     if (u_DiskOn == 1) {
@@ -498,9 +537,23 @@ void main() {
           float swirlArg = log(max(rDisk, 0.001)) * 5.0;
           float swirl = sin(phiSw * 3.0 + swirlArg) - sin(phiDisk * 3.0 + swirlArg);
           emis *= 1.0 + 0.30 * swirl;
+          // v3.9.1 OJ 287 flare: bright arc where the companion crosses /
+          // nears the sheet. crossK peaks twice per period (y = 0 at
+          // aC = 0 and pi); the kernel is stretched azimuthally around the
+          // companion's footprint. NOT gated by (1 - closeK) - flares are
+          // the station's signature and must show at spawn distance.
+          if (u_CompK > 0.5) {
+            float crossK = exp(-pow(cPos.y / (0.5 * u_CompRs), 2.0));
+            vec2 dComp = vec2(xDisk.x - cPos.x, xDisk.z - cPos.z);
+            float dRad = dot(dComp, vec2(cos(aC), sin(aC)));
+            float dAz = dot(dComp, vec2(-sin(aC), cos(aC)));
+            float arc = exp(-(dRad * dRad) / (0.20 * u_CompRs * u_CompRs)
+                            - (dAz * dAz) / (1.3 * u_CompRs * u_CompRs));
+            emis += crossK * arc * 3.2;
+          }
           // Uniform exposure; beaming geometry untouched.
           vec3 diskRgb = emis * g4 * 1.9;
-          diskRgb = clamp(diskRgb, 0.0, 12.0);
+          diskRgb = clamp(diskRgb * u_DiskGain, 0.0, 12.0);
           diskRgb *= fDisk * fDisk;
           // Thin-disk mode (sgra edge-on "fishing line" look): compress the
           // visible radial band toward ISCO (x0.55 width) with crisper edges.
@@ -690,6 +743,14 @@ void main() {
     // spawn/close range: reference frames deterministic. Ascending smoothstep.
     float farDotK = smoothstep(50.0, 200.0, camDistRs);
     col += vec3(1.0, 0.96, 0.88) * farDotK * exp(-dot(ndc, ndc) * 900.0) * 2.5;
+    // v3.9.1 companion silhouette + its own photon ring, reuse of the
+    // primary's ring idiom on the companion's minC. Neutral when off.
+    if (u_CompK > 0.5) {
+      float shW = smoothstep(u_CompRs * 1.02, u_CompRs * 1.10, minC);
+      col *= shW;
+      float cq = (minC - 1.5 * u_CompRs) / (0.055 * u_CompRs);
+      col += vec3(1.0, 0.97, 0.92) * exp(-cq * cq) * 1.2;
+    }
     FragColor = vec4(applyFinish(applyObserverShift(col, fCamSqrt, camRedden), v_TexCoord), 1.0);
     return;
   }
@@ -725,5 +786,12 @@ void main() {
   // rays toward a distant hole still leave a bright point. Zero unless far.
   float farDotKFb = smoothstep(50.0, 200.0, camDistRs);
   colFallback += vec3(1.0, 0.96, 0.88) * farDotKFb * exp(-dot(ndc, ndc) * 900.0) * 2.5;
+  // v3.9.1 companion silhouette: same rule as the escape branch above.
+  if (u_CompK > 0.5) {
+    float shWFb = smoothstep(u_CompRs * 1.02, u_CompRs * 1.10, minC);
+    colFallback *= shWFb;
+    float cqFb = (minC - 1.5 * u_CompRs) / (0.055 * u_CompRs);
+    colFallback += vec3(1.0, 0.97, 0.92) * exp(-cqFb * cqFb) * 1.2;
+  }
   FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCamSqrt, camRedden), v_TexCoord), 1.0);
 }

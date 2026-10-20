@@ -30,6 +30,17 @@ const std::vector<Station>& builtinCatalog() {
       {"m87", StationType::BlackHole, "M87*",
        "Supermassive black hole with relativistic jet.", 14.0,
        {1.5, 30.0, 0.05, 600}, 1.575, 60.0, 53.5e6},
+      // v3.9.1: OJ 287 binaryальный SMBH (companion pierces the disk twice
+      // per orbit, flares); shellRadius/maxSteps re-pinned by id in
+      // teleportTo because applyPreset overwrites params.
+      {"oj287", StationType::BlackHole, "OJ 287",
+       "Binary supermassive black hole: giant disk, companion punches the disk twice per orbit.", 16.0,
+       {1.0, 60.0, 0.06, 900}, 1.05, 120.0, 3.5e9},
+      // v3.9.1: hyperdisk - disk far bigger than the hole itself
+      // (rOut 26 Rs at spawn 45 Rs).
+      {"hyperdisk", StationType::BlackHole, "Hyperdisk",
+       "Black hole dwarfed by its huge thin accretion disk.", 45.0,
+       {1.0, 60.0, 0.06, 900}, 1.05, 55.0, 1.2e10},
       {"psr-vela", StationType::Pulsar, "Vela Pulsar",
        "Young neutron star: tilted dipole beams, lighthouse pulse.", 35.0,
        {}, 0.5, 3.0, 958.0},

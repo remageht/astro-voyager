@@ -681,6 +681,14 @@ void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
     if (m_preset != PerfPreset::Custom) {
       applyPreset(m_preset);
     }
+    // v3.9.1: OJ 287 / hyperdisk need a bigger march shell and budget
+    // than any preset gives (companion orbit 4.8 Rs needs deflection
+    // room; hyperdisk rOut 26 Rs needs shell >= spawn 45+13).
+    if (st->id == "oj287" || st->id == "hyperdisk") {
+      m_settings.shellRadius = st->params.shellRadius;
+      m_settings.maxSteps = st->params.maxSteps;
+      m_settings.stepSize = static_cast<float>(st->params.step);
+    }
     camera.clampNearHorizon(m_settings.rs);
   }
 
@@ -818,6 +826,19 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           camLen / std::max(static_cast<double>(m_settings.rs), 1e-3));
       m_bhShader->setUniform1f("u_CamDist", camDistRs);
     }
+    // v3.9.1: OJ 287 companion BH + hyperdisk radii (id-gated neutrals).
+    const bool isOj = (m_currentStation->id == "oj287");
+    m_bhShader->setUniform1f("u_CompK", isOj ? 1.0f : 0.0f);
+    m_bhShader->setUniform1f("u_CompRs", isOj ? 0.45f : 0.0f);
+    m_bhShader->setUniform1f("u_CompR", isOj ? 4.8f : 0.0f);
+    m_bhShader->setUniform1f("u_CompInc", isOj ? 0.22f : 0.0f);
+    m_bhShader->setUniform1f("u_CompOmega",
+                             isOj ? (6.2831853f / 60.0f) : 0.0f);
+    m_bhShader->setUniform1f("u_CompPhase0", isOj ? 0.7f : 0.0f);
+    const bool isHyper = (m_currentStation->id == "hyperdisk");
+    m_bhShader->setUniform1f("u_DiskInK", isHyper ? 3.0f : 0.0f);
+    m_bhShader->setUniform1f("u_DiskOutK", isHyper ? 26.0f : 0.0f);
+    m_bhShader->setUniform1f("u_DiskGain", isHyper ? 2.6f : 1.0f);
     m_bhShader->setUniform1f("u_Time", time);
     m_bhShader->setUniform1f("u_Exposure", m_exposure);
     m_bhShader->setUniform1i("u_Skybox", 0);
