@@ -790,6 +790,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_BHRingK", isSgra ? 1.8f : (isM87 ? 1.25f : 1.0f));
     m_bhShader->setUniform1f("u_ThinDisk", isSgra ? 1.0f : 0.0f);
     m_bhShader->setUniform1f("u_BandK", isSgra ? 1.3f : 1.0f);
+    m_bhShader->setUniform1f("u_RedshiftK", m_settings.gravRedshift ? 1.0f : 0.0f);
     // v3.9.0: грав. красное смещение скайбокса (0 = legacy, точно x1.0).
     m_bhShader->setUniform1f("u_RedshiftK", m_settings.gravRedshift ? 1.0f : 0.0f);
     // Close-camera distance in Rs: drives disk-detail smoothing and pole
