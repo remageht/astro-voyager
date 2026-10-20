@@ -424,15 +424,17 @@ const std::vector<StorySlide>& storyPrologueSlides() {
         "the Seine, past the Cafe de Paris, tracing the liners. \"I will "
         "become a cosmonaut,\" he told everyone, and nobody blinked.",
         0, "res/story/paris_peace.jpg"});
-    s.push_back(StorySlide{  // 1: the dream revelation
-        "Однажды во сне ему явился... сам Егорка. Из пятой вселенной. "
-        "Голос сказал: \"Мы не найдём друг друга, пока ты не станешь тем, "
-        "кем я успел стать. Начни - остальное вспомнишь по дороге.\"",
-        "One night, in a dream, he met... himself. From the fifth "
-        "universe. The voice said: \"We will not find each other until "
-        "you become the one I already am. Begin - the rest you will "
+    s.push_back(StorySlide{  // 1: the dream revelation - cinematic slide
+        "Идя вдоль Сены, Егорка увидел, как воздух вскрылся: на набережной "
+        "раскрылся глаз пятой вселенной, и голос Егорки-из-пятой сказал: "
+        "\"Мы не найдём друг друга, пока ты не станешь тем, кем я успел "
+        "стать. Начни - остальное вспомнишь по дороге.\"",
+        "Walking along the Seine, Yegorka saw the air tear open: an eye "
+        "of the fifth universe unfolded on the embankment, and the voice "
+        "of Yegorka-from-the-fifth said: \"We will not find each other "
+        "until you become the one I already am. Begin - the rest you will "
         "remember on the way.\"",
-        1});
+        0, "", "res/story/egor_intro"});
     s.push_back(StorySlide{  // 2: the dying world
         "Проснувшись, он узнал: асфальт на набережной дышит гарью. "
         "Солнечная система: клетка, в которой от нереста полярных дыр "

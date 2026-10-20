@@ -1453,10 +1453,11 @@ void AppGL::startExpeditionIntro() {
   m_slidesIdx = 0;
   m_slidesOpen = true;
   m_inMenu = false;
+  invalidateVideoSlide();
 }
 
 void AppGL::startNewAdventure() {
-  // === v4.0 "Новая игра": пролог Егорки (фотослайды res/story/) + слот
+  // === v4.0 "Новая игра": пролог Егорки (фотослайды) + слот
   // save-adventure.json. Экспедиция сбрасывается: главы идут с "Дома".
   m_slidesCurrent = storyPrologueSlides();
   m_slidesIntro = true;
@@ -1466,6 +1467,7 @@ void AppGL::startNewAdventure() {
   m_inMenu = false;
   m_expedition = ExpeditionState{};
   saveExpeditionFileNow();
+  invalidateVideoSlide();
 }
 
 void AppGL::saveAdventureSlotNow(bool quiet) {
@@ -1504,6 +1506,32 @@ void AppGL::saveAdventureSlotNow(bool quiet) {
   }
 }
 
+unsigned int AppGL::uploadRgba(const unsigned char* px, int w, int h) {
+  unsigned int tex = 0;
+  glGenTextures(1, &tex);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, px);
+  return tex;
+}
+
+void AppGL::invalidateVideoSlide() {
+  if (m_videoTex != 0) {
+    glDeleteTextures(1, &m_videoTex);
+    m_videoTex = 0;
+  }
+  m_slideVStart = -1.0;
+  m_videoFrames = 0;
+  m_videoIdx = -1;
+  m_videoW = 0;
+  m_videoH = 0;
+}
+
 unsigned int AppGL::loadUiTexture(const std::string& rel, int* w, int* h) {
   auto it = m_uiTex.find(rel);
   if (it != m_uiTex.end()) {
@@ -1514,15 +1542,7 @@ unsigned int AppGL::loadUiTexture(const std::string& rel, int* w, int* h) {
   UiTex t;
   unsigned char* px = stbi_load(rel.c_str(), &t.w, &t.h, nullptr, 4);
   if (px) {
-    glGenTextures(1, &t.id);
-    glBindTexture(GL_TEXTURE_2D, t.id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, t.w, t.h, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, px);
+    t.id = uploadRgba(px, t.w, t.h);
     stbi_image_free(px);
   }
   m_uiTex[rel] = t;
@@ -1539,8 +1559,7 @@ void AppGL::openChapterSlide(int slideIdx) {
   m_slidesHead.clear();
   for (const auto& c : expeditionChapters()) {
     if (c.slideIdx == slideIdx) {
-      m_slidesHead = uiRu(c.titleRu.c_str(), c.titleEn.c_str());
-      break;
+      m_slidesHead = uiRu(c.titleRu.c_str(), c.titleEn.c_str());      break;
     }
   }
   m_slidesIntro = false;
@@ -1585,13 +1604,36 @@ void AppGL::drawSlidesOverlay() {
   const StorySlide& sl = m_slidesCurrent[m_slidesIdx];
   const ImVec2 disp = io.DisplaySize;
 
+  // v4.0 видео-слайд: счёт кадров и старт аудио/таймера при первом показе.
+  const bool hasVideo = !sl.videoDir.empty();
+  double vTime = 0.0;
+  if (hasVideo) {
+    if (m_videoFrames == 0) {
+      for (int i = 1; i <= 4000; ++i) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s/frame_%03d.jpg",
+                 sl.videoDir.c_str(), i);
+        if (!std::filesystem::exists(buf)) break;
+        m_videoFrames = i;
+      }
+      if (m_videoFrames > 0) {
+        m_slideVStart = ImGui::GetTime();
+        m_audio.playFile(sl.videoDir + "/audio.wav", -6.0f);
+      }
+    }
+    if (m_slideVStart >= 0.0) vTime = ImGui::GetTime() - m_slideVStart;
+  }
+  // Автолистание: кадры кончились — как если бы нажали Space.
+  const bool videoDone = hasVideo && m_videoFrames > 0 &&
+                         vTime * 12.0 >= static_cast<double>(m_videoFrames);
+
   const bool advance = ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
                        ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
                        ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false) ||
                        ImGui::IsMouseClicked(0);
   const bool skip = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
 
-  if (m_slidesIntro && (advance || skip)) {
+  if (m_slidesIntro && (advance || skip || videoDone)) {
     // Пролог: Space/клик листают, Esc досматривает до конца; конец ==
     // старт миссии (teleport в sol сам завершит главу «Дом»).
     if (skip || m_slidesIdx + 1 >= static_cast<int>(m_slidesCurrent.size())) {
@@ -1605,16 +1647,19 @@ void AppGL::drawSlidesOverlay() {
         m_slidesAdv = false;
         saveAdventureSlotNow(true);
       }
+      invalidateVideoSlide();
       teleportToStation("sol");
       return;
     }
     ++m_slidesIdx;
+    invalidateVideoSlide();
     return;
   }
   if (skip || advance) {
     // Одиночный done-слайд: любое действие закрывает.
     m_slidesOpen = false;
     m_slidesCurrent.clear();
+    invalidateVideoSlide();
     return;
   }
   if (m_slidesCurrent.empty() || m_slidesOpen == false) return;
@@ -1633,13 +1678,50 @@ void AppGL::drawSlidesOverlay() {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   // v4.0: фотослайд (res/story/*.jpg) перекрывает векторную миниатюру:
   // рисуем текстурой с сохранением пропорций в той же сетке, что и арт.
+  // Видео-слайд крупнее (0.56 высоты экрана, letterbox) и живёт своей
+  // сеткой: текст под ним; арт/фото ветки байт-идентичны прошлому.
+  float artSize = disp.y < 620.0f ? disp.y * 0.36f : 286.0f;
+  float artTop = disp.y * 0.13f;
   int iw = 0;
   int ih = 0;
   unsigned int uiTex = 0;
   if (!sl.image.empty()) uiTex = loadUiTexture(sl.image, &iw, &ih);
-  const float artSize = disp.y < 620.0f ? disp.y * 0.36f : 286.0f;
-  const ImVec2 artPos((disp.x - artSize) * 0.5f, disp.y * 0.13f);
-  if (uiTex != 0 && iw > 0 && ih > 0) {
+  const ImVec2 artPos((disp.x - artSize) * 0.5f, artTop);
+  float textY = artPos.y + artSize + 26.0f;
+  if (hasVideo && m_videoFrames > 0) {
+    int fi = static_cast<int>(vTime * 12.0);
+    if (fi >= m_videoFrames) fi = m_videoFrames - 1;
+    if (fi != m_videoIdx) {
+      char buf[64];
+      snprintf(buf, sizeof(buf), "%s/frame_%03d.jpg", sl.videoDir.c_str(),
+               fi + 1);
+      int w = 0;
+      int h = 0;
+      unsigned char* px = stbi_load(buf, &w, &h, nullptr, 4);
+      if (px) {
+        if (m_videoTex != 0) {
+          glDeleteTextures(1, &m_videoTex);
+          m_videoTex = 0;
+        }
+        m_videoTex = uploadRgba(px, w, h);
+        stbi_image_free(px);
+        m_videoW = w;
+        m_videoH = h;
+      }
+      m_videoIdx = fi;
+    }
+    artSize = disp.y < 620.0f ? disp.y * 0.46f : disp.y * 0.56f;
+    artTop = disp.y * 0.14f;
+    textY = artTop + artSize + 16.0f;
+    if (m_videoTex != 0 && m_videoH > 0) {
+      const float imgW =
+          artSize * (static_cast<float>(m_videoW) / static_cast<float>(m_videoH));
+      ImGui::SetCursorScreenPos(ImVec2((disp.x - imgW) * 0.5f, artTop));
+      ImGui::Image((ImTextureID)(intptr_t)m_videoTex, ImVec2(imgW, artSize));
+    } else {
+      drawStoryArt(dl, sl.art, artPos, artSize);
+    }
+  } else if (uiTex != 0 && iw > 0 && ih > 0) {
     const float imgH = artSize;
     const float imgW = imgH * (static_cast<float>(iw) / static_cast<float>(ih));
     ImGui::SetCursorScreenPos(
@@ -1664,7 +1746,7 @@ void AppGL::drawSlidesOverlay() {
 
   const float textW = disp.x < 900.0f ? disp.x * 0.66f : 620.0f;
   ImGui::SetCursorScreenPos(
-      ImVec2((disp.x - textW) * 0.5f, artPos.y + artSize + 26.0f));
+      ImVec2((disp.x - textW) * 0.5f, textY));
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.86f, 0.89f, 0.94f, 1.00f));
   ImGui::TextWrapped("%s", uiRu(sl.textRu.c_str(), sl.textEn.c_str()));
   ImGui::PopStyleColor();
@@ -4057,6 +4139,59 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   app.m_slidesOpen = false;
   app.m_slidesCurrent.clear();
   app.m_slidesIdx = 0;
+
+  // === v4.0: prologue.png — слайд 0 «Новой игры» (фото мирного Парижа).
+  // Без startNewAdventure(): он сбрасывает экспедицию и пишет сейв —
+  // харнесс не должен трогать пользовательский expedition.json.
+  app.m_slidesCurrent = storyPrologueSlides();
+  app.m_slidesIntro = true;
+  app.m_slidesAdv = true;
+  app.m_slidesIdx = 0;
+  app.m_slidesOpen = true;
+  app.m_inMenu = false;
+  for (int frame = 0; frame < 3; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawImGui();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string prologueFile = outDir + "/prologue.png";
+  if (app.saveScreenshot(prologueFile)) {
+    std::cout << "Captured screenshot: " << prologueFile << "\n";
+  }
+
+  // === v4.0: prologue_video.png — видео-слайд (катсцена res/story/
+  // egor_intro): таймер слайда зажимаем в кадр 60 (vTime = 5.0 c) прямо
+  // перед отрисовкой, чтобы PNG был детерминирован и ловил деградацию
+  // декода/рисунка кадра байт-в-байт.
+  app.m_slidesIdx = 1;
+  app.m_videoFrames = 0;  // пересчитать кадры, как в живом запуске
+  for (int frame = 0; frame < 3; ++frame) {
+    app.m_slideVStart = ImGui::GetTime() - 60.0 / 12.0;
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawImGui();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+  std::string prologueVideoFile = outDir + "/prologue_video.png";
+  if (app.saveScreenshot(prologueVideoFile)) {
+    std::cout << "Captured screenshot: " << prologueVideoFile << "\n";
+  }
+  app.m_slidesOpen = false;
+  app.m_slidesCurrent.clear();
+  app.m_slidesIdx = 0;
+  app.m_slidesAdv = false;
+  app.invalidateVideoSlide();
 
   // === MenuSky === (v3.5.0): menu.png — hero-вид главного меню (живой
   // космос + стеклянная панель). u_Time фиксирован => кадр детерминирован,

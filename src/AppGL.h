@@ -159,6 +159,15 @@ class AppGL {
   // v4.0: ленивые 2D-текстуры для фотографических слайдов (res/story/*.jpg).
   struct UiTex { unsigned int id = 0; int w = 0; int h = 0; };
   std::unordered_map<std::string, UiTex> m_uiTex;
+  // v4.0: автоплей видео-слайда (одна активная GL-текстура кадра).
+  double m_slideVStart = -1.0;
+  int m_videoFrames = 0;
+  int m_videoIdx = -1;
+  unsigned int m_videoTex = 0;
+  int m_videoW = 0;
+  int m_videoH = 0;
+  static unsigned int uploadRgba(const unsigned char* px, int w, int h);
+  void invalidateVideoSlide();
 
   // === MenuSky === (v3.5.0): "живой космос" за главным меню — фуллскрин-
   // шейдерный бэкдроп (туманность + MW-полоса + параллакс-звёзды), ленивая

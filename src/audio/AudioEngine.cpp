@@ -180,6 +180,11 @@ void AudioEngine::update(float dt) {
       case VoiceType::Blip: dur = 0.3; break;
       case VoiceType::Capture: dur = 2.4; break;
       case VoiceType::Tick: dur = 0.05; break;
+      case VoiceType::File:
+        dur = m_voices[i].pcm ? static_cast<double>(m_voices[i].pcm->size()) /
+                                    kSampleRate
+                              : 0.0;
+        break;
     }
     if (age > dur + 0.1) {
       m_voices[i] = m_voices.back();
@@ -267,6 +272,36 @@ void AudioEngine::playCapture() {
   }
   if (m_voices.size() > 32) return;
   m_voices.push_back({VoiceType::Capture, m_samples.load()});
+}
+
+// v4.0: файл-голос катсцены. Декод синхронный в вызывающем треде (UI):
+// короткий wav катсцены читается за миллисекунды; audio-поток потом
+// только читает готовый буфер (no lock).
+void AudioEngine::playFile(const std::string& path, float db) {
+  if (!m_tried) return;
+  ma_decoder_config dcfg =
+      ma_decoder_config_init(ma_format_f32, 1, kSampleRate);
+  ma_decoder dec;
+  if (ma_decoder_init_file(path.c_str(), &dcfg, &dec) != MA_SUCCESS) return;
+  std::vector<float> buf;
+  float chunk[4096];
+  for (;;) {
+    ma_uint64 got = 0;
+    if (ma_decoder_read_pcm_frames(&dec, chunk, 4096, &got) != MA_SUCCESS ||
+        got == 0)
+      break;
+    buf.insert(buf.end(), chunk, chunk + got);
+  }
+  ma_decoder_uninit(&dec);
+  if (buf.empty()) return;
+  Voice v;
+  v.type = VoiceType::File;
+  v.startSample = m_samples.load();
+  v.pcm = std::make_shared<std::vector<float>>(std::move(buf));
+  v.gainDb = db;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (m_voices.size() > 24) return;
+  m_voices.push_back(std::move(v));
 }
 
 float AudioEngine::renderMusic(double tAbs, double tLoop) const {
@@ -382,6 +417,20 @@ float AudioEngine::renderVoice(const Voice& v, double age,
       if (age > 0.05) return 0.0f;
       const float s = static_cast<float>(std::sin(2.0 * kPi * 2200.0 * age));
       return s * static_cast<float>(std::exp(-age * 120.0)) * 0.5f;
+    }
+    case VoiceType::File: {
+      // Файл-голос: линейный лерп по готовому float-буферу (моно,
+      // kSampleRate, значит шаг 1 сэмпл на сэмпл; лерп страховка).
+      if (!v.pcm || v.pcm->empty()) return 0.0f;
+      const size_t n = v.pcm->size();
+      const double idx = age * static_cast<double>(kSampleRate);
+      if (idx < 0.0) return 0.0f;
+      if (idx >= static_cast<double>(n)) return 0.0f;
+      const size_t i0 = static_cast<size_t>(idx);
+      const float f = static_cast<float>(idx - static_cast<double>(i0));
+      const float a = (*v.pcm)[i0];
+      const float b = (i0 + 1 < n) ? (*v.pcm)[i0 + 1] : a;
+      return (a + (b - a) * f) * dbToGain(v.gainDb);
     }
   }
   return 0.0f;

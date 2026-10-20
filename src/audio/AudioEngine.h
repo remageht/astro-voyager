@@ -59,6 +59,9 @@ class AudioEngine {
   void playChime();    // ачивка: 3 щипка
   void playBlip();     // ошибка/тур: короткий blip
   void playCapture();  // тревога захвата ЧД (зовёт PH-хук наружу)
+  // v4.0: файл-голос для катсцен (wav, декодируется miniaudio в float
+  // моно kSampleRate синхронно при запуске; каталог с аудио рядом).
+  void playFile(const std::string& path, float db);
 
   void setVolume(float v);  // 0..1
   float volume() const { return m_volume.load(); }
@@ -67,10 +70,14 @@ class AudioEngine {
   float warpLevel() const { return m_warpCurrent.load(); }
 
  private:
-  enum class VoiceType : int { Click, Whoosh, Jump, Chime, Blip, Capture, Tick };
+  enum class VoiceType : int { Click, Whoosh, Jump, Chime, Blip, Capture, Tick, File };
   struct Voice {
     VoiceType type = VoiceType::Click;
     uint64_t startSample = 0;
+    // File-голос (v4.0): декодированный float-моно PCM, kSampleRate.
+    // audio-поток читает без мьютекса (после push не меняется).
+    std::shared_ptr<std::vector<float>> pcm;
+    float gainDb = 0.0f;
   };
 
   // Рендер одного музыкального сэмпла (моно; стерео дублируется).

@@ -21,6 +21,10 @@ struct StorySlide {
   // "res/story/paris_peace.jpg"). Non-empty wins over the vector art;
   // the drawing side lazy-loads it into a GL texture (stb_image).
   std::string image;
+  // v4.0: катсцена-слайд: каталог с frame_%03d.jpg (fps=12) + audio.wav.
+  // Непустой перекрывает и арт, и фото; слайд играет сам и листается по
+  // окончании кадров (Space/Esc работают как раньше).
+  std::string videoDir;
 };
 
 namespace astro {
