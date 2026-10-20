@@ -45,7 +45,7 @@ cp "${repo_root}/build-gl/${app}" "${appdir}/usr/bin/${app}"
 chmod +x "${appdir}/usr/bin/${app}"
 
 cp "${repo_root}"/shaders/* "${appdir}/usr/share/astro-voyager/shaders/"
-cp "${repo_root}"/res/* "${appdir}/usr/share/astro-voyager/res/"
+cp -r "${repo_root}"/res/* "${appdir}/usr/share/astro-voyager/res/"
 cp "${repo_root}/LICENSE" "${repo_root}/README.md" "${appdir}/usr/share/astro-voyager/"
 
 cp "${repo_root}/packaging/${app}.desktop" \
