@@ -24,10 +24,10 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
-LicenseFile=dist\stage\LICENSE
-OutputDir=dist
+LicenseFile=..\dist\stage\LICENSE
+OutputDir=..\dist
 OutputBaseFilename=AstroVoyager-v{#APP_VERSION}-setup
-SetupIconFile=packaging\app.ico
+SetupIconFile=app.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -40,7 +40,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; \
   GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "dist\stage\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\stage\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
