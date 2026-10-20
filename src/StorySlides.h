@@ -17,6 +17,10 @@ struct StorySlide {
   std::string textRu;
   std::string textEn;
   int art = 0;  // procedural scene id in StorySlides.cpp
+  // v4.0: optional photographic illustration (res/-relative path, e.g.
+  // "res/story/paris_peace.jpg"). Non-empty wins over the vector art;
+  // the drawing side lazy-loads it into a GL texture (stb_image).
+  std::string image;
 };
 
 namespace astro {
@@ -28,6 +32,12 @@ const std::vector<StorySlide>& storyIntroSlides();
 
 // Shared finish-of-chapter slides; art ids reuse the same table as intro.
 const std::vector<StorySlide>& storyChapterSlides();
+
+// v4.0 "Новая игра / New Game" prologue: Yegorka's own story (dream
+// revelation, dying planet, warp drive on antimatter, pilot's path) with
+// two photographic slides (res/story/*.jpg); hands off to the expedition
+// at Zemlya ("Дом").
+const std::vector<StorySlide>& storyPrologueSlides();
 
 // Procedural vector art for slide id (dark glass drawing list style).
 void drawStoryArt(ImDrawList* dl, int art, const ImVec2& pos, float size);

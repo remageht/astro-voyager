@@ -3,6 +3,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Camera.h"
@@ -68,6 +69,10 @@ class AppGL {
   void drawExpeditionMap();
   void startExpeditionIntro();
   void openChapterSlide(int slideIdx);
+  // v4.0: "Новая игра" — пролог Егорки + создание слота Adventure.
+  void startNewAdventure();
+  void saveAdventureSlotNow(bool quiet);
+  unsigned int loadUiTexture(const std::string& rel, int* w, int* h);
   void saveExpeditionFileNow();
   void loadExpeditionFileNow();
   void flyToObjectAt(double px, double py);
@@ -147,7 +152,13 @@ class AppGL {
   std::string m_slidesHead;  // заголовок слайда главы (для done-карточек)
   bool m_slidesOpen = false;
   bool m_slidesIntro = false;
+  // v4.0: пролог кнопки "Новая игра" (Егорка) — тот же оверлей слайдов,
+  // но в конце создаётся слот save-adventure.json.
+  bool m_slidesAdv = false;
   int m_slidesIdx = 0;
+  // v4.0: ленивые 2D-текстуры для фотографических слайдов (res/story/*.jpg).
+  struct UiTex { unsigned int id = 0; int w = 0; int h = 0; };
+  std::unordered_map<std::string, UiTex> m_uiTex;
 
   // === MenuSky === (v3.5.0): "живой космос" за главным меню — фуллскрин-
   // шейдерный бэкдроп (туманность + MW-полоса + параллакс-звёзды), ленивая

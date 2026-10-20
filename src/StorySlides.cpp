@@ -411,6 +411,69 @@ const std::vector<StorySlide>& storyChapterSlides() {
   return slides;
 }
 
+// v4.0 prologue of the "New Game / Adventure" slot: Yegorka's own path.
+// Photos live in res/story/ (jpg, stb_image); art slides reuse the table.
+const std::vector<StorySlide>& storyPrologueSlides() {
+  static const std::vector<StorySlide> slides = [] {
+    std::vector<StorySlide> s;
+    s.push_back(StorySlide{
+        "Егорка с детства глядел на звёзды: из окна квартирки у Сены, "
+        "мимо кафе \"De Paris\", в списывает маршрут лайнеров. "
+        "\"Космонавтом стану\", - говорил он всем, и никого это не смущало.",
+        "Yegorka watched the stars since childhood: from a window flat by "
+        "the Seine, past the Cafe de Paris, tracing the liners. \"I will "
+        "become a cosmonaut,\" he told everyone, and nobody blinked.",
+        0, "res/story/paris_peace.jpg"});
+    s.push_back(StorySlide{  // 1: the dream revelation
+        "Однажды во сне ему явился... сам Егорка. Из пятой вселенной. "
+        "Голос сказал: \"Мы не найдём друг друга, пока ты не станешь тем, "
+        "кем я успел стать. Начни - остальное вспомнишь по дороге.\"",
+        "One night, in a dream, he met... himself. From the fifth "
+        "universe. The voice said: \"We will not find each other until "
+        "you become the one I already am. Begin - the rest you will "
+        "remember on the way.\"",
+        1});
+    s.push_back(StorySlide{  // 2: the dying world
+        "Проснувшись, он узнал: асфальт на набережной дышит гарью. "
+        "Солнечная система: клетка, в которой от нереста полярных дыр "
+        "гниёт даже свет. Земля становится непригодной для жизни.",
+        "Awake, he learned the embankment asphalt breathes fumes. The "
+        "solar system is a cage where even light rots from polar decay. "
+        "Earth is becoming unfit for life.",
+        0, "res/story/paris_burn.jpg"});
+    s.push_back(StorySlide{  // 3: engineering the way out
+        "Он собрал команду инженеров. Годами они варили машину, которой "
+        "не было в учебниках: Warp Drive на антиматерии - тяга из ничего, "
+        "вес корабля дешевле взгляда. После десяти аварий вышло.",
+        "He gathered a crew of engineers. For years they welded a machine "
+        "missing from textbooks: a Warp Drive running on antimatter - "
+        "thrust from nothing, a ship lighter than a glance. Ten failures, "
+        "one doorway.",
+        4});
+    s.push_back(StorySlide{  // 4: earning the cockpit
+        "Топливо - считанные граммы антивещества; каждый запуск - приговор "
+        "для предприятия. Егорка сдал права пилота warp-движения со второй "
+        "попытки: инструктор сказал - \"Ты управляешь не тягой, а тишиной.\"",
+        "Fuel - a few grams of antimatter; every launch is a verdict. "
+        "Yegorka earned his warp-pilot license on the second try. The "
+        "instructor said: \"You are not steering thrust - you steer "
+        "silence.\"",
+        3});
+    s.push_back(StorySlide{  // 5: departure, hand-off to the expedition
+        "Пятым по счёту межгалактическим прыжком его корабль \"Кофе и "
+        "Звёзды\" вышел к зеркальному следу пятой вселенной. Рядом дышит "
+        "Мия Сато - астронавигатор, которая умеет слышать, куда тянется "
+        "дом. Начинается экспедиция.",
+        "On the fifth intergalactic jump, his ship \"Coffee and Stars\" "
+        "reached the mirror trail of the fifth universe. Mya Sato - the "
+        "navigator who can hear where home stretches - breathes nearby. "
+        "The expedition begins.",
+        5});
+    return s;
+  }();
+  return slides;
+}
+
 void drawStoryArt(ImDrawList* dl, int art, const ImVec2& pos, float size) {
   if (!dl || size <= 0.0f) return;
   switch (art) {

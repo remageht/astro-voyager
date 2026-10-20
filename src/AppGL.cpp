@@ -21,6 +21,7 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <stb_image.h>  // v4.0: photographic slides (res/story/*.jpg)
 
 #include "Constellation.h"
 #include "Interaction.h"
@@ -1448,9 +1449,86 @@ void AppGL::startExpeditionIntro() {
   // первой игре); по завершении — высадка в Солнечной системе.
   m_slidesCurrent = storyIntroSlides();
   m_slidesIntro = true;
+  m_slidesAdv = false;
   m_slidesIdx = 0;
   m_slidesOpen = true;
   m_inMenu = false;
+}
+
+void AppGL::startNewAdventure() {
+  // === v4.0 "Новая игра": пролог Егорки (фотослайды res/story/) + слот
+  // save-adventure.json. Экспедиция сбрасывается: главы идут с "Дома".
+  m_slidesCurrent = storyPrologueSlides();
+  m_slidesIntro = true;
+  m_slidesAdv = true;
+  m_slidesIdx = 0;
+  m_slidesOpen = true;
+  m_inMenu = false;
+  m_expedition = ExpeditionState{};
+  saveExpeditionFileNow();
+}
+
+void AppGL::saveAdventureSlotNow(bool quiet) {
+  // v4.0: зеркало saveProfileNow с mode = Adventure и своим слотом;
+  // структура сейва и kSaveSchema=1 не тронуты (слот резервирован).
+  if (!m_saveInteractive) return;
+  std::string err;
+  SaveGame g;
+  g.mode = SaveMode::Adventure;
+  g.savedUtc = saveUtcNowISO8601();
+  g.progress.visited = m_visited;
+  g.progress.unlocked.assign(m_unlockedIds.begin(), m_unlockedIds.end());
+  g.progress.route = m_route;
+  g.progress.colonies = m_colonies;
+  g.progress.minBhDistance = m_minBhDistance;
+  if (const Station* cur = m_sceneManager->getCurrentStation()) {
+    g.session.station = cur->id;
+  }
+  g.session.camPos = m_camera.position;
+  g.session.yaw = m_camera.yaw;
+  g.session.pitch = m_camera.pitch;
+  const bool saveOk =
+      saveWriteFile(saveFilePath(SaveMode::Adventure), saveSerialize(g), err);
+  if (saveOk) {
+    if (!quiet) {
+      Toast t;
+      t.title = uiRu("Новая игра", "New Game");
+      t.desc = uiRu("Сюжетный профиль создан (save-adventure.json).",
+                    "Story profile written (save-adventure.json).");
+      t.time = static_cast<float>(glfwGetTime());
+      m_toasts.push_back(t);
+    }
+  } else {
+    m_saveStatus = std::string(uiRu("Ошибка сохранения", "Save failed")) + ": " + err;
+    if (!quiet) m_audio.playBlip();
+  }
+}
+
+unsigned int AppGL::loadUiTexture(const std::string& rel, int* w, int* h) {
+  auto it = m_uiTex.find(rel);
+  if (it != m_uiTex.end()) {
+    if (w) *w = it->second.w;
+    if (h) *h = it->second.h;
+    return it->second.id;
+  }
+  UiTex t;
+  unsigned char* px = stbi_load(rel.c_str(), &t.w, &t.h, nullptr, 4);
+  if (px) {
+    glGenTextures(1, &t.id);
+    glBindTexture(GL_TEXTURE_2D, t.id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, t.w, t.h, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, px);
+    stbi_image_free(px);
+  }
+  m_uiTex[rel] = t;
+  if (w) *w = t.w;
+  if (h) *h = t.h;
+  return t.id;
 }
 
 void AppGL::openChapterSlide(int slideIdx) {
@@ -1521,6 +1599,12 @@ void AppGL::drawSlidesOverlay() {
       m_slidesOpen = false;
       m_slidesCurrent.clear();
       saveExpeditionFileNow();
+      if (m_slidesAdv) {
+        // v4.0: пролог «Новой игры» заканчивается созданием слота
+        // Adventure; высадка в sol — та же, что у экспедиции.
+        m_slidesAdv = false;
+        saveAdventureSlotNow(true);
+      }
       teleportToStation("sol");
       return;
     }
@@ -1547,13 +1631,29 @@ void AppGL::drawSlidesOverlay() {
                    ImGuiWindowFlags_NoBringToFrontOnFocus);
 
   ImDrawList* dl = ImGui::GetWindowDrawList();
+  // v4.0: фотослайд (res/story/*.jpg) перекрывает векторную миниатюру:
+  // рисуем текстурой с сохранением пропорций в той же сетке, что и арт.
+  int iw = 0;
+  int ih = 0;
+  unsigned int uiTex = 0;
+  if (!sl.image.empty()) uiTex = loadUiTexture(sl.image, &iw, &ih);
   const float artSize = disp.y < 620.0f ? disp.y * 0.36f : 286.0f;
   const ImVec2 artPos((disp.x - artSize) * 0.5f, disp.y * 0.13f);
-  drawStoryArt(dl, sl.art, artPos, artSize);
+  if (uiTex != 0 && iw > 0 && ih > 0) {
+    const float imgH = artSize;
+    const float imgW = imgH * (static_cast<float>(iw) / static_cast<float>(ih));
+    ImGui::SetCursorScreenPos(
+        ImVec2((disp.x - imgW) * 0.5f, artPos.y));
+    ImGui::Image((ImTextureID)(intptr_t)uiTex, ImVec2(imgW, imgH));
+  } else {
+    drawStoryArt(dl, sl.art, artPos, artSize);
+  }
 
   const char* headTxt =
-      m_slidesIntro ? uiRu("Экспедиция · пролог", "Expedition · Prologue")
-                    : m_slidesHead.c_str();
+      m_slidesAdv
+          ? uiRu("Егорка · пролог", "Yegorka · Prologue")
+          : (m_slidesIntro ? uiRu("Экспедиция · пролог", "Expedition · Prologue")
+                           : m_slidesHead.c_str());
   if (headTxt && headTxt[0] != '\0') {
     ImGui::SetCursorScreenPos(ImVec2((disp.x - ImGui::CalcTextSize(headTxt).x) * 0.5f,
                                      disp.y * 0.10f));
@@ -3134,6 +3234,21 @@ void AppGL::drawMenu() {
     };
 
     ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.28f, 0.19f, 0.05f, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.42f, 0.29f, 0.08f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.34f, 0.09f, 1.00f));
+    if (ImGui::Button(uiRu("Новая игра · Adventure", "New Game · Adventure"),
+                      ImVec2(-1.0f, 42.0f))) {
+      // v4.0: сюжетный слот Adventure: пролог Егорки (фотослайды),
+      // создание save-adventure.json, высадка в sol.
+      startNewAdventure();
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip(
+          "Start the story from scratch (saves to the Adventure slot)");
+    }
+    ImGui::PopStyleColor(3);
+
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.28f, 0.19f, 0.05f, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.42f, 0.29f, 0.08f, 1.00f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.34f, 0.09f, 1.00f));
