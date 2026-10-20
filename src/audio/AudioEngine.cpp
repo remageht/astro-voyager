@@ -1,6 +1,6 @@
-// === Audio === (агент AU): реализация процедурного движка.
-// MINIAUDIO_IMPLEMENTATION ровно здесь, в одном .cpp. Больше нигде
-// miniaudio.h с имплементацией не подключать.
+﻿// === Audio === (Р°РіРµРЅС‚ AU): СЂРµР°Р»РёР·Р°С†РёСЏ РїСЂРѕС†РµРґСѓСЂРЅРѕРіРѕ РґРІРёР¶РєР°.
+// MINIAUDIO_IMPLEMENTATION СЂРѕРІРЅРѕ Р·РґРµСЃСЊ, РІ РѕРґРЅРѕРј .cpp. Р‘РѕР»СЊС€Рµ РЅРёРіРґРµ
+// miniaudio.h СЃ РёРјРїР»РµРјРµРЅС‚Р°С†РёРµР№ РЅРµ РїРѕРґРєР»СЋС‡Р°С‚СЊ.
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -18,18 +18,19 @@
 
 #include <cmath>
 #include <cstring>
+#include <string>  // playFile: path -> ma_decoder (GCC РЅРµ С‚СЏРЅРµС‚ <string> С‚СЂР°РЅР·РёС‚РёРІРЅРѕ)
 
 namespace astro {
 namespace {
 
-// --- Константы музыки: Am-F-C-G, тоники октавы 2-3 ---
+// --- РљРѕРЅСЃС‚Р°РЅС‚С‹ РјСѓР·С‹РєРё: Am-F-C-G, С‚РѕРЅРёРєРё РѕРєС‚Р°РІС‹ 2-3 ---
 // A2 110.0, F2 87.307, C3 130.813, G2 97.999.
 constexpr double kRoots[4] = {110.0, 87.30705758, 130.81278265, 97.99885896};
-// Пентатонные щипки (A-минор): время в лупе + частота.
+// РџРµРЅС‚Р°С‚РѕРЅРЅС‹Рµ С‰РёРїРєРё (A-РјРёРЅРѕСЂ): РІСЂРµРјСЏ РІ Р»СѓРїРµ + С‡Р°СЃС‚РѕС‚Р°.
 constexpr double kPluckTimes[6] = {2.5, 7.2, 11.8, 18.3, 23.7, 29.2};
 constexpr double kPluckNotes[6] = {440.0, 659.25511383, 523.2511306,
                                    783.99087196, 587.32953583, 880.0};
-constexpr double kEcho1 = 0.375;  // delay-эхo щипков
+constexpr double kEcho1 = 0.375;  // delay-СЌС…o С‰РёРїРєРѕРІ
 constexpr double kEcho2 = 0.75;
 
 constexpr double kPi = 3.14159265358979323846;
@@ -50,7 +51,7 @@ double wrapLoop(double t) {
   return l;
 }
 
-// Один аккорд: тоника + квинта + октава с медленным биением 0.07 Гц.
+// РћРґРёРЅ Р°РєРєРѕСЂРґ: С‚РѕРЅРёРєР° + РєРІРёРЅС‚Р° + РѕРєС‚Р°РІР° СЃ РјРµРґР»РµРЅРЅС‹Рј Р±РёРµРЅРёРµРј 0.07 Р“С†.
 float chordTone(double tAbs, double root) {
   const double f1 = root;
   const double f2 = root * 1.5;
@@ -69,7 +70,7 @@ float chordTone(double tAbs, double root) {
   return 0.34f * s1 + 0.22f * s2 + 0.15f * s3;
 }
 
-// Щипок с экспонентой + 2-я гармоника.
+// Р©РёРїРѕРє СЃ СЌРєСЃРїРѕРЅРµРЅС‚РѕР№ + 2-СЏ РіР°СЂРјРѕРЅРёРєР°.
 float pluckTone(double freq, double age) {
   if (age < 0.0) return 0.0f;
   const float env = static_cast<float>(std::exp(-3.5 * age));
@@ -120,8 +121,8 @@ bool AudioEngine::ensureInitialized() {
   config.pUserData = this;
 
   if (ma_device_init(nullptr, &config, &m_holder->device) != MA_SUCCESS) {
-    // Null-backend: устройства нет (headless/CI) — не падаем, очередь
-    // крутится виртуально в update().
+    // Null-backend: СѓСЃС‚СЂРѕР№СЃС‚РІР° РЅРµС‚ (headless/CI) вЂ” РЅРµ РїР°РґР°РµРј, РѕС‡РµСЂРµРґСЊ
+    // РєСЂСѓС‚РёС‚СЃСЏ РІРёСЂС‚СѓР°Р»СЊРЅРѕ РІ update().
     m_live = false;
     return false;
   }
@@ -141,7 +142,7 @@ void AudioEngine::update(float dt) {
   if (dt < 0.0f) dt = 0.0f;
   if (dt > 0.5f) dt = 0.5f;
 
-  // Сглаживание варпа к цели (~0.3с) — дакинг музыки читает m_warpCurrent.
+  // РЎРіР»Р°Р¶РёРІР°РЅРёРµ РІР°СЂРїР° Рє С†РµР»Рё (~0.3СЃ) вЂ” РґР°РєРёРЅРі РјСѓР·С‹РєРё С‡РёС‚Р°РµС‚ m_warpCurrent.
   const float target = m_warpTarget.load();
   float cur = m_warpCurrent.load();
   const float a = 1.0f - std::exp(-dt * 6.0f);
@@ -150,7 +151,7 @@ void AudioEngine::update(float dt) {
   if (cur > 1.0f) cur = 1.0f;
   m_warpCurrent.store(cur);
 
-  // Гул двигателя (v3.3.0): сглаживание цели (~0.2с), читает аудиопоток.
+  // Р“СѓР» РґРІРёРіР°С‚РµР»СЏ (v3.3.0): СЃРіР»Р°Р¶РёРІР°РЅРёРµ С†РµР»Рё (~0.2СЃ), С‡РёС‚Р°РµС‚ Р°СѓРґРёРѕРїРѕС‚РѕРє.
   const float engTarget = m_engineTarget.load();
   float eng = m_engineCurrent.load();
   const float ea = 1.0f - std::exp(-dt * 5.0f);
@@ -160,7 +161,7 @@ void AudioEngine::update(float dt) {
   m_engineCurrent.store(eng);
 
   if (!m_live) {
-    // Null-backend: двигаем виртуальное время, чистим голоса по нему.
+    // Null-backend: РґРІРёРіР°РµРј РІРёСЂС‚СѓР°Р»СЊРЅРѕРµ РІСЂРµРјСЏ, С‡РёСЃС‚РёРј РіРѕР»РѕСЃР° РїРѕ РЅРµРјСѓ.
     uint64_t adv = static_cast<uint64_t>(static_cast<double>(dt) * kSampleRate);
     m_samples.fetch_add(adv);
   }
@@ -219,50 +220,50 @@ void AudioEngine::playClick() {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Click, m_samples.load()});
+  m_voices.push_back({VoiceType::Click, m_samples.load(), nullptr, 0.0f});
 }
 
-// v3.0.0: тик пульсара. Короткий голос (25 мс): планировщик AppGL зовёт
-// его каждые 59..945 мс, перекрытий почти нет, кап общий (32) не жмёт.
+// v3.0.0: С‚РёРє РїСѓР»СЊСЃР°СЂР°. РљРѕСЂРѕС‚РєРёР№ РіРѕР»РѕСЃ (25 РјСЃ): РїР»Р°РЅРёСЂРѕРІС‰РёРє AppGL Р·РѕРІС‘С‚
+// РµРіРѕ РєР°Р¶РґС‹Рµ 59..945 РјСЃ, РїРµСЂРµРєСЂС‹С‚РёР№ РїРѕС‡С‚Рё РЅРµС‚, РєР°Рї РѕР±С‰РёР№ (32) РЅРµ Р¶РјС‘С‚.
 void AudioEngine::playTick() {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Tick, m_samples.load()});
+  m_voices.push_back({VoiceType::Tick, m_samples.load(), nullptr, 0.0f});
 }
 
 void AudioEngine::playWhoosh() {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Whoosh, m_samples.load()});
+  m_voices.push_back({VoiceType::Whoosh, m_samples.load(), nullptr, 0.0f});
 }
 
 void AudioEngine::playJump() {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Jump, m_samples.load()});
+  m_voices.push_back({VoiceType::Jump, m_samples.load(), nullptr, 0.0f});
 }
 
 void AudioEngine::playChime() {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Chime, m_samples.load()});
+  m_voices.push_back({VoiceType::Chime, m_samples.load(), nullptr, 0.0f});
 }
 
 void AudioEngine::playBlip() {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Blip, m_samples.load()});
+  m_voices.push_back({VoiceType::Blip, m_samples.load(), nullptr, 0.0f});
 }
 
 void AudioEngine::playCapture() {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
-  // Тревогу не спамим: не чаще одной за раз.
+  // РўСЂРµРІРѕРіСѓ РЅРµ СЃРїР°РјРёРј: РЅРµ С‡Р°С‰Рµ РѕРґРЅРѕР№ Р·Р° СЂР°Р·.
   for (const auto& v : m_voices) {
     if (v.type == VoiceType::Capture) {
       const double age =
@@ -271,12 +272,12 @@ void AudioEngine::playCapture() {
     }
   }
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Capture, m_samples.load()});
+  m_voices.push_back({VoiceType::Capture, m_samples.load(), nullptr, 0.0f});
 }
 
-// v4.0: файл-голос катсцены. Декод синхронный в вызывающем треде (UI):
-// короткий wav катсцены читается за миллисекунды; audio-поток потом
-// только читает готовый буфер (no lock).
+// v4.0: С„Р°Р№Р»-РіРѕР»РѕСЃ РєР°С‚СЃС†РµРЅС‹. Р”РµРєРѕРґ СЃРёРЅС…СЂРѕРЅРЅС‹Р№ РІ РІС‹Р·С‹РІР°СЋС‰РµРј С‚СЂРµРґРµ (UI):
+// РєРѕСЂРѕС‚РєРёР№ wav РєР°С‚СЃС†РµРЅС‹ С‡РёС‚Р°РµС‚СЃСЏ Р·Р° РјРёР»Р»РёСЃРµРєСѓРЅРґС‹; audio-РїРѕС‚РѕРє РїРѕС‚РѕРј
+// С‚РѕР»СЊРєРѕ С‡РёС‚Р°РµС‚ РіРѕС‚РѕРІС‹Р№ Р±СѓС„РµСЂ (no lock).
 void AudioEngine::playFile(const std::string& path, float db) {
   if (!m_tried) return;
   ma_decoder_config dcfg =
@@ -305,7 +306,7 @@ void AudioEngine::playFile(const std::string& path, float db) {
 }
 
 float AudioEngine::renderMusic(double tAbs, double tLoop) const {
-  // Аккорд i + equal-power кроссфейд 2с в конце каждого 8с отрезка.
+  // РђРєРєРѕСЂРґ i + equal-power РєСЂРѕСЃСЃС„РµР№Рґ 2СЃ РІ РєРѕРЅС†Рµ РєР°Р¶РґРѕРіРѕ 8СЃ РѕС‚СЂРµР·РєР°.
   const int ci = static_cast<int>(tLoop / kChordSec) % 4;
   const int cn = (ci + 1) % 4;
   const double local = tLoop - static_cast<double>(ci) * kChordSec;
@@ -321,13 +322,13 @@ float AudioEngine::renderMusic(double tAbs, double tLoop) const {
     pad = chordTone(tAbs, kRoots[ci]);
   }
 
-  // Разреженные пентатонные щипки + echo-delay (бесшовно: дистанция по модулю).
+  // Р Р°Р·СЂРµР¶РµРЅРЅС‹Рµ РїРµРЅС‚Р°С‚РѕРЅРЅС‹Рµ С‰РёРїРєРё + echo-delay (Р±РµСЃС€РѕРІРЅРѕ: РґРёСЃС‚Р°РЅС†РёСЏ РїРѕ РјРѕРґСѓР»СЋ).
   float plucks = 0.0f;
   for (int i = 0; i < 6; ++i) {
     double d = tLoop - kPluckTimes[i];
     d = std::fmod(d, kLoopSec);
     if (d < 0.0) d += kLoopSec;
-    // d — возраст щипка в лупе; старше 3с почти затух — скипаем.
+    // d вЂ” РІРѕР·СЂР°СЃС‚ С‰РёРїРєР° РІ Р»СѓРїРµ; СЃС‚Р°СЂС€Рµ 3СЃ РїРѕС‡С‚Рё Р·Р°С‚СѓС… вЂ” СЃРєРёРїР°РµРј.
     if (d > 3.0) continue;
     plucks += pluckTone(kPluckNotes[i], d);
     plucks += 0.35f * pluckTone(kPluckNotes[i], d - kEcho1);
@@ -335,7 +336,7 @@ float AudioEngine::renderMusic(double tAbs, double tLoop) const {
   }
 
   const float music = pad * 0.6f + plucks * 0.5f;
-  return music * dbToGain(kMusicDb);  // тихо: -18 дБ
+  return music * dbToGain(kMusicDb);  // С‚РёС…Рѕ: -18 РґР‘
 }
 
 float AudioEngine::renderVoice(const Voice& v, double age,
@@ -352,7 +353,7 @@ float AudioEngine::renderVoice(const Voice& v, double age,
       const double e = std::sin(kPi * age / 0.6);
       const float env = static_cast<float>(std::pow(e > 0.0 ? e : 0.0, 1.2));
       const double f = 300.0 * std::pow(8.0, age / 0.6);  // 300 -> 2400
-      // Фаза sweep: интеграл f(t).
+      // Р¤Р°Р·Р° sweep: РёРЅС‚РµРіСЂР°Р» f(t).
       const double phase =
           2.0 * kPi * 300.0 * 0.6 / std::log(8.0) * (std::pow(8.0, age / 0.6) - 1.0);
       (void)f;
@@ -362,7 +363,7 @@ float AudioEngine::renderVoice(const Voice& v, double age,
     }
     case VoiceType::Jump: {
       if (age > 1.6) return 0.0f;
-      // Sine-drop 200 -> 30 Гц: f(t) = 30 + 170*exp(-3.2t).
+      // Sine-drop 200 -> 30 Р“С†: f(t) = 30 + 170*exp(-3.2t).
       const double phase =
           2.0 * kPi *
           (30.0 * age + 170.0 * (1.0 - std::exp(-3.2 * age)) / 3.2);
@@ -399,7 +400,7 @@ float AudioEngine::renderVoice(const Voice& v, double age,
     }
     case VoiceType::Capture: {
       if (age > 2.4) return 0.0f;
-      // Тревога захвата ЧД: чередование 523/784 Гц, пульс 5 Гц.
+      // РўСЂРµРІРѕРіР° Р·Р°С…РІР°С‚Р° Р§Р”: С‡РµСЂРµРґРѕРІР°РЅРёРµ 523/784 Р“С†, РїСѓР»СЊСЃ 5 Р“С†.
       const double cyc = std::fmod(age * 2.5, 1.0);
       const double f = (cyc < 0.5) ? 523.2511306 : 783.99087196;
       const float s = static_cast<float>(std::sin(2.0 * kPi * f * age)) +
@@ -413,14 +414,14 @@ float AudioEngine::renderVoice(const Voice& v, double age,
       return s * 0.45f * pulse * env;
     }
     case VoiceType::Tick: {
-      // Тик пульсара: пинг 2200 Гц, затухание 25 мс (радиоудар).
+      // РўРёРє РїСѓР»СЊСЃР°СЂР°: РїРёРЅРі 2200 Р“С†, Р·Р°С‚СѓС…Р°РЅРёРµ 25 РјСЃ (СЂР°РґРёРѕСѓРґР°СЂ).
       if (age > 0.05) return 0.0f;
       const float s = static_cast<float>(std::sin(2.0 * kPi * 2200.0 * age));
       return s * static_cast<float>(std::exp(-age * 120.0)) * 0.5f;
     }
     case VoiceType::File: {
-      // Файл-голос: линейный лерп по готовому float-буферу (моно,
-      // kSampleRate, значит шаг 1 сэмпл на сэмпл; лерп страховка).
+      // Р¤Р°Р№Р»-РіРѕР»РѕСЃ: Р»РёРЅРµР№РЅС‹Р№ Р»РµСЂРї РїРѕ РіРѕС‚РѕРІРѕРјСѓ float-Р±СѓС„РµСЂСѓ (РјРѕРЅРѕ,
+      // kSampleRate, Р·РЅР°С‡РёС‚ С€Р°Рі 1 СЃСЌРјРїР» РЅР° СЃСЌРјРїР»; Р»РµСЂРї СЃС‚СЂР°С…РѕРІРєР°).
       if (!v.pcm || v.pcm->empty()) return 0.0f;
       const size_t n = v.pcm->size();
       const double idx = age * static_cast<double>(kSampleRate);
@@ -437,7 +438,7 @@ float AudioEngine::renderVoice(const Voice& v, double age,
 }
 
 void AudioEngine::renderFrames(float* out, unsigned frames) {
-  // Снимок голосов под коротким мьютексом (без аллокаций в колбэке).
+  // РЎРЅРёРјРѕРє РіРѕР»РѕСЃРѕРІ РїРѕРґ РєРѕСЂРѕС‚РєРёРј РјСЊСЋС‚РµРєСЃРѕРј (Р±РµР· Р°Р»Р»РѕРєР°С†РёР№ РІ РєРѕР»Р±СЌРєРµ).
   Voice snap[40];
   size_t nSnap = 0;
   {
@@ -447,7 +448,7 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
   }
   const float vol = m_muted.load() ? 0.0f : m_volume.load();
   const float warpK = m_warpCurrent.load();
-  const float duck = dbToGain(kDuckDb * warpK);  // -8 дБ при K=1
+  const float duck = dbToGain(kDuckDb * warpK);  // -8 РґР‘ РїСЂРё K=1
   const double rate = static_cast<double>(kSampleRate);
   uint64_t base = m_samples.load();
 
@@ -464,7 +465,7 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
       sfx += renderVoice(snap[v], age, m_rng);
     }
 
-    // WarpRumble: коричневый шум + суб-синус, громкость от уровня варпа.
+    // WarpRumble: РєРѕСЂРёС‡РЅРµРІС‹Р№ С€СѓРј + СЃСѓР±-СЃРёРЅСѓСЃ, РіСЂРѕРјРєРѕСЃС‚СЊ РѕС‚ СѓСЂРѕРІРЅСЏ РІР°СЂРїР°.
     const float engK = m_engineCurrent.load();
     float rumble = 0.0f;
     if (warpK > 0.001f || engK > 0.001f) {
@@ -478,7 +479,7 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
       rumble = (m_brown * 3.0f * 0.8f + sub * 0.6f) * warpK * 0.5f;
     }
 
-    // Engine hum (v3.3.0): тон 52-82 Гц по скорости + обертон + дыхание шума.
+    // Engine hum (v3.3.0): С‚РѕРЅ 52-82 Р“С† РїРѕ СЃРєРѕСЂРѕСЃС‚Рё + РѕР±РµСЂС‚РѕРЅ + РґС‹С…Р°РЅРёРµ С€СѓРјР°.
     float engine = 0.0f;
     if (engK > 0.001f) {
       const float f = 52.0f + 30.0f * engK;
@@ -489,7 +490,7 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
     }
 
     float mix = (music + sfx + rumble + engine) * vol;
-    // Мягкий лимитер tanh на мастере.
+    // РњСЏРіРєРёР№ Р»РёРјРёС‚РµСЂ tanh РЅР° РјР°СЃС‚РµСЂРµ.
     mix = std::tanh(mix * 1.1f);
     out[i * 2 + 0] = mix;
     out[i * 2 + 1] = mix;
