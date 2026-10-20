@@ -444,6 +444,10 @@ class AppGL {
   // стрики в композите и микро-FOV (+3°). Дефолты 0 => харнесс байт-в-байт.
   view::ViewMode m_viewMode = view::ViewMode::Cockpit;
   bool m_prevVPressed = false;
+  // v4.0: зум колёсиком в видах Chase/Overview (кокпит не трогаем).
+  // 1 = дефолт; 0.35..2.5 — множитель сноса камеры назад.
+  float m_viewZoom = 1.0f;
+  float m_viewZoomT = 1.0f;  // цель (сглаживание кадром)
   Camera m_renderCam;  // камера кадра (со сносом вида); метки/пикинг — по ней
   bool m_renderCamValid = false;  // false в меню/харнессе => метки по m_camera
   Vec3 m_prevSpeedPos;

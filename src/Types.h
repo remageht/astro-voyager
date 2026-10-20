@@ -203,10 +203,14 @@ constexpr double kFarBack = 9.0;
 constexpr double kFarUp = 2.2;
 
 // Render-camera position for a view mode (Cockpit = the camera itself).
-inline Vec3 offsetCameraPos(const Vec3& pos, const Vec3& fwd, ViewMode v) {
+// zoomK (v4.0): множитель сноса колёсиком; 1 = дефолт.
+inline Vec3 offsetCameraPos(const Vec3& pos, const Vec3& fwd, ViewMode v,
+                            float zoomK = 1.0f) {
   if (v == ViewMode::Cockpit) return pos;
-  const double back = (v == ViewMode::Chase) ? kChaseBack : kFarBack;
-  const double up = (v == ViewMode::Chase) ? kChaseUp : kFarUp;
+  const double zk = static_cast<double>(zoomK);
+  const double back = ((v == ViewMode::Chase) ? kChaseBack : kFarBack) * zk;
+  const double up = (((v == ViewMode::Chase) ? kChaseUp : kFarUp) - 0.35) * zk +
+                    0.35;  // подъём почти пропорционален, но не уходит в 0
   return Vec3(pos.x - fwd.x * back, pos.y - fwd.y * back + up,
               pos.z - fwd.z * back);
 }

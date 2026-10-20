@@ -232,6 +232,20 @@ int main() {
       camPos, camFwd, astro::view::ViewMode::Overview);
   AssertNear(static_cast<float>(far.y), 4.2f, 0.0001f, "overview up offset");
   AssertNear(static_cast<float>(far.z), -6.0f, 0.0001f, "overview back offset");
+  // Test 12b (v4.0): зум колёсиком — zoomK масштабирует снос (кокпит всегда
+  // identity), дефолт-аргументы обоих видов выше уже покрыты.
+  const astro::Vec3 chaseIn = astro::view::offsetCameraPos(
+      camPos, camFwd, astro::view::ViewMode::Chase, 0.35f);
+  AssertNear(static_cast<float>(chaseIn.z), 1.425f, 0.0001f, "chase zoom-in");
+  AssertNear(static_cast<float>(chaseIn.y), 2.6125f, 0.0001f, "chase zoom-in up");
+  const astro::Vec3 farOut = astro::view::offsetCameraPos(
+      camPos, camFwd, astro::view::ViewMode::Overview, 2.0f);
+  AssertNear(static_cast<float>(farOut.z), -15.0f, 0.0001f, "overview zoom-out");
+  AssertNear(static_cast<float>(farOut.y), 6.05f, 0.0001f, "overview zoom-out up");
+  AssertNear(static_cast<float>(astro::view::offsetCameraPos(
+                 camPos, camFwd, astro::view::ViewMode::Cockpit, 2.0f)
+                 .z),
+             3.0f, 0.0001f, "zoom must not touch cockpit");
 
   // Test 13 (v3.3.0): масштаб эффекта скорости (кламп 0..1, защита ref).
   AssertNear(astro::view::speedFx(6.0f, 12.0f), 0.5f, 0.0001f, "half ref speed");

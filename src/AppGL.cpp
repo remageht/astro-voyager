@@ -331,6 +331,12 @@ int AppGL::run() {
     // === Camera views + speed FX === (v3.3.0): скорость камеры/варпа =>
     // доплер+стрики+микро-FOV; камера кадра со сносом вида; корабль в кадре.
     updateSpeedFx(deltaTime);
+    // v4.0: сглаживание зума колёсиком (быстрый лерк, без поп-эффекта).
+    {
+      const float zk = 1.0f - std::exp(-deltaTime * 10.0f);
+      m_viewZoom += (m_viewZoomT - m_viewZoom) * zk;
+      if (std::fabs(m_viewZoomT - m_viewZoom) < 0.002f) m_viewZoom = m_viewZoomT;
+    }
     applyViewCamera(m_renderCam);
     if (!m_jumpCine) {
       if (m_viewMode != view::ViewMode::Cockpit && !m_inMenu) {
@@ -748,6 +754,17 @@ void AppGL::processMouse() {
   const bool rightDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
   const bool leftDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
   const bool rawMousePress = (rightDown || leftDown);
+
+  // === View zoom === (v4.0): колесо мыши в видах Chase/Overview двигает
+  // камеру кадра ближе/дальше (кокпит, меню и катсцены не трогаем; харнесс
+  // без ввода => дефолт 1, PNG байт-в-байт). Зум не сохраняется: сброс на
+  // 1 при следующем запуске.
+  if (!m_tour.active() && !m_jumpCine && !m_inMenu && !io.WantCaptureMouse &&
+      m_viewMode != view::ViewMode::Cockpit && io.MouseWheel != 0.0f) {
+    m_viewZoomT *= std::pow(0.85f, io.MouseWheel);
+    if (m_viewZoomT < 0.35f) m_viewZoomT = 0.35f;
+    if (m_viewZoomT > 2.5f) m_viewZoomT = 2.5f;
+  }
 
   const bool isDragging = interaction::shouldCaptureMouseForCamera(rawMousePress, io.WantCaptureMouse);
 
@@ -2826,8 +2843,9 @@ void AppGL::applyViewCamera(Camera& out) {
   m_renderCamValid = true;
   if (m_jumpCine || m_inMenu) return;
   if (m_viewMode == view::ViewMode::Cockpit) return;
-  out.position =
-      view::offsetCameraPos(m_camera.position, m_camera.forward(), m_viewMode);
+  // v4.0: зум колёсиком — множитель сноса (ближе/дальше), без крышки значений.
+  out.position = view::offsetCameraPos(
+      m_camera.position, m_camera.forward(), m_viewMode, m_viewZoom);
   const Station* st = m_sceneManager->getCurrentStation();
   if (st && st->type == StationType::BlackHole) {
     // Снос не должен затаскивать камеру кадра под горизонт.
