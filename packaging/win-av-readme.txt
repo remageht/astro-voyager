@@ -11,6 +11,9 @@ Portable usage (this zip)
   the folder anywhere.
   An optional Inno Setup installer (Start-menu shortcuts, uninstaller)
   is published on the GitHub Releases page for this project.
+  SmartScreen note for the installer: it is unsigned too and triggers
+  the same "Windows protected your PC" - More info -> Run anyway.
+  SHA256 (v3.9.0) = 6805287948C6B4C75A67F809952B3B80AB9BA357F646E6CF3F68AF1113D58091
 
 The Windows build is **unsigned** (no code-signing certificate yet). Two
 consequences, both expected for unsigned software:
