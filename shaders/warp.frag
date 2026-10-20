@@ -47,6 +47,36 @@ float streakBandB(float ang01, float r, float density, float seed, float t) {
   return pulse * step(0.30, h);
 }
 
+// v4.0 (reference pass): value-noise fbm for the tunnel walls — soft
+// chrysalis curtains wrapping the flight line, plus the red entry
+// nebula ring. All terms are multiplied by k downstream, so neutral
+// frames (warpK == 0) stay byte-identical.
+float hash12(vec2 q) {
+  vec3 p3 = fract(vec3(q.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec2 q) {
+  vec2 i = floor(q);
+  vec2 f = fract(q);
+  vec2 u = f * f * (3.0 - 2.0 * f);  // smooth interp (ascending edges ok)
+  float a = hash12(i);
+  float b = hash12(i + vec2(1.0, 0.0));
+  float c = hash12(i + vec2(0.0, 1.0));
+  float d = hash12(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float fbm(vec2 q) {
+  float s = 0.0;
+  float amp = 0.55;
+  for (int i = 0; i < 4; ++i) {
+    s += amp * vnoise(q);
+    q = q * 2.13 + vec2(17.3, 9.1);
+    amp *= 0.5;
+  }
+  return s;
+}
+
 void main() {
   vec2 p = vec2((v_TexCoord.x - 0.5) * u_Aspect, v_TexCoord.y - 0.5);
   float r = length(p);
@@ -74,10 +104,43 @@ void main() {
   float rim = smoothstep(0.45, 0.95, r);
   vec3 fringe = vec3(0.30, 0.55, 1.00) * rim * 0.22;
   float core = 1.0 - smoothstep(0.0, 0.55, r);
-  vec3 glow = vec3(0.65, 0.80, 1.00) * core * core * 0.38;
+  vec3 glow = vec3(0.65, 0.80, 1.00) * core * core * 0.28;
+
+  // v4.0 tunnel walls: two fbm curtains with a slow angular twirl; the
+  // wall annulus sits between the starburst and the outer rim. The slow
+  // radial slide (-0.05*t) reads as "flying through folded space".
+  float wallR = smoothstep(0.10, 0.30, r) * (1.0 - smoothstep(0.66, 1.05, r));
+  float tw = ang01 + 0.10 / rs;  // vortex swirl (stronger near the core)
+  vec2 wq1 = vec2(tw * 5.0, r * 3.2 - u_Time * 0.05);
+  vec2 wq2 = vec2((ang01 - 0.04 / rs) * 7.0, r * 5.1 - u_Time * 0.08);
+  float f1 = fbm(wq1);
+  float f2 = fbm(wq2);
+  float fil1 = smoothstep(0.42, 0.80, f1);   // ascending edges (gate rule)
+  float fil2 = smoothstep(0.55, 0.95, f2);
+  vec3 walls = (vec3(0.14, 0.36, 0.88) * fil1 * 0.40 +
+                vec3(0.22, 0.52, 1.00) * fil2 * 0.24) * wallR;
+
+  // Red entry nebula: warm dust annulus at the outermost band.
+  float redBand = smoothstep(0.72, 0.88, r) * (1.0 - smoothstep(0.95, 1.12, r));
+  float redN = fbm(vec2(ang01 * 9.0, r * 4.0 - u_Time * 0.03));
+  vec3 redDust = vec3(0.85, 0.18, 0.12) * smoothstep(0.50, 0.90, redN) * redBand * 0.32;
+
+  // White-hot exit core: compact shimmering mouth at the flight centre.
+  float mouth = exp(-r * r * 160.0);
+  vec3 hotCore = vec3(1.0, 0.985, 0.94) * mouth * (0.55 + 0.15 * sin(u_Time * 7.3));
+
+  // Prismatic rim accent: faint rainbow ring on the wall silhouette edge.
+  float prEdge = exp(-pow((r - 0.68) * 9.0, 2.0));
+  vec3 prism = vec3(sin(6.28318 * (ang01 + u_Time * 0.05)),
+                    sin(6.28318 * (ang01 + 0.33)),
+                    sin(6.28318 * (ang01 - 0.33))) * 0.5 + 0.5;
+  prism *= prEdge * 0.10;
 
   // v3.6.0: общая интенсивность оверлея снижена (комфорт для глаз).
-  vec3 col = (streak * vec3(0.75, 0.85, 1.0) * 0.62 + fringe + glow) * k;
+  // v4.0: добавлены стены туннеля, красный вход, white-hot ядро и
+  // призматический ободок — всё внутри одного множителя k.
+  vec3 col = (streak * vec3(0.75, 0.85, 1.0) * 0.62 + fringe + glow +
+              walls + redDust + hotCore + prism) * k;
 
   // Own exposure lift (SceneManager m_exposure is never touched).
   col *= 1.0 + 0.12 * k;

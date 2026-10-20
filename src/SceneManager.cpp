@@ -37,12 +37,21 @@ float g_shipPos[3] = {0.0f, 0.0f, 0.0f};
 float g_shipYaw = 0.0f;
 float g_shipThruster = 0.7f;  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
 int g_shipStyle = 0;  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model (OBJ)
+// AV_WARP_DEMO=1: dev-режим для визуальной отладки варп-туннеля и кокона
+// (корабль в (0,0,0), warpK=1). Без переменной поведение байт-в-байт, а
+// ней можно прогнать --screenshot-all в зеркале для ручного тюнинга шейда.
+bool warpDemo() {
+  static const bool v = std::getenv("AV_WARP_DEMO") != nullptr;
+  return v;
+}
 }  // namespace
 void setState(float k, float flash) {
   g_warpK = k;
   g_warpFlash = flash;
 }
-float warpK() { return g_warpK; }
+float warpK() {
+  return warpDemo() ? 1.0f : g_warpK;
+}
 float warpFlash() { return g_warpFlash; }
 void setBurst(float b) { g_burst = b; }
 float burst() { return g_burst; }
@@ -53,7 +62,13 @@ void setShip(bool v, float x, float y, float z, float yaw) {
   g_shipPos[2] = z;
   g_shipYaw = yaw;
 }
-bool shipVisible() { return g_shipVisible; }
+bool shipVisible() {
+  if (warpDemo()) {
+    g_shipVisible = true;
+    return true;
+  }
+  return g_shipVisible;
+}
 float shipX() { return g_shipPos[0]; }
 float shipY() { return g_shipPos[1]; }
 float shipZ() { return g_shipPos[2]; }
@@ -1569,6 +1584,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         static LineMesh s_warpShell;
         static LineMesh s_bowFan;
         static LineMesh s_tailLines;
+        static SphereMesh s_warpSheath;  // v4.0: заполненное хризалидное полотно
         static StarPoints s_engine;
         static bool s_shipInit = false;
         if (!s_shipFailed && !s_shipShader) {
@@ -1582,10 +1598,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         if (!s_shipInit) {
           s_shipSphere.setSphere(22, 44);  // S4: гладкий силуэт корпуса
           s_shipRing.setRing(0.30f, 0.44f, 64);
-          // Варп-кокон (макет): эллипсоидный ореол из бегущих струй
-          // (24 меридиана по 3 сегмента), носовой веер и кормовой красный
-          // хвост. Дрейф струй целиком в trail.vert (u_Time), геометрия
-          // статична. xorshift с фикс-сидом — кадры детерминированы.
+          s_warpSheath.setSphere(20, 40);  // v4.0: полотно хризалиды
+          // Варп-кокон (макет): эллипсоидный ореол из бегущих струй.
+          // v4.0 рестайл по референсу: стройные ДЛИННЫЕ меридианы (полная
+          // дуга через полюс у каждого меридиана) вместо-cloudsؾ случайных
+          // обрезков — струи читаются как текущие по корпусу волокна xa:
+          // 44 меридиана по 10 сегментов. Дрейф целиком в trail.vert.
           const float sLat = 0.55f;  // поперечный радиус ореола
           const float sLen = 1.25f;  // полудлина ореола (нос = -z)
           std::uint32_t h = 0x9E3779B9u;
@@ -1600,30 +1618,20 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                              sLen * std::cos(th));
           };
           {
-            // Плотность как на макете: 36 меридианов по 4 сегмента плюс
-            // 80 отдельных стриков с непрерывным азимутом (облако пыли).
-            constexpr int kMer = 36;
-            constexpr int kSeg = 4;
-            constexpr int kDust = 80;
+            constexpr int kMer = 44;
+            constexpr int kSeg = 10;
             std::vector<glm::vec3> shell;
             std::vector<unsigned int> shellIdx;
             for (int m = 0; m < kMer; ++m) {
               const float phi = (static_cast<float>(m) + 0.37f * rnd()) *
-                                6.28318f / static_cast<float>(kMer);
+                                6.28318f / static_cast<float>(kMer) +
+                                0.5f * rnd();
               for (int k = 0; k < kSeg; ++k) {
-                const float th0 =
-                    0.30f + 0.85f * (static_cast<float>(k) + rnd());
-                const float dl = 0.16f + 0.14f * rnd();
+                const float th0 = 0.24f +
+                                  2.66f * static_cast<float>(k) / kSeg;
                 shell.emplace_back(sph(th0, phi));
-                shell.emplace_back(sph(th0 + dl, phi));
+                shell.emplace_back(sph(th0 + 2.66f / kSeg, phi));
               }
-            }
-            for (int i = 0; i < kDust; ++i) {
-              const float phi = rnd() * 6.28318f;
-              const float th0 = 0.50f + 1.70f * rnd();
-              const float dl = 0.16f + 0.18f * rnd();
-              shell.emplace_back(sph(th0, phi));
-              shell.emplace_back(sph(th0 + dl, phi));
             }
             shellIdx.resize(shell.size());
             for (unsigned int i = 0; i < shellIdx.size(); ++i) shellIdx[i] = i;
@@ -2060,10 +2068,19 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_trailShader->setUniform1f("u_Drift", driftK);
         m_trailShader->setUniform1f("u_Elong", elongK);
         m_trailShader->setUniform1f("u_Energy", energyK);
-        m_trailShader->setUniform1i("u_Mode", 0);
         m_trailShader->setUniform3f("u_CyanCol", cyanCol.x, cyanCol.y,
                                     cyanCol.z);
         m_trailShader->setUniform3f("u_RedCol", redCol.x, redCol.y, redCol.z);
+        {
+          // v4.0: камера в shell-local для френеля хризалидной оболочки.
+          const glm::vec4 camSh =
+              glm::inverse(static_cast<glm::mat4>(shipModel)) *
+              glm::vec4(eye, 1.0f);
+          m_trailShader->setUniform3f("u_CamShell", camSh.x, camSh.y, camSh.z);
+        }
+        m_trailShader->setUniform1i("u_Mode", 3);  // хризалида (полотно)
+        s_warpSheath.draw();
+        m_trailShader->setUniform1i("u_Mode", 0);
         s_warpShell.drawLines();
         m_trailShader->setUniform1i("u_Mode", 1);
         s_bowFan.drawLines();
