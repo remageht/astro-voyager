@@ -27,6 +27,9 @@ struct RenderSettings {
   // v3.9.0: грав-красное смещение скайбокса (bh-станция). Дефолт OFF —
   // референсы байт-в-байт (шейдер умножает на 1.0f).
   bool gravRedshift = false;    // v3.9.0: грав. красное смещение скайбокса
+  // v3.10: RKF45 (Fehlberg 5(4)) адаптивный шаг марша черной дыры.
+  // Дефолт OFF — референсы байт-в-байт (RK4 + степенной закон шага).
+  bool rkf45Adaptive = false;
   int enginePalette = 0;        // палитра выхлопа двигателя (0..3)
 };
 
@@ -282,6 +285,7 @@ class SceneManager {
   std::unique_ptr<Shader> m_bhShader;
   std::unique_ptr<Shader> m_quasarShader;
   std::unique_ptr<Shader> m_linesShader;
+  std::unique_ptr<Shader> m_trailShader;
   std::unique_ptr<Shader> m_starShader;
   std::unique_ptr<Shader> m_m31StarShader;
   std::unique_ptr<Shader> m_galaxyShader;

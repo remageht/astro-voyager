@@ -3316,6 +3316,8 @@ void AppGL::drawMenu() {
         ImGui::Checkbox("Ship reflections", &menuSettings.shipReflections);
     menuChanged |=
         ImGui::Checkbox("Sky gravitational redshift", &menuSettings.gravRedshift);
+    menuChanged |=
+        ImGui::Checkbox("Sky RKF45 adaptive march", &menuSettings.rkf45Adaptive);
 
     ImGui::SeparatorText("Anti-aliasing");
     const char* aaNames[] = {"Off", "FXAA"};

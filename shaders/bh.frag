@@ -62,6 +62,7 @@ uniform float u_BHRingK;  // photon-ring/rim brightness gain (default 1.0; sgra 
 uniform float u_ThinDisk;  // thin-disk mode 0/1 (sgra 1.0): radial x0.55 band + crisper edges
 uniform float u_BandK;  // milky-way band gain (default 1.0; sgra 1.7)
 uniform float u_RedshiftK;  // v3.9.0: sky gravitational redshift 0/1 (0 = legacy exact)
+uniform float u_Rkf45K;  // v3.10.0: RKF45 adaptive march 0/1 (0 = legacy rk4+step law)
 uniform float u_CamDist;  // camera distance in Rs (set by SceneManager; <=0 = far/legacy)
 // === Relativity === skybox aberration (same as sky.frag): apparent star
 // directions compress towards u_VelDir at speed. u_Beta == 0.0 returns d
@@ -134,6 +135,130 @@ void cartRk4(float h, inout vec3 x, inout vec3 v, inout float dt, float rs) {
   x += (h / 6.0) * (v + 2.0 * v2 + 2.0 * v3 + v4);
   v += (h / 6.0) * (a1 + 2.0 * a2 + 2.0 * a3 + a4);
   dt += (h / 6.0) * (d1 + 2.0 * d2 + 2.0 * d3 + d4);
+}
+// === v3.10: RKF45 (Fehlberg 5(4)) adaptive step - GPU port of the CPU
+// reference rkf45Step (src/Geodesic.cpp). Six stages, embedded 4th-order
+// error estimate, 5th-order solution accepted. Spatial-only RMS metric
+// (dt is a slave variable, excluded from the norm like the CPU port);
+// per-component scale = max(|c|, 1.0); controller 0.9*(tol/err)^0.2
+// clamped to [0.2, 5.0]. GPU deviation: bounded reject budget (6 tries)
+// then the last 5th-order estimate is accepted anyway - the fixed-law
+// clamp in the march loop keeps h sane, so worst case degrades to a
+// slightly inaccurate single step instead of stalling the seven-most
+// important budget of ABSOLUTE_MAX_STEPS.
+const float RKF45_TOL = 1e-5;
+bool cartRkf45(inout float h, float tol, inout vec3 x, inout vec3 v,
+               inout float dt, float rs, out float hNext) {
+  hNext = h;
+  vec3 a;
+  float dd;
+  // 5th-order trial state, hoisted so the reject-budget exhaustion path
+  // can accept the last estimate (kept in scope across attempts).
+  vec3 ox5 = x;
+  vec3 ov5 = v;
+  float odt5 = dt;
+  for (int att = 0; att < 6; ++att) {
+    // Stage 1: k1 at the trial state (v as the position derivative).
+    vec3 kx1 = v;
+    cartAccel(x, v, dt, rs, a, dd);
+    vec3 kv1 = a;
+    float kdt1 = dd;
+    // Stage 2 (a21 = 1/4).
+    vec3 x2 = x + (0.25 * h) * kx1;
+    vec3 v2 = v + (0.25 * h) * kv1;
+    float dt2 = dt + (0.25 * h) * kdt1;
+    vec3 kx2 = v2;
+    cartAccel(x2, v2, dt2, rs, a, dd);
+    vec3 kv2 = a;
+    float kdt2 = dd;
+    // Stage 3 (a31 = 3/32, a32 = 9/32).
+    vec3 x3 = x + h * (3.0 * kx1 + 9.0 * kx2) * (1.0 / 32.0);
+    vec3 v3 = v + h * (3.0 * kv1 + 9.0 * kv2) * (1.0 / 32.0);
+    float dt3 = dt + h * (3.0 * kdt1 + 9.0 * kdt2) * (1.0 / 32.0);
+    vec3 kx3 = v3;
+    cartAccel(x3, v3, dt3, rs, a, dd);
+    vec3 kv3 = a;
+    float kdt3 = dd;
+    // Stage 4 (1932/2197, -7200/2197, 7296/2197).
+    vec3 x4 = x + h * (1932.0 * kx1 - 7200.0 * kx2 + 7296.0 * kx3) * (1.0 / 2197.0);
+    vec3 v4 = v + h * (1932.0 * kv1 - 7200.0 * kv2 + 7296.0 * kv3) * (1.0 / 2197.0);
+    float dt4 = dt + h * (1932.0 * kdt1 - 7200.0 * kdt2 + 7296.0 * kdt3) * (1.0 / 2197.0);
+    vec3 kx4 = v4;
+    cartAccel(x4, v4, dt4, rs, a, dd);
+    vec3 kv4 = a;
+    float kdt4 = dd;
+    // Stage 5 (439/216, -8, 3680/513, -845/4104).
+    vec3 x5 = x + h * (439.0 * kx1 * (1.0 / 216.0) - 8.0 * kx2 +
+                       3680.0 * kx3 * (1.0 / 513.0) -
+                       845.0 * kx4 * (1.0 / 4104.0));
+    vec3 v5 = v + h * (439.0 * kv1 * (1.0 / 216.0) - 8.0 * kv2 +
+                       3680.0 * kv3 * (1.0 / 513.0) -
+                       845.0 * kv4 * (1.0 / 4104.0));
+    float dt5 = dt + h * (439.0 * kdt1 * (1.0 / 216.0) - 8.0 * kdt2 +
+                          3680.0 * kdt3 * (1.0 / 513.0) -
+                          845.0 * kdt4 * (1.0 / 4104.0));
+    vec3 kx5 = v5;
+    cartAccel(x5, v5, dt5, rs, a, dd);
+    vec3 kv5 = a;
+    float kdt5 = dd;
+    // Stage 6 (-8/27, 2, -3544/2565, 1859/4104, -11/40).
+    vec3 x6 = x + h * (-8.0 * kx1 * (1.0 / 27.0) + 2.0 * kx2 -
+                       3544.0 * kx3 * (1.0 / 2565.0) +
+                       1859.0 * kx4 * (1.0 / 4104.0) -
+                       11.0 * kx5 * (1.0 / 40.0));
+    vec3 v6 = v + h * (-8.0 * kv1 * (1.0 / 27.0) + 2.0 * kv2 -
+                       3544.0 * kv3 * (1.0 / 2565.0) +
+                       1859.0 * kv4 * (1.0 / 4104.0) -
+                       11.0 * kv5 * (1.0 / 40.0));
+    float dt6 = dt + h * (-8.0 * kdt1 * (1.0 / 27.0) + 2.0 * kdt2 -
+                          3544.0 * kdt3 * (1.0 / 2565.0) +
+                          1859.0 * kdt4 * (1.0 / 4104.0) -
+                          11.0 * kdt5 * (1.0 / 40.0));
+    vec3 kx6 = v6;
+    cartAccel(x6, v6, dt6, rs, a, dd);
+    vec3 kv6 = a;
+    float kdt6 = dd;
+    // 5th-order solution (b5) and 4th-order estimate (b4).
+    ox5 = x + h * ((16.0 / 135.0) * kx1 + (6656.0 / 12825.0) * kx3 +
+                        (28561.0 / 56430.0) * kx4 - (9.0 / 50.0) * kx5 +
+                        (2.0 / 55.0) * kx6);
+    ov5 = v + h * ((16.0 / 135.0) * kv1 + (6656.0 / 12825.0) * kv3 +
+                        (28561.0 / 56430.0) * kv4 - (9.0 / 50.0) * kv5 +
+                        (2.0 / 55.0) * kv6);
+    odt5 = dt + h * ((16.0 / 135.0) * kdt1 + (6656.0 / 12825.0) * kdt3 +
+                           (28561.0 / 56430.0) * kdt4 - (9.0 / 50.0) * kdt5 +
+                           (2.0 / 55.0) * kdt6);
+    // 4th-order estimate (b4) for the error metric.
+    vec3 ox4 = x + h * ((25.0 / 216.0) * kx1 + (1408.0 / 2565.0) * kx3 +
+                        (2197.0 / 4104.0) * kx4 - (1.0 / 5.0) * kx5);
+    vec3 ov4 = v + h * ((25.0 / 216.0) * kv1 + (1408.0 / 2565.0) * kv3 +
+                        (2197.0 / 4104.0) * kv4 - (1.0 / 5.0) * kv5);
+    // Spatial-only RMS error, component scale max(|c|, 1.0) (dt excluded).
+    vec3 dex = abs(ox5 - ox4);
+    vec3 dev = abs(ov5 - ov4);
+    vec3 sex = max(abs(ox5), vec3(1.0));
+    vec3 sev = max(abs(ov5), vec3(1.0));
+    vec3 ex = dex / sex;
+    vec3 evv = dev / sev;
+    float err = sqrt(max(dot(ex, ex) + dot(evv, evv), 0.0) * (1.0 / 6.0));
+    // Controller identical to the CPU port.
+    float fac = clamp(0.9 * pow(tol / max(err, 1e-30), 0.2), 0.2, 5.0);
+    if (err > tol) {
+      h *= fac;
+      if (h < 1e-9 * u_Rs) break;
+      continue;
+    }
+    x = ox5;
+    v = ov5;
+    dt = odt5;
+    hNext = h * fac;
+    return true;
+  }
+  // Reject budget exhausted: accept the last trial's 5th-order state.
+  x = ox5;
+  v = ov5;
+  dt = odt5;
+  return true;
 }
 // Planckian-locus colour ramp (Tanner Helland approximation of black-body
 // colour), normalized to unit luminance so it can be scaled by radiance.
@@ -242,6 +367,9 @@ void main() {
   float kStep = u_StepSize / (0.5 * u_Rs * sqrt(1.5 * u_Rs));
   float hMin = 0.004 * u_StepSize;
   float hMax = 8.0 * u_StepSize;
+  // v3.10 AdRKF45 adaptive state: hCur carries the controller-owned step
+  // between march iterations; initialized from the fixed law at first use.
+  float hCur = 0.0;
 
   for (int i = 0; i < ABSOLUTE_MAX_STEPS; i++) {
     if (i >= u_MaxSteps) break;
@@ -249,8 +377,18 @@ void main() {
     if (r >= u_ShellRadius) break;
     vec3 xPrev = x;
     float q = max(r - u_Rs, 1e-4 * u_Rs);
-    float hAdapt = clamp(kStep * q * sqrt(r), hMin, hMax);
-    cartRk4(hAdapt, x, v, dt, u_Rs);
+    float hUse;
+    if (u_Rkf45K > 0.5) {
+      if (hCur <= 0.0) hCur = clamp(kStep * q * sqrt(r), hMin, hMax);
+      float hNext;
+      cartRkf45(hCur, RKF45_TOL, x, v, dt, u_Rs, hNext);
+      hUse = hCur;  // weights track the step actually taken
+      hCur = clamp(hNext, hMin, hMax);
+    } else {
+      hUse = clamp(kStep * q * sqrt(r), hMin, hMax);
+      cartRk4(hUse, x, v, dt, u_Rs);
+    }
+    float hAdapt = hUse;
     projectNull(x, v, dt, u_Rs);
     r = length(x);
     if (r < minR) minR = r;

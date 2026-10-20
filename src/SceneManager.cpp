@@ -83,6 +83,7 @@ SceneManager::SceneManager() {
   m_bhShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/bh.frag");
   m_quasarShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/quasar.frag");
   m_linesShader = std::make_unique<Shader>("shaders/lines.vert", "shaders/lines.frag");
+  m_trailShader = std::make_unique<Shader>("shaders/trail.vert", "shaders/trail.frag");
   m_starShader = std::make_unique<Shader>("shaders/star.vert", "shaders/star.frag");
   m_m31StarShader = std::make_unique<Shader>("shaders/m31star.vert", "shaders/m31star.frag");
   m_galaxyShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/galaxy.frag");
@@ -791,8 +792,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_ThinDisk", isSgra ? 1.0f : 0.0f);
     m_bhShader->setUniform1f("u_BandK", isSgra ? 1.3f : 1.0f);
     m_bhShader->setUniform1f("u_RedshiftK", m_settings.gravRedshift ? 1.0f : 0.0f);
-    // v3.9.0: грав. красное смещение скайбокса (0 = legacy, точно x1.0).
-    m_bhShader->setUniform1f("u_RedshiftK", m_settings.gravRedshift ? 1.0f : 0.0f);
+    // v3.10: RKF45 адаптивный шаг марша предметно-LID (0 = legacy rk4+step law).
+    m_bhShader->setUniform1f("u_Rkf45K", m_settings.rkf45Adaptive ? 1.0f : 0.0f);
     // Close-camera distance in Rs: drives disk-detail smoothing and pole
     // damping in bh.frag (u_CamDist <= 0 means far/legacy on shader side).
     {
@@ -1565,7 +1566,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         static Shader* s_shipShader = nullptr;
         static SphereMesh s_shipSphere;
         static RingMesh s_shipRing;
-        static LineMesh s_trail;
+        static LineMesh s_warpShell;
+        static LineMesh s_bowFan;
+        static LineMesh s_tailLines;
         static StarPoints s_engine;
         static bool s_shipInit = false;
         if (!s_shipFailed && !s_shipShader) {
@@ -1579,32 +1582,92 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         if (!s_shipInit) {
           s_shipSphere.setSphere(22, 44);  // S4: гладкий силуэт корпуса
           s_shipRing.setRing(0.30f, 0.44f, 64);
-          // Трейл-лента: 44 поперечных пары за кормой (z 0.55 -> 2.75,
-          // полуширина 0.16 -> 0.02) + 2 продольных ребра. Плотные узкие
-          // рунги читаются гладким следом вместо «лестницы» на малой тяге.
-          std::vector<glm::vec3> trail;
-          trail.reserve(280);
-          constexpr int kSeg = 44;
-          for (int i = 0; i < kSeg; ++i) {
-            const float f0 = static_cast<float>(i) / kSeg;
-            const float z = 0.55f + f0 * 2.2f;
-            const float hw = 0.16f + (0.02f - 0.16f) * f0;
-            trail.emplace_back(-hw, 0.0f, z);
-            trail.emplace_back(hw, 0.0f, z);
-          }
-          for (int side = -1; side <= 1; side += 2) {
-            for (int i = 0; i < kSeg; ++i) {
-              const float f0 = static_cast<float>(i) / kSeg;
-              const float f1 = static_cast<float>(i + 1) / kSeg;
-              const float hw0 = 0.16f + (0.02f - 0.16f) * f0;
-              const float hw1 = 0.16f + (0.02f - 0.16f) * f1;
-              trail.emplace_back(side * hw0, 0.0f, 0.55f + f0 * 2.2f);
-              trail.emplace_back(side * hw1, 0.0f, 0.55f + f1 * 2.2f);
+          // Варп-кокон (макет): эллипсоидный ореол из бегущих струй
+          // (24 меридиана по 3 сегмента), носовой веер и кормовой красный
+          // хвост. Дрейф струй целиком в trail.vert (u_Time), геометрия
+          // статична. xorshift с фикс-сидом — кадры детерминированы.
+          const float sLat = 0.55f;  // поперечный радиус ореола
+          const float sLen = 1.25f;  // полудлина ореола (нос = -z)
+          std::uint32_t h = 0x9E3779B9u;
+          auto rnd = [&h]() {
+            h ^= h << 13; h ^= h >> 17; h ^= h << 5;
+            return static_cast<float>(h & 0xFFFFFFu) /
+                   static_cast<float>(0xFFFFFFu);
+          };
+          auto sph = [&](float th, float phi) {
+            const float st = std::sin(th) * sLat;
+            return glm::vec3(st * std::cos(phi), st * std::sin(phi),
+                             sLen * std::cos(th));
+          };
+          {
+            // Плотность как на макете: 36 меридианов по 4 сегмента плюс
+            // 80 отдельных стриков с непрерывным азимутом (облако пыли).
+            constexpr int kMer = 36;
+            constexpr int kSeg = 4;
+            constexpr int kDust = 80;
+            std::vector<glm::vec3> shell;
+            std::vector<unsigned int> shellIdx;
+            for (int m = 0; m < kMer; ++m) {
+              const float phi = (static_cast<float>(m) + 0.37f * rnd()) *
+                                6.28318f / static_cast<float>(kMer);
+              for (int k = 0; k < kSeg; ++k) {
+                const float th0 =
+                    0.30f + 0.85f * (static_cast<float>(k) + rnd());
+                const float dl = 0.16f + 0.14f * rnd();
+                shell.emplace_back(sph(th0, phi));
+                shell.emplace_back(sph(th0 + dl, phi));
+              }
             }
+            for (int i = 0; i < kDust; ++i) {
+              const float phi = rnd() * 6.28318f;
+              const float th0 = 0.50f + 1.70f * rnd();
+              const float dl = 0.16f + 0.18f * rnd();
+              shell.emplace_back(sph(th0, phi));
+              shell.emplace_back(sph(th0 + dl, phi));
+            }
+            shellIdx.resize(shell.size());
+            for (unsigned int i = 0; i < shellIdx.size(); ++i) shellIdx[i] = i;
+            s_warpShell.setGeometry(shell, shellIdx);
           }
-          std::vector<unsigned int> trailIdx(trail.size());
-          for (unsigned int i = 0; i < trailIdx.size(); ++i) trailIdx[i] = i;
-          s_trail.setGeometry(trail, trailIdx);
+          {
+            // Носовой веер: 20 тонких лучей конусом от точки у носа наружу.
+            constexpr int kFan = 20;
+            const glm::vec3 nose(0.0f, 0.0f, -1.02f);
+            std::vector<glm::vec3> fan;
+            fan.reserve(kFan * 2);
+            for (int i = 0; i < kFan; ++i) {
+              const float a = static_cast<float>(i) * 2.39996f;
+              const float rr = 0.15f + 0.35f * rnd();
+              const float dx = rr * std::cos(a);
+              const float dy = rr * std::sin(a);
+              const float len = 0.55f + 0.40f * rnd();
+              fan.emplace_back(nose);
+              fan.emplace_back(nose + glm::normalize(glm::vec3(dx, dy, -1.0f)) *
+                                       len);
+            }
+            std::vector<unsigned int> fanIdx(fan.size());
+            for (unsigned int i = 0; i < fanIdx.size(); ++i) fanIdx[i] = i;
+            s_bowFan.setGeometry(fan, fanIdx);
+          }
+          {
+            // Кормовой хвост: 14 тёплых струй позади ореола, слегка провисают
+            // и расходятся; покачивание и затухание — в шейдере (режим 2).
+            constexpr int kTail = 14;
+            std::vector<glm::vec3> tail;
+            tail.reserve(kTail * 2);
+            for (int i = 0; i < kTail; ++i) {
+              const float x0 = (rnd() - 0.5f) * 0.72f;
+              const float y0 = (rnd() - 0.5f) * 0.50f;
+              const float z0 = 1.05f + 0.30f * rnd();
+              const float z1 = z0 + 0.70f + 0.85f * rnd();
+              const float sp = 1.10f + 0.35f * rnd();
+              tail.emplace_back(x0, y0, z0);
+              tail.emplace_back(x0 * sp, y0 * sp, z1);
+            }
+            std::vector<unsigned int> tailIdx(tail.size());
+            for (unsigned int i = 0; i < tailIdx.size(); ++i) tailIdx[i] = i;
+            s_tailLines.setGeometry(tail, tailIdx);
+          }
           s_shipInit = true;
         }
         const glm::vec3 shipPos(warpdrive::shipX(), warpdrive::shipY(),
@@ -1977,22 +2040,36 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glDepthMask(GL_FALSE);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        // v3.3.0: тяга растягивает ленту за кормой и разжигает её цвет.
+        // v3.9.0: варп-кокон (макет) — эллипсоидный ореол из бегущих струй,
+        // носовой веер и тёплый кормовой хвост вместо плоской ленты.
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         const float thr = warpdrive::thruster();
-        const glm::mat4 trailModel =
-            shipModel *
-            glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f + 2.2f * thr));
-        m_linesShader->bind();
-        m_linesShader->setUniformMat4f("u_MVP", mvp);
-        m_linesShader->setUniformMat4f("u_Model", trailModel);
-        m_linesShader->setUniform1f("u_Time", time);
-        // Цвет следа — база палитры * тяга (пал 0 — исторические коэффициенты).
-        const glm::vec3 trailThrK(1.70f, 1.50f, 1.20f);
-        const glm::vec3 trailCol = kTrailBase[pal] * (0.55f + trailThrK * thr);
-        m_linesShader->setUniform3f("u_LineColor", trailCol.x, trailCol.y,
-                                    trailCol.z);
-        s_trail.drawLines();
-        m_linesShader->unbind();
+        const float driftK = 1.1f + 5.5f * warpVis + 1.2f * thr;
+        const float elongK = 1.0f + 0.35f * warpVis + 0.05f * thr;
+        const float energyK = 0.30f + 0.75f * warpVis + 0.10f * thr;
+        const glm::vec3 cyanCol = kTrailBase[pal] * glm::vec3(2.6f, 2.4f, 2.2f);
+        const glm::vec3 redCol = glm::vec3(1.55f, 0.40f, 0.16f) *
+                                 (0.8f + 0.8f * thr + 0.9f * warpVis);
+        m_trailShader->bind();
+        m_trailShader->setUniformMat4f("u_MVP", mvp);
+        m_trailShader->setUniformMat4f("u_Model", shipModel);
+        m_trailShader->setUniform1f("u_Time", time);
+        m_trailShader->setUniform1f("u_Drift", driftK);
+        m_trailShader->setUniform1f("u_Elong", elongK);
+        m_trailShader->setUniform1f("u_Energy", energyK);
+        m_trailShader->setUniform1i("u_Mode", 0);
+        m_trailShader->setUniform3f("u_CyanCol", cyanCol.x, cyanCol.y,
+                                    cyanCol.z);
+        m_trailShader->setUniform3f("u_RedCol", redCol.x, redCol.y, redCol.z);
+        s_warpShell.drawLines();
+        m_trailShader->setUniform1i("u_Mode", 1);
+        s_bowFan.drawLines();
+        m_trailShader->setUniform1i("u_Mode", 2);
+        s_tailLines.drawLines();
+        m_trailShader->unbind();
         // Движок: 1 крупная пульсирующая КРАСНАЯ точка за кормой.
         {
           const float sy = warpdrive::shipYaw();
