@@ -790,6 +790,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_BHRingK", isSgra ? 1.8f : (isM87 ? 1.25f : 1.0f));
     m_bhShader->setUniform1f("u_ThinDisk", isSgra ? 1.0f : 0.0f);
     m_bhShader->setUniform1f("u_BandK", isSgra ? 1.3f : 1.0f);
+    // v3.9.0: грав. красное смещение скайбокса (0 = legacy, точно x1.0).
+    m_bhShader->setUniform1f("u_RedshiftK", m_settings.gravRedshift ? 1.0f : 0.0f);
     // Close-camera distance in Rs: drives disk-detail smoothing and pole
     // damping in bh.frag (u_CamDist <= 0 means far/legacy on shader side).
     {
@@ -1832,17 +1834,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 s_shipModel.bindTextures(1);
               }
               // Emissive-карта livery (кольцевой неон, окна, выхлоп): юнит 5.
+              // Пинним БЕЗ emOn: без карты юнит 0 с samplerCube IBL — конфликт
+              // типов сэмплеров, драйвер может отбросить весь draw.
               const bool emOn = s_shipModel.emissive();
-              static bool s_texDbg = false;
-              if (!s_texDbg) {
-                s_texDbg = true;
-                std::printf("[ship] ready=%d texOn=%d emOn=%d\n",
-                            s_shipModel.ready() ? 1 : 0, texOn ? 1 : 0,
-                            emOn ? 1 : 0);
-                std::fflush(stdout);
-              }
               s_shipShader->setUniform1i("u_EmissiveOn", emOn ? 1 : 0);
-              if (emOn) s_shipShader->setUniform1i("u_EmissiveTex", 5);
+              s_shipShader->setUniform1i("u_EmissiveTex", 5);
               // Star Trek-подсветка в варпе: линейный HDR-довесок, умеренный.
               const float wk =
                   std::min(std::max(warpdrive::warpK(), 0.0f), 1.0f);
@@ -1865,6 +1861,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_shipShader->setUniform1i("u_NormalTex", 2);
           s_shipShader->setUniform1i("u_RoughTex", 3);
           s_shipShader->setUniform1i("u_MetalTex", 4);
+          // И emissive-сэмплер прочь от юнита 0: его дефолт делит кубмапу
+          // IBL (юнит 0) с samplerCube → драйвер отбрасывает silhouette.
+          s_shipShader->setUniform1i("u_EmissiveTex", 5);
           // Тайловый скин Ring Ship (панели, заклёпки, потёртости):
           // tools/make_ring_skin.mjs -> res/models/ring_skin_*.bmp.
           static unsigned int s_skinAlbedo = 0;
@@ -1888,6 +1887,14 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             glBindTexture(GL_TEXTURE_2D, s_skinRough);
             glActiveTexture(GL_TEXTURE0);
           }
+          // Фаза спина интегрируется раз за кадр (раньше сидела внутри
+          // ring-ветки): кольца и их бегущие огни делят одну фазу.
+          static float s_spinVar = 0.0f;
+          static float s_spinPrev = time;
+          const float dtS = time - s_spinPrev;
+          s_spinPrev = time;
+          if (dtS > 0.0f && dtS < 0.5f)
+            s_spinVar += (2.6f * thrW + 8.0f * warpVis) * dtS;
           int ringIdx = 0;
           for (const ShipPart& p : parts) {
             glm::mat4 model = shipHullModel *
@@ -1897,23 +1904,41 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               model = model * glm::rotate(glm::mat4(1.0f),
                                           glm::radians(90.0f),
                                           glm::vec3(1.0f, 0.0f, 0.0f));
-              // Спин кольца: раскручивается тягой и варпом, соседние кольца
-              // вращаются в разные стороны (живее силуэт). База 0.55*time
-              // остаётся исторической (детерминизм харнесса), а переменную
-              // часть скорости интегрируем по кадрам: вариант time*rate
-              // давал рывок фазы ~ time*dRate — кольца «телепортировались»
-              // при включении варпа на рабочем столе минут за десять.
-              static float s_spinVar = 0.0f;
-              static float s_spinPrev = time;
-              const float dtS = time - s_spinPrev;
-              s_spinPrev = time;
-              if (dtS > 0.0f && dtS < 0.5f)
-                s_spinVar += (2.6f * thrW + 8.0f * warpVis) * dtS;
+              // Спин строго В ПЛОСКОСТИ КОЛЬЦА: ось mesh-Y (нормаль кольца),
+              // а не mesh-Z — прежняя ось после rotX(90°) ложилась на
+              // вертикаль корабля, и кольца кувыркались сквозь корпус
+              // как гироскоп вместо «катания по окружности».
               const float spinDir = (ringIdx % 2 == 0) ? 1.0f : -1.0f;
               model = model * glm::rotate(glm::mat4(1.0f),
                                           spinDir * (0.55f * time + s_spinVar),
-                                          glm::vec3(0.0f, 0.0f, 1.0f));
+                                          glm::vec3(0.0f, 1.0f, 0.0f));
+              // Бегущие по ободу огни: радиальная симметрия RingMesh не
+              // показывает вращение — скорость читают маркеры с той же
+              // фазой (пер-кольцо offset, направление как у спина).
+              const float ang = spinDir * (0.55f * time + s_spinVar) +
+                                static_cast<float>(ringIdx) * 2.0944f;
+              const glm::mat4 ringCenter = model;
+              for (int m = 0; m < 3; ++m) {
+                const float a = ang + static_cast<float>(m) * 2.0944f;
+                glm::mat4 dotM = ringCenter *
+                    glm::translate(glm::mat4(1.0f),
+                                   glm::vec3(0.37f * std::cos(a), 0.0f,
+                                             0.37f * std::sin(a)));
+                s_shipShader->setUniformMat4f("u_Model", dotM);
+                s_shipShader->setUniform3f("u_InvScale", 5.0f, 5.0f, 5.0f);
+                s_shipShader->setUniform1f("u_FlatNormal", 0.0f);
+                s_shipShader->setUniform3f("u_BaseColor", 0.85f, 0.90f, 1.0f);
+                s_shipShader->setUniform1f("u_Metal", 0.0f);
+                s_shipShader->setUniform1f("u_Rough", 0.60f);
+                // Маркеры варпа: цвет палитры выхлопа × (0.55 idle / 1.0+ warp)
+                const float glow = 0.55f + 1.45f * warpVis;
+                s_shipShader->setUniform3f(
+                    "u_Emissive",
+                    engineEmi.x * glow, engineEmi.y * glow, engineEmi.z * glow);
+                s_shipSphere.draw();
+              }
               ++ringIdx;
+              continue;
             }
             model = model * glm::scale(glm::mat4(1.0f), p.scale);
             s_shipShader->setUniformMat4f("u_Model", model);

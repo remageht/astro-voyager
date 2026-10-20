@@ -25,6 +25,7 @@ struct RenderSettings {
   // === v3.6.0: расширенные настройки (вкладка Settings) ===
   bool shipReflections = true;  // зеркальные IBL-отражения на корпусе корабля
   int enginePalette = 0;        // палитра выхлопа двигателя (0..3)
+  bool gravRedshift = false;    // v3.9.0: грав. красное смещение скайбокса
 };
 
 // User-spawned object (flexible object editor, v3.2.0).

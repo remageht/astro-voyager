@@ -61,6 +61,7 @@ uniform float u_Exposure;
 uniform float u_BHRingK;  // photon-ring/rim brightness gain (default 1.0; sgra 1.8, m87 1.25)
 uniform float u_ThinDisk;  // thin-disk mode 0/1 (sgra 1.0): radial x0.55 band + crisper edges
 uniform float u_BandK;  // milky-way band gain (default 1.0; sgra 1.7)
+uniform float u_RedshiftK;  // v3.9.0: sky gravitational redshift 0/1 (0 = legacy exact)
 uniform float u_CamDist;  // camera distance in Rs (set by SceneManager; <=0 = far/legacy)
 // === Relativity === skybox aberration (same as sky.frag): apparent star
 // directions compress towards u_VelDir at speed. u_Beta == 0.0 returns d
@@ -484,6 +485,15 @@ void main() {
   if (r >= u_ShellRadius) {
     vec3 skyDir = aberrateDir(fb);
     vec3 sky = texture(u_Skybox, skyDir).rgb;
+    // v3.9.0: gravitational redshift on the lensed sky (roadmap): the ray's
+    // deepest approach (minR) stands in for the emission depth; g factor is
+    // sqrt(1 - Rs/minR), hue pushed toward red as photons climb out.
+    // Default-off keeps the legacy sky byte-exact (mix with 0.0 -> x1.0).
+    float gRaw = sqrt(clamp(1.0 - u_Rs / max(minR, u_Rs + 1e-4), 0.0, 1.0));
+    sky *= mix(vec3(1.0),
+               vec3(gRaw, gRaw * mix(1.0, gRaw, 0.35),
+                    gRaw * mix(1.0, gRaw, 0.7)),
+               u_RedshiftK);
     // Milky-Way band gain: boost sky along the band plane (fb.y ~ 0),
     // same profile as the procedural cubemap. Neutral at u_BandK == 1.0.
     float bandW = exp(-abs(skyDir.y) * 5.0);
@@ -553,6 +563,12 @@ void main() {
   // they were heading for.
   vec3 fbDir = aberrateDir(fb);
   vec3 skyFallback = texture(u_Skybox, fbDir).rgb * vec3(0.18, 0.16, 0.22);
+  // v3.9.0: same redshift rule as the escape branch (legacy-exact when off).
+  float gRawFb = sqrt(clamp(1.0 - u_Rs / max(minR, u_Rs + 1e-4), 0.0, 1.0));
+  skyFallback *= mix(vec3(1.0),
+                     vec3(gRawFb, gRawFb * mix(1.0, gRawFb, 0.35),
+                          gRawFb * mix(1.0, gRawFb, 0.7)),
+                     u_RedshiftK);
   float bandWFb = exp(-abs(fbDir.y) * 5.0);
   skyFallback *= 1.0 + (u_BandK - 1.0) * bandWFb;
   // Same jet-glow rule as the escape branch: visible with disk off too.
