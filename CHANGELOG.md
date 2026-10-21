@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 3.10.1 - 2026-10-22
+
+## What's new / Что нового
+- EN: Cinematic story prologue overhaul ("Yegorka's Prologue: Legacy of the Fifth Universe") - fully illustrated 5-slide narrative sequence in res/story/ replacing procedural vector art; covers the Paris Seine dimensional portal encounter with Yegorka-5, the antimatter Casimir vacuum phase-shift revelation, attic equation decoding, orbital construction of the Astro-Voyager with Alcubierre rings, and pilot EgorKa (29078) at the helm initiating the first interstellar warp jump.
+- EN: Updated bilingual story slide texts in StorySlides.cpp (Russian and English) with full hard sci-fi grounding.
+- RU: Кинематографический пролог сюжета («Пролог Егорки: Наследие Пятой Вселенной») - 5 фотореалистичных слайдов в res/story/ с полной заменой процедурных векторных заглушек: встреча на набережной Сены с Егоркой из Пятой Вселенной, передача секрета фазового сдвига вакуума антиматерии в резонаторе Казимира, разгадка метрики Алькубьерре в мансарде, орбитальная сборка корабля Astro-Voyager и пилот EgorKa (29078) за штурвалом перед первым варп-прыжком.
+- RU: Обновлены двуязычные художественные тексты слайдов в StorySlides.cpp (русский и английский) с опорой на твердую научную фантастику.
+
 ## 3.10.0 - 2026-10-21
 
 ## What's new / Что нового

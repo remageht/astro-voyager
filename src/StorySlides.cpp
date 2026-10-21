@@ -412,65 +412,51 @@ const std::vector<StorySlide>& storyChapterSlides() {
 }
 
 // v4.0 prologue of the "New Game / Adventure" slot: Yegorka's own path.
-// Photos live in res/story/ (jpg, stb_image); art slides reuse the table.
+// v4.0 prologue of the "New Game / Adventure" slot: Yegorka's own path.
+// Photos live in res/story/ (jpg/png, stb_image); art slides reuse the table.
 const std::vector<StorySlide>& storyPrologueSlides() {
   static const std::vector<StorySlide> slides = [] {
     std::vector<StorySlide> s;
-    s.push_back(StorySlide{
-        "Егорка с детства глядел на звёзды: из окна квартирки у Сены, "
-        "мимо кафе \"De Paris\", в списывает маршрут лайнеров. "
-        "\"Космонавтом стану\", - говорил он всем, и никого это не смущало.",
-        "Yegorka watched the stars since childhood: from a window flat by "
-        "the Seine, past the Cafe de Paris, tracing the liners. \"I will "
-        "become a cosmonaut,\" he told everyone, and nobody blinked.",
-        0, "res/story/paris_peace.jpg"});
-    s.push_back(StorySlide{  // 1: the dream revelation - cinematic slide
-        "Идя вдоль Сены, Егорка увидел, как воздух вскрылся: на набережной "
-        "раскрылся глаз пятой вселенной, и голос Егорки-из-пятой сказал: "
-        "\"Мы не найдём друг друга, пока ты не станешь тем, кем я успел "
-        "стать. Начни - остальное вспомнишь по дороге.\"",
-        "Walking along the Seine, Yegorka saw the air tear open: an eye "
-        "of the fifth universe unfolded on the embankment, and the voice "
-        "of Yegorka-from-the-fifth said: \"We will not find each other "
-        "until you become the one I already am. Begin - the rest you will "
-        "remember on the way.\"",
-        0, "", "res/story/egor_intro"});
-    s.push_back(StorySlide{  // 2: the dying world
-        "Проснувшись, он узнал: асфальт на набережной дышит гарью. "
-        "Солнечная система: клетка, в которой от нереста полярных дыр "
-        "гниёт даже свет. Земля становится непригодной для жизни.",
-        "Awake, he learned the embankment asphalt breathes fumes. The "
-        "solar system is a cage where even light rots from polar decay. "
-        "Earth is becoming unfit for life.",
-        0, "res/story/paris_burn.jpg"});
-    s.push_back(StorySlide{  // 3: engineering the way out
-        "Он собрал команду инженеров. Годами они варили машину, которой "
-        "не было в учебниках: Warp Drive на антиматерии - тяга из ничего, "
-        "вес корабля дешевле взгляда. После десяти аварий вышло.",
-        "He gathered a crew of engineers. For years they welded a machine "
-        "missing from textbooks: a Warp Drive running on antimatter - "
-        "thrust from nothing, a ship lighter than a glance. Ten failures, "
-        "one doorway.",
-        4});
-    s.push_back(StorySlide{  // 4: earning the cockpit
-        "Топливо - считанные граммы антивещества; каждый запуск - приговор "
-        "для предприятия. Егорка сдал права пилота warp-движения со второй "
-        "попытки: инструктор сказал - \"Ты управляешь не тягой, а тишиной.\"",
-        "Fuel - a few grams of antimatter; every launch is a verdict. "
-        "Yegorka earned his warp-pilot license on the second try. The "
-        "instructor said: \"You are not steering thrust - you steer "
-        "silence.\"",
-        3});
-    s.push_back(StorySlide{  // 5: departure, hand-off to the expedition
-        "Пятым по счёту межгалактическим прыжком его корабль \"Кофе и "
-        "Звёзды\" вышел к зеркальному следу пятой вселенной. Рядом дышит "
-        "Мия Сато - астронавигатор, которая умеет слышать, куда тянется "
-        "дом. Начинается экспедиция.",
-        "On the fifth intergalactic jump, his ship \"Coffee and Stars\" "
-        "reached the mirror trail of the fifth universe. Mya Sato - the "
-        "navigator who can hear where home stretches - breathes nearby. "
-        "The expedition begins.",
-        5});
+    s.push_back(StorySlide{  // 0: The Encounter in Paris
+        "Париж. Дождливый вечер на набережной Сены. Пространство с треском "
+        "вскрылось синим порталом: навстречу шагнул странник в звёздном плаще — "
+        "Егорка из Пятой Вселенной с пульсирующей сингулярностью в руке.",
+        "Paris. A rainy night by the Seine. Spacetime tore open with a crackling "
+        "blue portal: a traveler in a starlight cloak stepped forward — older "
+        "Yegorka from the Fifth Universe, holding a pulsing singularity.",
+        0, "res/story/01_paris_portal.jpg"});
+    s.push_back(StorySlide{  // 1: The Secret of Antimatter
+        "\"Не ищи отрицательную массу — используй фазовый сдвиг вакуума при "
+        "аннигиляции антиматерии в резонаторе Казимира\". Сияющий кулон-звезда "
+        "и кристалл сингулярности легли в дрожащие руки школьника.",
+        "\"Do not seek negative mass — use the vacuum phase shift of antimatter "
+        "annihilation inside a Casimir cavity\". The radiant star pendant and "
+        "the singularity crystal settled into the schoolboy's trembling hands.",
+        0, "res/story/02_pendant_handover.jpg"});
+    s.push_back(StorySlide{  // 2: Decoding the Metric in the Attic
+        "Ночами в парижской мансарде звёздный кулон проецировал голограммы "
+        "уравнений метрики Алькубьерре. То, над чем бились институты "
+        "десятилетиями, сошлось в одной тетради: искривление пространства возможно.",
+        "Nights in a Parisian attic, the star pendant projected holographic "
+        "equations of the Alcubierre metric. What institutions struggled over "
+        "for decades converged in a single notebook: spacetime warp is real.",
+        0, "res/story/03_attic_equation.jpg"});
+    s.push_back(StorySlide{  // 3: Astro-Voyager in Orbit
+        "На орбитальной верфи ожил колосс — корабль Astro-Voyager. "
+        "Двойные тороидальные кольца варп-двигателя вспыхнули фиолетовой "
+        "плазмой антивещества, деформируя ткань Вселенной.",
+        "At the orbital shipyard, the colossus awoke — the Astro-Voyager. "
+        "The dual toroidal warp rings flared with violet antimatter plasma, "
+        "bending the very fabric of spacetime.",
+        0, "res/story/04_ship_orbit.jpg"});
+    s.push_back(StorySlide{  // 4: EgorKa at the Helm - The First Jump
+        "Егорка сжал штурвал корабля. На груди мерцает звёздный кулон, в "
+        "панорамном окне пространство схлопывается в релятивистский тоннель. "
+        "Первый межзвёздный прыжок начат — курс на неизведанный космос.",
+        "Yegorka gripped the ship's control yoke. The star pendant gleamed on "
+        "his chest, and through the canopy, spacetime collapsed into a "
+        "relativistic warp tunnel. The first interstellar jump begins.",
+        0, "res/story/05_egorka_cockpit.png"});
     return s;
   }();
   return slides;
