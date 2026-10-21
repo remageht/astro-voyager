@@ -21,6 +21,7 @@ struct ShipState {
   float shield = 100.0f;  // pulsar radiation drains it; death at 0
   Vec3 gravVel;           // gravitational drift velocity (world units/s)
   bool fuelNoticeShown = false;  // one-shot "drift to star" notice flag
+  bool boostActive = false;      // conventional boost engaged
 };
 
 namespace ship {
@@ -39,6 +40,31 @@ constexpr float kRespawnFuel = 30.0f;
 constexpr float kGravDampPerSec = 0.35f;    // drift velocity damping
 constexpr float kGravVelMax = 2.0f;         // drift speed cap (units/s)
 constexpr float kGravMinDist = 0.5f;        // avoids the r->0 singularity
+
+// Conventional Boost balance constants (v3.9.0):
+// Форсаж на обычном топливе в досветовом полёте (Left Shift, warp off).
+// Расход: kSublightFuelRatePerSec = 2.0 ед./с (полного бака 100 ед. хватает на 50 с).
+constexpr float kSublightFuelRatePerSec = 2.0f;
+constexpr float kBoostSpeedMultiplier = 2.0f;   // форсаж: множитель скорости x2.0 (x1.7 - x2.2)
+constexpr float kBoostRespMultiplier = 1.8f;    // форсаж: множитель приёмистости x1.8
+
+inline bool canBoost(const ShipState& s) {
+  return s.fuel > 0.0f;
+}
+
+inline bool spendBoostFuel(ShipState& s, float dt, float rateK = 1.0f) {
+  if (s.fuel <= 0.0f) {
+    s.fuel = 0.0f;
+    return false;
+  }
+  s.fuel -= kSublightFuelRatePerSec * rateK * dt;
+  if (s.fuel < 0.0f) s.fuel = 0.0f;
+  return true;
+}
+
+inline bool spendSublightFuel(ShipState& s, float dt, float rateK = 1.0f) {
+  return spendBoostFuel(s, dt, rateK);
+}
 
 inline bool canJump(const ShipState& s, float costK = 1.0f) {
   return s.fuel >= kJumpFuelCost * costK;
@@ -77,6 +103,7 @@ inline void respawn(ShipState& s) {
   s.fuel = kRespawnFuel;
   s.gravVel = Vec3();
   s.fuelNoticeShown = false;
+  s.boostActive = false;
 }
 
 // Newtonian pull of a point mass: a = GM / r^2 (GM = catalogue mass field).

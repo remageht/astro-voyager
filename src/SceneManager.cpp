@@ -1901,59 +1901,75 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_spinVar += (2.6f * thrW + 8.0f * warpVis) * dtS;
           const float spinPhase = 0.55f * time + s_spinVar;
           bool meshDrawn = false;
+          ObjModel* activeModel = nullptr;
+          float modelRingSpin = 0.0f;
           if (style == 3) {
-            // Model hull (агент M): меш из res/models/warp_ship.obj рядом с
-            // exe. Лениво, раз за процесс; ~15 МБ текстовый парс — единичный
-            // хитч кадра. При отсутствии файла meshDrawn останется false:
-            // процедурный Ring Ship уже собран в parts (styleParts).
+            // Model hull (Alcubierre warp cruiser): меш из res/models/warp_ship.obj
             static ObjModel s_shipModel;
-            static bool s_modelTried = false;
-            if (!s_modelTried) {
-              s_modelTried = true;
+            static bool s_shipTried = false;
+            if (!s_shipTried) {
+              s_shipTried = true;
               s_shipModel.load("res/models/warp_ship.obj");
-              // PBR-набор рядом с мешом (albedo/normal/rough/metal BMP).
-              // Нет карт — остаёмся на плоском металле, ошибки не фатальны.
               s_shipModel.loadTextures("res/models/warp_ship");
             }
             if (s_shipModel.ready()) {
-              s_shipShader->setUniformMat4f("u_Model", shipHullModel);
-              s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
-              s_shipShader->setUniform1i("u_FlatNormal", 0);
-              // Кручение колец Model-корабля (окраска едет с ободом —
-              // скин сэмплится в некрутёной позиции). Окна читаются и
-              // в простое: база 0.55*time + переменная фаза.
-              s_shipShader->setUniform1f("u_RingSpin", spinPhase);
-              s_shipShader->setUniform1i("u_SkinOn", 0);
-              // Окраску несёт livery-альбедо (запечён в экспортёре), поэтому
-              // множитель нейтральный; метал/шершавость — фолбэки, когда карт нет.
-              s_shipShader->setUniform3f("u_BaseColor", glm::vec3(1.0f));
-              s_shipShader->setUniform1f("u_Metal", 0.78f);
-              s_shipShader->setUniform1f("u_Rough", 0.42f);
-              // Текстурированный путь: карты в юнитах 1..4 (0 — скайбокс).
-              const bool texOn = s_shipModel.textured();
-              s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
-              if (texOn) {
-                s_shipShader->setUniform1i("u_Albedo", 1);
-                s_shipShader->setUniform1i("u_NormalTex", 2);
-                s_shipShader->setUniform1i("u_RoughTex", 3);
-                s_shipShader->setUniform1i("u_MetalTex", 4);
-                s_shipModel.bindTextures(1);
-              }
-              // Emissive-карта livery (кольцевой неон, окна, выхлоп): юнит 5.
-              // Пинним БЕЗ emOn: без карты юнит 0 с samplerCube IBL — конфликт
-              // типов сэмплеров, драйвер может отбросить весь draw.
-              const bool emOn = s_shipModel.emissive();
-              s_shipShader->setUniform1i("u_EmissiveOn", emOn ? 1 : 0);
-              s_shipShader->setUniform1i("u_EmissiveTex", 5);
-              // Star Trek-подсветка в варпе: линейный HDR-довесок, умеренный.
-              const float wk =
-                  std::min(std::max(warpdrive::warpK(), 0.0f), 1.0f);
-              s_shipShader->setUniform3f(
-                  "u_Emissive", glm::vec3(0.010f, 0.028f, 0.052f) * wk);
-              s_shipModel.draw();
-              if (texOn) glActiveTexture(GL_TEXTURE0);
-              meshDrawn = true;
+              activeModel = &s_shipModel;
+              modelRingSpin = spinPhase;
             }
+          } else if (style == 0) {
+            // Dart interceptor: меш из res/models/dart.obj
+            static ObjModel s_dartModel;
+            static bool s_dartTried = false;
+            if (!s_dartTried) {
+              s_dartTried = true;
+              s_dartModel.load("res/models/dart.obj");
+              s_dartModel.loadTextures("res/models/dart");
+            }
+            if (s_dartModel.ready()) {
+              activeModel = &s_dartModel;
+            }
+          } else if (style == 2) {
+            // Shuttle explorer: меш из res/models/shuttle.obj
+            static ObjModel s_shuttleModel;
+            static bool s_shuttleTried = false;
+            if (!s_shuttleTried) {
+              s_shuttleTried = true;
+              s_shuttleModel.load("res/models/shuttle.obj");
+              s_shuttleModel.loadTextures("res/models/shuttle");
+            }
+            if (s_shuttleModel.ready()) {
+              activeModel = &s_shuttleModel;
+            }
+          }
+
+          if (activeModel) {
+            s_shipShader->setUniformMat4f("u_Model", shipHullModel);
+            s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
+            s_shipShader->setUniform1i("u_FlatNormal", 0);
+            s_shipShader->setUniform1f("u_RingSpin", modelRingSpin);
+            s_shipShader->setUniform1i("u_SkinOn", 0);
+            s_shipShader->setUniform3f("u_BaseColor", glm::vec3(1.0f));
+            s_shipShader->setUniform1f("u_Metal", 0.78f);
+            s_shipShader->setUniform1f("u_Rough", 0.42f);
+            const bool texOn = activeModel->textured();
+            s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
+            if (texOn) {
+              s_shipShader->setUniform1i("u_Albedo", 1);
+              s_shipShader->setUniform1i("u_NormalTex", 2);
+              s_shipShader->setUniform1i("u_RoughTex", 3);
+              s_shipShader->setUniform1i("u_MetalTex", 4);
+              activeModel->bindTextures(1);
+            }
+            const bool emOn = activeModel->emissive();
+            s_shipShader->setUniform1i("u_EmissiveOn", emOn ? 1 : 0);
+            s_shipShader->setUniform1i("u_EmissiveTex", 5);
+            const float wk =
+                std::min(std::max(warpdrive::warpK(), 0.0f), 1.0f);
+            s_shipShader->setUniform3f(
+                "u_Emissive", glm::vec3(0.010f, 0.028f, 0.052f) * wk);
+            activeModel->draw();
+            if (texOn) glActiveTexture(GL_TEXTURE0);
+            meshDrawn = true;
           }
           if (!meshDrawn) {
           // Процедурные части: плоский u_BaseColor, текстуры выключены
@@ -2069,45 +2085,45 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glDepthMask(GL_FALSE);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        // v3.9.0: варп-кокон (макет) — эллипсоидный ореол из бегущих струй,
-        // носовой веер и тёплый кормовой хвост вместо плоской ленты.
-        glDisable(GL_DEPTH_TEST);
-        glDepthMask(GL_FALSE);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        const float thr = warpdrive::thruster();
-        const float driftK = 1.1f + 5.5f * warpVis + 1.2f * thr;
-        const float elongK = 1.0f + 0.35f * warpVis + 0.05f * thr;
-        const float energyK = 0.30f + 0.75f * warpVis + 0.10f * thr;
-        const glm::vec3 cyanCol = kTrailBase[pal] * glm::vec3(2.6f, 2.4f, 2.2f);
-        const glm::vec3 redCol = glm::vec3(1.55f, 0.40f, 0.16f) *
-                                 (0.8f + 0.8f * thr + 0.9f * warpVis);
-        m_trailShader->bind();
-        m_trailShader->setUniformMat4f("u_MVP", mvp);
-        m_trailShader->setUniformMat4f("u_Model", shipModel);
-        m_trailShader->setUniform1f("u_Time", time);
-        m_trailShader->setUniform1f("u_Drift", driftK);
-        m_trailShader->setUniform1f("u_Elong", elongK);
-        m_trailShader->setUniform1f("u_Energy", energyK);
-        m_trailShader->setUniform3f("u_CyanCol", cyanCol.x, cyanCol.y,
-                                    cyanCol.z);
-        m_trailShader->setUniform3f("u_RedCol", redCol.x, redCol.y, redCol.z);
-        {
-          // v4.0: камера в shell-local для френеля хризалидной оболочки.
-          const glm::vec4 camSh =
-              glm::inverse(static_cast<glm::mat4>(shipModel)) *
-              glm::vec4(eye, 1.0f);
-          m_trailShader->setUniform3f("u_CamShell", camSh.x, camSh.y, camSh.z);
+        // v3.9.0: варп-кокон — эллипсоидный ореол из бегущих струй,
+        // носовой веер, кормовой хвост и хризалидная оболочка.
+        // Аура видна ТОЛЬКО при движении с варп-искажением (warpVis > 0.001f).
+        if (warpVis > 0.001f) {
+          const float warpAuraFade = glm::smoothstep(0.01f, 0.20f, warpVis);
+          const float thr = warpdrive::thruster();
+          const float driftK = 1.1f + 5.5f * warpVis + 1.2f * thr;
+          const float elongK = 1.0f + 0.35f * warpVis + 0.05f * thr;
+          const float energyK = warpAuraFade * (0.30f + 0.75f * warpVis + 0.10f * thr);
+          const glm::vec3 cyanCol = kTrailBase[pal] * glm::vec3(2.6f, 2.4f, 2.2f);
+          const glm::vec3 redCol = glm::vec3(1.55f, 0.40f, 0.16f) *
+                                   (0.8f + 0.8f * thr + 0.9f * warpVis);
+          m_trailShader->bind();
+          m_trailShader->setUniformMat4f("u_MVP", mvp);
+          m_trailShader->setUniformMat4f("u_Model", shipModel);
+          m_trailShader->setUniform1f("u_Time", time);
+          m_trailShader->setUniform1f("u_Drift", driftK);
+          m_trailShader->setUniform1f("u_Elong", elongK);
+          m_trailShader->setUniform1f("u_Energy", energyK);
+          m_trailShader->setUniform3f("u_CyanCol", cyanCol.x, cyanCol.y,
+                                      cyanCol.z);
+          m_trailShader->setUniform3f("u_RedCol", redCol.x, redCol.y, redCol.z);
+          {
+            // v4.0: камера в shell-local для френеля хризалидной оболочки.
+            const glm::vec4 camSh =
+                glm::inverse(static_cast<glm::mat4>(shipModel)) *
+                glm::vec4(eye, 1.0f);
+            m_trailShader->setUniform3f("u_CamShell", camSh.x, camSh.y, camSh.z);
+          }
+          m_trailShader->setUniform1i("u_Mode", 3);  // хризалида (полотно)
+          s_warpSheath.draw();
+          m_trailShader->setUniform1i("u_Mode", 0);
+          s_warpShell.drawLines();
+          m_trailShader->setUniform1i("u_Mode", 1);
+          s_bowFan.drawLines();
+          m_trailShader->setUniform1i("u_Mode", 2);
+          s_tailLines.drawLines();
+          m_trailShader->unbind();
         }
-        m_trailShader->setUniform1i("u_Mode", 3);  // хризалида (полотно)
-        s_warpSheath.draw();
-        m_trailShader->setUniform1i("u_Mode", 0);
-        s_warpShell.drawLines();
-        m_trailShader->setUniform1i("u_Mode", 1);
-        s_bowFan.drawLines();
-        m_trailShader->setUniform1i("u_Mode", 2);
-        s_tailLines.drawLines();
-        m_trailShader->unbind();
         // Движок: 1 крупная пульсирующая КРАСНАЯ точка за кормой.
         {
           const float sy = warpdrive::shipYaw();

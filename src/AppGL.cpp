@@ -49,6 +49,16 @@ static bool fuzzyMatch(const std::string& text, const std::string& query) {
   }
   return qIdx == query.size();
 }
+
+static float s_mouseWheelAccum = 0.0f;
+static GLFWscrollfun s_prevGlfwScrollCallback = nullptr;
+
+static void appGlfwScrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+  s_mouseWheelAccum += static_cast<float>(yoffset);
+  if (s_prevGlfwScrollCallback) {
+    s_prevGlfwScrollCallback(window, xoffset, yoffset);
+  }
+}
 }  // namespace
 
 // === Cinematic === begin (агент C): шрифт с кириллицей для русских строк.
@@ -139,10 +149,15 @@ AppGL::AppGL(int width, int height, bool visible) {
   // === Cinematic === end
 
   ImGui_ImplGlfw_InitForOpenGL(m_window->getNativeWindow(), true);
+  s_prevGlfwScrollCallback = glfwSetScrollCallback(
+      m_window->getNativeWindow(), appGlfwScrollCallback);
   ImGui_ImplOpenGL3_Init("#version 330");
 }
 
 AppGL::~AppGL() {
+  if (m_window && m_window->getNativeWindow()) {
+    glfwSetScrollCallback(m_window->getNativeWindow(), s_prevGlfwScrollCallback);
+  }
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
@@ -485,6 +500,8 @@ void AppGL::processInput(float deltaTime) {
   const bool vDown = (glfwGetKey(win, m_keyView) == GLFW_PRESS);
   if (vDown && !m_prevVPressed && !io.WantCaptureKeyboard && !m_jumpCine) {
     m_viewMode = view::nextView(m_viewMode);
+    m_viewZoom = 1.0f;
+    m_viewZoomT = 1.0f;
     // Снос камеры меняет камеру кадра: без сброса рел. скорости был бы
     // ложный скачок beta (доплер-вспышка) на кадр переключения.
     m_sceneManager->resetRelativity();
@@ -606,17 +623,51 @@ void AppGL::processInput(float deltaTime) {
   const double axisR =
       (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS ? 1.0 : 0.0) -
       (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS ? 1.0 : 0.0);
+  const bool shiftPressed = (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS);
+  const bool ctrlPressed = (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                            glfwGetKey(win, GLFW_KEY_C) == GLFW_PRESS);
   const double axisU =
       (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ? 1.0 : 0.0) -
-      (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 1.0 : 0.0);
+      (ctrlPressed ? 1.0 : (shiftPressed && axisF == 0.0 && axisR == 0.0 && !ship::canBoost(m_ship) ? 1.0 : 0.0));
   m_moveInputActive = (axisF != 0.0 || axisR != 0.0 || axisU != 0.0);
+
+  // v3.9.0: обычное ускорение (форсаж) при помощи обычного топлива.
+  // При зажатом Left Shift в обычном досветовом полёте (варп выключен) расходуется
+  // топливо бака со скоростью kSublightFuelRatePerSec и активируется повышенная тяга (x2.0).
+  const bool wantBoost = shiftPressed && !m_warpOn && !m_jumpCine;
+  if (wantBoost && ship::canBoost(m_ship) && (m_moveInputActive || axisF != 0.0)) {
+    m_ship.boostActive = true;
+    const DifficultyTuning dtune = difficultyTuning(m_difficulty);
+    ship::spendBoostFuel(m_ship, deltaTime, dtune.jumpCostK);
+    if (m_ship.fuel <= 0.0f) {
+      m_ship.boostActive = false;
+      m_shipNotice = uiRu("Топливо исчерпано. Инерционный дрейф.",
+                          "Out of fuel. Inertial drift.");
+      m_shipNoticeT = 3.5f;
+    }
+  } else {
+    m_ship.boostActive = false;
+    if (wantBoost && m_ship.fuel <= 0.0f && m_moveInputActive) {
+      if (!m_ship.fuelNoticeShown) {
+        m_ship.fuelNoticeShown = true;
+        m_shipNotice = uiRu("Нет топлива для форсажа. Дрейфуйте к звезде.",
+                            "No fuel for boost. Drift to star to refuel.");
+        m_shipNoticeT = 3.0f;
+      }
+    }
+  }
+
+  const double boostMul = m_ship.boostActive ? ship::kBoostSpeedMultiplier : 1.0;
   const Vec3 fwd = m_camera.forward();
   const Vec3 rgt = m_camera.right();
-  const Vec3 want((fwd.x * axisF + rgt.x * axisR) * m_camera.moveSpeed,
-                  (fwd.y * axisF + axisU) * m_camera.moveSpeed,
-                  (fwd.z * axisF + rgt.z * axisR) * m_camera.moveSpeed);
-  // Разгон быстрее торможения: тяга ~3/с, свободный дрейф ~0.9/с.
-  const double resp = m_moveInputActive ? 3.0 : 0.9;
+  const Vec3 want((fwd.x * axisF + rgt.x * axisR) * (m_camera.moveSpeed * boostMul),
+                  (fwd.y * axisF + axisU) * (m_camera.moveSpeed * boostMul),
+                  (fwd.z * axisF + rgt.z * axisR) * (m_camera.moveSpeed * boostMul));
+  // Разгон быстрее торможения: базовая тяга ~3/с (на форсаже ~5.4/с), свободный дрейф ~0.9/с.
+  double resp = m_moveInputActive ? 3.0 : 0.9;
+  if (m_moveInputActive && m_ship.boostActive) {
+    resp *= ship::kBoostRespMultiplier;
+  }
   const double kAcc = 1.0 - std::exp(-static_cast<double>(deltaTime) * resp);
   m_shipVel = Vec3(m_shipVel.x + (want.x - m_shipVel.x) * kAcc,
                    m_shipVel.y + (want.y - m_shipVel.y) * kAcc,
@@ -755,15 +806,50 @@ void AppGL::processMouse() {
   const bool leftDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
   const bool rawMousePress = (rightDown || leftDown);
 
-  // === View zoom === (v4.0): колесо мыши в видах Chase/Overview двигает
-  // камеру кадра ближе/дальше (кокпит, меню и катсцены не трогаем; харнесс
-  // без ввода => дефолт 1, PNG байт-в-байт). Зум не сохраняется: сброс на
-  // 1 при следующем запуске.
-  if (!m_tour.active() && !m_jumpCine && !m_inMenu && !io.WantCaptureMouse &&
-      m_viewMode != view::ViewMode::Cockpit && io.MouseWheel != 0.0f) {
-    m_viewZoomT *= std::pow(0.85f, io.MouseWheel);
-    if (m_viewZoomT < 0.35f) m_viewZoomT = 0.35f;
-    if (m_viewZoomT > 2.5f) m_viewZoomT = 2.5f;
+  // === View zoom ===: плавный зум колёсиком мыши к кораблю и от него.
+  // При скролле назад (wheel < 0) в кабине камера плавно выходит за корму в вид от 3-го лица.
+  // При максимальном приближении в виде Chase скролл вперёд мягко возвращает в кабину.
+  float wheelDelta = s_mouseWheelAccum;
+  s_mouseWheelAccum = 0.0f;
+  if (wheelDelta == 0.0f && io.MouseWheel != 0.0f) {
+    wheelDelta = io.MouseWheel;
+  }
+  if (!m_tour.active() && !m_jumpCine && !m_inMenu && !io.WantCaptureMouse && wheelDelta != 0.0f) {
+    if (m_viewMode == view::ViewMode::Cockpit) {
+      if (wheelDelta < 0.0f) {
+        m_viewMode = view::ViewMode::Chase;
+        m_viewZoom = 0.35f;
+        m_viewZoomT = 0.50f;
+        m_sceneManager->resetRelativity();
+        static const char* kViewNameRu[] = {"Кабина", "За кормой", "Дальний обзор"};
+        static const char* kViewNameEn[] = {"Cockpit", "Behind", "Overview"};
+        const int vi = static_cast<int>(m_viewMode);
+        Toast vt;
+        vt.title = uiRu("Вид камеры", "Camera view");
+        vt.desc = uiRu(kViewNameRu[vi], kViewNameEn[vi]);
+        vt.time = static_cast<float>(glfwGetTime());
+        m_toasts.push_back(vt);
+      }
+    } else {
+      if (wheelDelta > 0.0f && m_viewMode == view::ViewMode::Chase && m_viewZoomT <= 0.28f) {
+        m_viewMode = view::ViewMode::Cockpit;
+        m_viewZoom = 1.0f;
+        m_viewZoomT = 1.0f;
+        m_sceneManager->resetRelativity();
+        static const char* kViewNameRu[] = {"Кабина", "За кормой", "Дальний обзор"};
+        static const char* kViewNameEn[] = {"Cockpit", "Behind", "Overview"};
+        const int vi = static_cast<int>(m_viewMode);
+        Toast vt;
+        vt.title = uiRu("Вид камеры", "Camera view");
+        vt.desc = uiRu(kViewNameRu[vi], kViewNameEn[vi]);
+        vt.time = static_cast<float>(glfwGetTime());
+        m_toasts.push_back(vt);
+      } else {
+        m_viewZoomT *= std::pow(0.85f, wheelDelta);
+        if (m_viewZoomT < 0.25f) m_viewZoomT = 0.25f;
+        if (m_viewZoomT > 4.5f) m_viewZoomT = 4.5f;
+      }
+    }
   }
 
   const bool isDragging = interaction::shouldCaptureMouseForCamera(rawMousePress, io.WantCaptureMouse);
@@ -2795,8 +2881,8 @@ void AppGL::drawShipHud() {
     char buf[48];
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
                           ImVec4(1.0f, 0.55f, 0.15f, 1.0f));
-    std::snprintf(buf, sizeof(buf), "%s %.0f", uiRu("Топливо", "Fuel"),
-                  m_ship.fuel);
+    std::snprintf(buf, sizeof(buf), "%s %.0f%s", uiRu("Топливо", "Fuel"),
+                  m_ship.fuel, m_ship.boostActive ? " [BOOST]" : "");
     ImGui::ProgressBar(m_ship.fuel / 100.0f, ImVec2(180.0f, 12.0f), buf);
     ImGui::PopStyleColor();
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
@@ -2892,7 +2978,8 @@ void AppGL::updateSpeedFx(float deltaTime) {
                              static_cast<float>(dir.z), warpK);
   m_speedK = speedK;
   // v3.3.0: тяга масштабирует шлейф/движок корабля и гул в audioUpdate.
-  warpdrive::setThruster(speedK);
+  // На форсаже пламя сопел раскрывается на максимум (1.0f).
+  warpdrive::setThruster(m_ship.boostActive ? std::max(speedK, 1.0f) : speedK);
   // Микро-FOV: +3° на полном эффекте поверх варп-кривой (+10° * m_warpK).
   auto& st = m_sceneManager->getSettings();
   if (m_warpBaseFov <= 1.0f) m_warpBaseFov = st.fovDegrees;  // ленивая база

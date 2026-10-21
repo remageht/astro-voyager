@@ -22,22 +22,9 @@ out vec3 v_PartPos;  // object-space позиция: панельные лини
 out vec3 v_ObjPos;   // ship-space позиция: скин Ring Ship
 out vec2 v_UV;
 void main() {
-  // Спин колец Model-корабля: классификация в локальном пространстве OBJ
-  // (совпадает с ship-space до stretch). Зоны замерены гистограммой
-  // warp_ship.obj: обод r>0.18 лежит в трёх z-срезах
-  // [-0.36..-0.14], [0.14..0.26], [0.44..0.66]; крылья и носовые детали
-  // вне срезов остаются на месте. Наружные половины пилонов крутятся
-  // вместе с кольцом (гибкий шарнир на r~0.19).
+  // Спин колец Model-корабля: отключен скручивающий процедурный сдвиг вершин
+  // цельного OBJ-меша, предотвращая деформацию пилонов и искажение колец.
   float k = 0.0;
-  {
-    float rxy = length(position.xy);
-    float radial = smoothstep(0.180, 0.205, rxy);
-    float z = position.z;
-    float slab = max(step(-0.36, z) * step(z, -0.14),
-                     max(step(0.14, z) * step(z, 0.26),
-                         step(0.44, z) * step(z, 0.66)));
-    k = radial * slab;
-  }
   float ang = u_RingSpin * k;
   float ca = cos(ang);
   float sa = sin(ang);

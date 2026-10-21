@@ -51,21 +51,21 @@ void main() {
                                   ((C_LEN * u_Elong) * (C_LEN * u_Elong))));
     vec3 V = normalize(u_CamShell - p);
     float ndv = clamp(abs(dot(nrm, V)), 0.0, 1.0);
-    // Френель: тёмный полупрозрачный центр, светлая кромка силуэта.
-    float fres = pow(1.0 - ndv, 2.4);
-    // «Водянистость»: крупные мягкие пятна (сетка 4x6 по ячейкам
-    // phi/theta) + два бегущих потока энергии по меридианам.
+    // Мягкий и эфирный френель: прозрачный центр (не забивает силуэт корабля),
+    // деликатное и тонкое свечение по кромке силуэта.
+    float fres = pow(1.0 - ndv, 3.2);
+    // «Водянистость»: мягкие энергетические переливы и бегущие потоки.
     float blotch = hash12(floor(vec2(phi * 3.5, theta * 3.5)) + 4.1);
-    float flows = 0.55 +
-                  0.45 * sin(theta * 5.0 - u_Drift * u_Time * (0.8 + 0.3 * zz) +
+    float flows = 0.65 +
+                  0.35 * sin(theta * 5.0 - u_Drift * u_Time * (0.8 + 0.3 * zz) +
                              blotch * 6.28);
-    // Цвет: у носа циановый, к корме тёплый; свечение по френелю.
+    // Цвет: у носа циановый, к корме тёплый; мягкое свечение по френелю.
     float mixF = smoothstep(0.35, -0.30, zz);
     vec3 col = mix(u_RedCol, u_CyanCol, mixF);
-    col *= (0.05 + 0.55 * fres) * flows * (0.55 + 0.75 * blotch);
-    // Белый ободок у переднего полюса и сгущение к носу (макет).
-    col += vec3(0.90, 0.96, 1.0) * exp(-max(-zz, 0.0) * 2.2) * fres * 1.1;
-    col *= u_Energy;
+    col *= (0.015 + 0.35 * fres) * flows * (0.75 + 0.25 * blotch);
+    // Деликатный ободок у переднего полюса без избыточной засветки.
+    col += vec3(0.90, 0.96, 1.0) * exp(-max(-zz, 0.0) * 2.2) * fres * 0.40;
+    col *= u_Energy * 0.70;
     v_Color = col;
     return;
   }
@@ -86,15 +86,16 @@ void main() {
     vec3 p = vec3(A_LAT * lat * cos(phi), A_LAT * lat * sin(phi),
                   zz * C_LEN * u_Elong + C_CENTER);
     gl_Position = u_MVP * u_Model * vec4(p, 1.0);
-    // Огибающая: тонкие у полюсов, плотные в средней части.
-    float env = smoothstep(0.02, 0.18, lat) * (0.80 + 0.20 * lat);
+    // Тонкая деликатная огибающая меридианов.
+    float env = smoothstep(0.03, 0.22, lat) * (0.70 + 0.30 * lat);
     // Цвет: нос (zz < 0) — циан, корма (zz > 0.2) — тёплый красный; спад к
     // экватору ореола.
     float mixF = smoothstep(0.35, -0.30, zz);
     vec3 col = mix(u_RedCol, u_CyanCol, mixF);
-    // Белый блик у носового полюса (как на макете: сгущение к носу).
-    col += vec3(1.0, 0.97, 0.92) * exp(-max(-zz, 0.0) * 2.6) * 0.9 * mixF;
-    col *= env * (0.90 + 0.55 * id) * u_Energy;
+    // Мягкий полупрозрачный блик у носового полюса.
+    col += vec3(1.0, 0.97, 0.92) * exp(-max(-zz, 0.0) * 2.6) * 0.40 * mixF;
+    // Снижаем яркость в ~2.8 раза (0.36), чтобы корпус и звёзды читались сквозь линии.
+    col *= env * (0.85 + 0.45 * id) * u_Energy * 0.36;
     v_Color = col;
     return;
   }
@@ -103,8 +104,8 @@ void main() {
     float f = clamp((-position.z - 1.05) / 0.70, 0.0, 1.0);
     float glow = 1.0 - f * f;
     float fl = 0.75 + 0.25 * sin(u_Time * 7.3 + position.y * 31.0);
-    vec3 col = mix(u_CyanCol, vec3(1.0, 0.98, 0.95), 0.60) * glow * fl;
-    col *= u_Energy * (0.45 + 0.55 * glow);
+    vec3 col = mix(u_CyanCol, vec3(1.0, 0.98, 0.95), 0.50) * glow * fl;
+    col *= u_Energy * (0.40 + 0.60 * glow) * 0.36;
     v_Color = col;
     gl_Position = u_MVP * u_Model * vec4(position, 1.0);
     return;
@@ -117,6 +118,6 @@ void main() {
   float fade = 1.0 - clamp((p.z - 1.05) / 1.45, 0.0, 1.0);
   float fl = 0.80 + 0.20 * sin(u_Time * 3.1 + position.x * 23.0);
   vec3 col = u_RedCol * (0.55 + 0.45 * fade) * fade * fl;
-  col *= u_Energy;
+  col *= u_Energy * 0.36;
   v_Color = col;
 }

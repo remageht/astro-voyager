@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## 3.10.0 - 2026-10-21
+
+## What's new / Что нового
+- EN: Warp ship 3D geometry separation - Alcubierre rings on the Style 3 cruiser (res/models/warp_ship.obj) are now physically separated by pristine vacuum gaps (3,057 bridge triangles removed); hull twisting disabled in ship.vert so the rings and pylons remain rigid.
+- EN: Dynamic warp aura gating - warp cocoon, sheath, bow fan, and tail field lines are now rendered strictly during active warp distortion (warpVis > 0.001) with smoothstep fade-in; completely hidden on idle and sublight drift.
+- EN: Field line transparency overhaul - trail shader line opacity lowered ~2.8x with high-power fresnel rim (exponent 3.2), keeping the ship silhouette and starfield crisp and readable through the cocoon.
+- EN: Conventional boost flight on conventional fuel - Left Shift in sublight flight engages thruster boost (2.0x speed, 1.8x acceleration, max thruster glow, [BOOST] HUD label), consuming fuel at 2.0/s with automatic revert to inertial drift on empty tank.
+- EN: Mouse wheel camera zoom - seamless scroll-wheel dolly in Chase and Overview views (0.25x extreme close-up to 4.5x wide overview); zooming out in Cockpit view smoothly pulls the camera into Chase view, and zooming all the way in returns into the Cockpit.
+- EN: Expanded PBR 3D asset suite - detailed meshes and 2K PBR textures for the Warp Drive Core/Generator, Dart interceptor (Style 0), Shuttle explorer (Style 2), and realistic cratered regolith Asteroids.
+- RU: Разделение колец варп-корабля - 3 кольца Алькубьерре на крейсере Style 3 (res/models/warp_ship.obj) теперь физически разделены чистым вакуумом (удалены 3 057 паразитных треугольников); в ship.vert отключен скручивающий сдвиг вершин, устранив деформацию пилонов.
+- RU: Динамическая аура варпа - кокон, силовые линии, носовой веер и кормовой хвост теперь включаются строго при движении в варп-искажении (warpVis > 0.001) с плавным зажиганием; в покое и досветовом полёте аура полностью скрыта.
+- RU: Повышенная прозрачность силовых линий - яркость линий снижена в ~2.8 раза, экспонента френеля хризалиды повышена до 3.2, благодаря чему силуэт корабля и звёздное небо отчётливо видны сквозь поле.
+- RU: Форсаж на обычном топливе - Left Shift в досветовом полёте активирует ускорение (x2.0 к скорости, x1.8 к приёмистости, полное раскрытие сопел, плашка [BOOST] в HUD) с расходом топлива 2.0 ед./с и мягким переходом в инерционный дрейф при нулевом остатке.
+- RU: Зум камеры колёсиком мыши - плавный зум в видах Chase и Overview (от 0.25x вплотную к соплам и кольцам до 4.5x панорамного обзора); скролл назад в кабине плавно выводит камеру за корму в вид от 3-го лица, а максимальное приближение возвращает в кабину.
+- RU: Расширенный PBR-набор 3D-моделей - высокодетализированные меши и 2K PBR-текстуры для генератора варп-ядра (Warp Core), перехватчика Dart (Style 0), челнока Shuttle (Style 2) и реалистичных кратерированных астероидов.
+- Gates / Гейты: ctest 6/7, static checks all pass (100% PASS), GL Release build OK, BlackHoleInteraction tests PASS.
+
 ## 3.9.1 - 2026-10-20
 
 ## What's new / Что нового
