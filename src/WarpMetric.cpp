@@ -129,4 +129,170 @@ bool SchwarzschildADM::isInsideHorizon(double x, double y, double z) const {
   return r <= m_rs * 1.001;
 }
 
+// ============================================================================
+// AlcubierreMetric Implementation
+// ============================================================================
+AlcubierreMetric::AlcubierreMetric(double R, double sigma, double vMax,
+                                   double x0, double y0, double z0,
+                                   double nx, double ny, double nz,
+                                   double totalTime, double tauAcc)
+    : m_R(R > 1e-4 ? R : 5.0),
+      m_sigma(sigma > 1e-6 ? sigma : 0.5),
+      m_vMax(vMax),
+      m_totalTime(totalTime > 1e-4 ? totalTime : 100.0),
+      m_tauAcc(tauAcc > 1e-4 ? tauAcc : 10.0) {
+  m_pos0[0] = x0;
+  m_pos0[1] = y0;
+  m_pos0[2] = z0;
+  const double len = std::sqrt(nx * nx + ny * ny + nz * nz);
+  if (len < 1e-12) {
+    m_dir[0] = 1.0;
+    m_dir[1] = 0.0;
+    m_dir[2] = 0.0;
+  } else {
+    m_dir[0] = nx / len;
+    m_dir[1] = ny / len;
+    m_dir[2] = nz / len;
+  }
+}
+
+double AlcubierreMetric::shapeFunction(double rs) const {
+  const double r = std::max(rs, 0.0);
+  const double up = (r + m_R) / m_sigma;
+  const double um = (r - m_R) / m_sigma;
+  const double denom = 2.0 * std::tanh(m_R / m_sigma);
+  if (std::abs(denom) < 1e-30) return 0.0;
+  return (std::tanh(up) - std::tanh(um)) / denom;
+}
+
+double AlcubierreMetric::shapeFunctionDeriv(double rs) const {
+  const double r = std::max(rs, 0.0);
+  const double up = (r + m_R) / m_sigma;
+  const double um = (r - m_R) / m_sigma;
+  const double tu_p = std::tanh(up);
+  const double tu_m = std::tanh(um);
+  const double sechSq_p = 1.0 - tu_p * tu_p;
+  const double sechSq_m = 1.0 - tu_m * tu_m;
+  const double denom = 2.0 * m_sigma * std::tanh(m_R / m_sigma);
+  if (std::abs(denom) < 1e-30) return 0.0;
+  return (sechSq_p - sechSq_m) / denom;
+}
+
+double AlcubierreMetric::velocity(double t) const {
+  if (m_totalTime <= 0.0) return m_vMax;
+  if (t <= 0.0 || t >= m_totalTime) return 0.0;
+  const double u1 = t / m_tauAcc;
+  const double u2 = (m_totalTime - t) / m_tauAcc;
+  const double mid = 0.5 * m_totalTime / m_tauAcc;
+  const double norm = std::tanh(mid);
+  const double normSq = norm * norm;
+  if (normSq < 1e-30) return 0.0;
+  return m_vMax * (std::tanh(u1) * std::tanh(u2)) / normSq;
+}
+
+void AlcubierreMetric::bubbleCenter(double t, double center[3]) const {
+  if (t <= 0.0) {
+    center[0] = m_pos0[0];
+    center[1] = m_pos0[1];
+    center[2] = m_pos0[2];
+    return;
+  }
+  const double tClamped = std::min(t, m_totalTime);
+  const int N = 64;
+  const double dt = tClamped / N;
+  double sum = velocity(0.0) + velocity(tClamped);
+  for (int i = 1; i < N; ++i) {
+    const double ti = i * dt;
+    const double w = (i % 2 == 1) ? 4.0 : 2.0;
+    sum += w * velocity(ti);
+  }
+  const double s = (dt / 3.0) * sum;
+  center[0] = m_pos0[0] + m_dir[0] * s;
+  center[1] = m_pos0[1] + m_dir[1] * s;
+  center[2] = m_pos0[2] + m_dir[2] * s;
+}
+
+void AlcubierreMetric::evalADM(double x, double y, double z, double t,
+                               double& alpha, double beta[3],
+                               double gamma_ij[3][3], double gamma_inv[3][3]) const {
+  alpha = 1.0;
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      gamma_ij[i][j] = (i == j) ? 1.0 : 0.0;
+      gamma_inv[i][j] = (i == j) ? 1.0 : 0.0;
+    }
+  }
+
+  double c[3];
+  bubbleCenter(t, c);
+  const double dx = x - c[0];
+  const double dy = y - c[1];
+  const double dz = z - c[2];
+  const double rs = std::sqrt(dx * dx + dy * dy + dz * dz);
+  const double f = shapeFunction(rs);
+  const double v = velocity(t);
+
+  beta[0] = -v * f * m_dir[0];
+  beta[1] = -v * f * m_dir[1];
+  beta[2] = -v * f * m_dir[2];
+}
+
+void AlcubierreMetric::evalDerivInv4Metric(double x, double y, double z, double t,
+                                          double dg_inv_dx[3][4][4]) const {
+  std::memset(dg_inv_dx, 0, sizeof(double) * 3 * 4 * 4);
+
+  double c[3];
+  bubbleCenter(t, c);
+  const double diff[3] = {x - c[0], y - c[1], z - c[2]};
+  const double rs = std::sqrt(diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2]);
+  if (rs < 1e-12) return;
+
+  const double invRs = 1.0 / rs;
+  const double rHat[3] = {diff[0] * invRs, diff[1] * invRs, diff[2] * invRs};
+  const double f = shapeFunction(rs);
+  const double df = shapeFunctionDeriv(rs);
+  const double v = velocity(t);
+
+  for (int k = 0; k < 3; ++k) {
+    // d(g^00)/dx^k = 0 (alpha = 1 identically)
+    dg_inv_dx[k][0][0] = 0.0;
+
+    // d(g^0i)/dx^k = -v * n^i * df * rHat_k
+    for (int i = 0; i < 3; ++i) {
+      const double d_0i = -v * m_dir[i] * df * rHat[k];
+      dg_inv_dx[k][0][i + 1] = d_0i;
+      dg_inv_dx[k][i + 1][0] = d_0i;
+    }
+
+    // d(g^ij)/dx^k = -2 * v^2 * n^i * n^j * f * df * rHat_k
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        dg_inv_dx[k][i + 1][j + 1] = -2.0 * (v * v) * (m_dir[i] * m_dir[j]) * (f * df) * rHat[k];
+      }
+    }
+  }
+}
+
+double AlcubierreMetric::yorkTime(double x, double y, double z, double t) const {
+  double c[3];
+  bubbleCenter(t, c);
+  const double dx = x - c[0];
+  const double dy = y - c[1];
+  const double dz = z - c[2];
+  const double rs = std::sqrt(dx * dx + dy * dy + dz * dz);
+  if (rs < 1e-12) return 0.0;
+
+  const double cosAngle = (m_dir[0] * dx + m_dir[1] * dy + m_dir[2] * dz) / rs;
+  const double df = shapeFunctionDeriv(rs);
+  const double v = velocity(t);
+  return v * df * cosAngle;
+}
+
+double AlcubierreMetric::thetaMax(double t) const {
+  const double v = velocity(t);
+  const double denom = 2.0 * m_sigma * std::tanh(m_R / m_sigma);
+  if (std::abs(denom) < 1e-30) return 0.0;
+  return std::abs(v) / denom;
+}
+
 }  // namespace astro

@@ -88,4 +88,78 @@ private:
   double m_rs;
 };
 
+// ============================================================================
+// AlcubierreMetric: 3+1 ADM Alcubierre Warp Bubble (M2 Framework)
+// ============================================================================
+// Spacetime line element (Alcubierre 1994):
+//   ds^2 = -dt^2 + (dx - v_s(t) f(r_s) dt)^2 + dy^2 + dz^2
+// In 3+1 ADM form:
+//   alpha = 1
+//   gamma_ij = delta_ij, gamma^ij = delta^ij
+//   beta^i = -v_s(t) * f(r_s) * n^i
+//
+// Shape function f(r_s) with smooth sigma-wall:
+//   f(r_s) = (tanh((r_s + R) / sigma) - tanh((r_s - R) / sigma)) / (2 * tanh(R / sigma))
+//   - At r_s = 0: f(0) = 1 (flat Eulerian bubble interior)
+//   - At r_s >> R + 3*sigma: f(r_s) -> 0 (asymptotically flat exterior)
+//
+// Velocity profile v(t) (tanh acceleration / cruise / deceleration):
+//   v(t) = vMax * tanh(t / tau_a) * tanh((T - t) / tau_a) / (tanh(T / (2*tau_a))^2)
+//
+// York extrinsic curvature scalar (York time):
+//   theta = -nabla_i beta^i = v(t) * f'(r_s) * (n . (x - x_s)) / r_s
+//   theta_max = |v(t)| / (2 * sigma * tanh(R / sigma))
+// ============================================================================
+class AlcubierreMetric : public WarpMetric {
+public:
+  AlcubierreMetric(double R = 5.0, double sigma = 0.5, double vMax = 1.0,
+                   double x0 = 0.0, double y0 = 0.0, double z0 = 0.0,
+                   double nx = 1.0, double ny = 0.0, double nz = 0.0,
+                   double totalTime = 100.0, double tauAcc = 10.0);
+
+  std::string name() const override { return "AlcubierreMetric"; }
+
+  void evalADM(double x, double y, double z, double t,
+               double& alpha, double beta[3],
+               double gamma_ij[3][3], double gamma_inv[3][3]) const override;
+
+  void evalDerivInv4Metric(double x, double y, double z, double t,
+                           double dg_inv_dx[3][4][4]) const override;
+
+  bool isInsideHorizon(double x, double y, double z) const override {
+    (void)x; (void)y; (void)z;
+    return false;
+  }
+
+  double horizonRadius() const override { return 0.0; }
+
+  // Shape function f(r_s) and its analytical derivative f'(r_s)
+  double shapeFunction(double rs) const;
+  double shapeFunctionDeriv(double rs) const;
+
+  // Velocity profile v(t) and center position x_s(t)
+  double velocity(double t) const;
+  void bubbleCenter(double t, double center[3]) const;
+
+  // York time / expansion scalar theta(x, y, z, t) and analytical maximum theta_max(t)
+  double yorkTime(double x, double y, double z, double t) const;
+  double thetaMax(double t) const;
+
+  // Parameters
+  double bubbleRadius() const { return m_R; }
+  double wallThickness() const { return m_sigma; }
+  double peakVelocity() const { return m_vMax; }
+  double totalTime() const { return m_totalTime; }
+  double tauAcc() const { return m_tauAcc; }
+
+private:
+  double m_R;
+  double m_sigma;
+  double m_vMax;
+  double m_pos0[3];
+  double m_dir[3];
+  double m_totalTime;
+  double m_tauAcc;
+};
+
 }  // namespace astro

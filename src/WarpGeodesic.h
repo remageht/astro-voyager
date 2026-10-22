@@ -48,4 +48,40 @@ WarpTraceResult traceWarpRay(const WarpMetric& metric, WarpRayState s,
 // Energy E = 1 (p_t = -1), angular momentum L = b, directed inward along -X axis.
 WarpRayState makeWarpInwardRay(const WarpMetric& metric, double r0, double b);
 
+// ============================================================================
+// Skiff Warp Waypoint & Trajectory Generator (M2 Framework)
+// ============================================================================
+struct SkiffWaypoint {
+  double t = 0.0;          // coordinate time
+  double x = 0.0;          // bubble center X
+  double y = 0.0;          // bubble center Y
+  double z = 0.0;          // bubble center Z
+  double vx = 0.0;         // bubble velocity X
+  double vy = 0.0;         // bubble velocity Y
+  double vz = 0.0;         // bubble velocity Z
+  double v = 0.0;          // scalar speed |v|
+  double tau = 0.0;        // proper time of comoving observer inside bubble
+  double thetaMax = 0.0;   // peak York time expansion scalar at this instant
+  double wallDist = 0.0;   // clearance distance from ship (center) to wall
+  bool wallSafe = true;    // true if ship is safely in flat interior (wall does not intersect waypoint)
+  bool dtsDtauValid = true;// true if |dts/dtau| <= 1 outside bubble
+};
+
+class WarpGeodesic {
+public:
+  // Generates a deterministic Skiff warp path from start to end with tanh acceleration/deceleration.
+  // Performs internal safety checks:
+  // - |dts/dtau| <= 1 outside bubble (proper time invariant)
+  // - Bubble wall does not intersect waypoint
+  // - Exact time-reversal and roundtrip symmetry
+  static std::vector<SkiffWaypoint> skiffPath(
+      const double start[3], const double end[3],
+      double vMax = 5.0, double sigma = 0.5, int steps = 100);
+};
+
+// Direct namespace-level helper
+std::vector<SkiffWaypoint> skiffPath(
+    const double start[3], const double end[3],
+    double vMax = 5.0, double sigma = 0.5, int steps = 100);
+
 }  // namespace astro

@@ -643,7 +643,42 @@ int main(int argc, char** argv) {
               << " -> " << (overOk ? "PASS" : "FAIL") << "\n";
     std::cout << "Part (D) Result: " << (passD ? "PASS" : "FAIL") << "\n\n";
 
-    const bool allWarpOk = passA && passB && passC && passD;
+    // --- (E) Alcubierre Skiff Warp Flight: Earth -> Proxima-16 (Skyluck) ---
+    std::cout << "--- (E) Alcubierre Skiff Warp Flight: Earth -> Proxima-16 (Skyluck) ---\n";
+    const double earthPos[3] = {0.0, 0.0, 0.0};
+    const double proximaPos[3] = {1000.0, 250.0, -100.0};
+    const double vMax = 12.5;
+    const double sigma = 0.5;
+    const int steps = 50;
+
+    std::vector<astro::SkiffWaypoint> path =
+        astro::WarpGeodesic::skiffPath(earthPos, proximaPos, vMax, sigma, steps);
+
+    const double dx = proximaPos[0] - earthPos[0];
+    const double dy = proximaPos[1] - earthPos[1];
+    const double dz = proximaPos[2] - earthPos[2];
+    const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+    const double wallLength = 3.0 * sigma;
+
+    double maxThetaObserved = 0.0;
+    bool allSafe = true;
+    for (const auto& wp : path) {
+      if (wp.thetaMax > maxThetaObserved) maxThetaObserved = wp.thetaMax;
+      if (!wp.wallSafe || !wp.dtsDtauValid) allSafe = false;
+    }
+
+    std::cout << "Flight plan: Sol (Earth) -> Proxima-16 (Skyluck)\n";
+    std::cout << "Distance: " << dist << " units\n";
+    std::cout << "Peak velocity: " << vMax << " c\n";
+    std::cout << "Bubble wall thickness: " << sigma << " units (transition length ~" << wallLength << ")\n";
+    std::cout << "York time theta_max: " << maxThetaObserved << " s^-1\n";
+    std::cout << "Waypoints: " << path.size() << " | Wall-safe: " << (allSafe ? "YES" : "NO")
+              << " | Outside |dt_s/dtau| <= 1: " << (allSafe ? "PASS" : "FAIL") << "\n";
+
+    const bool passE = allSafe && (maxThetaObserved > 0.0) && (path.size() == steps);
+    std::cout << "Part (E) Result: " << (passE ? "PASS" : "FAIL") << "\n\n";
+
+    const bool allWarpOk = passA && passB && passC && passD && passE;
     std::cout << "Warp ADM validation result: " << (allWarpOk ? "ALL PASS" : "FAIL") << "\n";
     return allWarpOk ? 0 : 1;
   }

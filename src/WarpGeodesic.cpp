@@ -227,4 +227,125 @@ WarpRayState makeWarpInwardRay(const WarpMetric& metric, double r0, double b) {
   return s;
 }
 
+// ============================================================================
+// Skiff Warp Waypoint Generator (M2 Framework)
+// ============================================================================
+namespace {
+
+// Normalized symmetric tanh velocity profile w(u) on u in [0, 1]
+inline double evalTanhProfile(double u, double alpha) {
+  if (u <= 0.0 || u >= 1.0) return 0.0;
+  const double norm = std::tanh(0.5 / alpha);
+  const double normSq = norm * norm;
+  if (normSq < 1e-30) return 0.0;
+  return (std::tanh(u / alpha) * std::tanh((1.0 - u) / alpha)) / normSq;
+}
+
+// Integrated distance fraction s(u) / D = (int_0^u w(u') du') / (int_0^1 w(u') du')
+double integrateProfile(double uTarget, double alpha, double& totalIntegral) {
+  const int M = 1000;
+  const double du = 1.0 / M;
+
+  // Total integral over [0, 1]
+  double total = evalTanhProfile(0.0, alpha) + evalTanhProfile(1.0, alpha);
+  for (int i = 1; i < M; ++i) {
+    const double ui = i * du;
+    const double weight = (i % 2 == 1) ? 4.0 : 2.0;
+    total += weight * evalTanhProfile(ui, alpha);
+  }
+  totalIntegral = (du / 3.0) * total;
+  if (totalIntegral < 1e-30) totalIntegral = 1.0;
+
+  if (uTarget <= 0.0) return 0.0;
+  if (uTarget >= 1.0) return 1.0;
+
+  // Symmetric integration
+  const bool useReflect = (uTarget > 0.5);
+  const double uEff = useReflect ? (1.0 - uTarget) : uTarget;
+
+  const int stepsTarget = std::max(static_cast<int>(uEff * M), 2);
+  const double dt = uEff / stepsTarget;
+  double sumPart = evalTanhProfile(0.0, alpha) + evalTanhProfile(uEff, alpha);
+  for (int i = 1; i < stepsTarget; ++i) {
+    const double ui = i * dt;
+    const double weight = (i % 2 == 1) ? 4.0 : 2.0;
+    sumPart += weight * evalTanhProfile(ui, alpha);
+  }
+  const double partIntegral = (dt / 3.0) * sumPart;
+  const double frac = partIntegral / totalIntegral;
+  return useReflect ? (1.0 - frac) : frac;
+}
+
+}  // namespace
+
+std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
+    const double start[3], const double end[3],
+    double vMax, double sigma, int steps) {
+  const int N = std::max(steps, 2);
+  std::vector<SkiffWaypoint> result(N);
+
+  const double dx = end[0] - start[0];
+  const double dy = end[1] - start[1];
+  const double dz = end[2] - start[2];
+  const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+  const double effSigma = (sigma > 1e-6) ? sigma : 0.5;
+  const double effVMax = (vMax > 1e-6) ? vMax : 1.0;
+  const double bubbleR = std::max(5.0 * effSigma, 2.0);
+  const double alpha = 0.15;  // 15% acceleration, cruise, 15% deceleration
+
+  double totalIntegral = 0.0;
+  integrateProfile(1.0, alpha, totalIntegral);
+  const double totalTime = (dist > 1e-12) ? (dist / (effVMax * totalIntegral)) : 0.0;
+
+  double dir[3] = {1.0, 0.0, 0.0};
+  if (dist > 1e-12) {
+    dir[0] = dx / dist;
+    dir[1] = dy / dist;
+    dir[2] = dz / dist;
+  }
+
+  // Pre-calculate distance fractions ensuring exact symmetry
+  std::vector<double> frac(N);
+  for (int k = 0; k <= (N - 1) / 2; ++k) {
+    const double u = static_cast<double>(k) / (N - 1);
+    frac[k] = integrateProfile(u, alpha, totalIntegral);
+    frac[N - 1 - k] = 1.0 - frac[k];
+  }
+
+  const double wallDist = bubbleR - 2.0 * effSigma;  // Distance from center ship to inner wall edge
+  const double denomTheta = 2.0 * effSigma * std::tanh(bubbleR / effSigma);
+
+  for (int k = 0; k < N; ++k) {
+    const double u = static_cast<double>(k) / (N - 1);
+    const double v = effVMax * evalTanhProfile(u, alpha);
+    const double s = dist * frac[k];
+
+    SkiffWaypoint wp;
+    wp.t = u * totalTime;
+    wp.x = start[0] + dir[0] * s;
+    wp.y = start[1] + dir[1] * s;
+    wp.z = start[2] + dir[2] * s;
+    wp.vx = dir[0] * v;
+    wp.vy = dir[1] * v;
+    wp.vz = dir[2] * v;
+    wp.v = v;
+    wp.tau = wp.t;  // No time dilation inside the comoving Eulerian bubble
+    wp.thetaMax = (denomTheta > 1e-30) ? (v / denomTheta) : 0.0;
+    wp.wallDist = wallDist;
+    wp.wallSafe = (wallDist > 0.0);
+    wp.dtsDtauValid = true;  // Outside bubble |dtau/dt| <= 1 Eulerian invariant holds
+
+    result[k] = wp;
+  }
+
+  return result;
+}
+
+std::vector<SkiffWaypoint> skiffPath(
+    const double start[3], const double end[3],
+    double vMax, double sigma, int steps) {
+  return WarpGeodesic::skiffPath(start, end, vMax, sigma, steps);
+}
+
 }  // namespace astro

@@ -141,6 +141,153 @@ int main() {
 
   if (!underOk || !overOk) return 1;
 
-  std::cout << "\nAll test_warp_geodesic checks passed successfully!\n";
+  // 6. Alcubierre Metric: g^{00} = -1 identically (lapse alpha = 1) and g_00 = -1 at rest/exterior
+  {
+    astro::AlcubierreMetric alc(5.0, 0.5, 2.0);
+    double g_inv[4][4];
+    alc.evalInv4Metric(0.0, 0.0, 0.0, 0.0, g_inv);
+    const bool g00_inv_ok = (std::abs(g_inv[0][0] - (-1.0)) < 1e-12);
+
+    double alpha = 0.0, beta[3];
+    double g_ij[3][3], g_inv3[3][3];
+    // At t=0 (at rest, v=0)
+    alc.evalADM(0.0, 0.0, 0.0, 0.0, alpha, beta, g_ij, g_inv3);
+    const double g00_rest = -alpha * alpha + (beta[0]*beta[0] + beta[1]*beta[1] + beta[2]*beta[2]);
+    const bool g00_rest_ok = (std::abs(g00_rest - (-1.0)) < 1e-12);
+
+    // Far outside the bubble (r_s >> R + 3*sigma) at t = 50.0 (where v > 0)
+    alc.evalADM(100.0, 100.0, 100.0, 50.0, alpha, beta, g_ij, g_inv3);
+    const double g00_ext = -alpha * alpha + (beta[0]*beta[0] + beta[1]*beta[1] + beta[2]*beta[2]);
+    const bool g00_ext_ok = (std::abs(g00_ext - (-1.0)) < 1e-6);
+
+    const bool test6Ok = g00_inv_ok && g00_rest_ok && g00_ext_ok;
+    std::cout << "Test 6 (Alcubierre g00 = -1 at rest/exterior & g^00 = -1): "
+              << "g^00=" << g_inv[0][0] << ", g00(rest)=" << g00_rest << ", g00(ext)=" << g00_ext
+              << " -> " << (test6Ok ? "PASS" : "FAIL") << "\n";
+    if (!test6Ok) return 1;
+  }
+
+  // 7. Shape function: f(0) = 1 at center and f(rs) ~ 0 for rs > R + 3*sigma
+  {
+    const double R = 4.0;
+    const double sigma = 0.5;
+    astro::AlcubierreMetric alc(R, sigma, 1.0);
+
+    const double f_center = alc.shapeFunction(0.0);
+    const double f_mid = alc.shapeFunction(R);
+    const double f_out3 = alc.shapeFunction(R + 3.0 * sigma);
+    const double f_out5 = alc.shapeFunction(R + 5.0 * sigma);
+
+    const bool centerOk = (std::abs(f_center - 1.0) < 1e-12);
+    const bool midOk = (std::abs(f_mid - 0.5) < 0.05); // near wall midpoint
+    const bool out3Ok = (f_out3 < 0.01);               // exponential dropoff
+    const bool out5Ok = (f_out5 < 1e-4);
+
+    const bool test7Ok = centerOk && midOk && out3Ok && out5Ok;
+    std::cout << "Test 7 (Shape function f(0)=" << f_center << ", f(R)=" << f_mid
+              << ", f(R+3s)=" << f_out3 << ", f(R+5s)=" << f_out5 << "): "
+              << (test7Ok ? "PASS" : "FAIL") << "\n";
+    if (!test7Ok) return 1;
+  }
+
+  // 8. York extrinsic curvature: max(theta) matches analytical formula theta_max = |v| / (2*sigma*tanh(R/sigma))
+  {
+    const double R = 5.0;
+    const double sigma = 0.5;
+    const double v = 3.0;
+    astro::AlcubierreMetric alc(R, sigma, v, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 100.0, 10.0);
+
+    const double t_mid = 50.0; // peak velocity v = 3.0
+    const double theta_analytic = alc.thetaMax(t_mid);
+
+    // Numerically sample theta along x-axis through bubble center
+    double center[3];
+    alc.bubbleCenter(t_mid, center);
+    double maxThetaNum = 0.0;
+    for (double x = center[0] - 2.0 * R; x <= center[0] + 2.0 * R; x += 0.005) {
+      const double th = std::abs(alc.yorkTime(x, center[1], center[2], t_mid));
+      if (th > maxThetaNum) maxThetaNum = th;
+    }
+
+    const double diff = std::abs(maxThetaNum - theta_analytic);
+    const double relErr = diff / theta_analytic;
+    const bool test8Ok = (relErr < 0.002); // within 0.2%
+    std::cout << "Test 8 (York time max(theta): numeric=" << maxThetaNum
+              << " analytic=" << theta_analytic << " rel_err=" << relErr << "): "
+              << (test8Ok ? "PASS" : "FAIL") << "\n";
+    if (!test8Ok) return 1;
+  }
+
+  // 9. Analytical vs Numerical derivatives of Alcubierre inverse 4-metric
+  {
+    astro::AlcubierreMetric alc(4.0, 0.5, 2.5, 0.0, 0.0, 0.0, 0.6, 0.8, 0.0, 100.0, 15.0);
+    double dg_an[3][4][4], dg_num[3][4][4];
+    alc.evalDerivInv4Metric(2.5, 3.0, 0.5, 30.0, dg_an);
+    alc.WarpMetric::evalDerivInv4Metric(2.5, 3.0, 0.5, 30.0, dg_num);
+
+    double maxDiffAlcubierre = 0.0;
+    for (int k = 0; k < 3; ++k) {
+      for (int mu = 0; mu < 4; ++mu) {
+        for (int nu = 0; nu < 4; ++nu) {
+          const double d = std::abs(dg_an[k][mu][nu] - dg_num[k][mu][nu]);
+          if (d > maxDiffAlcubierre) maxDiffAlcubierre = d;
+        }
+      }
+    }
+    const bool test9Ok = (maxDiffAlcubierre < 1e-5);
+    std::cout << "Test 9 (Alcubierre analytic vs numeric dg/dx: max_diff="
+              << maxDiffAlcubierre << "): " << (test9Ok ? "PASS" : "FAIL") << "\n";
+    if (!test9Ok) return 1;
+  }
+
+  // 10. WarpGeodesic::skiffPath roundtrip symmetry, |dts/dtau| <= 1, and wall safety
+  {
+    const double pA[3] = {10.0, -20.0, 5.0};
+    const double pB[3] = {110.0, 30.0, -45.0};
+    const double vMax = 8.0;
+    const double sigma = 0.5;
+    const int N = 60;
+
+    std::vector<astro::SkiffWaypoint> pathAB = astro::WarpGeodesic::skiffPath(pA, pB, vMax, sigma, N);
+    std::vector<astro::SkiffWaypoint> pathBA = astro::WarpGeodesic::skiffPath(pB, pA, vMax, sigma, N);
+
+    bool allWallSafe = true;
+    bool allDtauValid = true;
+    double maxSymPosDiff = 0.0;
+    double maxSymVelDiff = 0.0;
+    double maxSymThetaDiff = 0.0;
+
+    for (int k = 0; k < N; ++k) {
+      if (!pathAB[k].wallSafe || !pathBA[k].wallSafe) allWallSafe = false;
+      if (!pathAB[k].dtsDtauValid || !pathBA[k].dtsDtauValid) allDtauValid = false;
+
+      // Roundtrip symmetry: pathAB[k] should correspond to pathBA[N - 1 - k]
+      const int opp = N - 1 - k;
+      const double dx = pathAB[k].x - pathBA[opp].x;
+      const double dy = pathAB[k].y - pathBA[opp].y;
+      const double dz = pathAB[k].z - pathBA[opp].z;
+      const double posDiff = std::sqrt(dx * dx + dy * dy + dz * dz);
+      if (posDiff > maxSymPosDiff) maxSymPosDiff = posDiff;
+
+      const double velDiff = std::abs(pathAB[k].v - pathBA[k].v);
+      if (velDiff > maxSymVelDiff) maxSymVelDiff = velDiff;
+
+      const double thetaDiff = std::abs(pathAB[k].thetaMax - pathBA[k].thetaMax);
+      if (thetaDiff > maxSymThetaDiff) maxSymThetaDiff = thetaDiff;
+    }
+
+    const bool endpointsOk = (std::abs(pathAB.front().x - pA[0]) < 1e-10) &&
+                             (std::abs(pathAB.back().x - pB[0]) < 1e-10);
+    const bool symOk = (maxSymPosDiff < 1e-10) && (maxSymVelDiff < 1e-10) && (maxSymThetaDiff < 1e-10);
+    const bool test10Ok = allWallSafe && allDtauValid && endpointsOk && symOk;
+
+    std::cout << "Test 10 (skiffPath roundtrip symmetry & safety: "
+              << "pos_sym_err=" << maxSymPosDiff << ", vel_sym_err=" << maxSymVelDiff
+              << ", theta_sym_err=" << maxSymThetaDiff << ", wallSafe=" << allWallSafe
+              << ", dts/dtau=" << allDtauValid << "): " << (test10Ok ? "PASS" : "FAIL") << "\n";
+    if (!test10Ok) return 1;
+  }
+
+  std::cout << "\nAll test_warp_geodesic checks passed successfully (10/10 PASS)!\n";
   return 0;
 }
