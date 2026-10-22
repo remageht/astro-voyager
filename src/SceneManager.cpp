@@ -37,6 +37,8 @@ float g_shipPos[3] = {0.0f, 0.0f, 0.0f};
 float g_shipYaw = 0.0f;
 float g_shipThruster = 0.7f;  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
 int g_shipStyle = 0;  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model (OBJ)
+static ShipCustomization g_shipCustomization;
+static bool g_dockSitesVisible = true;
 // AV_WARP_DEMO=1: dev-режим для визуальной отладки варп-туннеля и кокона
 // (корабль в (0,0,0), warpK=1). Без переменной поведение байт-в-байт, а
 // ней можно прогнать --screenshot-all в зеркале для ручного тюнинга шейда.
@@ -74,6 +76,10 @@ float shipY() { return g_shipPos[1]; }
 float shipZ() { return g_shipPos[2]; }
 float shipYaw() { return g_shipYaw; }
 void setShipStyle(int s) { g_shipStyle = (s < 0 || s > 3) ? 0 : s; }
+void setShipCustomization(const ShipCustomization& c) { g_shipCustomization = c; }
+const ShipCustomization& shipCustomization() { return g_shipCustomization; }
+void setDockSitesVisible(bool v) { g_dockSitesVisible = v; }
+bool dockSitesVisible() { return g_dockSitesVisible; }
 // v3.6.0 (пасс D): астероидное поле в Travel. Дефолт 0: харнесс не видит
 // катсцену и ни одного GL-вызова не получает — PNG остаются байт-в-байт.
 float g_astK = 0.0f;
@@ -754,6 +760,24 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   // каждый кадр, чтобы не просачиваться между станциями.
   m_colonySites.clear();
   m_clusterBright.clear();
+  m_dockSites.clear();
+  if (m_currentStation) {
+    if (m_currentStation->id == "sol") {
+      Vec3 earthPos(0.0, 0.0, 10.0);
+      for (const auto& b : m_lastBodies) {
+        if (b.def && b.def->id == "earth") { earthPos = b.pos; break; }
+      }
+      m_dockSites.push_back(DockSite{"dock-sol", "Gateway Orbital Shipyard", "sol", Vec3(earthPos.x + 0.35, earthPos.y + 0.25, earthPos.z + 0.65), 4.5f});
+    } else if (m_currentStation->id == "m13") {
+      m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
+    } else if (m_currentStation->id == "sgra") {
+      m_dockSites.push_back(DockSite{"dock-sgra", "Deep Core Outpost", "sgra", Vec3(0.0, 4.0, 18.0), 5.0f});
+    } else if (m_currentStation->id == "ori") {
+      m_dockSites.push_back(DockSite{"dock-ori", "Rigel Orbital Dock", "ori", Vec3(3.0, 1.0, 15.0), 5.0f});
+    } else {
+      m_dockSites.push_back(DockSite{"dock-station", "Orbital Station " + m_currentStation->name, m_currentStation->id, Vec3(0.0, 1.8, m_currentStation->spawnDistanceRs * 1.15), 5.0f});
+    }
+  }
 
   // === Speed FX === (v3.3.0): игровой разгон/варп — камера в варпе почти не
   // движется, поэтому доплер/абберацию масштабируем внешним boost'ом.
@@ -1889,6 +1913,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           // v3.6.0: тумблер зеркальных отражений из настроек (по умолчанию 1.0
           // — эталон ship.png не меняется, умножение на 1.0f точное).
           s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
+          const ShipCustomization& shipCust = warpdrive::shipCustomization();
+          s_shipShader->setUniform3f("u_HullTint", shipCust.primaryColor[0], shipCust.primaryColor[1], shipCust.primaryColor[2]);
+          s_shipShader->setUniform3f("u_AccentTint", shipCust.accentColor[0], shipCust.accentColor[1], shipCust.accentColor[2]);
+          s_shipShader->setUniform3f("u_EmissiveTint", shipCust.emissiveColor[0], shipCust.emissiveColor[1], shipCust.emissiveColor[2]);
           glActiveTexture(GL_TEXTURE0);
           m_skyboxLocal->bind(0);
           // Фаза спина интегрируется раз за кадр: кольца процедурного
@@ -1899,7 +1927,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_spinPrev = time;
           if (dtS > 0.0f && dtS < 0.5f)
             s_spinVar += (2.6f * thrW + 8.0f * warpVis) * dtS;
-          const float spinPhase = 0.55f * time + s_spinVar;
+          const float spinRateMult = (shipCust.ringSpinSpeed > 0.0f) ? shipCust.ringSpinSpeed : 1.0f;
+          const float spinPhase = 0.55f * time * spinRateMult + s_spinVar;
           bool meshDrawn = false;
           ObjModel* activeModel = nullptr;
           float modelRingSpin = 0.0f;
@@ -2079,6 +2108,49 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           }
           }  // !meshDrawn (fallback procedural parts)
           s_shipShader->unbind();
+        }
+        // === v3.11.0: Orbital Space Station & Shipyard Dock Rendering ===
+        if (warpdrive::dockSitesVisible() && warpdrive::shipVisible()) {
+          for (const auto& dock : m_dockSites) {
+            if (!m_currentStation || dock.stationId != m_currentStation->id) continue;
+            glm::vec3 stPos(static_cast<float>(dock.pos.x), static_cast<float>(dock.pos.y), static_cast<float>(dock.pos.z));
+            glm::mat4 coreModel = glm::translate(glm::mat4(1.0f), stPos) * glm::scale(glm::mat4(1.0f), glm::vec3(0.22f, 0.95f, 0.22f));
+            m_planetShader->bind();
+            m_planetShader->setUniformMat4f("u_MVP", mvp);
+            m_planetShader->setUniformMat4f("u_Model", coreModel);
+            m_planetShader->setUniform1i("u_Type", 2);
+            m_planetShader->setUniform1i("u_Body", 0);
+            m_planetShader->setUniform1f("u_Seed", 123.0f);
+            m_planetShader->setUniform3f("u_ColA", 0.38f, 0.42f, 0.48f);
+            m_planetShader->setUniform3f("u_ColB", 0.16f, 0.19f, 0.24f);
+            m_planetShader->setUniform1f("u_Radius", 0.95f);
+            m_planetShader->setUniform1i("u_Spot", 0);
+            m_planetShader->setUniform1i("u_Clouds", 0);
+            m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
+            m_planetShader->setUniform1i("u_MoonOccN", 0);
+            m_planetShader->setUniform1i("u_RingOn", 0);
+            m_sphere.draw();
+            m_planetShader->unbind();
+            m_ringShader->bind();
+            m_ringShader->setUniformMat4f("u_MVP", mvp);
+            glm::mat4 ringModel = glm::translate(glm::mat4(1.0f), stPos) * glm::rotate(glm::mat4(1.0f), 0.25f * time, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.65f / 2.7f));
+            m_ringShader->setUniformMat4f("u_Model", ringModel);
+            m_ringShader->setUniform1f("u_Seed", 42.0f);
+            m_ringShader->setUniform1f("u_Time", time);
+            m_ringShader->setUniform3f("u_Center", stPos.x, stPos.y, stPos.z);
+            m_ringShader->setUniform3f("u_ColA", 0.0f, 0.85f, 1.0f);
+            m_ringShader->setUniform1f("u_PlanetR", 0.0f);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            m_saturnRing.draw();
+            glDisable(GL_BLEND);
+            glm::mat4 dockRingModel = glm::translate(glm::mat4(1.0f), stPos) * glm::rotate(glm::mat4(1.0f), -0.15f * time, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.15f / 2.7f));
+            m_ringShader->setUniformMat4f("u_Model", dockRingModel);
+            m_ringShader->setUniform3f("u_ColA", 1.0f, 0.72f, 0.20f);
+            glEnable(GL_BLEND);
+            m_saturnRing.draw();
+            glDisable(GL_BLEND);
+          }
         }
         // Трейл + движок: без depth, аддитивно поверх корпуса.
         glDisable(GL_DEPTH_TEST);

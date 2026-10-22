@@ -324,6 +324,16 @@ class AppGL {
   int m_warpJumpFromFactor = 1;
   int m_warpSel = 0;  // выбор пункта в варп-панели
   int m_shipStyle = 0;  // корпус корабля: 0 Dart, 1 Ring Ship v2, 2 Shuttle, 3 Model (OBJ)
+  // === Orbital Shipyard & Station Docking (v3.11.0) ===
+  bool m_shipyardOpen = false;
+  bool m_prevKPressed = false;
+  std::string m_dockHint;
+  std::string m_dockHintId;
+  ShipCustomization m_shipCustomization;
+  void toggleShipyard();
+  void dockAtStation(const std::string& dockId);
+  void undockFromStation();
+  void drawShipyard();
   // === Settings v3.6.0 ===: пользовательские настройки (сохраняются в профиль).
   int m_difficulty = 1;  // 0 Easy, 1 Normal, 2 Hard (см. difficultyTuning)
   int m_aaMode = 1;      // 0 Off, 1 FXAA (PostFX)
@@ -485,7 +495,12 @@ namespace warpdrive {
 void setState(float k, float flash);
 void setBurst(float b);
 void setShip(bool v, float x, float y, float z, float yaw);
-void setShipStyle(int s);  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle
+void setShipStyle(int s);  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model
+// v3.11.0: кастомизация корабля (ливрея, свечение, спин колец, апгрейды)
+void setShipCustomization(const ShipCustomization& c);
+const ShipCustomization& shipCustomization();
+void setDockSitesVisible(bool v);
+bool dockSitesVisible();
 void setThruster(float k);  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
 // v3.6.0 (пасс D): астероидное поле в Travel. k 0..1 — плотность/видимость
 // (дефолт 0, харнесс чистый), lane -1..1 — сглаженный сдвиг полосы обломков

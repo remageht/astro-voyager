@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <string>
 
 namespace astro {
 
@@ -22,6 +23,24 @@ struct ShipState {
   Vec3 gravVel;           // gravitational drift velocity (world units/s)
   bool fuelNoticeShown = false;  // one-shot "drift to star" notice flag
   bool boostActive = false;      // conventional boost engaged
+  bool isDocked = false;         // v3.11.0: docked at orbital station / shipyard
+  std::string dockedStationId;   // id of current dock site
+};
+
+// === Ship Customization & Shipyard === (v3.11.0)
+// Livery, plasma emission, ring spin rate and engineering upgrades.
+// Defaults are neutral (tints 1.0, spin 1.0, upgrades 0) so the baseline
+// reference screenshots and flight balance remain bit-for-bit identical.
+struct ShipCustomization {
+  int style = 0;                               // 0 Dart, 1 Ring Ship, 2 Shuttle, 3 Model (Warp Cruiser)
+  float primaryColor[3] = {1.0f, 1.0f, 1.0f};  // base hull tint multiplier
+  float accentColor[3] = {1.0f, 1.0f, 1.0f};   // secondary livery trim (cyan, gold, dark)
+  float emissiveColor[3] = {1.0f, 1.0f, 1.0f}; // plasma glow tint (nozzle, rings, core)
+  float ringSpinSpeed = 1.0f;                  // multiplier for warp ring rotation rate (0..3)
+  float warpGlowIntensity = 1.0f;              // multiplier for warp field glow (0.2..3.0)
+  int engineUpgrade = 0;                       // 0..3: +15% boost speed & fuel efficiency per level
+  int shieldUpgrade = 0;                       // 0..3: +20% hazard / radiation resistance per level
+  int warpUpgrade = 0;                         // 0..3: -12% jump fuel cost per level
 };
 
 namespace ship {
@@ -73,6 +92,22 @@ inline bool canJump(const ShipState& s, float costK = 1.0f) {
 // v3.6.0: варп-роли корпусов. Dart (0) и Ring Ship (1) несут варп-двигатель,
 // Shuttle (2) — локальный корабль: прыжок недоступен.
 inline bool styleCanWarp(int style) { return style != 2; }
+
+// v3.11.0: инженерные модификации корпуса и оборудования
+inline float upgradeBoostSpeedMult(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  return 1.0f + 0.15f * static_cast<float>(l);
+}
+
+inline float upgradeShieldDamageFactor(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  return 1.0f / (1.0f + 0.20f * static_cast<float>(l));
+}
+
+inline float upgradeJumpCostFactor(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  return 1.0f - 0.12f * static_cast<float>(l);
+}
 
 inline bool spendJumpFuel(ShipState& s, float costK = 1.0f) {
   const float cost = kJumpFuelCost * costK;

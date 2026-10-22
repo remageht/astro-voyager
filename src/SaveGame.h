@@ -82,7 +82,8 @@ struct SaveSession {
   float timeScale = 1.0f;  // sim-секунд на wall-секунду (пресеты 1..1000)
   float fuel = 100.0f;
   float shield = 100.0f;
-  int shipStyle = 0;  // 0 Dart, 1 Ring, 2 Shuttle
+  int shipStyle = 0;  // 0 Dart, 1 Ring, 2 Shuttle, 3 Model
+  ShipCustomization custom;  // v3.11.0: кастомизация ливреи и апгрейды корабля
 };
 
 struct SaveGame {

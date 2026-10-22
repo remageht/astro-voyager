@@ -38,6 +38,9 @@ uniform sampler2D u_NormalTex;
 uniform sampler2D u_RoughTex;
 uniform sampler2D u_MetalTex;
 uniform sampler2D u_EmissiveTex;  // запечённые наклейки/окна/кольцевой неон
+uniform vec3 u_HullTint;          // v3.11.0: базовый оттенок корпуса (1,1,1 по умолчанию)
+uniform vec3 u_AccentTint;        // v3.11.0: оттенок акцентной ливреи (1,1,1 по умолчанию)
+uniform vec3 u_EmissiveTint;      // v3.11.0: оттенок плазменного свечения (1,1,1 по умолчанию)
 
 const float kPi = 3.14159265;
 
@@ -69,11 +72,11 @@ void main() {
     // sRGB albedo -> linear; roughness/metallic maps are linear grayscale.
     // LOD 0 принудительно: vt у Model — кластерные средние, производные UV
     // скачут между кластерами, mip-фильтр вырождается в средний цвет атласа.
-    albedo = pow(max(textureLod(u_Albedo, v_UV, 0.0).rgb, vec3(0.0)), vec3(2.2));
+    albedo = pow(max(textureLod(u_Albedo, v_UV, 0.0).rgb, vec3(0.0)), vec3(2.2)) * u_HullTint;
     rough = clamp(textureLod(u_RoughTex, v_UV, 0.0).r, 0.05, 1.0);
     metal = clamp(textureLod(u_MetalTex, v_UV, 0.0).r, 0.0, 1.0);
     if (u_EmissiveOn == 1)
-      mapEm = pow(textureLod(u_EmissiveTex, v_UV, 0.0).rgb, vec3(2.2));
+      mapEm = pow(textureLod(u_EmissiveTex, v_UV, 0.0).rgb, vec3(2.2)) * u_EmissiveTint;
     // Tangent-space normal without a tangent stream: build the cotangent
     // frame from screen-space derivatives of world position and uv.
     vec3 nmap = textureLod(u_NormalTex, v_UV, 0.0).xyz * 2.0 - 1.0;
@@ -88,7 +91,7 @@ void main() {
     float im = inversesqrt(max(dot(T, T), dot(B, B)) + 1e-12);
     n = normalize(T * (im * nmap.x) + B * (im * nmap.y) + n * nmap.z);
   } else {
-    albedo = pow(max(u_BaseColor, vec3(0.0)), vec3(2.2));
+    albedo = pow(max(u_BaseColor, vec3(0.0)), vec3(2.2)) * u_HullTint;
     rough = clamp(u_Rough, 0.05, 1.0);
     metal = clamp(u_Metal, 0.0, 1.0);
     // S7: панельные линии и вариация плит — только металлический корпус
@@ -109,7 +112,7 @@ void main() {
       float cr = texture(u_SkinRough, tp.yz).r * an.x +
                  texture(u_SkinRough, tp.xz).r * an.y +
                  texture(u_SkinRough, tp.xy).r * an.z;
-      albedo = pow(max(ca, vec3(0.0)), vec3(2.2));
+      albedo = pow(max(ca, vec3(0.0)), vec3(2.2)) * u_HullTint;
       rough = clamp(mix(rough, cr, 0.90), 0.08, 1.0);
       // Гарь у сопел: корма темнее и «металличнее».
       float heat = smoothstep(0.55, 1.15, v_ObjPos.z);
@@ -154,6 +157,6 @@ void main() {
   vec3 fEnv = f0 + (max(vec3(1.0 - rough), f0) - f0) * pow(1.0 - NoV, 5.0);
   col += envDiff * albedo * kd * 2.6;  // ambient gain: sky is dim HDR
   col += envSpec * fEnv * (1.0 - 0.55 * rough) * u_ReflK;
-  col += u_Emissive + mapEm;  // S5/S8: сопла, навогни, кабина + Model эмиссив
+  col += u_Emissive * u_EmissiveTint + mapEm;  // S5/S8: сопла, навогни, кабина + Model эмиссив
   FragColor = vec4(col, 1.0);
 }

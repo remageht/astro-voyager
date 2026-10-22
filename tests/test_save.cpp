@@ -377,6 +377,47 @@ int main() {
     }
   }
 
+  // Test 14 (v3.11.0): ship customization round-trip in SaveGame session
+  {
+    astro::SaveGame g;
+    g.session.station = "sol";
+    g.session.shipStyle = 3;
+    g.session.custom.style = 3;
+    g.session.custom.primaryColor[0] = 0.8f;
+    g.session.custom.primaryColor[1] = 0.85f;
+    g.session.custom.primaryColor[2] = 0.9f;
+    g.session.custom.accentColor[0] = 0.0f;
+    g.session.custom.accentColor[1] = 0.9f;
+    g.session.custom.accentColor[2] = 1.0f;
+    g.session.custom.emissiveColor[0] = 0.6f;
+    g.session.custom.emissiveColor[1] = 0.2f;
+    g.session.custom.emissiveColor[2] = 1.0f;
+    g.session.custom.ringSpinSpeed = 1.8f;
+    g.session.custom.warpGlowIntensity = 2.2f;
+    g.session.custom.engineUpgrade = 2;
+    g.session.custom.shieldUpgrade = 1;
+    g.session.custom.warpUpgrade = 3;
+
+    const std::string text = astro::saveSerialize(g);
+    astro::SaveGame out;
+    std::string err;
+    if (!astro::saveDeserialize(text, out, err)) {
+      std::cerr << "Test 14 failed: " << err << '\n';
+      return 1;
+    }
+    if (out.session.shipStyle != 3 ||
+        !close(out.session.custom.primaryColor[0], 0.8f) ||
+        !close(out.session.custom.accentColor[1], 0.9f) ||
+        !close(out.session.custom.emissiveColor[2], 1.0f) ||
+        !close(out.session.custom.ringSpinSpeed, 1.8f) ||
+        !close(out.session.custom.warpGlowIntensity, 2.2f) ||
+        out.session.custom.engineUpgrade != 2 ||
+        out.session.custom.shieldUpgrade != 1 ||
+        out.session.custom.warpUpgrade != 3) {
+      std::cerr << "Test 14 failed: customization round-trip mismatch\n";
+      return 1;
+    }
+  }
   std::cout << "save tests: ALL PASS\n";
   return 0;
 }

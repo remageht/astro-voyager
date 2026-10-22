@@ -275,6 +275,16 @@ class SceneManager {
   const std::vector<ColonySite>& colonySites() const { return m_colonySites; }
   void setColonies(const std::vector<std::string>& ids) { m_colonies = ids; }
   bool hasColony(const std::string& id) const;
+  // === Orbital Stations & Docks === (v3.11.0)
+  struct DockSite {
+    std::string id;
+    std::string name;
+    std::string stationId;
+    Vec3 pos;
+    float dockRadius = 4.5f;
+  };
+  std::vector<DockSite> m_dockSites;
+  const std::vector<DockSite>& dockSites() const { return m_dockSites; }
 
   // === Horizon capture === (v3.6.0): приливная линза + вспышка post-composite.
   void setHorizonFx(float k, float flash) { m_postFx.setHorizonFx(k, flash); }

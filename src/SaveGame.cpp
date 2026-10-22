@@ -490,7 +490,21 @@ std::string saveSerialize(const SaveGame& g) {
   out += ind(2) + "\"timeScale\": " + numToJson(g.session.timeScale) + ",\n";
   out += ind(2) + "\"fuel\": " + numToJson(g.session.fuel) + ",\n";
   out += ind(2) + "\"shield\": " + numToJson(g.session.shield) + ",\n";
-  out += ind(2) + "\"shipStyle\": " + std::to_string(g.session.shipStyle) + "\n";
+  out += ind(2) + "\"shipStyle\": " + std::to_string(g.session.shipStyle) + ",\n";
+  out += ind(2) + "\"hullTint\": ";
+  writeVec3(out, Vec3(g.session.custom.primaryColor[0], g.session.custom.primaryColor[1], g.session.custom.primaryColor[2]));
+  out += ",\n";
+  out += ind(2) + "\"accentTint\": ";
+  writeVec3(out, Vec3(g.session.custom.accentColor[0], g.session.custom.accentColor[1], g.session.custom.accentColor[2]));
+  out += ",\n";
+  out += ind(2) + "\"emissiveTint\": ";
+  writeVec3(out, Vec3(g.session.custom.emissiveColor[0], g.session.custom.emissiveColor[1], g.session.custom.emissiveColor[2]));
+  out += ",\n";
+  out += ind(2) + "\"ringSpin\": " + numToJson(g.session.custom.ringSpinSpeed) + ",\n";
+  out += ind(2) + "\"warpGlow\": " + numToJson(g.session.custom.warpGlowIntensity) + ",\n";
+  out += ind(2) + "\"engineUpgrade\": " + std::to_string(g.session.custom.engineUpgrade) + ",\n";
+  out += ind(2) + "\"shieldUpgrade\": " + std::to_string(g.session.custom.shieldUpgrade) + ",\n";
+  out += ind(2) + "\"warpUpgrade\": " + std::to_string(g.session.custom.warpUpgrade) + "\n";
   out += ind(1) + "}\n";
 
   out += "}\n";
@@ -558,6 +572,27 @@ bool saveDeserialize(const std::string& text, SaveGame& out, std::string& err) {
     out.session.fuel = readFloat(*se, "fuel", out.session.fuel);
     out.session.shield = readFloat(*se, "shield", out.session.shield);
     out.session.shipStyle = readInt(*se, "shipStyle", out.session.shipStyle);
+    out.session.custom.style = out.session.shipStyle;
+    Vec3 ht(out.session.custom.primaryColor[0], out.session.custom.primaryColor[1], out.session.custom.primaryColor[2]);
+    readVec3(*se, "hullTint", ht);
+    out.session.custom.primaryColor[0] = static_cast<float>(ht.x);
+    out.session.custom.primaryColor[1] = static_cast<float>(ht.y);
+    out.session.custom.primaryColor[2] = static_cast<float>(ht.z);
+    Vec3 at(out.session.custom.accentColor[0], out.session.custom.accentColor[1], out.session.custom.accentColor[2]);
+    readVec3(*se, "accentTint", at);
+    out.session.custom.accentColor[0] = static_cast<float>(at.x);
+    out.session.custom.accentColor[1] = static_cast<float>(at.y);
+    out.session.custom.accentColor[2] = static_cast<float>(at.z);
+    Vec3 et(out.session.custom.emissiveColor[0], out.session.custom.emissiveColor[1], out.session.custom.emissiveColor[2]);
+    readVec3(*se, "emissiveTint", et);
+    out.session.custom.emissiveColor[0] = static_cast<float>(et.x);
+    out.session.custom.emissiveColor[1] = static_cast<float>(et.y);
+    out.session.custom.emissiveColor[2] = static_cast<float>(et.z);
+    out.session.custom.ringSpinSpeed = readFloat(*se, "ringSpin", out.session.custom.ringSpinSpeed);
+    out.session.custom.warpGlowIntensity = readFloat(*se, "warpGlow", out.session.custom.warpGlowIntensity);
+    out.session.custom.engineUpgrade = readInt(*se, "engineUpgrade", out.session.custom.engineUpgrade);
+    out.session.custom.shieldUpgrade = readInt(*se, "shieldUpgrade", out.session.custom.shieldUpgrade);
+    out.session.custom.warpUpgrade = readInt(*se, "warpUpgrade", out.session.custom.warpUpgrade);
   }
   return true;
 }

@@ -105,6 +105,33 @@ FBO с **bloom** (5 уровней яркости) и **релятивистск
 | `H` / `F1` | Скрыть панель / помощь |
 | F5 / F6 | Экспорт / импорт маршрута |
 | F9 / F10 | Быстрое сохранение / загрузка профиля (автосейв при выходе) |
+| `K` | Орбитальная верфь: стыковка со станцией / ангар флота / кастомизация / отстыковка |
+
+## Орбитальные станции и Верфь кораблей / Space Stations & Shipyard (v3.11.0)
+
+В астрономических системах развернута сеть орбитальных станций (Земной Шлюз Sol Gateway, Станция Зенит M13, Аванпост ядра Sgr A*, Ригель Док Orion и др.):
+- **Стыковка (`K`)**: При сближении с орбитальной станцией (< 4.5 ед.) нажмите `[K]` для захвата стыковочными манипуляторами. Скорость гасится, баки топлива и щиты мгновенно перезаряжаются до 100%, открывается интерфейс Верфи.
+- **Ангар (Смена корабля)**: Мгновенное переключение между кораблями флота:
+  * *0: Dart* — лёгкий скоростной перехватчик/разведчик;
+  * *1: IXS Warp Ship* — классический исследователь с независимыми варп-кольцами Алькубьерре;
+  * *2: Heavy Shuttle* — тяжёлый исследовательский челнок (досветовой, без варп-привода);
+  * *3: Warp Cruiser (OBJ)* — флагманский крейсер дальнего поиска с высокой PBR-детализацией.
+- **Ливрея и Покрасочный цех (Paint Shop)**:
+  * Настройка цвета корпуса (Primary Tint), акцентных полос (Accent Tint) и свечения плазмы/дюз (Plasma Emissive);
+  * Готовые темы: *Quantum Cyan* (квантовый лазурный), *Plasma Violet* (фиолетовая сингулярность), *Solar Gold* (золотой титан), *Void Stealth* (глубокий стелс);
+  * Регулировка скорости вращения варп-катушек и интенсивности свечения варп-поля.
+- **Инженерный отсек (Модификации)**:
+  * *Форсажные инжекторы*: уровни 0–3 (до +45% к скорости обычного форсажа на маршевых двигателях);
+  * *Конденсаторы щита*: уровни 0–3 (до +37% сопротивления радиации и столкновениям);
+  * *Гармоническая калибровка варп-катушек*: уровни 0–3 (до -36% расхода топлива на варп-прыжки).
+- **Сохранение**: конфигурация ливреи, активный корабль, апгрейды и состояние стыковки автоматически сохраняются в профиле `save-sandbox.json` с полной обратной совместимостью.
+
+*English summary:*
+- **Docking (`K`)**: Approach within 4.5 units of any orbital station (Sol Gateway, M13 Zenith, Sgr A* Core Outpost, etc.) and press `[K]` to dock. Resupplies fuel and shields to 100% and opens the Shipyard.
+- **Fleet Hangar**: Switch between Dart interceptor, Alcubierre Ring Ship, Heavy Sublight Shuttle, and Warp Cruiser.
+- **Custom Livery & Paint Shop**: Customize Hull Tint, Accent Tint, and Plasma Emissive colors with quick presets (Quantum Cyan, Plasma Violet, Solar Gold, Void Stealth) and adjust ring spin rate.
+- **Engineering Upgrades**: Level 0–3 Boost Injectors (+speed), Shield Capacitors (+defense), and Warp Coil Tuning (-jump cost).
+- **Persistent State**: Full round-trip serialization of customized livery and installed upgrades in `save-sandbox.json`.
 
 ## Сохранения (v3.4.0)
 

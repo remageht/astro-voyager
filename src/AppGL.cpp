@@ -634,6 +634,18 @@ void AppGL::processInput(float deltaTime) {
   // v3.9.0: обычное ускорение (форсаж) при помощи обычного топлива.
   // При зажатом Left Shift в обычном досветовом полёте (варп выключен) расходуется
   // топливо бака со скоростью kSublightFuelRatePerSec и активируется повышенная тяга (x2.0).
+  // v3.11.0: если корабль состыкован — держим его в доке, обнуляем скорости.
+  if (m_ship.isDocked) {
+    m_shipVel = Vec3();
+    m_ship.gravVel = Vec3();
+    if (m_moveInputActive) {
+      m_shipNotice = uiRu("Корабль состыкован. Нажмите [K] или кнопку в верфи для отстыковки.",
+                          "Ship is docked. Press [K] or button in shipyard to undock.");
+      m_shipNoticeT = 2.0f;
+    }
+    return;
+  }
+
   const bool wantBoost = shiftPressed && !m_warpOn && !m_jumpCine;
   if (wantBoost && ship::canBoost(m_ship) && (m_moveInputActive || axisF != 0.0)) {
     m_ship.boostActive = true;
@@ -657,7 +669,8 @@ void AppGL::processInput(float deltaTime) {
     }
   }
 
-  const double boostMul = m_ship.boostActive ? ship::kBoostSpeedMultiplier : 1.0;
+  const float upgradeSpeedMult = ship::upgradeBoostSpeedMult(m_shipCustomization.engineUpgrade);
+  const double boostMul = m_ship.boostActive ? (ship::kBoostSpeedMultiplier * static_cast<double>(upgradeSpeedMult)) : 1.0;
   const Vec3 fwd = m_camera.forward();
   const Vec3 rgt = m_camera.right();
   const Vec3 want((fwd.x * axisF + rgt.x * axisR) * (m_camera.moveSpeed * boostMul),
@@ -1586,6 +1599,7 @@ void AppGL::saveAdventureSlotNow(bool quiet) {
   g.progress.route = m_route;
   g.progress.colonies = m_colonies;
   g.progress.minBhDistance = m_minBhDistance;
+  g.session.custom = m_shipCustomization;
   if (const Station* cur = m_sceneManager->getCurrentStation()) {
     g.session.station = cur->id;
   }
@@ -2128,6 +2142,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (!m_inMenu) drawShipHud();
   // === StoryJournal === (v3.5.0): панель журнала поверх сцены (в меню скрыта).
   if (m_storyOpen && !m_inMenu) drawStoryPanel();
+  // === Orbital Shipyard === (v3.11.0): верфь и кастомизация кораблей.
+  if (m_shipyardOpen && !m_inMenu) drawShipyard();
   // === Expedition === (v3.5.0): HUD-карточка главы над сценой.
   if (!m_inMenu) {
     drawExpeditionHud();
@@ -2864,6 +2880,38 @@ void AppGL::updateShip(float deltaTime) {
     m_colonyHintId.clear();
   }
   m_prevCPressed = cDown;
+
+  // === v3.11.0: Orbital Space Station Docking & Shipyard ===
+  m_dockHint.clear();
+  m_dockHintId.clear();
+  if (!m_inMenu && !m_slidesOpen && !m_jumpCine && !m_captureAnim) {
+    const Station* stNow = m_sceneManager->getCurrentStation();
+    if (stNow) {
+      for (const SceneManager::DockSite& dock : m_sceneManager->dockSites()) {
+        if (dock.stationId != stNow->id) continue;
+        const double dx = m_camera.position.x - dock.pos.x;
+        const double dy = m_camera.position.y - dock.pos.y;
+        const double dz = m_camera.position.z - dock.pos.z;
+        const double lim = static_cast<double>(dock.dockRadius);
+        if (dx * dx + dy * dy + dz * dz < lim * lim) {
+          m_dockHint = dock.name;
+          m_dockHintId = dock.id;
+          break;
+        }
+      }
+    }
+  }
+  const bool kDown = (glfwGetKey(m_window->getNativeWindow(), GLFW_KEY_K) == GLFW_PRESS);
+  if (kDown && !m_prevKPressed && !colonyIo.WantCaptureKeyboard) {
+    if (m_ship.isDocked) {
+      undockFromStation();
+    } else if (!m_dockHintId.empty()) {
+      dockAtStation(m_dockHintId);
+    } else {
+      toggleShipyard();
+    }
+  }
+  m_prevKPressed = kDown;
 }
 
 // Нижний левый HUD: полосы топлива (оранжевая) и щитов (синяя) + нотисы.
@@ -2908,6 +2956,18 @@ void AppGL::drawShipHud() {
           ImVec4(1.0f, 0.55f, 0.15f, 1.0f), "%s",
           uiRu("Топливо исчерпано. Дрейф к ближайшей звезде...",
                "Out of fuel. Drifting to the nearest star..."));
+    }
+    // v3.11.0: подсказка стыковки у орбитальной станции / верфи.
+    if (!m_dockHint.empty() && !m_ship.isDocked) {
+      ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.75f, 1.0f), "%s %s",
+                         uiRu("[K] Стыковка:", "[K] Dock:"),
+                         m_dockHint.c_str());
+    } else if (m_ship.isDocked) {
+      ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.5f, 1.0f), "%s",
+                         uiRu("[ СОСТЫКОВАНО С ВЕРФЬЮ ]", "[ DOCKED AT SHIPYARD ]"));
+    }
+    if (ImGui::SmallButton(uiRu("Верфь / Shipyard [K]", "Shipyard [K]"))) {
+      toggleShipyard();
     }
     // v3.6.0: подсказка колонизации у планеты-сайта.
     if (!m_colonyHint.empty()) {
@@ -3164,6 +3224,8 @@ void AppGL::applySaveGame(const SaveGame& g) {
   m_shipVel = Vec3();
   m_orbitNoticeShown = false;
   m_shipNoticeT = 0.0f;
+  m_shipCustomization = g.session.custom;
+  warpdrive::setShipCustomization(m_shipCustomization);
   setShipStyleNow(g.session.shipStyle);  // v3.6.0: с учётом варп-ролей
   // Скоростные эффекты: после прыжка камеры не меряем «скачок скорости»
   // (иначе ложный доплер/стрики на первом кадре).
@@ -4160,6 +4222,7 @@ bool AppGL::saveScreenshot(const std::string& filepath) {
 
 int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   s_harnessPinFps = true;
+  warpdrive::setDockSitesVisible(false);
   std::filesystem::create_directories(outDir);
 
   // Create AppGL (with window 1280x720)
@@ -4730,7 +4793,9 @@ void AppGL::disengageWarp() {
 
 void AppGL::setShipStyleNow(int style) {
   m_shipStyle = std::min(std::max(style, 0), 3);
+  m_shipCustomization.style = m_shipStyle;
   warpdrive::setShipStyle(m_shipStyle);
+  warpdrive::setShipCustomization(m_shipCustomization);
   // Shuttle без варп-двигателя: если варп был активен (Cruise/Cooldown),
   // гасим его; посреди катсцены не трогаем (досматриваем).
   if (!ship::styleCanWarp(m_shipStyle) && m_warpOn && !m_jumpCine &&
@@ -6187,5 +6252,280 @@ void AppGL::drawHorizonCapture(ImDrawList* dl) {
   dl->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(0, 0, 0, ab));
 }
 // === Physics === end
+
+
+// === Orbital Shipyard & Station Docking (v3.11.0) ===
+void AppGL::toggleShipyard() {
+  m_shipyardOpen = !m_shipyardOpen;
+}
+
+void AppGL::dockAtStation(const std::string& dockId) {
+  m_ship.isDocked = true;
+  m_ship.dockedStationId = dockId;
+  m_ship.fuel = 100.0f;
+  m_ship.shield = 100.0f;
+  m_shipVel = Vec3();
+  m_ship.gravVel = Vec3();
+  m_shipyardOpen = true;
+
+  Toast dt;
+  dt.title = uiRu("Стыковка выполнена", "Docking successful");
+  dt.desc = (m_dockHint.empty() ? std::string(uiRu("Орбитальная верфь", "Orbital Shipyard")) : m_dockHint) +
+            uiRu(" — корабль заправлен и обслужен.", " — vessel serviced and refueled.");
+  dt.time = static_cast<float>(glfwGetTime());
+  m_toasts.push_back(dt);
+
+  m_shipNotice = std::string(uiRu("Состыковано: ", "Docked: ")) + (m_dockHint.empty() ? dockId : m_dockHint);
+  m_shipNoticeT = 4.0f;
+  saveProfileNow(false);
+}
+
+void AppGL::undockFromStation() {
+  m_ship.isDocked = false;
+  m_ship.dockedStationId.clear();
+  m_shipyardOpen = false;
+  const Vec3 fwd = m_camera.forward();
+  m_camera.position = Vec3(m_camera.position.x + fwd.x * 0.8,
+                           m_camera.position.y + fwd.y * 0.8,
+                           m_camera.position.z + fwd.z * 0.8);
+  Toast ut;
+  ut.title = uiRu("Отстыковка завершена", "Undocking complete");
+  ut.desc = uiRu("Шлюзы закрыты. Системы корабля в норме.", "Clamps released. Ship systems nominal.");
+  ut.time = static_cast<float>(glfwGetTime());
+  m_toasts.push_back(ut);
+
+  m_shipNotice = uiRu("Свободный полёт. Двигатели готовы.", "Free flight. Engines ready.");
+  m_shipNoticeT = 3.0f;
+  saveProfileNow(false);
+}
+
+void AppGL::drawShipyard() {
+  if (!m_shipyardOpen) return;
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowSize(ImVec2(540.0f, 480.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f - 270.0f, io.DisplaySize.y * 0.5f - 240.0f), ImGuiCond_FirstUseEver);
+
+  std::string title = uiRu("Орбитальная Верфь и Док Кораблей", "Orbital Shipyard & Vessel Bay");
+  if (m_ship.isDocked) {
+    title += " [";
+    title += uiRu("Состыковано", "Docked");
+    title += "]";
+  }
+
+  bool open = m_shipyardOpen;
+  if (ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoCollapse)) {
+    if (ImGui::BeginTabBar("##shipyardTabs")) {
+      
+      // === TAB 1: HANGAR / SWITCH SHIP ===
+      if (ImGui::BeginTabItem(uiRu("Ангар / Смена корабля", "Hangar / Switch Ship"))) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s",
+                           uiRu("Выберите активный корпус флота:", "Select active fleet vessel:"));
+        ImGui::Separator();
+        
+        const char* styles[] = {
+          "0: Dart (Перехватчик / Interceptor)",
+          "1: Ring Ship IXS (Алькубьерре / Warp Explorer)",
+          "2: Shuttle (Тяжёлый челнок / Sublight Heavy)",
+          "3: Warp Cruiser (Флагман / Triple-Ring Cruiser)"
+        };
+
+        for (int i = 0; i < 4; ++i) {
+          bool selected = (m_shipStyle == i);
+          if (ImGui::Selectable(styles[i], selected)) {
+            setShipStyleNow(i);
+            saveProfileNow(false);
+          }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.9f, 0.75f, 0.2f, 1.0f), "%s", uiRu("Характеристики корпуса:", "Vessel Specifications:"));
+        if (m_shipStyle == 0) {
+          ImGui::BulletText("%s", uiRu("Класс: Скоростной перехватчик / Разведчик", "Class: High-speed Interceptor / Scout"));
+          ImGui::BulletText("%s: %s", uiRu("Варп-двигатель", "Warp Drive"), uiRu("Установлен (Класс I)", "Installed (Class I)"));
+          ImGui::BulletText("%s", uiRu("Преимущество: Высокая маневренность и быстрый форсаж", "Advantage: Superior agility & rapid boost"));
+        } else if (m_shipStyle == 1) {
+          ImGui::BulletText("%s", uiRu("Класс: Исследователь дальнего космоса IXS Enterprise", "Class: Deep Space Explorer IXS Enterprise"));
+          ImGui::BulletText("%s: %s", uiRu("Варп-двигатель", "Warp Drive"), uiRu("Тороидальные катушки Алькубьерре", "Alcubierre Toroidal Coils"));
+          ImGui::BulletText("%s", uiRu("Преимущество: Стабильный кинематографический варп-кокон", "Advantage: Stable cinematic warp sheath"));
+        } else if (m_shipStyle == 2) {
+          ImGui::BulletText("%s", uiRu("Класс: Тяжёлый планетарный челнок / Эксплорер", "Class: Heavy Planetary Shuttle / Explorer"));
+          ImGui::BulletText("%s: %s", uiRu("Варп-двигатель", "Warp Drive"), uiRu("Отсутствует (Досветовой транспорт)", "None (Sublight Local Transport)"));
+          ImGui::BulletText("%s", uiRu("Преимущество: Усиленный композитный корпус и большой бак", "Advantage: Heavy composite hull & enhanced cargo capacity"));
+        } else {
+          ImGui::BulletText("%s", uiRu("Класс: Варп-крейсер Алькубьерре (Модель OBJ)", "Class: Alcubierre Warp Cruiser (OBJ Model)"));
+          ImGui::BulletText("%s: %s", uiRu("Варп-двигатель", "Warp Drive"), uiRu("Трёхконтурный генератор пространственного искажения", "Triple-Ring Spacetime Distortion Generator"));
+          ImGui::BulletText("%s", uiRu("Преимущество: PBR-композитная броня, квантовое ядро", "Advantage: Full PBR composite armor, quantum core"));
+        }
+
+        ImGui::EndTabItem();
+      }
+
+      // === TAB 2: LIVERY & PAINT SHOP ===
+      if (ImGui::BeginTabItem(uiRu("Покраска & Ливрея", "Livery & Paint Shop"))) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s",
+                           uiRu("Цветовые схемы и шейдерные настройки:", "Color Schemes & Shading Adjustments:"));
+        
+        bool changed = false;
+        changed |= ImGui::ColorEdit3(uiRu("Основной цвет корпуса", "Hull Primary Tint"), m_shipCustomization.primaryColor);
+        changed |= ImGui::ColorEdit3(uiRu("Акцентная ливрея / Полосы", "Accent Livery / Stripes"), m_shipCustomization.accentColor);
+        changed |= ImGui::ColorEdit3(uiRu("Свечение плазмы / Сопла", "Plasma Core & Nozzle Glow"), m_shipCustomization.emissiveColor);
+
+        ImGui::Spacing();
+        ImGui::Text("%s:", uiRu("Готовые стили оформления", "Preset Livery Themes"));
+        if (ImGui::Button(uiRu("Квантовый Циан", "Quantum Cyan"))) {
+          m_shipCustomization.primaryColor[0] = 0.95f; m_shipCustomization.primaryColor[1] = 0.98f; m_shipCustomization.primaryColor[2] = 1.0f;
+          m_shipCustomization.accentColor[0] = 0.0f; m_shipCustomization.accentColor[1] = 0.9f; m_shipCustomization.accentColor[2] = 1.0f;
+          m_shipCustomization.emissiveColor[0] = 0.1f; m_shipCustomization.emissiveColor[1] = 0.8f; m_shipCustomization.emissiveColor[2] = 1.0f;
+          changed = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(uiRu("Плазменный Фиолет", "Plasma Violet"))) {
+          m_shipCustomization.primaryColor[0] = 0.85f; m_shipCustomization.primaryColor[1] = 0.88f; m_shipCustomization.primaryColor[2] = 0.95f;
+          m_shipCustomization.accentColor[0] = 1.0f; m_shipCustomization.accentColor[1] = 0.75f; m_shipCustomization.accentColor[2] = 0.2f;
+          m_shipCustomization.emissiveColor[0] = 0.62f; m_shipCustomization.emissiveColor[1] = 0.15f; m_shipCustomization.emissiveColor[2] = 1.0f;
+          changed = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(uiRu("Тёмный Стелс", "Void Stealth"))) {
+          m_shipCustomization.primaryColor[0] = 0.25f; m_shipCustomization.primaryColor[1] = 0.26f; m_shipCustomization.primaryColor[2] = 0.28f;
+          m_shipCustomization.accentColor[0] = 1.0f; m_shipCustomization.accentColor[1] = 0.2f; m_shipCustomization.accentColor[2] = 0.1f;
+          m_shipCustomization.emissiveColor[0] = 1.0f; m_shipCustomization.emissiveColor[1] = 0.35f; m_shipCustomization.emissiveColor[2] = 0.05f;
+          changed = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(uiRu("Сброс", "Reset Defaults"))) {
+          for (int c = 0; c < 3; ++c) {
+            m_shipCustomization.primaryColor[c] = 1.0f;
+            m_shipCustomization.accentColor[c] = 1.0f;
+            m_shipCustomization.emissiveColor[c] = 1.0f;
+          }
+          m_shipCustomization.ringSpinSpeed = 1.0f;
+          m_shipCustomization.warpGlowIntensity = 1.0f;
+          changed = true;
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        changed |= ImGui::SliderFloat(uiRu("Скорость вращения колец", "Warp Ring Spin Rate"), &m_shipCustomization.ringSpinSpeed, 0.0f, 3.0f, "%.2fx");
+        changed |= ImGui::SliderFloat(uiRu("Интенсивность ауры варпа", "Warp Field Glow Gain"), &m_shipCustomization.warpGlowIntensity, 0.2f, 3.0f, "%.2fx");
+
+        if (changed) {
+          warpdrive::setShipCustomization(m_shipCustomization);
+          saveProfileNow(false);
+        }
+
+        ImGui::EndTabItem();
+      }
+
+      // === TAB 3: ENGINEERING / UPGRADES ===
+      if (ImGui::BeginTabItem(uiRu("Инженерия & Апгрейды", "Engineering & Upgrades"))) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s",
+                           uiRu("Модификации бортовых систем корабля:", "Ship Systems & Subsystem Tuning:"));
+        
+        bool upgraded = false;
+        // 1. Boost Injector
+        ImGui::Spacing();
+        ImGui::Text("%s [Ур. %d / 3]:", uiRu("Форсажные плазменные инжекторы", "Sublight Boost Injectors"), m_shipCustomization.engineUpgrade);
+        ImGui::ProgressBar(m_shipCustomization.engineUpgrade / 3.0f, ImVec2(220.0f, 14.0f));
+        ImGui::SameLine();
+        if (m_shipCustomization.engineUpgrade < 3) {
+          if (ImGui::Button(uiRu("Улучшить##eng", "Upgrade##eng"))) {
+            m_shipCustomization.engineUpgrade++;
+            upgraded = true;
+          }
+        } else {
+          ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "%s", uiRu("МАКСИМУМ", "MAX"));
+        }
+        ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  -> %s +%.0f%%",
+                           uiRu("Бонус скорости форсажа:", "Boost speed bonus:"),
+                           (ship::upgradeBoostSpeedMult(m_shipCustomization.engineUpgrade) - 1.0f) * 100.0f);
+
+        // 2. Shield Hardening
+        ImGui::Spacing();
+        ImGui::Text("%s [Ур. %d / 3]:", uiRu("Усиленные генераторы защитного поля", "Reinforced Shield Capacitors"), m_shipCustomization.shieldUpgrade);
+        ImGui::ProgressBar(m_shipCustomization.shieldUpgrade / 3.0f, ImVec2(220.0f, 14.0f));
+        ImGui::SameLine();
+        if (m_shipCustomization.shieldUpgrade < 3) {
+          if (ImGui::Button(uiRu("Улучшить##shd", "Upgrade##shd"))) {
+            m_shipCustomization.shieldUpgrade++;
+            upgraded = true;
+          }
+        } else {
+          ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "%s", uiRu("МАКСИМУМ", "MAX"));
+        }
+        ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  -> %s +%.0f%%",
+                           uiRu("Поглощение радиации пульсаров:", "Radiation absorption bonus:"),
+                           (1.0f - ship::upgradeShieldDamageFactor(m_shipCustomization.shieldUpgrade)) * 100.0f);
+
+        // 3. Warp Coil Harmonic Tuning
+        ImGui::Spacing();
+        ImGui::Text("%s [Ур. %d / 3]:", uiRu("Гармоническая калибровка варп-катушек", "Warp Coil Harmonic Tuning"), m_shipCustomization.warpUpgrade);
+        ImGui::ProgressBar(m_shipCustomization.warpUpgrade / 3.0f, ImVec2(220.0f, 14.0f));
+        ImGui::SameLine();
+        if (m_shipCustomization.warpUpgrade < 3) {
+          if (ImGui::Button(uiRu("Улучшить##wrp", "Upgrade##wrp"))) {
+            m_shipCustomization.warpUpgrade++;
+            upgraded = true;
+          }
+        } else {
+          ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "%s", uiRu("МАКСИМУМ", "MAX"));
+        }
+        ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  -> %s -%.0f%%",
+                           uiRu("Экономия топлива при варп-прыжке:", "Warp jump fuel savings:"),
+                           (1.0f - ship::upgradeJumpCostFactor(m_shipCustomization.warpUpgrade)) * 100.0f);
+
+        if (upgraded) {
+          warpdrive::setShipCustomization(m_shipCustomization);
+          saveProfileNow(false);
+        }
+
+        ImGui::EndTabItem();
+      }
+
+      // === TAB 4: SERVICES ===
+      if (ImGui::BeginTabItem(uiRu("Службы верфи", "Station Services"))) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s",
+                           uiRu("Статус систем корабля:", "Ship Diagnostic Status:"));
+        ImGui::BulletText("%s: %.0f / 100", uiRu("Топливо", "Fuel"), m_ship.fuel);
+        ImGui::BulletText("%s: %.0f / 100", uiRu("Щиты", "Shields"), m_ship.shield);
+        ImGui::BulletText("%s: %s", uiRu("Статус дока", "Dock Status"),
+                          m_ship.isDocked ? uiRu("Состыкован", "Docked") : uiRu("Свободный дрейф", "Free Flight"));
+
+        ImGui::Spacing();
+        if (ImGui::Button(uiRu("Полная дозаправка (100%)", "Full Refuel (100%)"), ImVec2(220.0f, 28.0f))) {
+          m_ship.fuel = 100.0f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(uiRu("Восстановление щитов (100%)", "Recharge Shields (100%)"), ImVec2(220.0f, 28.0f))) {
+          m_ship.shield = 100.0f;
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        if (m_ship.isDocked) {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.65f, 0.35f, 1.0f));
+          if (ImGui::Button(uiRu("ОТСТЫКОВАТЬСЯ [K]", "UNDOCK SHIP [K]"), ImVec2(320.0f, 36.0f))) {
+            undockFromStation();
+          }
+          ImGui::PopStyleColor();
+        } else {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.45f, 0.85f, 1.0f));
+          if (ImGui::Button(uiRu("ПРИНУДИТЕЛЬНАЯ СТЫКОВКА [K]", "EMERGENCY DOCK [K]"), ImVec2(320.0f, 36.0f))) {
+            dockAtStation(m_dockHintId.empty() ? "dock-station" : m_dockHintId);
+          }
+          ImGui::PopStyleColor();
+        }
+
+        ImGui::EndTabItem();
+      }
+
+      ImGui::EndTabBar();
+    }
+  }
+  ImGui::End();
+
+  m_shipyardOpen = open;
+}
 
 }  // namespace astro
