@@ -257,8 +257,16 @@ bool cartRkf45(inout float h, float tol, inout vec3 x, inout vec3 v,
     // Controller identical to the CPU port.
     float fac = clamp(0.9 * pow(tol / max(err, 1e-30), 0.2), 0.2, 5.0);
     if (err > tol) {
-      h *= fac;
-      if (h < 1e-9 * u_Rs) break;
+      float hShrunk = h * fac;
+      if (att == 5 || hShrunk < 1e-9 * rs) {
+        // Reject budget exhausted: accept this trial's 5th-order state with the h that generated it
+        x = ox5;
+        v = ov5;
+        dt = odt5;
+        hNext = hShrunk;
+        return true;
+      }
+      h = hShrunk;
       continue;
     }
     x = ox5;
@@ -267,7 +275,6 @@ bool cartRkf45(inout float h, float tol, inout vec3 x, inout vec3 v,
     hNext = h * fac;
     return true;
   }
-  // Reject budget exhausted: accept the last trial's 5th-order state.
   x = ox5;
   v = ov5;
   dt = odt5;
@@ -665,11 +672,12 @@ void main() {
   }
 
   if (r <= u_Rs * 1.001) {
-    // Captured rays carry no disk/sky light: hard black shadow.
+    // Captured rays carry foreground emission (disk/jet accumulated before horizon crossing);
+    // where nothing was accumulated (accumColor == 0), the horizon remains pure black shadow.
     if (u_DiskOn == 1) {
-      FragColor = vec4(applyFinish(applyObserverShift(vec3(0.0), fCamSqrt, camRedden), v_TexCoord), 1.0);
+      FragColor = vec4(applyFinish(applyObserverShift(accumColor, fCamSqrt, camRedden), v_TexCoord), 1.0);
     } else {
-      FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+      FragColor = vec4(accumColor, 1.0);
     }
     return;
   }
