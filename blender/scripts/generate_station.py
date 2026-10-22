@@ -936,6 +936,94 @@ def bake_pbr_set(obj, base_path, tex_size=2048):
 
 
 # ---------------------------------------------------------------------------
+# BVH / Line-of-sight & Collision Validation for Close Camera
+# ---------------------------------------------------------------------------
+def find_valid_close_camera(station, target, desired_dist=0.50):
+    """Ensure camera is not inside geometry and has clear line of sight to target."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    eval_station = station.evaluated_get(depsgraph)
+
+    candidates = [
+        Vector(( 0.28,  0.28,  0.32)),  # Elevated forward-right looking at SAW junction
+        Vector(( 0.34,  0.22,  0.26)),
+        Vector(( 0.20,  0.38,  0.24)),
+        Vector(( 0.32,  0.25, -0.26)),
+        Vector((-0.20,  0.36,  0.26)),
+        Vector(( 0.16,  0.44,  0.16)),
+        Vector((-0.26,  0.28, -0.28)),
+    ]
+
+    for offset in candidates:
+        cam_pos = target + offset.normalized() * desired_dist
+
+        # 1. Proximity check to mesh surface
+        success, closest_pt, _, _ = eval_station.closest_point_on_mesh(cam_pos)
+        dist_to_mesh = 999.0
+        if success:
+            dist_to_mesh = (cam_pos - closest_pt).length
+            if dist_to_mesh < 0.045:
+                continue  # Inside or too close to geometry
+
+        # 2. Ray-cast check from camera to target
+        ray_dir = (target - cam_pos).normalized()
+        ray_dist = (target - cam_pos).length
+        hit_success, hit_loc, _, _ = eval_station.ray_cast(cam_pos, ray_dir, distance=ray_dist + 0.1)
+
+        if hit_success:
+            dist_to_target = (hit_loc - target).length
+            if dist_to_target < 0.07:
+                print(f"BVH-ray hit verified: cam_pos={cam_pos}, dist_to_mesh={dist_to_mesh:.3f}, hit_err={dist_to_target:.3f}")
+                return cam_pos
+        else:
+            print(f"BVH-ray unobstructed: cam_pos={cam_pos}, dist_to_mesh={dist_to_mesh:.3f}")
+            return cam_pos
+
+    # Safe fallback
+    fallback_pos = target + Vector((0.24, 0.38, 0.26)).normalized() * desired_dist
+    print(f"Using elevated fallback close camera: {fallback_pos}")
+    return fallback_pos
+
+
+# ---------------------------------------------------------------------------
+# Sanity-check & Self-adjusting Render Loop
+# ---------------------------------------------------------------------------
+def render_with_sanity_check(scene, out_path, frame_tag, min_luma=18.0/255.0, max_dark_frac=0.35, max_iters=5):
+    """Renders still and checks pixel luma and darkness, automatically tuning exposure/ambient up to max_iters."""
+    world = scene.world
+    bg_node = world.node_tree.nodes.get("Background") if (world and world.use_nodes) else None
+    
+    for it in range(1, max_iters + 1):
+        scene.render.filepath = out_path
+        bpy.ops.render.render(write_still=True)
+        
+        # Read pixels from saved image
+        abs_p = os.path.abspath(out_path)
+        img = bpy.data.images.load(abs_p)
+        px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
+        rgb = px[:, :3]
+        luma = 0.2126 * rgb[:, 0] + 0.7152 * rgb[:, 1] + 0.0722 * rgb[:, 2]
+        mean_luma = float(np.mean(luma))
+        dark_frac = float(np.mean(luma < (6.0 / 255.0)))
+        bpy.data.images.remove(img)
+        
+        is_pass = (mean_luma >= min_luma) and (dark_frac <= max_dark_frac)
+        status_str = "PASS" if is_pass else f"RETRY ({it}/{max_iters})"
+        print(f"[{frame_tag} iter {it}] LUMA={mean_luma * 255.0:.2f}/255 (mean={mean_luma:.4f}, dark_frac={dark_frac * 100.0:.2f}%) {status_str}")
+        
+        if is_pass:
+            break
+            
+        # Self-adjustment
+        if mean_luma < min_luma:
+            scene.view_settings.exposure += 0.35
+            print(f"  Adjusting exposure -> {scene.view_settings.exposure:.2f}")
+        if dark_frac > max_dark_frac and bg_node:
+            cur_str = bg_node.inputs["Strength"].default_value
+            bg_node.inputs["Strength"].default_value = cur_str + 0.30
+            print(f"  Adjusting ambient background strength -> {bg_node.inputs['Strength'].default_value:.2f}")
+
+
+# ---------------------------------------------------------------------------
 # Cycles Showcase Renders
 # ---------------------------------------------------------------------------
 def render_station_showcases(station, out_hero_png, out_close_png):
@@ -949,32 +1037,33 @@ def render_station_showcases(station, out_hero_png, out_close_png):
     scene.render.resolution_y = 720
     scene.render.image_settings.file_format = 'PNG'
     scene.render.image_settings.color_mode = 'RGBA'
+    scene.view_settings.exposure = 0.25
 
     # Camera
     cam_data = bpy.data.cameras.new("StationCam")
-    cam_data.lens = 45
+    cam_data.lens = 48
     cam_obj = bpy.data.objects.new("StationCam", cam_data)
     scene.collection.objects.link(cam_obj)
     scene.camera = cam_obj
 
     # Lighting
-    # 1. Direct High-Intensity Orbital Sun Key (crisp vacuum sunlight)
+    # 1. Direct Sun Key at ~35° from top-left (crisp vacuum sunlight)
     sun_data = bpy.data.lights.new("OrbitalSun", type='SUN')
-    sun_data.energy = 6.0
+    sun_data.energy = 9.0
     sun_data.color = (1.0, 0.98, 0.95)
     sun_obj = bpy.data.objects.new("OrbitalSun", sun_data)
-    sun_obj.rotation_euler = (math.radians(52), math.radians(30), math.radians(-40))
+    sun_obj.rotation_euler = (math.radians(35), math.radians(25), math.radians(-50))
     scene.collection.objects.link(sun_obj)
 
     # 2. Cool Azure Earth-Shine Albedo Rim/Bounce from Nadir
     earth_shine = bpy.data.lights.new("EarthAlbedo", type='SUN')
-    earth_shine.energy = 2.6
-    earth_shine.color = (0.22, 0.52, 0.95)
+    earth_shine.energy = 3.5
+    earth_shine.color = (0.22, 0.55, 0.95)
     earth_obj = bpy.data.objects.new("EarthAlbedo", earth_shine)
     earth_obj.rotation_euler = (math.radians(-45), math.radians(-25), math.radians(140))
     scene.collection.objects.link(earth_obj)
 
-    # Deep space world background
+    # Deep space world background with subtle orbital airglow/scatter
     world = scene.world
     if not world:
         world = bpy.data.worlds.new("StationWorld")
@@ -982,31 +1071,52 @@ def render_station_showcases(station, out_hero_png, out_close_png):
     world.use_nodes = True
     bg = world.node_tree.nodes.get("Background")
     if bg:
-        bg.inputs["Color"].default_value = (0.005, 0.008, 0.016, 1.0)
-        bg.inputs["Strength"].default_value = 0.35
+        bg.inputs["Color"].default_value = (0.028, 0.038, 0.058, 1.0)
+        bg.inputs["Strength"].default_value = 0.85
 
-    # === Render 1: Hero Perspective of the full station ===
-    print(f"Rendering Hero View -> {out_hero_png} ...")
-    cam_pos = Vector((-0.75, 0.45, 0.85))
-    target = Vector((0.0, -0.03, 0.04))
-    direction = target - cam_pos
-    cam_obj.location = cam_pos
-    cam_obj.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+    # =======================================================================
+    # Render 1: Hero Showcase - Full silhouette of ENTIRE station
+    # (Distance >= 2.5 truss-span, elevated diagonal view)
+    # =======================================================================
+    print(f"\nRendering Hero View -> {out_hero_png} ...")
+    cam_data.lens = 48
+    cam_data.dof.use_dof = False
 
-    scene.render.filepath = out_hero_png
-    bpy.ops.render.render(write_still=True)
-    print(f"Saved: {out_hero_png}")
+    target_hero = Vector((0.0, -0.04, 0.02))
+    hero_dist = 2.75  # >= 2.5 truss-span (normalized wingspan is 1.0)
+    cam_hero_pos = target_hero + Vector((-1.45, 1.30, 1.60)).normalized() * hero_dist
+    cam_obj.location = cam_hero_pos
+    cam_obj.rotation_euler = (target_hero - cam_hero_pos).to_track_quat('-Z', 'Y').to_euler()
 
-    # === Render 2: Close-up of the Modules, Cupola and Forward Docking Hub ===
-    print(f"Rendering Close-Up View -> {out_close_png} ...")
-    cam_close_pos = Vector((0.32, -0.18, 0.52))
-    close_target = Vector((0.0, -0.06, 0.22))
+    actual_hero_dist = (target_hero - cam_hero_pos).length
+    print(f"Showcase Camera distance to target: {actual_hero_dist:.2f} truss-spans (requirement: >= 2.5)")
+
+    render_with_sanity_check(scene, out_hero_png, "SHOWCASE", min_luma=18.0/255.0, max_dark_frac=0.35)
+    print(f"Saved Showcase: {out_hero_png}")
+
+    # =======================================================================
+    # Render 2: Close-Up View - SAW junction / connection to truss
+    # (Distance ~0.5 truss-span, DoF f/4, BVH line-of-sight validation)
+    # =======================================================================
+    print(f"\nRendering Close-Up View -> {out_close_png} ...")
+    close_target = Vector((-0.29, 0.02, 0.01))  # Port SAW canister / truss junction
+    close_dist = 0.50  # ~0.5 truss-span
+
+    cam_close_pos = find_valid_close_camera(station, close_target, desired_dist=close_dist)
     cam_obj.location = cam_close_pos
     cam_obj.rotation_euler = (close_target - cam_close_pos).to_track_quat('-Z', 'Y').to_euler()
 
-    scene.render.filepath = out_close_png
-    bpy.ops.render.render(write_still=True)
-    print(f"Saved: {out_close_png}")
+    # Depth of Field f/4 focused on the junction
+    cam_data.lens = 52
+    cam_data.dof.use_dof = True
+    cam_data.dof.focus_distance = (close_target - cam_close_pos).length
+    cam_data.dof.aperture_fstop = 4.0  # f/4!
+
+    actual_close_dist = (close_target - cam_close_pos).length
+    print(f"Close Camera distance to target: {actual_close_dist:.2f} truss-spans (requirement: ~0.5, DoF f/4)")
+
+    render_with_sanity_check(scene, out_close_png, "CLOSE", min_luma=18.0/255.0, max_dark_frac=0.35)
+    print(f"Saved Close-Up: {out_close_png}")
 
 
 # ---------------------------------------------------------------------------
