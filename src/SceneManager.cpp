@@ -2111,43 +2111,97 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         }
         // === v3.11.0: Orbital Space Station & Shipyard Dock Rendering ===
         if (warpdrive::dockSitesVisible() && warpdrive::shipVisible()) {
+          static ObjModel s_stationModel;
+          static bool s_stationTried = false;
+          if (!s_stationTried) {
+            s_stationTried = true;
+            s_stationModel.load("res/models/station.obj");
+            s_stationModel.loadTextures("res/models/station");
+          }
+
           for (const auto& dock : m_dockSites) {
             if (!m_currentStation || dock.stationId != m_currentStation->id) continue;
             glm::vec3 stPos(static_cast<float>(dock.pos.x), static_cast<float>(dock.pos.y), static_cast<float>(dock.pos.z));
-            glm::mat4 coreModel = glm::translate(glm::mat4(1.0f), stPos) * glm::scale(glm::mat4(1.0f), glm::vec3(0.22f, 0.95f, 0.22f));
-            m_planetShader->bind();
-            m_planetShader->setUniformMat4f("u_MVP", mvp);
-            m_planetShader->setUniformMat4f("u_Model", coreModel);
-            m_planetShader->setUniform1i("u_Type", 2);
-            m_planetShader->setUniform1i("u_Body", 0);
-            m_planetShader->setUniform1f("u_Seed", 123.0f);
-            m_planetShader->setUniform3f("u_ColA", 0.38f, 0.42f, 0.48f);
-            m_planetShader->setUniform3f("u_ColB", 0.16f, 0.19f, 0.24f);
-            m_planetShader->setUniform1f("u_Radius", 0.95f);
-            m_planetShader->setUniform1i("u_Spot", 0);
-            m_planetShader->setUniform1i("u_Clouds", 0);
-            m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
-            m_planetShader->setUniform1i("u_MoonOccN", 0);
-            m_planetShader->setUniform1i("u_RingOn", 0);
-            m_sphere.draw();
-            m_planetShader->unbind();
+
+            if (s_stationModel.ready()) {
+              // High-detail PBR ISS / Orbital Station model
+              glm::mat4 stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                                  glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                                  glm::scale(glm::mat4(1.0f), glm::vec3(0.75f));
+
+              s_shipShader->bind();
+              s_shipShader->setUniformMat4f("u_MVP", mvp);
+              s_shipShader->setUniformMat4f("u_Model", stModel);
+              s_shipShader->setUniformMat4f("u_ShipInv", glm::inverse(stModel));
+              s_shipShader->setUniform3f("u_CamPos", eye);
+              s_shipShader->setUniform3f("u_KeyDir", keyDir.x, keyDir.y, keyDir.z);
+              s_shipShader->setUniform3f("u_KeyColor", keyCol.x, keyCol.y, keyCol.z);
+              s_shipShader->setUniform1i("u_Env", 0);
+              s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
+              s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
+              s_shipShader->setUniform3f("u_InvScale", 1.0f / 0.75f, 1.0f / 0.75f, 1.0f / 0.75f);
+              s_shipShader->setUniform1i("u_FlatNormal", 0);
+              s_shipShader->setUniform1f("u_RingSpin", 0.0f);
+              s_shipShader->setUniform1i("u_SkinOn", 0);
+              s_shipShader->setUniform3f("u_BaseColor", glm::vec3(1.0f));
+              s_shipShader->setUniform3f("u_HullTint", glm::vec3(1.0f));
+              s_shipShader->setUniform3f("u_AccentTint", glm::vec3(1.0f));
+              s_shipShader->setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
+              s_shipShader->setUniform1f("u_Metal", 0.75f);
+              s_shipShader->setUniform1f("u_Rough", 0.35f);
+
+              const bool texOn = s_stationModel.textured();
+              s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
+              if (texOn) {
+                s_shipShader->setUniform1i("u_Albedo", 1);
+                s_shipShader->setUniform1i("u_NormalTex", 2);
+                s_shipShader->setUniform1i("u_RoughTex", 3);
+                s_shipShader->setUniform1i("u_MetalTex", 4);
+                s_stationModel.bindTextures(1);
+              }
+              const bool emOn = s_stationModel.emissive();
+              s_shipShader->setUniform1i("u_EmissiveOn", emOn ? 1 : 0);
+              s_shipShader->setUniform1i("u_EmissiveTex", 5);
+              s_shipShader->setUniform3f("u_Emissive", glm::vec3(0.15f, 0.20f, 0.25f));
+
+              s_stationModel.draw();
+              if (texOn) glActiveTexture(GL_TEXTURE0);
+              s_shipShader->unbind();
+            } else {
+              // Procedural fallback
+              glm::mat4 coreModel = glm::translate(glm::mat4(1.0f), stPos) * glm::scale(glm::mat4(1.0f), glm::vec3(0.22f, 0.95f, 0.22f));
+              m_planetShader->bind();
+              m_planetShader->setUniformMat4f("u_MVP", mvp);
+              m_planetShader->setUniformMat4f("u_Model", coreModel);
+              m_planetShader->setUniform1i("u_Type", 2);
+              m_planetShader->setUniform1i("u_Body", 0);
+              m_planetShader->setUniform1f("u_Seed", 123.0f);
+              m_planetShader->setUniform3f("u_ColA", 0.38f, 0.42f, 0.48f);
+              m_planetShader->setUniform3f("u_ColB", 0.16f, 0.19f, 0.24f);
+              m_planetShader->setUniform1f("u_Radius", 0.95f);
+              m_planetShader->setUniform1i("u_Spot", 0);
+              m_planetShader->setUniform1i("u_Clouds", 0);
+              m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
+              m_planetShader->setUniform1i("u_MoonOccN", 0);
+              m_planetShader->setUniform1i("u_RingOn", 0);
+              m_sphere.draw();
+              m_planetShader->unbind();
+            }
+
+            // Approach strobe beacons & docking ring
             m_ringShader->bind();
             m_ringShader->setUniformMat4f("u_MVP", mvp);
-            glm::mat4 ringModel = glm::translate(glm::mat4(1.0f), stPos) * glm::rotate(glm::mat4(1.0f), 0.25f * time, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.65f / 2.7f));
-            m_ringShader->setUniformMat4f("u_Model", ringModel);
+            glm::mat4 dockRingModel = glm::translate(glm::mat4(1.0f), stPos) *
+                                      glm::rotate(glm::mat4(1.0f), -0.15f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(1.15f / 2.7f));
+            m_ringShader->setUniformMat4f("u_Model", dockRingModel);
             m_ringShader->setUniform1f("u_Seed", 42.0f);
             m_ringShader->setUniform1f("u_Time", time);
             m_ringShader->setUniform3f("u_Center", stPos.x, stPos.y, stPos.z);
-            m_ringShader->setUniform3f("u_ColA", 0.0f, 0.85f, 1.0f);
+            m_ringShader->setUniform3f("u_ColA", 0.20f, 0.85f, 1.0f);
             m_ringShader->setUniform1f("u_PlanetR", 0.0f);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            m_saturnRing.draw();
-            glDisable(GL_BLEND);
-            glm::mat4 dockRingModel = glm::translate(glm::mat4(1.0f), stPos) * glm::rotate(glm::mat4(1.0f), -0.15f * time, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.15f / 2.7f));
-            m_ringShader->setUniformMat4f("u_Model", dockRingModel);
-            m_ringShader->setUniform3f("u_ColA", 1.0f, 0.72f, 0.20f);
-            glEnable(GL_BLEND);
             m_saturnRing.draw();
             glDisable(GL_BLEND);
           }
