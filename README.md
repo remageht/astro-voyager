@@ -1,4 +1,4 @@
-# astro-voyager — путешественник по Вселенной
+# astro-voyager — интерактивный симулятор Вселенной
 
 [![build](https://github.com/remageht/astro-voyager/actions/workflows/build.yml/badge.svg)](https://github.com/remageht/astro-voyager/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/remageht/astro-voyager)](https://github.com/remageht/astro-voyager/releases)
@@ -9,241 +9,129 @@
 ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)
 ![MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 
-### 3D-приложение: чёрные дыры, квазары, галактики, планеты и созвездия
+Физически корректный 3D-симулятор космоса на C++17 и OpenGL: релятивистские черные дыры, квазары, пульсары, галактики, туманности и Солнечная система. Численное гравитационное линзирование лучей в реальном времени, свободный полет, межзвездный варп-привод, орбитальные станции и верфь кастомизации кораблей.
 
 ![Sgr A*](docs/screens/pub/sgra.png)
-*Sgr A*: численное линзирование в метрике Шварцшильда — тень, фотонное кольцо, тонкий диск*
+*Сверхмассивная чёрная дыра Sgr A*: численное RK4-линзирование в метрике Шварцшильда, тень горизонта, фотонное кольцо и тонкий аккреционный диск Новикова-Торна с доплеровским бимингом.*
 
-Идея наследована от `RuCatGH/blackHole`: не картинка, а численная физика
-линзирования в метрике Шварцшильда (RK4-геодезические в шейдере).
-`astro-voyager` расширяет её до путешественника: свободный полёт WASD,
-**варп-двигатель (X)** с факторами 1–9 и кинематографичными прыжками между (кинематографический режим, не симуляция метрики / cinematic mode, not a metric simulation)
-станциями, **кинотур (T)** с автопилотом, телепорт по каталогу, дабл-клик —
-подлёт к объекту, ускорение времени до 1000x, осевое вращение планет,
-F5/F6 — экспорт/импорт маршрута. Пост-процессинг: HDR-композит через
-FBO с **bloom** (5 уровней яркости) и **релятивистским сдвигом света**
-(доплер-тинт и аберрация звёзд при быстром полёте).
+---
 
-**Редактор объектов (v3.2.0)**: палитра из 5 типов (камень, скалистая
-планета, луна, газовый гигант, звезда) — размер, два цвета, seed, кольца;
-добавление перед камерой, выбор кликом и живое редактирование, удаление,
-очистка (станция `sol`). Поверхности планет получают дополнительную
-детализацию при приближении камеры.
+## Флот кораблей и Верфь / Fleet & Shipyard
 
-Название: `astro-voyager` — коротко, GitHub/Docker-friendly, покрывает все типы
-объектов (не только дыру). Отвергнуты: `event-horizon` (только ЧД),
-`cosmo-traveler` (длинно), `starhopper` (ассоциация с игрой).
-
-## Галерея объектов
+В игре доступно переключение между кораблями с кольцевым варп-приводом Алькубьерре и обычными досветовыми судами:
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screens/sol.png" alt="Solar System" width="100%"><br><sub><b>Солнечная система</b>: Сатурн с делением Кассини и тенью колец, Большое красное пятно Юпитера, пояс астероидов</sub></td>
-    <td width="50%"><img src="docs/screens/qso-3c273.png" alt="Quasar 3C 273" width="100%"><br><sub><b>Квазар 3C 273</b>: светящееся ядро, аккреционный диск, полярные релятивистские джеты</sub></td>
+    <td width="50%" align="center">
+      <img src="docs/screens/warp_rings_separated.png" alt="Warp Ship IXS / Cruiser" width="100%"><br>
+      <b>Варп-корабль: Ring Ship IXS</b><br>
+      <sub>Варп-катушки Алькубьерре, сверхсветовые прыжки (<code>X</code>, факторы 1–9), квантовое свечение плазменного ядра</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/screens/warp_hero.png" alt="Warp Cruiser Hero" width="100%"><br>
+      <b>Варп-корабль: Warp Cruiser</b><br>
+      <sub>Флагман дальнего поиска, высокодетализированный PBR-корпус, IBL-освещение от окружения и навигационные огни</sub>
+    </td>
   </tr>
   <tr>
-    <td><img src="docs/screens/m31.png" alt="Andromeda (M31)" width="100%"><br><sub><b>Andromeda (M31)</b>: рукава из звёзд-частиц, LOD-зум, приливной поток</sub></td>
-    <td><img src="docs/screens/pub/m87.png" alt="M87*" width="100%"><br><sub><b>M87*</b>: гигантская ЧД с релятивистским джетом и движущимися узлами HST-1</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screens/m51.png" alt="Whirlpool (M51)" width="100%"><br><sub><b>Whirlpool (M51)</b>: широкие рукава, яркий балдж и компаньон NGC 5195</sub></td>
-    <td><img src="docs/screens/m104.png" alt="Sombrero (M104)" width="100%"><br><sub><b>Sombrero (M104)</b>: тёмная пылевая полоса вдоль диска и крупный балдж</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screens/mw.png" alt="Milky Way" width="100%"><br><sub><b>Milky Way</b>: наша Галактика снаружи — найдите Солнце и подлетите ближе 3 единиц</sub></td>
-    <td><img src="docs/screens/m1.png" alt="Crab Nebula (M1)" width="100%"><br><sub><b>Crab Nebula (M1)</b>: пульсар-маяк со стробом, wisps-дуги, синхротронные волокна</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screens/m13.png" alt="Hercules Cluster (M13)" width="100%"><br><sub><b>Hercules Cluster (M13)</b>: тысячи древних звёзд — между ними можно летать</sub></td>
-    <td><img src="docs/screens/ori.png" alt="Orion" width="100%"><br><sub><b>Orion</b>: 16 вершин, пояс из 9 отрезков, Бетельгейзе и Ригель + звёзды Hipparcos</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screens/uma.png" alt="Ursa Major" width="100%"><br><sub><b>Ursa Major</b>: астеризм Большого Ковша с центрированной проекцией</sub></td>
-    <td><img src="docs/screens/psr-vela.png" alt="Vela Pulsar" width="100%"><br><sub><b>Vela Pulsar</b>: наклонный дипольный маяк, горячие полюса, дуги магнитосферы, тик 89 мс</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2"><img src="docs/screens/ship.png" alt="Warp ship" width="100%"><br><sub><b>Warp-корабль игрока</b>: PBR-материалы, IBL из скайбокса станции, ключевой свет от доминирующего источника (Sgr A*)</sub></td>
+    <td width="50%" align="center">
+      <img src="docs/screens/dart_showcase.png" alt="Dart Interceptor" width="100%"><br>
+      <b>Обычный корабль: Dart</b><br>
+      <sub>Скоростной перехватчик/разведчик, стреловидное дельта-крыло, форсаж на обычном топливе (<code>Left Shift</code>)</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/screens/shuttle_showcase.png" alt="Heavy Shuttle" width="100%"><br>
+      <b>Обычный корабль: Heavy Shuttle</b><br>
+      <sub>Тяжёлый исследовательский челнок, сдвоенные мотогондолы, устойчивый досветовой атмосферно-орбитальный полёт</sub>
+    </td>
   </tr>
 </table>
 
-## Станции каталога
+### Орбитальные станции и кастомизация (Верфь `[K]`)
+- **Стыковка (`K`)**: При сближении с орбитальной станцией (< 4.5 ед.) нажмите `[K]` для захвата доком. Скорость гасится, щиты и баки топлива мгновенно восполняются до 100%, открывается интерфейс Верфи.
+- **Ангар (Hangar)**: Мгновенное переключение активного корабля: Dart (0), Ring Ship (1), Shuttle (2), Warp Cruiser (3).
+- **Покрасочный цех (Paint Shop)**: Индивидуальная настройка цветов обшивки (`Hull Tint`), полос (`Accent Tint`) и свечения плазмы (`Emissive Tint`) с быстрыми пресетами (*Quantum Cyan*, *Plasma Violet*, *Solar Gold*, *Void Stealth*).
+- **Инженерные модификации**: Апгрейды форсажа маршевых двигателей (+45%), энергоемкости щитов (+37%) и гармоники варп-катушек (-36% расхода топлива на прыжок). Полное сохранение в профиль `save-sandbox.json`.
 
-| id | Тип | Название | Что рендерит |
-|----|-----|----------|--------------|
-| `sgra` | `black_hole` | Sgr A* | Численный raytracing нулевых геодезических в метрике Шварцшильда (RK4, $R_s=1.0$, захват $r \le 1.001 R_s$, уход $r \ge R_{\text{shell}}$) |
-| `qso-3c273` | `quasar` | 3C 273 | Процедурный raymarching квазара: светящееся ядро, аккреционный диск и полярные релятивистские джеты |
-| `ori` | `constellation` | Orion | Созвездие Ориона: 16 вершин, 9 отрезков (`GL_LINES`) связей пояса, Бетельгейзе и Ригеля + звезды Hipparcos (`GL_POINTS`) |
-| `uma` | `constellation` | Ursa Major | Большая Медведица: астеризм Большого Ковша (14 вершин, 7 отрезков) с центрированной проекцией |
-| `m31` | `galaxy` | Andromeda (M31) | Спиральная галактика с LOD-зумом: издалека рукава из звёзд-частиц, вблизи объёмное поле + именованные звёзды (AE/AF/S And, M31N), приливной поток |
-| `m1` | `nebula` | Crab Nebula (M1) | Остаток сверхновой: пульсар-маяк со стробом, дрейфующие wisps-дуги, синхротронные волокна |
-| `sol` | `solar_system` | Solar System | Солнце с кипящей грануляцией и короной + 8 вращающихся планет и Плутон (БКП Юпитера, деление Кассини, два хвоста Галлеи); галилеевы луны и Титан, тень колец Сатурна, кольца Урана, пояс астероидов |
-| `m87` | `black_hole` | M87* | Гигантская ЧД с релятивистским джетом и движущимися узлами HST-1 |
-| `oj287` | `black_hole` | OJ 287 | Двойная сверхмассивная ЧД: гигантский диск, компаньон дважды за период прокалывает диск и зажигает вспышки |
-| `hyperdisk` | `black_hole` | Hyperdisk | ЧД, затмеваемая собственным тонким диском: радиус 26 Rs при камере 45 Rs |
-| `m51` | `galaxy` | Whirlpool (M51) | Спиральная галактика с широкими рукавами, ярким балджем и компаньоном NGC 5195 |
-| `m104` | `galaxy` | Sombrero (M104) | Галактика-сомбреро: тёмная пылевая полоса вдоль диска и крупный яркий балдж |
-| `psr-vela` | `pulsar` | Vela Pulsar | Молодая нейтронная звезда: наклонный дипольный маяк, горячие полюса, дуги магнитосферы, тик 89 мс |
-| `psr-crab` | `pulsar` | Crab Pulsar | Пульсар Крабовидной туманности (33 мс): быстрый маяк, пара к станции `m1` |
-| `sgr-1806` | `pulsar` | SGR 1806-20 | Магнетар: поле 1e15 Гс, огромные дуги, янтарное гало вспышек |
-| `psr-b1913` | `pulsar` | PSR B1913+16 | Двойной пульсар Халса-Тейлора: распад орбиты доказал гравитационные волны |
-| `mw` | `galaxy` | Milky Way | Наша Галактика снаружи: найдите Солнце и подлетите ближе 3 единиц — автопрыжок домой в `sol` |
-| `m13` | `star_cluster` | Hercules Cluster (M13) | Шаровое скопление: тысячи древних звёзд, можно летать между ними |
+---
 
-Фон всех станций: процедурный генератор звездного неба и Млечного Пути с автозагрузкой локального HDR (`starmap_2020_4k_gal.hdr`, в git не входит).
+## Галерея космических объектов
 
-## Управление
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screens/sol.png" alt="Solar System" width="100%"><br><sub><b>Солнечная система</b>: 8 планет с осевым вращением, Сатурн с тенью колец и делением Кассини, спутники и пояс астероидов</sub></td>
+    <td width="50%"><img src="docs/screens/qso-3c273.png" alt="Quasar 3C 273" width="100%"><br><sub><b>Квазар 3C 273</b>: сверхъяркое ядро, релятивистские джеты с прецессией и вторичные гравитационные дуги</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/m31.png" alt="Andromeda (M31)" width="100%"><br><sub><b>Галактика Андромеда (M31)</b>: рукава из звёзд-частиц, динамический LOD-зум и приливной звездный поток</sub></td>
+    <td><img src="docs/screens/pub/m87.png" alt="M87*" width="100%"><br><sub><b>M87*</b>: сверхмассивная чёрная дыра с синхротронным джетом и движущимися плазменными узлами HST-1</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/m1.png" alt="Crab Nebula (M1)" width="100%"><br><sub><b>Крабовидная туманность (M1)</b>: остаток сверхновой, пульсар со строб-маяком и волокна синхротронного излучения</sub></td>
+    <td><img src="docs/screens/m104.png" alt="Sombrero (M104)" width="100%"><br><sub><b>Галактика Сомбреро (M104)</b>: массивная пылевая полоса вдоль экватора диска и сфероидальный балдж</sub></td>
+  </tr>
+</table>
+
+Полный каталог включает 18 уникальных объектов: Sgr A*, 3C 273, M87*, OJ 287, Hyperdisk, M31, M51, M104, Млечный Путь, Скопление M13, Крабовидную туманность, пульсары Vela/Crab/B1913+16, магнетар SGR 1806-20, созвездия Орион и Большая Медведица (подробнее см. [`docs/CATALOG.md`](docs/CATALOG.md)).
+
+---
+
+## Управление / Controls
 
 | Клавиша | Действие |
-|---------|----------|
-| WASD + мышь | Свободный полёт |
-| Дабл-клик | Подлёт к объекту |
-| `/` | Поиск станций (нечёткий), Enter — телепорт |
-| `X`, `[` `]` | Варп-режим, факторы 1–9, прыжки между станциями |
-| `T` / Пробел / ESC | Кинотур / пропуск / выход |
-| `-` `=` | Темп времени (до 1000x), `P` — пауза |
-| `M` | Звук: мьют (процедурный эмбиент + эффекты, громкость в панели) |
-| `H` / `F1` | Скрыть панель / помощь |
-| F5 / F6 | Экспорт / импорт маршрута |
-| F9 / F10 | Быстрое сохранение / загрузка профиля (автосейв при выходе) |
-| `K` | Орбитальная верфь: стыковка со станцией / ангар флота / кастомизация / отстыковка |
+|---|---|
+| **WASD** + мышь | Свободный полёт камеры и корабля |
+| **Left Shift** | Форсажное ускорение на обычном топливе (досветовой режим) |
+| **X** / **[** **]** | Варп-режим (факторы 1–9) и межзвёздные прыжки |
+| **K** | Орбитальная верфь: стыковка со станцией / ангар флота / кастомизация / отстыковка |
+| **Дабл-клик** | Автоматический подлёт к выбранному объекту |
+| **/** | Быстрый нечёткий поиск по станциям каталога, `Enter` — мгновенный переход |
+| **T** / Пробел | Кинематографический тур с автопилотом / пропуск сцены |
+| **-** **=** / **P** | Ускорение времени (до 1000x) / Пауза |
+| **M** | Звук: включение/отключение процедурного эмбиента и эффектов двигателей |
+| **F5** / **F6** | Экспорт / импорт маршрута полёта |
+| **F9** / **F10** | Быстрое сохранение / загрузка профиля (`save-sandbox.json`) |
+| **H** / **F1** | Скрыть интерфейс / Экран помощи |
 
-## Орбитальные станции и Верфь кораблей / Space Stations & Shipyard (v3.11.0)
+---
 
-В астрономических системах развернута сеть орбитальных станций (Земной Шлюз Sol Gateway, Станция Зенит M13, Аванпост ядра Sgr A*, Ригель Док Orion и др.):
-- **Стыковка (`K`)**: При сближении с орбитальной станцией (< 4.5 ед.) нажмите `[K]` для захвата стыковочными манипуляторами. Скорость гасится, баки топлива и щиты мгновенно перезаряжаются до 100%, открывается интерфейс Верфи.
-- **Ангар (Смена корабля)**: Мгновенное переключение между кораблями флота:
-  * *0: Dart* — лёгкий скоростной перехватчик/разведчик;
-  * *1: IXS Warp Ship* — классический исследователь с независимыми варп-кольцами Алькубьерре;
-  * *2: Heavy Shuttle* — тяжёлый исследовательский челнок (досветовой, без варп-привода);
-  * *3: Warp Cruiser (OBJ)* — флагманский крейсер дальнего поиска с высокой PBR-детализацией.
-- **Ливрея и Покрасочный цех (Paint Shop)**:
-  * Настройка цвета корпуса (Primary Tint), акцентных полос (Accent Tint) и свечения плазмы/дюз (Plasma Emissive);
-  * Готовые темы: *Quantum Cyan* (квантовый лазурный), *Plasma Violet* (фиолетовая сингулярность), *Solar Gold* (золотой титан), *Void Stealth* (глубокий стелс);
-  * Регулировка скорости вращения варп-катушек и интенсивности свечения варп-поля.
-- **Инженерный отсек (Модификации)**:
-  * *Форсажные инжекторы*: уровни 0–3 (до +45% к скорости обычного форсажа на маршевых двигателях);
-  * *Конденсаторы щита*: уровни 0–3 (до +37% сопротивления радиации и столкновениям);
-  * *Гармоническая калибровка варп-катушек*: уровни 0–3 (до -36% расхода топлива на варп-прыжки).
-- **Сохранение**: конфигурация ливреи, активный корабль, апгрейды и состояние стыковки автоматически сохраняются в профиле `save-sandbox.json` с полной обратной совместимостью.
+## Физическая модель и CPU-геометрия
 
-*English summary:*
-- **Docking (`K`)**: Approach within 4.5 units of any orbital station (Sol Gateway, M13 Zenith, Sgr A* Core Outpost, etc.) and press `[K]` to dock. Resupplies fuel and shields to 100% and opens the Shipyard.
-- **Fleet Hangar**: Switch between Dart interceptor, Alcubierre Ring Ship, Heavy Sublight Shuttle, and Warp Cruiser.
-- **Custom Livery & Paint Shop**: Customize Hull Tint, Accent Tint, and Plasma Emissive colors with quick presets (Quantum Cyan, Plasma Violet, Solar Gold, Void Stealth) and adjust ring spin rate.
-- **Engineering Upgrades**: Level 0–3 Boost Injectors (+speed), Shield Capacitors (+defense), and Warp Coil Tuning (-jump cost).
-- **Persistent State**: Full round-trip serialization of customized livery and installed upgrades in `save-sandbox.json`.
+1. **Гравитационное линзирование (GPU `shaders/bh.frag`)**: численное интегрирование нулевых геодезических в метрике Шварцшильда (RK4-трассировка лучей в реальном времени), моделирование тонкого аккреционного диска Новикова-Торна с учётом релятивистского биминга и гравитационного красного смещения. При разгоне включается релятивистский доплер-тинт и звёздная аберрация.
+2. **Метрика Керра (CPU `src/Kerr.cpp`)**: точный расчёт нулевых геодезических вращающейся чёрной дыры со спином $|a| \le M$ без аппроксимаций (`./build/astro-voyager --demo-kerr`).
+3. **Варп-геометрия (CPU `src/WarpMetric.h`, `src/WarpGeodesic.h`)**: универсальный 3+1 ADM-фреймворк, метрика пузыря Алькубьерре `AlcubierreMetric` с гладкой $\sigma$-стенкой, скаляр расширения Йорка $\theta_{\max}$ и генератор безопасных траекторий `skiffPath` с контролем инварианта времени $d\tau/dt \le 1$ (`./build/astro-voyager --demo-warp`). На GPU варп-прыжки выполняются в кинематографическом режиме с визуальным шейдерным коконом и линзой деформации пространства.
 
-## Сохранения (v3.4.0)
+---
 
-Профиль игрока — JSON в пользовательской директории: Windows
-`%APPDATA%\astro-voyager\`, Linux `~/.config/astro-voyager/`, macOS
-`~/Library/Application Support/astro-voyager/`. Файлы: `save-sandbox.json`
-(прогресс, ачивки, история маршрута, объекты редактора, сессия — станция,
-камера, время, топливо/щиты) и `settings.json` (пресет производительности,
-звук, вид камеры). F9/F10 — быстрое сохранение/загрузка, кнопки Save/Load
-в меню, автосейв при выходе; слот сюжетного режима `save-adventure.json`
-зарезервирован под v4.0. Файлы человекочитаемые (pretty JSON) — можно
-править руками; схема версионируется, неизвестные поля игнорируются.
+## Быстрый старт и сборка
 
-## Физическая модель и ограничения (Limits & Assumptions)
-
-1. **Метрика Шварцшильда**: статическая, незаряженная и сферически-симметричная черная дыра ($M > 0$, $a = 0$, $Q = 0$).
-2. **Лимит: метрика Керра в рендерере отсутствует (No Kerr metric in renderer)**. Несмотря на наличие спина у реального Sagittarius A*, в шейдерном рендерере (`bh.frag`) сознательно используется геометрия Шварцшильда. Эффекты эргосферы, увлечения инерциальных систем отсчета (frame-dragging / Lense-Thirring) и спинового расщепления фотонных орбит в реальном времени опущены ради стабильности и производительности GPU. При этом физика нулевых геодезических Керра со спином $|a| \le M$ реализована в виде отдельного CPU-модуля `src/Kerr.cpp` с аналитической валидацией (`--demo-kerr`) без визуализации.
-3. **Гравитационное линзирование + аккреционный диск в `bh.frag`**: шейдер `bh.frag` рассчитывает искривление световых лучей (RK4-геодезические) и рендерит физически честный тонкий диск Новикова-Торна с фактором Бардена (доплеровский биминг, гравитационный красный сдвиг наблюдателя). Джеты и вторичные эффекты квазара смоделированы отдельно на станции `3C 273`. При быстром полёте (варп, прыжок) включается **релятивистский сдвиг света**: доплер-тинт (вперёд синий, назад красный) и аберрация звёзд к направлению движения.
-4. **Критерии останова лучей**:
-   - Поглощение горизонтом событий: $r \le R_s \times 1.001$ (черный цвет).
-   - Выход на асимптотическую бесконечность: $r \ge R_{\text{shell}}$ (выборка цвета из cubemap).
-   - Ограничение камеры: радиус камеры аппаратно ограничен $R \ge 1.05 R_s$, исключая падение наблюдателя под горизонт событий.
-5. **Пресеты производительности (Low / Med / Ultra)**:
-   - **Low**: $R_{\text{shell}}=20.0$, $h=0.08$, maxSteps=300 (для слабых/интегрированных GPU).
-   - **Med** (дефолт): $R_{\text{shell}}=30.0$, $h=0.05$, maxSteps=600 (сбалансированный режим).
-   - **Ultra**: $R_{\text{shell}}=45.0$, $h=0.025$, maxSteps=1200 (высокая детализация фотонной сферы).
-6. **Варп-геометрия на CPU / Warp metrics on CPU & кинематографический GPU-режим**:
-   - RU: В рендерере GPU варп-двигатель (клавиша `X`, факторы 1–9) и межзвёздные прыжки сознательно реализованы как стилизованный кинематографический режим (осознанное решение для стабильности и интерактивного фреймрейта): шейдерный кокон, линза поля деформации и релятивистский доплер-тинт, а не расчёт тензора энергии-импульса на GPU. При этом точная физика релятивистских варп-метрик полностью реализована на CPU: модуль `src/WarpMetric.h/.cpp` с универсальным 3+1 ADM-интерфейсом (`SchwarzschildADM`, а также метрика пузыря Алькубьерре `AlcubierreMetric` с гладкой сигма-стенкой толщиной $\sigma$, радиусом $R$ и вычислением скаляра расширения Йорка $\theta(r_s)$ и его максимума $\theta_{\max}$) и `src/WarpGeodesic.h/.cpp` (гамильтонов интегратор нулевых геодезических с нуль-проекцией `renormalizeNull` и генератор вейпойнтов полёта `skiffPath` с верификацией времени $d\tau/dt \le 1$, безопасности стенки и двусторонней симметрии туда-обратно). Аналитическая валидация выполняется через CLI-режим `./build/astro-voyager --demo-warp`.
-   - EN: On the GPU, the warp drive (`X` key, warp factors 1–9) and interstellar jumps are implemented as a stylized cinematic mode (an intentional real-time design choice): visual warp sheath, spacetime lens overlay, and relativistic Doppler tint without real-time stress-energy tensor marching. The underlying relativistic warp metric physics is implemented as a standalone CPU framework: `src/WarpMetric.h/.cpp` (universal 3+1 ADM interface, `SchwarzschildADM`, and `AlcubierreMetric` featuring smooth $\sigma$-wall, radius $R$, and York expansion scalar $\theta_{\max}$) paired with `src/WarpGeodesic.h/.cpp` (Hamiltonian null geodesic integrator with `renormalizeNull` and `skiffPath` waypoint trajectory generator ensuring $d\tau/dt \le 1$, wall clearance, and roundtrip symmetry). Analytical validation is available via `./build/astro-voyager --demo-warp`.
-
-## Быстрый старт (headless core, без GPU)
-
+### Сборка headless core (CLI-инструменты и физические тесты)
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ./build/astro-voyager --list
-./build/astro-voyager --info sgra
-./build/astro-voyager --demo-geodesic
-./build/astro-voyager --test-interaction
-# Windows: .\build\Release\astro-voyager.exe --list
+./build/astro-voyager --demo-warp
+./build/astro-voyager --demo-kerr
 ```
 
-Полный 3D-рендер (OpenGL) — опция `ASTROVOYAGER_ENABLE_GL=ON`, требует
-GLFW/GLM/ImGui локально, см. `docs/BUILD.md`. macOS: системный OpenGL 3.3
-(без GLEW — `src/GLCompat.h`), сборка `bash packaging/fetch-gl-deps.sh` +
-`-DASTROVOYAGER_ENABLE_GL=ON`. CI собирает core на Windows/Linux/macOS,
-полный GL — Linux AppImage и macOS (arm64).
-
-## Структура
-
-```
-astro-voyager/
-  CMakeLists.txt
-  src/            # Catalog, Camera, Geodesic, Interaction, SceneManager, PostFX, AppGL, SaveGame
-  shaders/        # quad.vert, bh.frag, quasar.frag, lines.vert, galaxy.frag,
-                  # nebula.frag, sky.frag, post_comp/bright/blur.frag, warp.frag, ...
-  res/catalog.json# каталог станций (зеркало Catalog.cpp)
-  docs/           # ARCHITECTURE, BUILD, CATALOG, ROADMAP, RELEASE, screens
-  tests/          # test_static_checks.ps1, test_interaction.cpp, test_save.cpp, test_doppler_side.ps1
-  .github/workflows/build.yml
-  Dockerfile      # reproducible build
-  .env.example    # ASTRO_* переменные
+### Запуск полного 3D-приложения (OpenGL 3.3 Core)
+Для сборки графического окна требуется опция `ASTROVOYAGER_ENABLE_GL=ON` (подробнее см. [`docs/BUILD.md`](docs/BUILD.md)):
+```bash
+cmake -S . -B build-gl -DASTROVOYAGER_ENABLE_GL=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build-gl --config Release
+./build-gl/Release/astro-voyager.exe --gl
 ```
 
-HDR-ассеты положить вручную:
-```
-res/textures/starmap_2020_4k_gal.hdr  # любой equirect HDR, в git не входит
-```
+---
 
-## Прод-гейты
+## Тестирование и валидация
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tests/test_static_checks.ps1
+ctest --test-dir build -C Release
 ```
 
-CI: сборка Windows/Linux/macOS, static checks, AppImage, macOS-архив, Docker-образ.
-Контракт каталога: `docs/CATALOG.md`. Архитектура: `docs/ARCHITECTURE.md`. Релиз: `docs/RELEASE.md`.
+CI автоматически проверяет сборку на Windows, Ubuntu Linux и macOS, собирает Linux AppImage и портативные архивы с хэш-суммами `CHECKSUMS.txt`.
 
-## Версии
-
-См. `CHANGELOG.md`. Скриншоты станций — в `docs/screens/` (референсы
-прод-гейта: каждый коммит с визуальными изменениями обязан их переснять).
-
-## SmartScreen и антивирус: ложные срабатывания (v3.8.2)
-
-Windows-сборка распространяется неподписанной, поэтому:
-
-**SmartScreen** показывает «Система Windows защитила ваш компьютер —
-неопознанное приложение» (издатель: Неизвестный). Это не вирус, у exe просто
-нет подписи издателя и репутации загрузок. Запустить можно через
-«Подробнее → Выполнить в любом случае» либо снять блокировку один раз:
-правый клик по exe → Свойства → «Разблокировать» → ОК. С подписью диалог
-пропадает навсегда.
-
-Отдельные генерик-эвристики AV (например, MaxSecure `Trojan.Malware.300983.susgen`
-и SecureAge `Malicious` на VirusTotal у v3.8.0: 2/71) помечают exe
-эвристически. Microsoft Defender, Kaspersky, ESET, BitDefender и ещё ~67
-движков — чисто.
-
-Что сделать, если сработало:
-- сверьте SHA256 в `CHECKSUMS.txt` внутри zip с хэшами на странице релиза —
-  они обязаны совпадать;
-- добавьте исключение или восстановите из карантина (Windows Security →
-  Protection history), либо сообщите о ложном срабатывании вендору AV или
-  через VirusTotal («Report false positive»; для Microsoft —
-  https://www.microsoft.com/en-us/wdsi/filesubmission);
-- внутри zip лежит `win-av-readme.txt` с этой памяткой (EN).
-
-Гигиена, уже вшитая в бинарник: иконка и VERSIONINFO (v3.8.1), манифест
-asInvoker + supportedOS Win7..Win11 + long paths (v3.8.2). Следующий шаг —
-подпись релизов Authenticode: `packaging/sign-exe.ps1` подписывает,
-штампует временем и проверяет подпись, а релизный workflow подхватывает
-секреты `WINDOWS_CERT_PFX_BASE64` / `WINDOWS_CERT_PASSWORD`. Для мгновенного
-доверия SmartScreen нужен EV-сертификат, OV набирает репутацию со временем —
-подробнее в `docs/RELEASE.md`.
+> [!NOTE]
+> **Windows SmartScreen**: Неподписанные портативные exe-файлы могут вызывать предупреждение SmartScreen. Нажмите «Подробнее → Выполнить в любом случае» или в свойствах файла отметьте галочку «Разблокировать». Хэши SHA-256 всегда приведены в файле релиза (подробнее см. [`docs/RELEASE.md`](docs/RELEASE.md)).
