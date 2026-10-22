@@ -1,13 +1,16 @@
 """Deterministic PBR 3D asset generation and baking for astro-voyager:
-- ISS / Orbital Space Station Model:
-  * Central Integrated Truss Structure (ITS)
-  * 8 Massive Photovoltaic Solar Array Wings (SAW) on articulated gimbals
-  * Pressurized Module Cluster (Zarya, Zvezda, Destiny, Harmony, Columbus, Kibo, Unity)
-  * Earth-facing Cupola 7-window observation dome
-  * Accordion-folded Thermal Control Radiator Panels (TCS)
-  * Docking collars (PMA / IDA) with approach alignment guides
-  * Canadarm2 robotic arm and High-Gain Communications Dish
-  * Navigation beacons and docking target lights
+- International Space Station (ISS) Model (Cycles Quality):
+  * Integrated Truss Structure (ITS: S0, S1, P1, S3/S4, P3/P4, S5/S6, P5/P6)
+  * Solar Alpha Rotary Joints (SARJ) with rotating collar detailing
+  * 8 Photovoltaic Solar Array Wings (SAW) on articulated gimbals with high-detail cell textures
+  * Active Thermal Control System (ATCS) accordion radiator arrays with corrugated micro-fins
+  * Pressurized Module Cluster:
+    - USOS: Destiny Lab, Unity (Node 1), Harmony (Node 2), Tranquility (Node 3), Columbus (ESA), Kibo (JAXA) + Exposed Facility porch, Quest Airlock with external gas tanks
+    - ROS: Zvezda Service Module with stepped cylinders and solar wings, Zarya (FGB) with angled panels, Poisk/Rassvet/Nauka docking compartments
+  * Earth-facing 7-window Cupola observation dome with warm interior cabin glow
+  * International Docking Adapter (IDA-2 / PMA-2) with laser retroreflectors and docking target lights
+  * Canadarm2 (SSRMS) mobile manipulator robotic arm and High-Gain Communications Dish
+  * Navigation beacons (Port Red, Starboard Green, Zenith/Nadir White Strobes)
 
 Produces:
   res/models/station.obj
@@ -34,11 +37,13 @@ RES_MODELS = os.path.join(REPO_ROOT, "res", "models")
 OUT_SHOWCASE = os.path.join(PROJECT_ROOT, "out", "final_showcase")
 DOCS_SCREENS = os.path.join(REPO_ROOT, "docs", "screens")
 BUILD_GL_MODELS = os.path.join(REPO_ROOT, "build-gl", "Release", "res", "models")
+BUILD_MODELS = os.path.join(REPO_ROOT, "build", "Release", "res", "models")
 
 os.makedirs(RES_MODELS, exist_ok=True)
 os.makedirs(OUT_SHOWCASE, exist_ok=True)
 os.makedirs(DOCS_SCREENS, exist_ok=True)
 os.makedirs(BUILD_GL_MODELS, exist_ok=True)
+os.makedirs(BUILD_MODELS, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # 24-bit uncompressed BMP writer matching src/ObjModel.cpp
@@ -91,9 +96,9 @@ def save_blender_image_as_bmp(img, filepath):
 
 
 # ---------------------------------------------------------------------------
-# Material Utilities
+# Procedural PBR Material Shaders
 # ---------------------------------------------------------------------------
-def make_pbr_material(name, base_color, metallic, roughness, emission=(0,0,0), emission_strength=0.0, bump_type=None):
+def make_iss_material(name, mat_type):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     nodes = mat.node_tree.nodes
@@ -104,97 +109,770 @@ def make_pbr_material(name, base_color, metallic, roughness, emission=(0,0,0), e
     bsdf = nodes.new("ShaderNodeBsdfPrincipled")
     links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
     
-    bsdf.inputs["Base Color"].default_value = (base_color[0], base_color[1], base_color[2], 1.0)
-    bsdf.inputs["Metallic"].default_value = metallic
-    bsdf.inputs["Roughness"].default_value = roughness
-    bsdf.inputs["Emission Color"].default_value = (emission[0], emission[1], emission[2], 1.0)
-    bsdf.inputs["Emission Strength"].default_value = emission_strength
+    tex_coord = nodes.new("ShaderNodeTexCoord")
     
-    if bump_type == 'panels':
-        tex_coord = nodes.new("ShaderNodeTexCoord")
-        voronoi = nodes.new("ShaderNodeTexVoronoi")
-        voronoi.feature = 'DISTANCE_TO_EDGE'
-        voronoi.inputs["Scale"].default_value = 32.0
-        bump = nodes.new("ShaderNodeBump")
-        bump.inputs["Strength"].default_value = 0.45
-        bump.inputs["Distance"].default_value = 0.015
-        links.new(tex_coord.outputs["UV"], voronoi.inputs["Vector"])
-        links.new(voronoi.outputs["Distance"], bump.inputs["Height"])
-        links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
-        
-    elif bump_type == 'solar_grid':
-        tex_coord = nodes.new("ShaderNodeTexCoord")
-        brick = nodes.new("ShaderNodeTexBrick")
-        brick.inputs["Scale"].default_value = 65.0
-        brick.inputs["Mortar Size"].default_value = 0.03
-        brick.inputs["Mortar Smooth"].default_value = 0.1
-        bump = nodes.new("ShaderNodeBump")
-        bump.inputs["Strength"].default_value = 0.8
-        bump.inputs["Distance"].default_value = 0.02
-        links.new(tex_coord.outputs["UV"], brick.inputs["Vector"])
-        links.new(brick.outputs["Color"], bump.inputs["Height"])
-        links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    # Store references for baking passes
+    bake_color = None
+    bake_rough = None
+    bake_metal = None
+    bake_emissive = None
 
-    elif bump_type == 'radiator_fins':
-        tex_coord = nodes.new("ShaderNodeTexCoord")
+    if mat_type == 'SOLAR_ARRAY':
+        # Dark indigo photovoltaic cells with bright copper/gold busbars and silver grid
+        brick = nodes.new("ShaderNodeTexBrick")
+        brick.inputs["Scale"].default_value = 85.0
+        brick.inputs["Mortar Size"].default_value = 0.04
+        brick.inputs["Mortar Smooth"].default_value = 0.15
+        brick.inputs["Color1"].default_value = (0.020, 0.045, 0.110, 1.0)  # Deep silicon blue
+        brick.inputs["Color2"].default_value = (0.028, 0.055, 0.135, 1.0)  # Slightly varied cell
+        brick.inputs["Mortar"].default_value = (0.850, 0.620, 0.200, 1.0)  # Gold/copper busbar
+        links.new(tex_coord.outputs["UV"], brick.inputs["Vector"])
+        
+        # Color mix with central busbar runner
         wave = nodes.new("ShaderNodeTexWave")
         wave.wave_type = 'BANDS'
         wave.bands_direction = 'X'
-        wave.inputs["Scale"].default_value = 40.0
-        bump = nodes.new("ShaderNodeBump")
-        bump.inputs["Strength"].default_value = 0.7
-        bump.inputs["Distance"].default_value = 0.025
+        wave.inputs["Scale"].default_value = 18.0
         links.new(tex_coord.outputs["UV"], wave.inputs["Vector"])
+        
+        mix_col = nodes.new("ShaderNodeMixRGB")
+        mix_col.blend_type = 'MIX'
+        mix_col.inputs["Fac"].default_value = 0.18
+        links.new(brick.outputs["Color"], mix_col.inputs["Color1"])
+        links.new(wave.outputs["Color"], mix_col.inputs["Color2"])
+        
+        links.new(mix_col.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = mix_col.outputs["Color"]
+        
+        # Roughness: cells are glossy glass (0.12), busbars are satin (0.32)
+        val_to_rgb_r = nodes.new("ShaderNodeValToRGB")
+        val_to_rgb_r.color_ramp.elements[0].position = 0.0
+        val_to_rgb_r.color_ramp.elements[0].color = (0.12, 0.12, 0.12, 1.0)
+        val_to_rgb_r.color_ramp.elements[1].position = 1.0
+        val_to_rgb_r.color_ramp.elements[1].color = (0.35, 0.35, 0.35, 1.0)
+        links.new(brick.outputs["Fac"], val_to_rgb_r.inputs["Fac"])
+        links.new(val_to_rgb_r.outputs["Color"], bsdf.inputs["Roughness"])
+        bake_rough = val_to_rgb_r.outputs["Color"]
+        
+        # Metallic: busbars are metallic 0.92, cells are 0.35
+        val_to_rgb_m = nodes.new("ShaderNodeValToRGB")
+        val_to_rgb_m.color_ramp.elements[0].position = 0.0
+        val_to_rgb_m.color_ramp.elements[0].color = (0.35, 0.35, 0.35, 1.0)
+        val_to_rgb_m.color_ramp.elements[1].position = 1.0
+        val_to_rgb_m.color_ramp.elements[1].color = (0.92, 0.92, 0.92, 1.0)
+        links.new(brick.outputs["Fac"], val_to_rgb_m.inputs["Fac"])
+        links.new(val_to_rgb_m.outputs["Color"], bsdf.inputs["Metallic"])
+        bake_metal = val_to_rgb_m.outputs["Color"]
+        
+        # Bump: cell bevels
+        bump = nodes.new("ShaderNodeBump")
+        bump.inputs["Strength"].default_value = 0.65
+        bump.inputs["Distance"].default_value = 0.02
+        links.new(brick.outputs["Fac"], bump.inputs["Height"])
+        links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+    elif mat_type == 'MODULE_HULL':
+        # White/light-gray Beta cloth thermal insulation with anodized aluminum stringer belts
+        voronoi = nodes.new("ShaderNodeTexVoronoi")
+        voronoi.feature = 'DISTANCE_TO_EDGE'
+        voronoi.inputs["Scale"].default_value = 35.0
+        links.new(tex_coord.outputs["UV"], voronoi.inputs["Vector"])
+        
+        val_to_rgb_c = nodes.new("ShaderNodeValToRGB")
+        val_to_rgb_c.color_ramp.elements[0].position = 0.02
+        val_to_rgb_c.color_ramp.elements[0].color = (0.32, 0.35, 0.40, 1.0)  # Dark panel seam
+        val_to_rgb_c.color_ramp.elements[1].position = 0.08
+        val_to_rgb_c.color_ramp.elements[1].color = (0.88, 0.89, 0.91, 1.0)  # White/silver cloth
+        links.new(voronoi.outputs["Distance"], val_to_rgb_c.inputs["Fac"])
+        
+        links.new(val_to_rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = val_to_rgb_c.outputs["Color"]
+        
+        # Roughness: cloth is matte (0.60), seams are smooth (0.25)
+        val_to_rgb_r = nodes.new("ShaderNodeValToRGB")
+        val_to_rgb_r.color_ramp.elements[0].position = 0.03
+        val_to_rgb_r.color_ramp.elements[0].color = (0.25, 0.25, 0.25, 1.0)
+        val_to_rgb_r.color_ramp.elements[1].position = 0.10
+        val_to_rgb_r.color_ramp.elements[1].color = (0.58, 0.58, 0.58, 1.0)
+        links.new(voronoi.outputs["Distance"], val_to_rgb_r.inputs["Fac"])
+        links.new(val_to_rgb_r.outputs["Color"], bsdf.inputs["Roughness"])
+        bake_rough = val_to_rgb_r.outputs["Color"]
+        
+        # Metallic: 0.15
+        rgb_m = nodes.new("ShaderNodeRGB")
+        rgb_m.outputs["Color"].default_value = (0.15, 0.15, 0.15, 1.0)
+        links.new(rgb_m.outputs["Color"], bsdf.inputs["Metallic"])
+        bake_metal = rgb_m.outputs["Color"]
+        
+        bump = nodes.new("ShaderNodeBump")
+        bump.inputs["Strength"].default_value = 0.45
+        bump.inputs["Distance"].default_value = 0.015
+        links.new(voronoi.outputs["Distance"], bump.inputs["Height"])
+        links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+    elif mat_type == 'RADIATOR':
+        # Accordion-folded corrugated thermal radiators with white high-emittance coating
+        wave = nodes.new("ShaderNodeTexWave")
+        wave.wave_type = 'BANDS'
+        wave.bands_direction = 'X'
+        wave.inputs["Scale"].default_value = 50.0
+        links.new(tex_coord.outputs["UV"], wave.inputs["Vector"])
+        
+        val_to_rgb_c = nodes.new("ShaderNodeValToRGB")
+        val_to_rgb_c.color_ramp.elements[0].position = 0.15
+        val_to_rgb_c.color_ramp.elements[0].color = (0.75, 0.77, 0.80, 1.0)  # Shadow crevice
+        val_to_rgb_c.color_ramp.elements[1].position = 0.85
+        val_to_rgb_c.color_ramp.elements[1].color = (0.95, 0.96, 0.98, 1.0)  # White radiator fin
+        links.new(wave.outputs["Color"], val_to_rgb_c.inputs["Fac"])
+        
+        links.new(val_to_rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = val_to_rgb_c.outputs["Color"]
+        
+        rgb_r = nodes.new("ShaderNodeRGB")
+        rgb_r.outputs["Color"].default_value = (0.45, 0.45, 0.45, 1.0)
+        links.new(rgb_r.outputs["Color"], bsdf.inputs["Roughness"])
+        bake_rough = rgb_r.outputs["Color"]
+        
+        rgb_m = nodes.new("ShaderNodeRGB")
+        rgb_m.outputs["Color"].default_value = (0.10, 0.10, 0.10, 1.0)
+        links.new(rgb_m.outputs["Color"], bsdf.inputs["Metallic"])
+        bake_metal = rgb_m.outputs["Color"]
+        
+        bump = nodes.new("ShaderNodeBump")
+        bump.inputs["Strength"].default_value = 0.85
+        bump.inputs["Distance"].default_value = 0.03
         links.new(wave.outputs["Color"], bump.inputs["Height"])
         links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
 
+    elif mat_type == 'GOLD_MLI':
+        # Wrinkled Kapton / aluminized Mylar gold insulation
+        noise = nodes.new("ShaderNodeTexNoise")
+        noise.inputs["Scale"].default_value = 45.0
+        noise.inputs["Detail"].default_value = 6.0
+        noise.inputs["Roughness"].default_value = 0.7
+        links.new(tex_coord.outputs["UV"], noise.inputs["Vector"])
+        
+        val_to_rgb_c = nodes.new("ShaderNodeValToRGB")
+        val_to_rgb_c.color_ramp.elements[0].position = 0.3
+        val_to_rgb_c.color_ramp.elements[0].color = (0.88, 0.62, 0.12, 1.0)  # Amber gold
+        val_to_rgb_c.color_ramp.elements[1].position = 0.7
+        val_to_rgb_c.color_ramp.elements[1].color = (0.98, 0.78, 0.22, 1.0)  # Bright gold foil
+        links.new(noise.outputs["Fac"], val_to_rgb_c.inputs["Fac"])
+        
+        links.new(val_to_rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = val_to_rgb_c.outputs["Color"]
+        
+        rgb_r = nodes.new("ShaderNodeRGB")
+        rgb_r.outputs["Color"].default_value = (0.22, 0.22, 0.22, 1.0)
+        links.new(rgb_r.outputs["Color"], bsdf.inputs["Roughness"])
+        bake_rough = rgb_r.outputs["Color"]
+        
+        rgb_m = nodes.new("ShaderNodeRGB")
+        rgb_m.outputs["Color"].default_value = (0.94, 0.94, 0.94, 1.0)
+        links.new(rgb_m.outputs["Color"], bsdf.inputs["Metallic"])
+        bake_metal = rgb_m.outputs["Color"]
+        
+        bump = nodes.new("ShaderNodeBump")
+        bump.inputs["Strength"].default_value = 0.6
+        bump.inputs["Distance"].default_value = 0.02
+        links.new(noise.outputs["Fac"], bump.inputs["Height"])
+        links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+    elif mat_type == 'TRUSS':
+        # Dark anodized structural alloy for ITS truss framework
+        rgb_c = nodes.new("ShaderNodeRGB")
+        rgb_c.outputs["Color"].default_value = (0.18, 0.20, 0.24, 1.0)
+        links.new(rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = rgb_c.outputs["Color"]
+        
+        rgb_r = nodes.new("ShaderNodeRGB")
+        rgb_r.outputs["Color"].default_value = (0.35, 0.35, 0.35, 1.0)
+        links.new(rgb_r.outputs["Color"], bsdf.inputs["Roughness"])
+        bake_rough = rgb_r.outputs["Color"]
+        
+        rgb_m = nodes.new("ShaderNodeRGB")
+        rgb_m.outputs["Color"].default_value = (0.88, 0.88, 0.88, 1.0)
+        links.new(rgb_m.outputs["Color"], bsdf.inputs["Metallic"])
+        bake_metal = rgb_m.outputs["Color"]
+
+    elif mat_type == 'DOCK':
+        # Titanium docking collar and alignment target
+        rgb_c = nodes.new("ShaderNodeRGB")
+        rgb_c.outputs["Color"].default_value = (0.42, 0.45, 0.50, 1.0)
+        links.new(rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = rgb_c.outputs["Color"]
+        
+        rgb_r = nodes.new("ShaderNodeRGB")
+        rgb_r.outputs["Color"].default_value = (0.30, 0.30, 0.30, 1.0)
+        links.new(rgb_r.outputs["Color"], bsdf.inputs["Roughness"])
+        bake_rough = rgb_r.outputs["Color"]
+        
+        rgb_m = nodes.new("ShaderNodeRGB")
+        rgb_m.outputs["Color"].default_value = (0.80, 0.80, 0.80, 1.0)
+        links.new(rgb_m.outputs["Color"], bsdf.inputs["Metallic"])
+        bake_metal = rgb_m.outputs["Color"]
+
+    elif mat_type == 'CUPOLA':
+        # Observation dome: deep sapphire glass with warm amber interior cabin light
+        rgb_c = nodes.new("ShaderNodeRGB")
+        rgb_c.outputs["Color"].default_value = (0.04, 0.10, 0.22, 1.0)
+        links.new(rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = rgb_c.outputs["Color"]
+        
+        rgb_r = nodes.new("ShaderNodeRGB")
+        rgb_r.outputs["Color"].default_value = (0.08, 0.08, 0.08, 1.0)
+        links.new(rgb_r.outputs["Color"], bsdf.inputs["Roughness"])
+        bake_rough = rgb_r.outputs["Color"]
+        
+        rgb_m = nodes.new("ShaderNodeRGB")
+        rgb_m.outputs["Color"].default_value = (0.15, 0.15, 0.15, 1.0)
+        links.new(rgb_m.outputs["Color"], bsdf.inputs["Metallic"])
+        bake_metal = rgb_m.outputs["Color"]
+        
+        # Warm golden cabin glow
+        bsdf.inputs["Emission Color"].default_value = (1.0, 0.82, 0.50, 1.0)
+        bsdf.inputs["Emission Strength"].default_value = 4.0
+        
+        rgb_e = nodes.new("ShaderNodeRGB")
+        rgb_e.outputs["Color"].default_value = (1.0, 0.82, 0.50, 1.0)
+        bake_emissive = rgb_e.outputs["Color"]
+
+    elif mat_type == 'NAV_RED':
+        # Port nav beacon
+        rgb_c = nodes.new("ShaderNodeRGB")
+        rgb_c.outputs["Color"].default_value = (1.0, 0.05, 0.05, 1.0)
+        links.new(rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = rgb_c.outputs["Color"]
+        bake_rough = rgb_c.outputs["Color"]
+        bake_metal = rgb_c.outputs["Color"]
+        
+        bsdf.inputs["Emission Color"].default_value = (1.0, 0.05, 0.05, 1.0)
+        bsdf.inputs["Emission Strength"].default_value = 8.0
+        bake_emissive = rgb_c.outputs["Color"]
+
+    elif mat_type == 'NAV_GREEN':
+        # Starboard nav beacon
+        rgb_c = nodes.new("ShaderNodeRGB")
+        rgb_c.outputs["Color"].default_value = (0.05, 1.0, 0.15, 1.0)
+        links.new(rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = rgb_c.outputs["Color"]
+        bake_rough = rgb_c.outputs["Color"]
+        bake_metal = rgb_c.outputs["Color"]
+        
+        bsdf.inputs["Emission Color"].default_value = (0.05, 1.0, 0.15, 1.0)
+        bsdf.inputs["Emission Strength"].default_value = 8.0
+        bake_emissive = rgb_c.outputs["Color"]
+
+    elif mat_type == 'STROBE_WHITE':
+        # Docking / zenith strobe beacon
+        rgb_c = nodes.new("ShaderNodeRGB")
+        rgb_c.outputs["Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+        links.new(rgb_c.outputs["Color"], bsdf.inputs["Base Color"])
+        bake_color = rgb_c.outputs["Color"]
+        bake_rough = rgb_c.outputs["Color"]
+        bake_metal = rgb_c.outputs["Color"]
+        
+        bsdf.inputs["Emission Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+        bsdf.inputs["Emission Strength"].default_value = 8.0
+        bake_emissive = rgb_c.outputs["Color"]
+
+    # Emission node used exclusively during bake passes
+    bake_emit = nodes.new("ShaderNodeEmission")
+    bake_emit.name = "BakeEmission"
+    
+    # Store references for fast switching
+    mat["bake_color_node"] = bake_color.node.name if bake_color else None
+    mat["bake_rough_node"] = bake_rough.node.name if bake_rough else None
+    mat["bake_metal_node"] = bake_metal.node.name if bake_metal else None
+    mat["bake_emissive_node"] = bake_emissive.node.name if bake_emissive else None
+    
     return mat
 
 
-def set_material_bake_pass(mat, pass_type):
+def set_material_pass(mat, pass_type):
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
     out = nodes.get("Material Output")
     bsdf = nodes.get("Principled BSDF")
-    
     emit = nodes.get("BakeEmission")
-    if not emit:
-        emit = nodes.new("ShaderNodeEmission")
-        emit.name = "BakeEmission"
-        
+    
     if pass_type == 'PBR':
         links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
-    elif pass_type == 'ALBEDO':
-        emit.inputs["Color"].default_value = bsdf.inputs["Base Color"].default_value
-        emit.inputs["Strength"].default_value = 1.0
+        return
+        
+    if pass_type == 'ALBEDO':
+        node_name = mat.get("bake_color_node")
+        if node_name and node_name in nodes:
+            src = nodes[node_name].outputs.get("Color") or nodes[node_name].outputs[0]
+            links.new(src, emit.inputs["Color"])
+            emit.inputs["Strength"].default_value = 1.0
+        else:
+            emit.inputs["Color"].default_value = (0.5, 0.5, 0.5, 1.0)
         links.new(emit.outputs["Emission"], out.inputs["Surface"])
-    elif pass_type == 'METALLIC':
-        m = bsdf.inputs["Metallic"].default_value
-        emit.inputs["Color"].default_value = (m, m, m, 1.0)
-        emit.inputs["Strength"].default_value = 1.0
-        links.new(emit.outputs["Emission"], out.inputs["Surface"])
+        
     elif pass_type == 'ROUGHNESS':
-        r = bsdf.inputs["Roughness"].default_value
-        emit.inputs["Color"].default_value = (r, r, r, 1.0)
-        emit.inputs["Strength"].default_value = 1.0
+        node_name = mat.get("bake_rough_node")
+        if node_name and node_name in nodes:
+            src = nodes[node_name].outputs.get("Color") or nodes[node_name].outputs[0]
+            links.new(src, emit.inputs["Color"])
+            emit.inputs["Strength"].default_value = 1.0
+        else:
+            emit.inputs["Color"].default_value = (0.5, 0.5, 0.5, 1.0)
         links.new(emit.outputs["Emission"], out.inputs["Surface"])
+        
+    elif pass_type == 'METALLIC':
+        node_name = mat.get("bake_metal_node")
+        if node_name and node_name in nodes:
+            src = nodes[node_name].outputs.get("Color") or nodes[node_name].outputs[0]
+            links.new(src, emit.inputs["Color"])
+            emit.inputs["Strength"].default_value = 1.0
+        else:
+            emit.inputs["Color"].default_value = (0.0, 0.0, 0.0, 1.0)
+        links.new(emit.outputs["Emission"], out.inputs["Surface"])
+        
     elif pass_type == 'EMISSIVE':
-        ec = bsdf.inputs["Emission Color"].default_value
-        es = bsdf.inputs["Emission Strength"].default_value
-        emit.inputs["Color"].default_value = (ec[0] * es, ec[1] * es, ec[2] * es, 1.0)
-        emit.inputs["Strength"].default_value = 1.0
+        node_name = mat.get("bake_emissive_node")
+        if node_name and node_name in nodes:
+            src = nodes[node_name].outputs.get("Color") or nodes[node_name].outputs[0]
+            links.new(src, emit.inputs["Color"])
+            emit.inputs["Strength"].default_value = 1.0
+        else:
+            emit.inputs["Color"].default_value = (0.0, 0.0, 0.0, 1.0)  # Pure black
         links.new(emit.outputs["Emission"], out.inputs["Surface"])
 
 
+# ---------------------------------------------------------------------------
+# Space Station / ISS Procedural Builder
+# ---------------------------------------------------------------------------
+def build_space_station():
+    print("\n=======================================================")
+    print("Building Authentic ISS (International Space Station)...")
+    print("=======================================================")
+    
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete(use_global=False)
+    
+    # 1. Instantiate Materials
+    m_solar = make_iss_material("Mat_Solar", 'SOLAR_ARRAY')
+    m_module = make_iss_material("Mat_Module", 'MODULE_HULL')
+    m_radiator = make_iss_material("Mat_Radiator", 'RADIATOR')
+    m_gold_mli = make_iss_material("Mat_GoldMLI", 'GOLD_MLI')
+    m_truss = make_iss_material("Mat_Truss", 'TRUSS')
+    m_dock = make_iss_material("Mat_Dock", 'DOCK')
+    m_cupola = make_iss_material("Mat_Cupola", 'CUPOLA')
+    m_nav_red = make_iss_material("Mat_NavRed", 'NAV_RED')
+    m_nav_green = make_iss_material("Mat_NavGreen", 'NAV_GREEN')
+    m_strobe = make_iss_material("Mat_Strobe", 'STROBE_WHITE')
+
+    parts = []
+
+    # Helper function to track active object
+    def add_part(mat):
+        obj = bpy.context.active_object
+        obj.data.materials.append(mat)
+        parts.append(obj)
+        return obj
+
+    # =======================================================================
+    # A. INTEGRATED TRUSS STRUCTURE (ITS: along X axis)
+    # =======================================================================
+    # Main continuous truss beam spanning from -2.8 to +2.8
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
+    t_main = add_part(m_truss)
+    t_main.name = "Truss_Main_Beam"
+    t_main.scale = (5.6, 0.14, 0.14)
+
+    # Truss upper and lower utility tray raceways
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.10, 0.0))
+    t_tray_top = add_part(m_dock)
+    t_tray_top.name = "Truss_Tray_Zenith"
+    t_tray_top.scale = (5.4, 0.04, 0.10)
+
+    # Solar Alpha Rotary Joints (SARJ) - massive cylindrical bearings on Port (-1.5) and Starboard (+1.5)
+    for sarj_x in [-1.5, 1.5]:
+        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.22, depth=0.28, location=(sarj_x, 0.0, 0.0), rotation=(0.0, math.pi/2, 0.0))
+        sarj = add_part(m_dock)
+        sarj.name = f"SARJ_Joint_{sarj_x}"
+
+        # Outer ring gear collar
+        bpy.ops.mesh.primitive_torus_add(major_radius=0.24, minor_radius=0.03, location=(sarj_x, 0.0, 0.0), rotation=(0.0, math.pi/2, 0.0))
+        sarj_gear = add_part(m_gold_mli)
+        sarj_gear.name = f"SARJ_Gear_{sarj_x}"
+
+    # Structural truss bulkheads and segment hubs along the spine
+    for hx in [-2.5, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, 2.5]:
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(hx, 0.0, 0.0))
+        hub = add_part(m_dock)
+        hub.name = f"Truss_Hub_{hx}"
+        hub.scale = (0.16, 0.18, 0.18)
+
+    # S0 Truss zenith mounting struts down to Destiny lab (Y: 0.0 to -0.22, Z: 0.2 to 0.7)
+    strut_coords = [(-0.16, -0.11, 0.25), (0.16, -0.11, 0.25), (-0.16, -0.11, 0.65), (0.16, -0.11, 0.65)]
+    for sx, sy, sz in strut_coords:
+        bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.025, depth=0.24, location=(sx, sy, sz))
+        strut = add_part(m_truss)
+        strut.name = f"Truss_S0_Strut_{sx}_{sz}"
+
+    # =======================================================================
+    # B. 8 PHOTOVOLTAIC SOLAR ARRAY WINGS (SAW)
+    # =======================================================================
+    # 4 gimbal stations: Port outboard P6 (-2.35), Port inboard P4 (-1.75),
+    # Starboard inboard S4 (+1.75), Starboard outboard S6 (+2.35).
+    # Each station has an upper (+Y) and lower (-Y) wing.
+    saw_stations = [
+        (-2.35,  0.80, 0.0, "P6_Zenith"),
+        (-2.35, -0.80, 0.0, "P6_Nadir"),
+        (-1.75,  0.80, 0.0, "P4_Zenith"),
+        (-1.75, -0.80, 0.0, "P4_Nadir"),
+        ( 1.75,  0.80, 0.0, "S4_Zenith"),
+        ( 1.75, -0.80, 0.0, "S4_Nadir"),
+        ( 2.35,  0.80, 0.0, "S6_Zenith"),
+        ( 2.35, -0.80, 0.0, "S6_Nadir"),
+    ]
+
+    for wx, wy, wz, tag in saw_stations:
+        # 1. Base canister (gold MLI cylinder at truss attachment)
+        can_y = 0.12 if wy > 0 else -0.12
+        bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.065, depth=0.22, location=(wx, can_y, wz))
+        can = add_part(m_gold_mli)
+        can.name = f"SAW_Canister_{tag}"
+
+        # 2. Central folding deployer mast
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(wx, wy, wz))
+        mast = add_part(m_truss)
+        mast.name = f"SAW_Mast_{tag}"
+        mast.scale = (0.045, 1.25, 0.035)
+
+        # 3. Dual solar blanket panels on Port and Starboard sides of mast
+        for side in [-1, 1]:
+            blanket_x = wx + side * 0.14
+            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(blanket_x, wy, wz))
+            blanket = add_part(m_solar)
+            blanket.name = f"SAW_Blanket_{tag}_{side}"
+            blanket.scale = (0.22, 1.20, 0.012)
+
+    # =======================================================================
+    # C. ACTIVE THERMAL CONTROL SYSTEM (ATCS) ACCORDION RADIATORS
+    # =======================================================================
+    # 3 major radiator wings extending backwards along -Z from P1 and S1 trusses
+    radiator_configs = [
+        (-0.85, 0.0, -0.75, "Port_P1"),
+        ( 0.45, 0.0, -0.75, "Starboard_S1_A"),
+        ( 0.95, 0.0, -0.75, "Starboard_S1_B"),
+    ]
+
+    for rx, ry, rz, tag in radiator_configs:
+        # Accordion folded radiator array
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(rx, ry, rz))
+        rad = add_part(m_radiator)
+        rad.name = f"ATCS_Radiator_{tag}"
+        rad.scale = (0.18, 0.018, 1.15)
+
+        # Radiator rotary gimbal hub at truss
+        bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.055, depth=0.18, location=(rx, ry, -0.12))
+        rad_hub = add_part(m_dock)
+        rad_hub.name = f"ATCS_Hub_{tag}"
+
+    # P6 small Early Ammonia Servicing (EAS) radiator
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(-2.05, 0.0, -0.45))
+    eas_rad = add_part(m_radiator)
+    eas_rad.name = "ATCS_EAS_Radiator"
+    eas_rad.scale = (0.12, 0.015, 0.65)
+
+    # =======================================================================
+    # D. PRESSURIZED MODULE CLUSTER (USOS & ROS along Z axis, Y = -0.25)
+    # =======================================================================
+    # Module centerline: Y = -0.24
+    CY = -0.24
+
+    # 1. Unity (Node 1) - Central connecting hub
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.22, depth=0.55, location=(0.0, CY, 0.0), rotation=(math.pi/2, 0.0, 0.0))
+    unity = add_part(m_module)
+    unity.name = "Module_Unity_Node1"
+
+    # Unity radial berthing rings (CBM)
+    for rot in [0.0, math.pi/2, math.pi, -math.pi/2]:
+        bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.12, depth=0.08, location=(0.0 + 0.22 * math.cos(rot), CY + 0.22 * math.sin(rot), 0.0))
+        cbm = add_part(m_dock)
+        cbm.name = f"Unity_CBM_{rot}"
+
+    # 2. Destiny US Laboratory (Forward from Unity, Z: 0.28 to 1.18)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.23, depth=0.90, location=(0.0, CY, 0.72), rotation=(math.pi/2, 0.0, 0.0))
+    destiny = add_part(m_module)
+    destiny.name = "Module_Destiny_USLab"
+
+    # Destiny forward and aft conical endcaps
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.23, radius2=0.18, depth=0.10, location=(0.0, CY, 1.22), rotation=(-math.pi/2, 0.0, 0.0))
+    destiny_cone_f = add_part(m_module)
+    destiny_cone_f.name = "Destiny_Cone_Fwd"
+
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.23, radius2=0.18, depth=0.10, location=(0.0, CY, 0.22), rotation=(math.pi/2, 0.0, 0.0))
+    destiny_cone_a = add_part(m_module)
+    destiny_cone_a.name = "Destiny_Cone_Aft"
+
+    # Destiny nadir optical research window
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.065, depth=0.04, location=(0.0, CY - 0.23, 0.72))
+    destiny_win = add_part(m_cupola)
+    destiny_win.name = "Destiny_Nadir_Window"
+
+    # 3. Harmony (Node 2) - Forward docking and lab hub (Z: 1.30 to 1.85)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.22, depth=0.55, location=(0.0, CY, 1.55), rotation=(math.pi/2, 0.0, 0.0))
+    harmony = add_part(m_module)
+    harmony.name = "Module_Harmony_Node2"
+
+    # 4. Columbus (ESA Laboratory) - Attached to Harmony Starboard (+X: 0.25 to 1.05)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.21, depth=0.80, location=(0.65, CY, 1.55), rotation=(0.0, math.pi/2, 0.0))
+    columbus = add_part(m_module)
+    columbus.name = "Module_Columbus_ESA"
+
+    # Columbus rounded end cap
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, radius=0.21, location=(1.05, CY, 1.55))
+    columbus_cap = add_part(m_module)
+    columbus_cap.name = "Columbus_EndCap"
+    columbus_cap.scale = (0.5, 1.0, 1.0)
+
+    # 5. Kibo (JAXA JEM) - Attached to Harmony Port (-X: -0.25 to -1.35)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.23, depth=1.10, location=(-0.80, CY, 1.55), rotation=(0.0, math.pi/2, 0.0))
+    kibo = add_part(m_module)
+    kibo.name = "Module_Kibo_JAXA"
+
+    # Kibo Experiment Logistics Module (ELM-PS) cylinder on top (+Y)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.18, depth=0.45, location=(-0.65, CY + 0.32, 1.55))
+    kibo_elm = add_part(m_module)
+    kibo_elm.name = "Kibo_ELM_PS"
+
+    # Kibo Exposed Facility (EF - external "porch" experiment platform at -X tip)
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(-1.55, CY, 1.55))
+    kibo_ef = add_part(m_truss)
+    kibo_ef.name = "Kibo_Exposed_Facility"
+    kibo_ef.scale = (0.42, 0.26, 0.36)
+
+    # 6. Quest Joint Airlock - Branching off Starboard from Unity (Node 1)
+    # Equipment lock (wider)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.18, depth=0.35, location=(0.38, CY, 0.0), rotation=(0.0, math.pi/2, 0.0))
+    quest_eq = add_part(m_module)
+    quest_eq.name = "Airlock_Quest_Equipment"
+
+    # Crew lock (narrower)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.14, depth=0.32, location=(0.68, CY, 0.0), rotation=(0.0, math.pi/2, 0.0))
+    quest_cr = add_part(m_module)
+    quest_cr.name = "Airlock_Quest_Crew"
+
+    # High-pressure gas tanks clustered on Quest airlock
+    for tz, ty in [(-0.12, 0.12), (0.12, 0.12), (-0.12, -0.12), (0.12, -0.12)]:
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=6, radius=0.055, location=(0.42, CY + ty, tz))
+        tank = add_part(m_gold_mli)
+        tank.name = f"Airlock_GasTank_{tz}_{ty}"
+
+    # 7. Tranquility (Node 3) & Cupola - Attached to Port from Unity (Node 1)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.22, depth=0.55, location=(-0.45, CY, 0.0), rotation=(0.0, math.pi/2, 0.0))
+    tranq = add_part(m_module)
+    tranq.name = "Module_Tranquility_Node3"
+
+    # Cupola Observation Dome on Tranquility Nadir (-Y, pointing directly down at Earth!)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.14, depth=0.10, location=(-0.45, CY - 0.26, 0.0))
+    cupola_base = add_part(m_dock)
+    cupola_base.name = "Cupola_Mount_Ring"
+
+    # 7-Window Faceted Cupola Dome
+    bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.13, depth=0.08, location=(-0.45, CY - 0.33, 0.0))
+    cupola_dome = add_part(m_cupola)
+    cupola_dome.name = "Cupola_Observation_Dome"
+
+    # 8. International Docking Adapter (IDA-2 / PMA-2) at forward nose (Z: 1.85 to 2.25)
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.21, radius2=0.16, depth=0.25, location=(0.0, CY, 1.95), rotation=(-math.pi/2, 0.0, 0.0))
+    pma2 = add_part(m_dock)
+    pma2.name = "PMA2_Adapter_Fwd"
+
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.16, depth=0.12, location=(0.0, CY, 2.12), rotation=(math.pi/2, 0.0, 0.0))
+    ida2_ring = add_part(m_dock)
+    ida2_ring.name = "IDA2_Docking_Collar"
+
+    # Docking Petal Alignment Ring
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.165, minor_radius=0.022, location=(0.0, CY, 2.18), rotation=(0.0, 0.0, 0.0))
+    ida_ring_petal = add_part(m_strobe)
+    ida_ring_petal.name = "IDA2_Alignment_Ring"
+
+    # Laser Retroreflector / Approach Cross
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, CY, 2.19))
+    cross_h = add_part(m_strobe)
+    cross_h.name = "Docking_Target_Cross_H"
+    cross_h.scale = (0.16, 0.015, 0.015)
+
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, CY, 2.19))
+    cross_v = add_part(m_strobe)
+    cross_v.name = "Docking_Target_Cross_V"
+    cross_v.scale = (0.015, 0.16, 0.015)
+
+    # 9. Russian Orbital Segment (ROS - along negative Z axis)
+    # Zarya (FGB - Functional Cargo Block, Z: -0.32 to -1.15)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.21, depth=0.75, location=(0.0, CY, -0.72), rotation=(math.pi/2, 0.0, 0.0))
+    zarya = add_part(m_gold_mli)
+    zarya.name = "Module_Zarya_FGB"
+
+    # Zarya side propellant fairings
+    for zs in [-1, 1]:
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(zs * 0.22, CY, -0.72))
+        z_fair = add_part(m_module)
+        z_fair.name = f"Zarya_Fairing_{zs}"
+        z_fair.scale = (0.06, 0.12, 0.65)
+
+    # Zarya angled secondary solar wings
+    for side in [-1, 1]:
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(side * 0.75, CY - 0.05, -0.72))
+        z_wing = add_part(m_solar)
+        z_wing.name = f"Zarya_Solar_Wing_{side}"
+        z_wing.scale = (0.85, 0.012, 0.22)
+
+    # Zvezda Service Module (Stepped Russian command hub, Z: -1.15 to -2.15)
+    # Forward spherical docking transfer chamber
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.18, location=(0.0, CY, -1.22))
+    zvezda_fwd = add_part(m_module)
+    zvezda_fwd.name = "Zvezda_Spherical_Compartment"
+
+    # Main cylindrical work compartment (stepped body)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.23, depth=0.65, location=(0.0, CY, -1.65), rotation=(math.pi/2, 0.0, 0.0))
+    zvezda_main = add_part(m_module)
+    zvezda_main.name = "Zvezda_Main_Compartment"
+
+    # Aft tapered engine section
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.23, radius2=0.15, depth=0.25, location=(0.0, CY, -2.05), rotation=(math.pi/2, 0.0, 0.0))
+    zvezda_aft_cone = add_part(m_module)
+    zvezda_aft_cone.name = "Zvezda_Aft_Cone"
+
+    # Aft docking collar (for Progress / Soyuz transports)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.13, depth=0.12, location=(0.0, CY, -2.22), rotation=(math.pi/2, 0.0, 0.0))
+    zvezda_dock = add_part(m_dock)
+    zvezda_dock.name = "Zvezda_Aft_Docking_Port"
+
+    # Zvezda primary steerable solar panels
+    for side in [-1, 1]:
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(side * 1.05, CY, -1.65))
+        zv_wing = add_part(m_solar)
+        zv_wing.name = f"Zvezda_Solar_Wing_{side}"
+        zv_wing.scale = (1.10, 0.012, 0.26)
+
+    # Poisk / Rassvet docking modules branching nadir/zenith
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.14, depth=0.35, location=(0.0, CY + 0.28, -1.22))
+    poisk = add_part(m_module)
+    poisk.name = "Module_Poisk_Zenith"
+
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.14, depth=0.35, location=(0.0, CY - 0.28, -0.72))
+    rassvet = add_part(m_module)
+    rassvet.name = "Module_Rassvet_Nadir"
+
+    # =======================================================================
+    # E. CANADARM2 & COMMUNICATIONS DISH
+    # =======================================================================
+    # Canadarm2 boom joints mounted near Destiny / S0 truss
+    arm_joints = [
+        Vector((0.25, CY + 0.35, 0.45)),
+        Vector((0.55, CY + 0.65, 0.70)),
+        Vector((0.35, CY + 0.85, 1.15)),
+    ]
+    for aj in range(len(arm_joints) - 1):
+        p1 = arm_joints[aj]
+        p2 = arm_joints[aj + 1]
+        mid = (p1 + p2) * 0.5
+        dist = (p2 - p1).length
+        bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.035, depth=dist, location=mid)
+        arm_seg = add_part(m_module)
+        arm_seg.name = f"Canadarm2_Boom_{aj}"
+
+    # Space-to-Ground High Gain Antenna (SGANT)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.025, depth=0.45, location=(0.65, 0.25, -0.15))
+    dish_mast = add_part(m_truss)
+    dish_mast.name = "SGANT_Antenna_Mast"
+
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.28, radius2=0.02, depth=0.12, location=(0.65, 0.45, -0.15), rotation=(math.radians(35), math.radians(20), 0.0))
+    dish = add_part(m_gold_mli)
+    dish.name = "SGANT_Antenna_Dish"
+
+    # =======================================================================
+    # F. NAVIGATION & DOCKING APPROACH LIGHTS
+    # =======================================================================
+    # Port Red Navigation Beacon (Far Port Tip of P6 Truss: -2.82)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=4, radius=0.045, location=(-2.82, 0.0, 0.0))
+    nav_r = add_part(m_nav_red)
+    nav_r.name = "Nav_Light_Port_Red"
+
+    # Starboard Green Navigation Beacon (Far Starboard Tip of S6 Truss: +2.82)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=4, radius=0.045, location=(2.82, 0.0, 0.0))
+    nav_g = add_part(m_nav_green)
+    nav_g.name = "Nav_Light_Starboard_Green"
+
+    # Forward Docking Alignment Strobes around IDA-2 collar
+    strobe_positions = [
+        (-0.25, CY, 2.20),
+        ( 0.25, CY, 2.20),
+        ( 0.0, CY + 0.25, 2.20),
+        ( 0.0, CY - 0.25, 2.20),
+        ( 0.0, 0.16, 0.0),  # Truss zenith strobe
+        ( 0.0, -0.16, 0.0), # Truss nadir strobe
+    ]
+    for s_idx, sp in enumerate(strobe_positions):
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=4, radius=0.035, location=sp)
+        strobe = add_part(m_strobe)
+        strobe.name = f"Dock_Strobe_{s_idx}"
+
+    # =======================================================================
+    # G. UNIFIED MESH JOINING & UV UNWRAPPING
+    # =======================================================================
+    print(f"Joining {len(parts)} individual station components...")
+    for obj in parts:
+        if obj.name not in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.link(obj)
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = t_main
+    bpy.ops.object.join()
+    station = bpy.context.active_object
+    station.name = "ISS_Space_Station"
+
+    # Normalize dimensions: total wingspan across solar arrays (X axis) normalized to 1.0 unit
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    bbox = [station.matrix_world @ Vector(corner) for corner in station.bound_box]
+    min_x = min(v.x for v in bbox)
+    max_x = max(v.x for v in bbox)
+    cur_width = max_x - min_x
+    target_width = 1.0  # Normalized to 1.0 so SceneManager scale directly governs world wingspan
+    scale_factor = target_width / cur_width
+    station.scale = (scale_factor, scale_factor, scale_factor)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    # Re-center geometry to (0, 0, 0)
+    bbox = [station.matrix_world @ Vector(corner) for corner in station.bound_box]
+    center = Vector(((min(v.x for v in bbox) + max(v.x for v in bbox)) * 0.5,
+                     (min(v.y for v in bbox) + max(v.y for v in bbox)) * 0.5,
+                     (min(v.z for v in bbox) + max(v.z for v in bbox)) * 0.5))
+    station.location = -center
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    # Generate non-overlapping UV atlas
+    print("Generating non-overlapping UV atlas via Smart Project...")
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=0.018)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    poly_count = len(station.data.polygons)
+    vert_count = len(station.data.vertices)
+    print(f"ISS Station Mesh built: {vert_count} vertices, {poly_count} polygons.")
+    return station
+
+
+# ---------------------------------------------------------------------------
+# PBR Texture Baking Suite
+# ---------------------------------------------------------------------------
 def bake_pbr_set(obj, base_path, tex_size=2048):
-    print(f"\n--- Baking Station PBR texture set ({tex_size}x{tex_size}) ---")
+    print(f"\n--- Baking ISS PBR texture suite ({tex_size}x{tex_size}) ---")
     scene = bpy.context.scene
     scene.render.engine = 'CYCLES'
     scene.cycles.device = 'CPU'
-    scene.cycles.samples = 4
+    scene.cycles.samples = 1  # 1 sample suffices for emit/color passes
     
     bake_img = bpy.data.images.new(f"Bake_{obj.name}", tex_size, tex_size)
     
+    # Configure image node target in all materials
     for slot in obj.material_slots:
         mat = slot.material
         if not mat or not mat.use_nodes:
@@ -209,17 +887,17 @@ def bake_pbr_set(obj, base_path, tex_size=2048):
     bpy.context.view_layer.objects.active = obj
     obj.select_set(True)
 
-    # 1. Albedo
+    # 1. Albedo Map
     print("Baking Albedo map...")
     for slot in obj.material_slots:
-        set_material_bake_pass(slot.material, 'ALBEDO')
+        set_material_pass(slot.material, 'ALBEDO')
     bpy.ops.object.bake(type='EMIT')
     save_blender_image_as_bmp(bake_img, f"{base_path}_albedo.bmp")
 
-    # 2. Normal (Tangent space)
-    print("Baking Normal map...")
+    # 2. Tangent-Space Normal Map
+    print("Baking Normal map (Tangent space)...")
     for slot in obj.material_slots:
-        set_material_bake_pass(slot.material, 'PBR')
+        set_material_pass(slot.material, 'PBR')
     scene.cycles.bake_type = 'NORMAL'
     scene.render.bake.normal_space = 'TANGENT'
     scene.render.bake.normal_r = 'POS_X'
@@ -228,323 +906,37 @@ def bake_pbr_set(obj, base_path, tex_size=2048):
     bpy.ops.object.bake(type='NORMAL')
     save_blender_image_as_bmp(bake_img, f"{base_path}_normal.bmp")
 
-    # 3. Roughness
+    # 3. Roughness Map
     print("Baking Roughness map...")
     for slot in obj.material_slots:
-        set_material_bake_pass(slot.material, 'ROUGHNESS')
+        set_material_pass(slot.material, 'ROUGHNESS')
     bpy.ops.object.bake(type='EMIT')
     save_blender_image_as_bmp(bake_img, f"{base_path}_rough.bmp")
 
-    # 4. Metallic
+    # 4. Metallic Map
     print("Baking Metallic map...")
     for slot in obj.material_slots:
-        set_material_bake_pass(slot.material, 'METALLIC')
+        set_material_pass(slot.material, 'METALLIC')
     bpy.ops.object.bake(type='EMIT')
     save_blender_image_as_bmp(bake_img, f"{base_path}_metal.bmp")
 
-    # 5. Emissive
+    # 5. Emissive Map
     print("Baking Emissive map...")
     for slot in obj.material_slots:
-        set_material_bake_pass(slot.material, 'EMISSIVE')
+        set_material_pass(slot.material, 'EMISSIVE')
     bpy.ops.object.bake(type='EMIT')
     save_blender_image_as_bmp(bake_img, f"{base_path}_emissive.bmp")
 
+    # Restore materials to standard PBR
     for slot in obj.material_slots:
-        set_material_bake_pass(slot.material, 'PBR')
+        set_material_pass(slot.material, 'PBR')
         
     bpy.data.images.remove(bake_img)
-    print("Baking complete!")
+    print("All 5 PBR texture maps baked successfully!")
 
 
 # ---------------------------------------------------------------------------
-# Space Station / ISS Procedural Builder
-# ---------------------------------------------------------------------------
-def build_space_station():
-    print("\n=======================================================")
-    print("Building ISS / Orbital Space Station Model...")
-    print("=======================================================")
-    
-    bpy.ops.object.select_all(action='SELECT')
-    bpy.ops.object.delete(use_global=False)
-    
-    # Materials
-    m_truss = make_pbr_material("Mat_Truss", base_color=(0.18, 0.20, 0.24), metallic=0.88, roughness=0.35)
-    m_module = make_pbr_material("Mat_Module", base_color=(0.88, 0.88, 0.85), metallic=0.15, roughness=0.45, bump_type='panels')
-    m_gold_mli = make_pbr_material("Mat_GoldMLI", base_color=(0.95, 0.74, 0.18), metallic=0.92, roughness=0.22)
-    m_solar = make_pbr_material("Mat_Solar", base_color=(0.035, 0.075, 0.18), metallic=0.45, roughness=0.18, bump_type='solar_grid')
-    m_radiator = make_pbr_material("Mat_Radiator", base_color=(0.94, 0.95, 0.96), metallic=0.10, roughness=0.50, bump_type='radiator_fins')
-    m_dock = make_pbr_material("Mat_Dock", base_color=(0.42, 0.45, 0.50), metallic=0.78, roughness=0.32)
-    m_cupola = make_pbr_material("Mat_Cupola", base_color=(0.05, 0.20, 0.40), metallic=0.10, roughness=0.08, emission=(0.25, 0.70, 1.0), emission_strength=2.2)
-    m_nav_green = make_pbr_material("Mat_NavGreen", base_color=(0.1, 1.0, 0.3), metallic=0.0, roughness=0.2, emission=(0.1, 1.0, 0.3), emission_strength=5.0)
-    m_nav_red = make_pbr_material("Mat_NavRed", base_color=(1.0, 0.1, 0.1), metallic=0.0, roughness=0.2, emission=(1.0, 0.1, 0.1), emission_strength=5.0)
-    m_dock_strobe = make_pbr_material("Mat_Strobe", base_color=(1.0, 0.95, 0.8), metallic=0.0, roughness=0.2, emission=(1.0, 0.95, 0.8), emission_strength=6.0)
-
-    parts = []
-
-    # 1. Main Integrated Truss Structure (ITS) along X axis
-    # Main truss beam spanning from -2.8 to +2.8
-    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
-    truss_main = bpy.context.active_object
-    truss_main.name = "Truss_Main"
-    truss_main.scale = (5.6, 0.16, 0.16)
-    truss_main.data.materials.append(m_truss)
-    parts.append(truss_main)
-
-    # Cross-beam collars and joint hubs along the truss
-    for x_pos in [-2.4, -1.6, -0.8, 0.0, 0.8, 1.6, 2.4]:
-        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(x_pos, 0.0, 0.0))
-        hub = bpy.context.active_object
-        hub.name = f"Truss_Hub_{x_pos}"
-        hub.scale = (0.22, 0.22, 0.22)
-        hub.data.materials.append(m_dock)
-        parts.append(hub)
-
-    # 2. Main Solar Array Wings (8 massive panels: 4 Port, 4 Starboard)
-    # Each wing pair has an upper and lower wing extending along Y/Z
-    solar_positions = [
-        # Port (Left, negative X): S4 / S6 segments
-        (-2.4,  0.75, 0.0),
-        (-2.4, -0.75, 0.0),
-        (-1.8,  0.75, 0.0),
-        (-1.8, -0.75, 0.0),
-        # Starboard (Right, positive X): P4 / P6 segments
-        ( 1.8,  0.75, 0.0),
-        ( 1.8, -0.75, 0.0),
-        ( 2.4,  0.75, 0.0),
-        ( 2.4, -0.75, 0.0),
-    ]
-
-    for i, (sx, sy, sz) in enumerate(solar_positions):
-        # Solar Panel Wing
-        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(sx, sy, sz))
-        wing = bpy.context.active_object
-        wing.name = f"Solar_Array_{i}"
-        wing.scale = (0.28, 1.15, 0.018)
-        wing.data.materials.append(m_solar)
-        parts.append(wing)
-
-        # Central mast and gold MLI canister
-        canister_y = 0.12 if sy > 0 else -0.12
-        bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.045, depth=0.25, location=(sx, canister_y, sz))
-        can = bpy.context.active_object
-        can.name = f"Solar_Canister_{i}"
-        can.data.materials.append(m_gold_mli)
-        parts.append(can)
-
-    # 3. Thermal Control Radiator Panels (TCS) extending backward along -Z
-    radiator_x = [-0.9, -0.4, 0.4, 0.9]
-    for i, rx in enumerate(radiator_x):
-        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(rx, 0.0, -0.65))
-        rad = bpy.context.active_object
-        rad.name = f"Radiator_{i}"
-        rad.scale = (0.16, 0.02, 0.95)
-        rad.data.materials.append(m_radiator)
-        parts.append(rad)
-
-    # 4. Pressurized Habitation & Lab Modules (Central Longitudinal Spine along Z)
-    # Module 1: Unity / Node 1 (central hub)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.24, depth=0.60, location=(0.0, -0.25, 0.0), rotation=(math.pi/2, 0.0, 0.0))
-    unity = bpy.context.active_object
-    unity.name = "Module_Unity"
-    unity.data.materials.append(m_module)
-    parts.append(unity)
-
-    # Module 2: Destiny US Laboratory (forward, positive Z)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.25, depth=0.90, location=(0.0, -0.25, 0.72), rotation=(math.pi/2, 0.0, 0.0))
-    destiny = bpy.context.active_object
-    destiny.name = "Module_Destiny"
-    destiny.data.materials.append(m_module)
-    parts.append(destiny)
-
-    # Module 3: Harmony / Node 2 (forward docking hub)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.24, depth=0.55, location=(0.0, -0.25, 1.40), rotation=(math.pi/2, 0.0, 0.0))
-    harmony = bpy.context.active_object
-    harmony.name = "Module_Harmony"
-    harmony.data.materials.append(m_module)
-    parts.append(harmony)
-
-    # International Docking Adapter (IDA / PMA-2) at forward nose
-    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.22, radius2=0.16, depth=0.30, location=(0.0, -0.25, 1.80), rotation=(-math.pi/2, 0.0, 0.0))
-    ida_fwd = bpy.context.active_object
-    ida_fwd.name = "Docking_IDA_Fwd"
-    ida_fwd.data.materials.append(m_dock)
-    parts.append(ida_fwd)
-
-    # Docking Petal Ring / Alignment Guide
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.18, minor_radius=0.025, location=(0.0, -0.25, 1.95), rotation=(0.0, 0.0, 0.0))
-    dock_ring = bpy.context.active_object
-    dock_ring.name = "Docking_Ring_Fwd"
-    dock_ring.data.materials.append(m_dock_strobe)
-    parts.append(dock_ring)
-
-    # Lateral Modules: Columbus (ESA Lab) to starboard (+X) and Kibo (JAXA Lab) to port (-X)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.22, depth=0.75, location=(0.58, -0.25, 1.40), rotation=(0.0, math.pi/2, 0.0))
-    columbus = bpy.context.active_object
-    columbus.name = "Module_Columbus"
-    columbus.data.materials.append(m_module)
-    parts.append(columbus)
-
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.24, depth=0.95, location=(-0.68, -0.25, 1.40), rotation=(0.0, math.pi/2, 0.0))
-    kibo = bpy.context.active_object
-    kibo.name = "Module_Kibo"
-    kibo.data.materials.append(m_module)
-    parts.append(kibo)
-
-    # Kibo Exposed Facility (porch)
-    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(-1.35, -0.25, 1.40))
-    kibo_ef = bpy.context.active_object
-    kibo_ef.name = "Kibo_ExposedFacility"
-    kibo_ef.scale = (0.35, 0.35, 0.35)
-    kibo_ef.data.materials.append(m_truss)
-    parts.append(kibo_ef)
-
-    # Earth-facing Cupola 7-window observation dome (nadir, -Y direction)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.14, depth=0.12, location=(0.0, -0.52, 0.0), rotation=(0.0, 0.0, 0.0))
-    cupola_base = bpy.context.active_object
-    cupola_base.name = "Cupola_Base"
-    cupola_base.data.materials.append(m_dock)
-    parts.append(cupola_base)
-
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, radius=0.12, location=(0.0, -0.56, 0.0))
-    cupola_dome = bpy.context.active_object
-    cupola_dome.name = "Cupola_Window"
-    cupola_dome.scale = (1.0, 0.5, 1.0)
-    cupola_dome.data.materials.append(m_cupola)
-    parts.append(cupola_dome)
-
-    # Russian Orbital Segment (Aft, negative Z): Zarya (FGB) and Zvezda Service Module
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.22, depth=0.85, location=(0.0, -0.25, -0.65), rotation=(math.pi/2, 0.0, 0.0))
-    zarya = bpy.context.active_object
-    zarya.name = "Module_Zarya"
-    zarya.data.materials.append(m_gold_mli)
-    parts.append(zarya)
-
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.24, depth=0.95, location=(0.0, -0.25, -1.45), rotation=(math.pi/2, 0.0, 0.0))
-    zvezda = bpy.context.active_object
-    zvezda.name = "Module_Zvezda"
-    zvezda.data.materials.append(m_module)
-    parts.append(zvezda)
-
-    # Russian Segment Solar Wings (Zarya / Zvezda secondary wings)
-    for side in [-1, 1]:
-        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(side * 0.75, -0.25, -0.65))
-        rus_wing = bpy.context.active_object
-        rus_wing.name = f"Russian_Solar_Wing_{side}"
-        rus_wing.scale = (0.85, 0.015, 0.22)
-        rus_wing.data.materials.append(m_solar)
-        parts.append(rus_wing)
-
-    # Aft Docking Collar (Zvezda Aft Port)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.14, depth=0.18, location=(0.0, -0.25, -1.98), rotation=(math.pi/2, 0.0, 0.0))
-    aft_dock = bpy.context.active_object
-    aft_dock.name = "Docking_Aft"
-    aft_dock.data.materials.append(m_dock)
-    parts.append(aft_dock)
-
-    # 5. Canadarm2 Robotic Manipulator Arm
-    arm_pts = [
-        Vector((0.25, 0.15, 0.3)),
-        Vector((0.45, 0.45, 0.5)),
-        Vector((0.25, 0.65, 0.9)),
-    ]
-    for j in range(len(arm_pts) - 1):
-        p1 = arm_pts[j]
-        p2 = arm_pts[j+1]
-        mid = (p1 + p2) * 0.5
-        diff = p2 - p1
-        dist = diff.length
-        bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.035, depth=dist, location=mid)
-        arm_seg = bpy.context.active_object
-        arm_seg.name = f"Canadarm_Segment_{j}"
-        arm_seg.data.materials.append(m_module)
-        parts.append(arm_seg)
-
-    # 6. High-Gain Communications Dish Antenna
-    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.025, depth=0.45, location=(0.7, 0.35, -0.2))
-    ant_mast = bpy.context.active_object
-    ant_mast.name = "Antenna_Mast"
-    ant_mast.data.materials.append(m_truss)
-    parts.append(ant_mast)
-
-    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.28, radius2=0.02, depth=0.12, location=(0.7, 0.55, -0.2), rotation=(math.radians(35), math.radians(20), 0.0))
-    ant_dish = bpy.context.active_object
-    ant_dish.name = "Antenna_Dish"
-    ant_dish.data.materials.append(m_gold_mli)
-    parts.append(ant_dish)
-
-    # 7. Navigation & Docking Target Lights
-    # Port Red Nav Light
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=4, radius=0.045, location=(-2.85, 0.0, 0.0))
-    nav_r = bpy.context.active_object
-    nav_r.name = "Nav_Light_Port_Red"
-    nav_r.data.materials.append(m_nav_red)
-    parts.append(nav_r)
-
-    # Starboard Green Nav Light
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=4, radius=0.045, location=(2.85, 0.0, 0.0))
-    nav_g = bpy.context.active_object
-    nav_g.name = "Nav_Light_Starboard_Green"
-    nav_g.data.materials.append(m_nav_green)
-    parts.append(nav_g)
-
-    # Docking Approach Target Lights
-    dock_lights_pos = [
-        (-0.35, -0.25, 1.85),
-        ( 0.35, -0.25, 1.85),
-        ( 0.0,   0.05, 1.85),
-        ( 0.0,  -0.55, 1.85),
-    ]
-    for k, lp in enumerate(dock_lights_pos):
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=4, radius=0.035, location=lp)
-        dl = bpy.context.active_object
-        dl.name = f"Dock_Strobe_{k}"
-        dl.data.materials.append(m_dock_strobe)
-        parts.append(dl)
-
-    # Join All Parts
-    for obj in parts:
-        if obj.name not in bpy.context.scene.collection.objects:
-            bpy.context.scene.collection.objects.link(obj)
-        obj.select_set(True)
-    bpy.context.view_layer.objects.active = truss_main
-    bpy.ops.object.join()
-    station = bpy.context.active_object
-    station.name = "ISS_Space_Station"
-
-    # Normalize to exact scale (~5.5 length across solar truss, centered at (0,0,0))
-    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-    bbox = [station.matrix_world @ Vector(corner) for corner in station.bound_box]
-    min_x = min(v.x for v in bbox)
-    max_x = max(v.x for v in bbox)
-    min_y = min(v.y for v in bbox)
-    max_y = max(v.y for v in bbox)
-    min_z = min(v.z for v in bbox)
-    max_z = max(v.z for v in bbox)
-    cur_w = max_x - min_x
-    scale_fac = 5.4 / cur_w
-    station.scale = (scale_fac, scale_fac, scale_fac)
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-
-    # Re-center
-    bbox = [station.matrix_world @ Vector(corner) for corner in station.bound_box]
-    center = Vector(((min(v.x for v in bbox) + max(v.x for v in bbox)) * 0.5,
-                     (min(v.y for v in bbox) + max(v.y for v in bbox)) * 0.5,
-                     (min(v.z for v in bbox) + max(v.z for v in bbox)) * 0.5))
-    station.location = -center
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-
-    # UV Smart Project with clean seams and margins
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=0.015)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    print(f"Station created successfully: {len(station.data.vertices)} vertices, {len(station.data.polygons)} polygons.")
-    return station
-
-
-# ---------------------------------------------------------------------------
-# Showcase Renders in Cycles
+# Cycles Showcase Renders
 # ---------------------------------------------------------------------------
 def render_station_showcases(station, out_hero_png, out_close_png):
     print(f"\n--- Setting up Cycles Studio Scene for Station Showcase Renders ---")
@@ -560,26 +952,26 @@ def render_station_showcases(station, out_hero_png, out_close_png):
 
     # Camera
     cam_data = bpy.data.cameras.new("StationCam")
-    cam_data.lens = 42
+    cam_data.lens = 45
     cam_obj = bpy.data.objects.new("StationCam", cam_data)
     scene.collection.objects.link(cam_obj)
     scene.camera = cam_obj
 
     # Lighting
-    # 1. Brilliant High-Intensity Orbital Sun Key
+    # 1. Direct High-Intensity Orbital Sun Key (crisp vacuum sunlight)
     sun_data = bpy.data.lights.new("OrbitalSun", type='SUN')
-    sun_data.energy = 5.5
-    sun_data.color = (1.0, 0.98, 0.94)
+    sun_data.energy = 6.0
+    sun_data.color = (1.0, 0.98, 0.95)
     sun_obj = bpy.data.objects.new("OrbitalSun", sun_data)
-    sun_obj.rotation_euler = (math.radians(50), math.radians(35), math.radians(-45))
+    sun_obj.rotation_euler = (math.radians(52), math.radians(30), math.radians(-40))
     scene.collection.objects.link(sun_obj)
 
-    # 2. Cool Blue Earth-Shine Albedo Rim Light
+    # 2. Cool Azure Earth-Shine Albedo Rim/Bounce from Nadir
     earth_shine = bpy.data.lights.new("EarthAlbedo", type='SUN')
-    earth_shine.energy = 2.4
-    earth_shine.color = (0.28, 0.55, 0.95)
+    earth_shine.energy = 2.6
+    earth_shine.color = (0.22, 0.52, 0.95)
     earth_obj = bpy.data.objects.new("EarthAlbedo", earth_shine)
-    earth_obj.rotation_euler = (math.radians(-40), math.radians(-30), math.radians(135))
+    earth_obj.rotation_euler = (math.radians(-45), math.radians(-25), math.radians(140))
     scene.collection.objects.link(earth_obj)
 
     # Deep space world background
@@ -590,13 +982,13 @@ def render_station_showcases(station, out_hero_png, out_close_png):
     world.use_nodes = True
     bg = world.node_tree.nodes.get("Background")
     if bg:
-        bg.inputs["Color"].default_value = (0.008, 0.012, 0.022, 1.0)
-        bg.inputs["Strength"].default_value = 0.40
+        bg.inputs["Color"].default_value = (0.005, 0.008, 0.016, 1.0)
+        bg.inputs["Strength"].default_value = 0.35
 
     # === Render 1: Hero Perspective of the full station ===
     print(f"Rendering Hero View -> {out_hero_png} ...")
-    cam_pos = Vector((-3.8, 2.4, 4.2))
-    target = Vector((0.0, -0.15, 0.2))
+    cam_pos = Vector((-0.75, 0.45, 0.85))
+    target = Vector((0.0, -0.03, 0.04))
     direction = target - cam_pos
     cam_obj.location = cam_pos
     cam_obj.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
@@ -605,10 +997,10 @@ def render_station_showcases(station, out_hero_png, out_close_png):
     bpy.ops.render.render(write_still=True)
     print(f"Saved: {out_hero_png}")
 
-    # === Render 2: Close-up of the Habitation Modules, Cupola and Docking Hub ===
+    # === Render 2: Close-up of the Modules, Cupola and Forward Docking Hub ===
     print(f"Rendering Close-Up View -> {out_close_png} ...")
-    cam_close_pos = Vector((1.4, -0.9, 2.5))
-    close_target = Vector((0.0, -0.35, 1.0))
+    cam_close_pos = Vector((0.32, -0.18, 0.52))
+    close_target = Vector((0.0, -0.06, 0.22))
     cam_obj.location = cam_close_pos
     cam_obj.rotation_euler = (close_target - cam_close_pos).to_track_quat('-Z', 'Y').to_euler()
 
@@ -621,7 +1013,7 @@ def render_station_showcases(station, out_hero_png, out_close_png):
 # Main Pipeline
 # ---------------------------------------------------------------------------
 def main():
-    print("Starting astro-voyager ISS / Space Station Asset Generator...")
+    print("Starting astro-voyager Authentic ISS Asset Pipeline...")
     station = build_space_station()
     station_base = os.path.join(RES_MODELS, "station")
 
@@ -640,16 +1032,17 @@ def main():
         forward_axis='Y',
         up_axis='Z'
     )
-    # Also copy to build-gl
+    # Also copy to build-gl and build
     shutil.copyfile(station_obj_path, os.path.join(BUILD_GL_MODELS, "station.obj"))
+    shutil.copyfile(station_obj_path, os.path.join(BUILD_MODELS, "station.obj"))
 
     # 2. Bake PBR Texture Set
     bake_pbr_set(station, station_base, tex_size=2048)
     for ext in ["_albedo.bmp", "_normal.bmp", "_rough.bmp", "_metal.bmp", "_emissive.bmp"]:
         src_f = f"{station_base}{ext}"
-        dst_f = os.path.join(BUILD_GL_MODELS, f"station{ext}")
-        shutil.copyfile(src_f, dst_f)
-    print("Copied all textures to build-gl/Release/res/models/")
+        shutil.copyfile(src_f, os.path.join(BUILD_GL_MODELS, f"station{ext}"))
+        shutil.copyfile(src_f, os.path.join(BUILD_MODELS, f"station{ext}"))
+    print("Copied all textures to build-gl/Release/res/models/ and build/Release/res/models/")
 
     # 3. Cycles Showcase Renders
     hero_out = os.path.join(OUT_SHOWCASE, "station_showcase.png")
@@ -664,7 +1057,7 @@ def main():
     print(f"Copied showcases to {hero_doc} and {close_doc}")
 
     print("\n=======================================================")
-    print("Space Station Generation & Rendering Complete!")
+    print("OK / exported Space Station ISS Assets Successfully!")
     print("=======================================================")
 
 

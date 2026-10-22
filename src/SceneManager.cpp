@@ -2124,10 +2124,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             glm::vec3 stPos(static_cast<float>(dock.pos.x), static_cast<float>(dock.pos.y), static_cast<float>(dock.pos.z));
 
             if (s_stationModel.ready()) {
-              // High-detail PBR ISS / Orbital Station model
+              // High-detail PBR ISS / Orbital Station model (normalized 1.0 wingspan -> scale 0.38)
+              const float stScale = 0.38f;
               glm::mat4 stModel = glm::translate(glm::mat4(1.0f), stPos) *
                                   glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                  glm::scale(glm::mat4(1.0f), glm::vec3(0.75f));
+                                  glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
 
               s_shipShader->bind();
               s_shipShader->setUniformMat4f("u_MVP", mvp);
@@ -2139,7 +2140,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               s_shipShader->setUniform1i("u_Env", 0);
               s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
               s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
-              s_shipShader->setUniform3f("u_InvScale", 1.0f / 0.75f, 1.0f / 0.75f, 1.0f / 0.75f);
+              s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
               s_shipShader->setUniform1i("u_FlatNormal", 0);
               s_shipShader->setUniform1f("u_RingSpin", 0.0f);
               s_shipShader->setUniform1i("u_SkinOn", 0);
@@ -2162,7 +2163,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               const bool emOn = s_stationModel.emissive();
               s_shipShader->setUniform1i("u_EmissiveOn", emOn ? 1 : 0);
               s_shipShader->setUniform1i("u_EmissiveTex", 5);
-              s_shipShader->setUniform3f("u_Emissive", glm::vec3(0.15f, 0.20f, 0.25f));
+              s_shipShader->setUniform3f("u_Emissive", glm::vec3(0.0f));
 
               s_stationModel.draw();
               if (texOn) glActiveTexture(GL_TEXTURE0);
@@ -2193,7 +2194,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             m_ringShader->setUniformMat4f("u_MVP", mvp);
             glm::mat4 dockRingModel = glm::translate(glm::mat4(1.0f), stPos) *
                                       glm::rotate(glm::mat4(1.0f), -0.15f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                      glm::scale(glm::mat4(1.0f), glm::vec3(1.15f / 2.7f));
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(0.28f));
             m_ringShader->setUniformMat4f("u_Model", dockRingModel);
             m_ringShader->setUniform1f("u_Seed", 42.0f);
             m_ringShader->setUniform1f("u_Time", time);
