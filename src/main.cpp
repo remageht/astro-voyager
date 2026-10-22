@@ -8,6 +8,8 @@
 #include "Kerr.h"
 #include "Interaction.h"
 #include "Version.h"
+#include "WarpMetric.h"
+#include "WarpGeodesic.h"
 
 #ifdef ASTROVOYAGER_ENABLE_GL
 #include "AppGL.h"
@@ -39,7 +41,7 @@ astro::SchwState makeInwardRay(double r0, double b, double rs) {
 
 void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
-               "--demo-geodesic | --demo-binet | --demo-rkf45 | --demo-kerr | --test-interaction | --version";
+               "--demo-geodesic | --demo-binet | --demo-rkf45 | --demo-kerr | --demo-warp | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --screenshot-all [--disk]";
 #endif
@@ -522,6 +524,128 @@ int main(int argc, char** argv) {
     bool allKerrOk = passA && passB && passC;
     std::cout << "Kerr validation result: " << (allKerrOk ? "ALL PASS" : "FAIL") << "\n";
     return allKerrOk ? 0 : 1;
+  }
+  if (arg == "--demo-warp") {
+    // Validation of M1 WarpMetric (3+1 ADM interface) and Hamiltonian null geodesic integrator:
+    // (A) Metric inversion consistency (gamma^{ik} gamma_{kj} = delta^i_j, g^{mu alpha} g_{alpha nu} = delta^mu_nu)
+    // (B) Schwarzschild limit parity with Geodesic.cpp RK4 and analytical b_crit = 2.598 Rs
+    // (C) Hamiltonian constraint conservation along trajectories (|H| < 1e-6)
+    // (D) Critical boundary sensitivity (b_crit +/- 0.005 Rs)
+    const double rs = 1.0;
+    const double r0 = 10.0;
+    const double bCrit = 1.5 * std::sqrt(3.0) * rs;
+    std::cout << "=== Warp ADM null geodesic validation (Rs=" << rs
+              << ", r0=" << r0 << ", b_crit=" << bCrit << ") ===\n\n";
+
+    bool passA = true, passB = true, passC = true, passD = true;
+    astro::SchwarzschildADM metric(rs);
+
+    // --- (A) Metric Inversion & Derivation ---
+    std::cout << "--- (A) ADM Metric Inversion & Analytical Derivatives ---\n";
+    double alpha = 0.0;
+    double beta[3] = {0.0, 0.0, 0.0};
+    double g_ij[3][3], g_inv[3][3];
+    metric.evalADM(3.0, 4.0, 5.0, 0.0, alpha, beta, g_ij, g_inv);
+
+    double maxErrA = 0.0;
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        double sum = 0.0;
+        for (int k = 0; k < 3; ++k) sum += g_inv[i][k] * g_ij[k][j];
+        const double delta = (i == j) ? 1.0 : 0.0;
+        const double err = std::abs(sum - delta);
+        if (err > maxErrA) maxErrA = err;
+      }
+    }
+    bool okInv = (maxErrA < 1e-10);
+    if (!okInv) passA = false;
+    std::cout << "gamma * gamma_inv = I: max_err=" << maxErrA
+              << " (< 1e-10 -> " << (okInv ? "PASS" : "FAIL") << ")\n";
+
+    double dg_an[3][4][4], dg_num[3][4][4];
+    metric.evalDerivInv4Metric(4.0, -3.0, 2.0, 0.0, dg_an);
+    metric.WarpMetric::evalDerivInv4Metric(4.0, -3.0, 2.0, 0.0, dg_num);
+    double maxDiffDg = 0.0;
+    for (int k = 0; k < 3; ++k) {
+      for (int mu = 0; mu < 4; ++mu) {
+        for (int nu = 0; nu < 4; ++nu) {
+          const double diff = std::abs(dg_an[k][mu][nu] - dg_num[k][mu][nu]);
+          if (diff > maxDiffDg) maxDiffDg = diff;
+        }
+      }
+    }
+    bool okDg = (maxDiffDg < 1e-5);
+    if (!okDg) passA = false;
+    std::cout << "Analytical vs numerical dg/dx: max_diff=" << maxDiffDg
+              << " (< 1e-5 -> " << (okDg ? "PASS" : "FAIL") << ")\n";
+    std::cout << "Part (A) Result: " << (passA ? "PASS" : "FAIL") << "\n\n";
+
+    // --- (B) Parity with Geodesic.cpp RK4 ---
+    std::cout << "--- (B) Schwarzschild Capture/Escape Parity ---\n";
+    const double testBs[] = {1.5, 2.0, 2.5, 2.7, 3.0, 5.0};
+    for (double b : testBs) {
+      const bool expectCap = (b < bCrit);
+      astro::WarpTraceResult warpRes = astro::traceWarpRay(
+          metric, astro::makeWarpInwardRay(metric, r0, b), 30.0, 0.01, 4000);
+
+      const double f0 = 1.0 - rs / r0;
+      astro::SchwState geoRay;
+      geoRay.t = 0.0;
+      geoRay.r = r0;
+      geoRay.theta = 1.5707963267948966;
+      geoRay.phi = 0.0;
+      geoRay.dt = 1.0 / f0;
+      geoRay.dr = -std::sqrt(std::max(1.0 - f0 * b * b / (r0 * r0), 0.0));
+      geoRay.dtheta = 0.0;
+      geoRay.dphi = b / (r0 * r0);
+      bool geoCap = false;
+      astro::traceRay(geoRay, rs, 30.0, 0.01, 4000, geoCap);
+
+      const bool match = (warpRes.captured == expectCap) && (warpRes.captured == geoCap);
+      if (!match) passB = false;
+      std::cout << "scenario b=" << b << " Rs: ADM="
+                << (warpRes.captured ? "capture" : "escape")
+                << " Geodesic=" << (geoCap ? "capture" : "escape")
+                << " -> " << (match ? "PASS" : "FAIL") << "\n";
+    }
+    std::cout << "Part (B) Result: " << (passB ? "PASS" : "FAIL") << "\n\n";
+
+    // --- (C) Hamiltonian Constraint Conservation ---
+    std::cout << "--- (C) Hamiltonian Null Constraint Conservation ---\n";
+    astro::WarpRayState rayH = astro::makeWarpInwardRay(metric, r0, 3.0);
+    double maxDriftH = 0.0;
+    for (int step = 0; step < 1000; ++step) {
+      astro::warpRk4Step(metric, 0.01, rayH);
+      const double hVal = std::abs(astro::evalHamiltonian(metric, rayH));
+      if (hVal > maxDriftH) maxDriftH = hVal;
+    }
+    bool okH = (maxDriftH < 1e-6);
+    if (!okH) passC = false;
+    std::cout << "Max |H| drift after 1000 steps: " << maxDriftH
+              << " (< 1e-6 -> " << (okH ? "PASS" : "FAIL") << ")\n";
+    std::cout << "Part (C) Result: " << (passC ? "PASS" : "FAIL") << "\n\n";
+
+    // --- (D) Critical Boundary Sensitivity ---
+    std::cout << "--- (D) Critical Boundary Sensitivity (b_crit +/- 0.005 Rs) ---\n";
+    const double bUnder = 2.598 - 0.005;
+    const double bOver = 2.598 + 0.005;
+    astro::WarpTraceResult resUnder = astro::traceWarpRay(
+        metric, astro::makeWarpInwardRay(metric, r0, bUnder), 30.0, 0.005, 6000);
+    astro::WarpTraceResult resOver = astro::traceWarpRay(
+        metric, astro::makeWarpInwardRay(metric, r0, bOver), 30.0, 0.005, 6000);
+
+    bool underOk = resUnder.captured;
+    bool overOk = !resOver.captured;
+    if (!underOk || !overOk) passD = false;
+    std::cout << "b=" << bUnder << " (< b_crit): captured=" << resUnder.captured
+              << " -> " << (underOk ? "PASS" : "FAIL") << "\n";
+    std::cout << "b=" << bOver << " (> b_crit): captured=" << resOver.captured
+              << " -> " << (overOk ? "PASS" : "FAIL") << "\n";
+    std::cout << "Part (D) Result: " << (passD ? "PASS" : "FAIL") << "\n\n";
+
+    const bool allWarpOk = passA && passB && passC && passD;
+    std::cout << "Warp ADM validation result: " << (allWarpOk ? "ALL PASS" : "FAIL") << "\n";
+    return allWarpOk ? 0 : 1;
   }
   if (arg == "--test-interaction") {
     bool ok = blackhole::ShouldCaptureMouseForCamera(true, false) &&

@@ -20,6 +20,8 @@ add_executable(astro-voyager
   src/Journey.cpp
   src/Achievements.cpp
   src/Tour.cpp
+  src/WarpMetric.cpp
+  src/WarpGeodesic.cpp
   src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
   src/StoryJournal.cpp  # === StoryJournal === (v3.5.0): бортовой журнал, чистый C++17
   src/Expedition.cpp  # === Expedition === (v3.5.0): сюжетная арка, чистый C++17
@@ -139,6 +141,22 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_rkf45.cpp")
     target_compile_options(test_rkf45 PRIVATE /W4 /permissive-)
   else()
     target_compile_options(test_rkf45 PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_warp_geodesic.cpp")
+  add_executable(test_warp_geodesic
+    tests/test_warp_geodesic.cpp
+    src/WarpMetric.cpp
+    src/WarpGeodesic.cpp
+    src/Geodesic.cpp
+  )
+  target_include_directories(test_warp_geodesic PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+  if(MSVC)
+    target_compile_options(test_warp_geodesic PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_warp_geodesic PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
 
@@ -324,6 +342,10 @@ if(TARGET test_story)
 endif()
 if(TARGET test_expedition)
   add_test(NAME test_expedition COMMAND test_expedition)
+endif()
+
+if(TARGET test_warp_geodesic)
+  add_test(NAME test_warp_geodesic COMMAND test_warp_geodesic)
 endif()
 
 if(TARGET test_rkf45)

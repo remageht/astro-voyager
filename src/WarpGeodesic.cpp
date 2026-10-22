@@ -1,0 +1,230 @@
+#include "WarpGeodesic.h"
+#include <algorithm>
+#include <cmath>
+
+namespace astro {
+
+double evalHamiltonian(const WarpMetric& metric, const WarpRayState& s) {
+  double g_inv[4][4];
+  metric.evalInv4Metric(s.x, s.y, s.z, s.t, g_inv);
+
+  const double p[4] = {s.pt, s.px, s.py, s.pz};
+  double hVal = 0.0;
+  for (int mu = 0; mu < 4; ++mu) {
+    for (int nu = 0; nu < 4; ++nu) {
+      hVal += g_inv[mu][nu] * p[mu] * p[nu];
+    }
+  }
+  return 0.5 * hVal;
+}
+
+void renormalizeNull(const WarpMetric& metric, WarpRayState& s) {
+  double g_inv[4][4];
+  metric.evalInv4Metric(s.x, s.y, s.z, s.t, g_inv);
+
+  // We seek scale factor k > 0 such that H(p_t, k * p_i) = 0:
+  //   1/2 * [ g^00 * p_t^2 + 2 * k * sum_i(g^0i * p_t * p_i) + k^2 * sum_{i,j}(g^ij * p_i * p_j) ] = 0
+  // Quadratic form: A * k^2 + B * k + C = 0
+  double A = 0.0;
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      const double pi = (i == 0) ? s.px : ((i == 1) ? s.py : s.pz);
+      const double pj = (j == 0) ? s.px : ((j == 1) ? s.py : s.pz);
+      A += g_inv[i + 1][j + 1] * pi * pj;
+    }
+  }
+
+  double B = 0.0;
+  for (int i = 0; i < 3; ++i) {
+    const double pi = (i == 0) ? s.px : ((i == 1) ? s.py : s.pz);
+    B += 2.0 * g_inv[0][i + 1] * s.pt * pi;
+  }
+
+  const double C = g_inv[0][0] * s.pt * s.pt;
+
+  if (std::abs(A) < 1e-30) return;
+
+  const double disc = B * B - 4.0 * A * C;
+  if (disc < 0.0) return;  // Space-like or complex, preserve state
+
+  const double sqrtDisc = std::sqrt(disc);
+  // Pick positive root closest to 1.0
+  const double k1 = (-B + sqrtDisc) / (2.0 * A);
+  const double k2 = (-B - sqrtDisc) / (2.0 * A);
+
+  double kBest = k1;
+  if (k1 <= 0.0 || (k2 > 0.0 && std::abs(k2 - 1.0) < std::abs(k1 - 1.0))) {
+    kBest = k2;
+  }
+
+  if (kBest > 0.0 && std::abs(kBest - 1.0) < 0.5) {
+    s.px *= kBest;
+    s.py *= kBest;
+    s.pz *= kBest;
+  }
+}
+
+void evalHamiltonianDerivatives(const WarpMetric& metric, const WarpRayState& s,
+                                double dxdlambda[4], double dpdlambda[4]) {
+  double g_inv[4][4];
+  metric.evalInv4Metric(s.x, s.y, s.z, s.t, g_inv);
+
+  double dg_inv_dx[3][4][4];
+  metric.evalDerivInv4Metric(s.x, s.y, s.z, s.t, dg_inv_dx);
+
+  const double p[4] = {s.pt, s.px, s.py, s.pz};
+
+  // dx^mu / dlambda = dH / dp_mu = sum_nu g^{mu nu} p_nu
+  for (int mu = 0; mu < 4; ++mu) {
+    dxdlambda[mu] = 0.0;
+    for (int nu = 0; nu < 4; ++nu) {
+      dxdlambda[mu] += g_inv[mu][nu] * p[nu];
+    }
+  }
+
+  // dp_t / dlambda = -dH / dt = 0 for stationary metric
+  dpdlambda[0] = 0.0;
+
+  // dp_i / dlambda = -dH / dx^i = -1/2 sum_{alpha, beta} (d g^{alpha beta} / dx^i) p_alpha p_beta
+  for (int i = 0; i < 3; ++i) {
+    double sum = 0.0;
+    for (int alpha = 0; alpha < 4; ++alpha) {
+      for (int beta = 0; beta < 4; ++beta) {
+        sum += dg_inv_dx[i][alpha][beta] * p[alpha] * p[beta];
+      }
+    }
+    dpdlambda[i + 1] = -0.5 * sum;
+  }
+}
+
+void warpRk4Step(const WarpMetric& metric, double h, WarpRayState& s) {
+  // Stage 1
+  double dx1[4], dp1[4];
+  evalHamiltonianDerivatives(metric, s, dx1, dp1);
+
+  // Stage 2
+  WarpRayState s2 = s;
+  s2.t += 0.5 * h * dx1[0];
+  s2.x += 0.5 * h * dx1[1];
+  s2.y += 0.5 * h * dx1[2];
+  s2.z += 0.5 * h * dx1[3];
+  s2.pt += 0.5 * h * dp1[0];
+  s2.px += 0.5 * h * dp1[1];
+  s2.py += 0.5 * h * dp1[2];
+  s2.pz += 0.5 * h * dp1[3];
+
+  double dx2[4], dp2[4];
+  evalHamiltonianDerivatives(metric, s2, dx2, dp2);
+
+  // Stage 3
+  WarpRayState s3 = s;
+  s3.t += 0.5 * h * dx2[0];
+  s3.x += 0.5 * h * dx2[1];
+  s3.y += 0.5 * h * dx2[2];
+  s3.z += 0.5 * h * dx2[3];
+  s3.pt += 0.5 * h * dp2[0];
+  s3.px += 0.5 * h * dp2[1];
+  s3.py += 0.5 * h * dp2[2];
+  s3.pz += 0.5 * h * dp2[3];
+
+  double dx3[4], dp3[4];
+  evalHamiltonianDerivatives(metric, s3, dx3, dp3);
+
+  // Stage 4
+  WarpRayState s4 = s;
+  s4.t += h * dx3[0];
+  s4.x += h * dx3[1];
+  s4.y += h * dx3[2];
+  s4.z += h * dx3[3];
+  s4.pt += h * dp3[0];
+  s4.px += h * dp3[1];
+  s4.py += h * dp3[2];
+  s4.pz += h * dp3[3];
+
+  double dx4[4], dp4[4];
+  evalHamiltonianDerivatives(metric, s4, dx4, dp4);
+
+  // Combine stages
+  const double sixth = h / 6.0;
+  s.t += sixth * (dx1[0] + 2.0 * dx2[0] + 2.0 * dx3[0] + dx4[0]);
+  s.x += sixth * (dx1[1] + 2.0 * dx2[1] + 2.0 * dx3[1] + dx4[1]);
+  s.y += sixth * (dx1[2] + 2.0 * dx2[2] + 2.0 * dx3[2] + dx4[2]);
+  s.z += sixth * (dx1[3] + 2.0 * dx2[3] + 2.0 * dx3[3] + dx4[3]);
+
+  s.pt += sixth * (dp1[0] + 2.0 * dp2[0] + 2.0 * dp3[0] + dp4[0]);
+  s.px += sixth * (dp1[1] + 2.0 * dp2[1] + 2.0 * dp3[1] + dp4[1]);
+  s.py += sixth * (dp1[2] + 2.0 * dp2[2] + 2.0 * dp3[2] + dp4[2]);
+  s.pz += sixth * (dp1[3] + 2.0 * dp2[3] + 2.0 * dp3[3] + dp4[3]);
+  s.lambda += h;
+
+  renormalizeNull(metric, s);
+}
+
+WarpTraceResult traceWarpRay(const WarpMetric& metric, WarpRayState s,
+                             double rMax, double h, int maxSteps) {
+  WarpTraceResult res;
+  res.maxHConstraint = 0.0;
+
+  for (int step = 0; step < maxSteps; ++step) {
+    const double r = std::sqrt(s.x * s.x + s.y * s.y + s.z * s.z);
+    res.finalR = r;
+
+    const double hVal = std::abs(evalHamiltonian(metric, s));
+    if (hVal > res.maxHConstraint) res.maxHConstraint = hVal;
+
+    if (metric.isInsideHorizon(s.x, s.y, s.z)) {
+      res.captured = true;
+      res.steps = step;
+      return res;
+    }
+
+    if (r >= rMax && step > 5) {
+      res.captured = false;
+      res.steps = step;
+      return res;
+    }
+
+    // Adaptive step size scaling based on distance to horizon
+    double curH = h;
+    const double rh = metric.horizonRadius();
+    if (rh > 0.0 && r > rh) {
+      const double q = std::max(r - rh, 1e-4 * rh);
+      curH = std::clamp(h * (q / rh) * std::sqrt(r / rh), 0.005 * h, 3.0 * h);
+    }
+
+    warpRk4Step(metric, curH, s);
+  }
+
+  res.captured = metric.isInsideHorizon(s.x, s.y, s.z);
+  res.steps = maxSteps;
+  return res;
+}
+
+WarpRayState makeWarpInwardRay(const WarpMetric& metric, double r0, double b) {
+  WarpRayState s;
+  s.t = 0.0;
+  s.x = r0;
+  s.y = 0.0;
+  s.z = 0.0;
+  s.pt = -1.0;  // Conserved energy E = 1
+
+  const double rh = metric.horizonRadius();
+  const double f0 = 1.0 - (rh > 0.0 ? rh / r0 : 0.0);
+
+  // In equatorial plane launching from +X towards origin with impact parameter b in +Y:
+  // p_y = b / r0
+  s.py = b / r0;
+  s.pz = 0.0;
+
+  // p_x determined from null condition H = 1/2 g^{mu nu} p_mu p_nu = 0:
+  // At (r0, 0, 0): g^{00} = -1/f0, g^{xx} = f0, g^{yy} = 1
+  // -1/f0 * (-1)^2 + f0 * px^2 + py^2 = 0 => px = -sqrt((1/f0 - py^2) / f0)
+  const double radArg = (1.0 / f0) - s.py * s.py;
+  s.px = (radArg > 0.0) ? -std::sqrt(radArg / f0) : 0.0;
+  s.lambda = 0.0;
+
+  renormalizeNull(metric, s);
+  return s;
+}
+
+}  // namespace astro
