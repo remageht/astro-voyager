@@ -343,6 +343,23 @@ int AppGL::run() {
     // чтобы пост-эффекты низкого щита попали в этот же кадр.
     updateShip(deltaTime);
 
+    // === Batch A1: Teleport Warp-In Halo & Input Cooldown ===
+    if (m_teleportHaloTimer > 0.0f) {
+      m_teleportHaloTimer -= deltaTime;
+      if (m_teleportHaloTimer < 0.0f) m_teleportHaloTimer = 0.0f;
+      // White flash for first 0.15s (1.2s -> 1.05s), then reveal over remaining 1.05s
+      if (m_teleportHaloTimer > 1.05f) {
+        m_warpFlash = 1.0f;
+      } else {
+        m_warpFlash = m_teleportHaloTimer / 1.05f;
+      }
+      warpdrive::setState(m_warpK, m_warpFlash);
+    }
+    if (m_inputCooldown > 0.0f) {
+      m_inputCooldown -= deltaTime;
+      if (m_inputCooldown < 0.0f) m_inputCooldown = 0.0f;
+    }
+
     // === Camera views + speed FX === (v3.3.0): скорость камеры/варпа =>
     // доплер+стрики+микро-FOV; камера кадра со сносом вида; корабль в кадре.
     updateSpeedFx(deltaTime);
@@ -596,7 +613,9 @@ void AppGL::processInput(float deltaTime) {
     }
   }
 
-  if (!interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
+  if (m_inputCooldown > 0.0f || m_dockAnimState == DockAnimState::DockPhase1_Clamps ||
+      m_dockAnimState == DockAnimState::DockPhase2_Service ||
+      !interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
 
   // M31 approach: distance-scaled WASD speed so the 80 -> 2 flight takes
   // seconds, not minutes, while staying precise near the core. Other
@@ -817,6 +836,15 @@ void AppGL::processMouse() {
 
   const bool rightDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
   const bool leftDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+  // === Action Feedback (Batch A1): Teleport input cooldown blocks mouse camera look ===
+  if (m_inputCooldown > 0.0f) {
+    const bool rawDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+    m_prevLeftDown = rawDown;
+    m_firstMouse = true;
+    m_mouseDragging = false;
+    return;
+  }
+
   const bool rawMousePress = (rightDown || leftDown);
 
   // === View zoom ===: плавный зум колёсиком мыши к кораблю и от него.
@@ -2220,6 +2248,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
 
   if (enterPressed && !query.empty() && !matchedStations.empty()) {
     teleportToStation(matchedStations[0]->id);
+    triggerWarpInHalo();
     m_searchBuf[0] = '\0';
   }
 
@@ -2281,6 +2310,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
           if (ImGui::Button(isCurrent ? "Here" : "Fly here",
                             ImVec2(-1.0f, 0.0f))) {
             teleportToStation(station.id);
+            triggerWarpInHalo();
           }
           if (isCurrent) {
             ImGui::PopStyleColor();
@@ -2727,6 +2757,105 @@ void AppGL::teleportToStation(const std::string& id, bool stopJumpCine) {
 // до render(); пауза (P) и нулевой dt его останавливают.
 void AppGL::updateShip(float deltaTime) {
   if (deltaTime <= 0.0f || m_sceneManager->isPaused()) return;
+
+  // === Batch A1: Docking & Undocking 2-phase sequence ===
+  if (m_dockAnimState == DockAnimState::DockPhase1_Clamps) {
+    m_dockAnimTimer -= deltaTime;
+    double damp = 1.0 - std::min(1.0, static_cast<double>(deltaTime) * 3.5);
+    m_shipVel.x *= damp; m_shipVel.y *= damp; m_shipVel.z *= damp;
+    m_ship.gravVel.x *= damp; m_ship.gravVel.y *= damp; m_ship.gravVel.z *= damp;
+    double tdx = m_dockTargetPos.x - m_camera.position.x;
+    double tdy = m_dockTargetPos.y - m_camera.position.y;
+    double tdz = m_dockTargetPos.z - m_camera.position.z;
+    double dist = std::sqrt(tdx * tdx + tdy * tdy + tdz * tdz);
+    if (dist > 1.0) {
+      double pullSpeed = std::min(dist, 1.8);
+      m_camera.position.x += (tdx / dist) * pullSpeed * deltaTime;
+      m_camera.position.y += (tdy / dist) * pullSpeed * deltaTime;
+      m_camera.position.z += (tdz / dist) * pullSpeed * deltaTime;
+    }
+    if (m_dockAnimTimer <= 0.0f) {
+      m_dockAnimState = DockAnimState::DockPhase2_Service;
+      m_dockAnimTimer = 0.9f;
+      m_shipVel = Vec3();
+      m_ship.gravVel = Vec3();
+      m_audio.playChime();
+    }
+  } else if (m_dockAnimState == DockAnimState::DockPhase2_Service) {
+    m_dockAnimTimer -= deltaTime;
+    float p = std::clamp(1.0f - (m_dockAnimTimer / 0.9f), 0.0f, 1.0f);
+    m_ship.fuel = m_dockInitialFuel + (100.0f - m_dockInitialFuel) * p;
+    m_ship.shield = m_dockInitialShield + (100.0f - m_dockInitialShield) * p;
+    if (m_dockAnimTimer <= 0.0f) {
+      m_dockAnimState = DockAnimState::None;
+      dockAtStation(m_dockTargetId);
+    }
+  } else if (m_dockAnimState == DockAnimState::Undock_Release) {
+    m_dockAnimTimer -= deltaTime;
+    if (m_dockAnimTimer <= 0.0f) {
+      m_dockAnimState = DockAnimState::None;
+      Toast ut;
+      ut.title = uiRu("Отстыковка завершена", "Undocking complete");
+      ut.desc = uiRu("Шлюзы закрыты. Системы корабля в норме.",
+                     "Clamps released. Ship systems nominal.");
+      ut.time = static_cast<float>(glfwGetTime());
+      m_toasts.push_back(ut);
+      m_shipNotice = uiRu("Свободный полёт. Двигатели готовы.", "Free flight. Engines ready.");
+      m_shipNoticeT = 3.0f;
+      saveProfileNow(false);
+    }
+  }
+
+  // === Batch A1: Shipyard model switch transition (~1.0s) ===
+  if (m_shipSwitchTimer > 0.0f) {
+    m_shipSwitchTimer -= deltaTime;
+    if (m_shipSwitchTimer < 0.0f) m_shipSwitchTimer = 0.0f;
+
+    ShipCustomization animCust = m_shipCustomization;
+    if (m_shipSwitchTimer > 0.5f) {
+      // Phase 1 (0.5s): Current ship dims/fades down, emissive flash peak
+      float t = (m_shipSwitchTimer - 0.5f) / 0.5f;
+      animCust.primaryColor[0] *= t;
+      animCust.primaryColor[1] *= t;
+      animCust.primaryColor[2] *= t;
+      animCust.accentColor[0] *= t;
+      animCust.accentColor[1] *= t;
+      animCust.accentColor[2] *= t;
+      float flash = (1.0f - t) * 2.8f;
+      animCust.emissiveColor[0] = animCust.emissiveColor[0] * t + flash;
+      animCust.emissiveColor[1] = animCust.emissiveColor[1] * t + flash;
+      animCust.emissiveColor[2] = animCust.emissiveColor[2] * t + flash;
+      warpdrive::setShipCustomization(animCust);
+    } else {
+      // Phase 2 (0.5s): Swap model at 0.5s, then new model rolls out & fades in
+      if (m_shipStyle != m_pendingShipStyle) {
+        m_shipStyle = m_pendingShipStyle;
+
+        m_shipCustomization.style = m_shipStyle;
+        warpdrive::setShipStyle(m_shipStyle);
+        if (!ship::styleCanWarp(m_shipStyle) && m_warpOn && !m_jumpCine &&
+            (m_warpStatus == 1 || m_warpStatus == 4)) {
+          disengageWarp();
+        }
+      }
+      float t = 1.0f - (m_shipSwitchTimer / 0.5f);
+      animCust.primaryColor[0] *= t;
+      animCust.primaryColor[1] *= t;
+      animCust.primaryColor[2] *= t;
+      animCust.accentColor[0] *= t;
+      animCust.accentColor[1] *= t;
+      animCust.accentColor[2] *= t;
+      float flash = (1.0f - t) * 2.8f;
+      animCust.emissiveColor[0] = animCust.emissiveColor[0] * t + flash;
+      animCust.emissiveColor[1] = animCust.emissiveColor[1] * t + flash;
+      animCust.emissiveColor[2] = animCust.emissiveColor[2] * t + flash;
+      warpdrive::setShipCustomization(animCust);
+    }
+
+    if (m_shipSwitchTimer <= 0.0f) {
+      warpdrive::setShipCustomization(m_shipCustomization);
+    }
+  }
   const Station* st = m_sceneManager->getCurrentStation();
   if (!st) return;
 
@@ -2902,11 +3031,11 @@ void AppGL::updateShip(float deltaTime) {
     }
   }
   const bool kDown = (glfwGetKey(m_window->getNativeWindow(), GLFW_KEY_K) == GLFW_PRESS);
-  if (kDown && !m_prevKPressed && !colonyIo.WantCaptureKeyboard) {
+  if (kDown && !m_prevKPressed && !colonyIo.WantCaptureKeyboard && m_dockAnimState == DockAnimState::None) {
     if (m_ship.isDocked) {
-      undockFromStation();
+      startUndockSequence();
     } else if (!m_dockHintId.empty()) {
-      dockAtStation(m_dockHintId);
+      startDockSequence(m_dockHintId);
     } else {
       toggleShipyard();
     }
@@ -2956,6 +3085,26 @@ void AppGL::drawShipHud() {
           ImVec4(1.0f, 0.55f, 0.15f, 1.0f), "%s",
           uiRu("Топливо исчерпано. Дрейф к ближайшей звезде...",
                "Out of fuel. Drifting to the nearest star..."));
+    }
+    // === Batch A1: Docking & Undocking progress bar ===
+    if (m_dockAnimState != DockAnimState::None) {
+      float prog = 0.0f;
+      const char* label = "";
+      if (m_dockAnimState == DockAnimState::DockPhase1_Clamps) {
+        prog = std::clamp((0.9f - m_dockAnimTimer) / 0.9f * 0.5f, 0.0f, 0.5f);
+        label = uiRu("Стыковочные манипуляторы...", "Docking clamps engaging...");
+      } else if (m_dockAnimState == DockAnimState::DockPhase2_Service) {
+        prog = std::clamp(0.5f + (0.9f - m_dockAnimTimer) / 0.9f * 0.5f, 0.5f, 1.0f);
+        label = uiRu("Заправка и ремонт...", "Refueling & repairs...");
+      } else if (m_dockAnimState == DockAnimState::Undock_Release) {
+        prog = std::clamp(1.0f - m_dockAnimTimer / 1.0f, 0.0f, 1.0f);
+        label = uiRu("Отшвартовка...", "Undocking sequence...");
+      }
+      char pbuf[64];
+      std::snprintf(pbuf, sizeof(pbuf), "%s (%.0f%%)", label, static_cast<double>(prog * 100.0f));
+      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.15f, 0.85f, 0.65f, 1.0f));
+      ImGui::ProgressBar(prog, ImVec2(180.0f, 14.0f), pbuf);
+      ImGui::PopStyleColor();
     }
     // v3.11.0: подсказка стыковки у орбитальной станции / верфи.
     if (!m_dockHint.empty() && !m_ship.isDocked) {
@@ -3301,7 +3450,9 @@ void AppGL::saveProfileNow(bool quiet) {
     if (!quiet) {
       m_audio.playClick();
       Toast t;
-      t.title = uiRu("Сохранение", "Save");
+      t.title = uiRu("СОХРАНЕНИЕ...", "SAVING...");
+      t.duration = 0.8f;
+      t.isMini = true;
       t.desc = uiRu("Песочница записана (F10 — загрузить).",
                     "Sandbox written to the profile (F10 to load).");
       t.time = static_cast<float>(glfwGetTime());
@@ -3350,7 +3501,9 @@ void AppGL::loadProfileNow(bool quiet) {
   if (!quiet) {
     m_audio.playChime();
     Toast t;
-    t.title = uiRu("Загрузка", "Load");
+    t.title = uiRu("ЗАГРУЖЕНО", "LOADED");
+    t.duration = 0.8f;
+    t.isMini = true;
     t.desc = uiRu("Состояние восстановлено из профиля.",
                   "State restored from the profile.");
     t.time = static_cast<float>(glfwGetTime());
@@ -3548,6 +3701,7 @@ void AppGL::drawMenu() {
         const std::string destLabel = station.name + "##dest-" + station.id;
         if (ImGui::Button(destLabel.c_str(), ImVec2(cellW, 0.0f))) {
           teleportToStation(station.id);
+          triggerWarpInHalo();
           m_inMenu = false;
         }
         if (ImGui::IsItemHovered()) {
@@ -3593,6 +3747,7 @@ void AppGL::drawMenu() {
           if (gridCol > 0) ImGui::SameLine();
           if (ImGui::Button(recentLabel.c_str(), ImVec2(cellW, 0.0f))) {
             teleportToStation(rid);
+            triggerWarpInHalo();
             m_inMenu = false;
           }
           if (rst && ImGui::IsItemHovered()) {
@@ -4152,7 +4307,10 @@ void AppGL::drawWorldLabels() {
   float now = static_cast<float>(glfwGetTime());
   m_toasts.erase(
       std::remove_if(m_toasts.begin(), m_toasts.end(),
-                     [now](const Toast& t) { return (now - t.time) >= 4.0f; }),
+                     [now](const Toast& t) {
+                       float dur = (t.duration > 0.0f) ? t.duration : 4.0f;
+                       return (now - t.time) >= dur;
+                     }),
       m_toasts.end());
 
   size_t toastCount = std::min<size_t>(m_toasts.size(), 3);
@@ -4161,10 +4319,12 @@ void AppGL::drawWorldLabels() {
     const auto& t = m_toasts[i];
     float age = now - t.time;
     if (age < 0.0f) age = 0.0f;
-    float alphaRatio = (age > 3.0f) ? (4.0f - age) : 1.0f;
+    float dur = (t.duration > 0.0f) ? t.duration : 4.0f;
+    float fadeTime = (dur <= 1.0f) ? 0.20f : 1.0f;
+    float alphaRatio = (age > (dur - fadeTime)) ? ((dur - age) / fadeTime) : 1.0f;
     alphaRatio = std::clamp(alphaRatio, 0.0f, 1.0f);
 
-    std::string line1 = "Achievement: " + t.title;
+    std::string line1 = t.isMini ? t.title : ("Achievement: " + t.title);
     std::string line2 = t.desc;
 
     ImVec2 sz1 = font->CalcTextSizeA(14.0f, FLT_MAX, 0.0f, line1.c_str());
@@ -4175,14 +4335,16 @@ void AppGL::drawWorldLabels() {
     float lineSpacing = 3.0f;
 
     float toastW = std::max(sz1.x, sz2.x) + padX * 2.0f;
-    float toastH = sz1.y + lineSpacing + sz2.y + padY * 2.0f;
+    float toastH = sz1.y + lineSpacing + sz2.y + padY * 2.0f + (t.isMini ? 4.0f : 0.0f);
 
     float toastX = displaySize.x - toastW - 16.0f;
     float toastY = curToastBottomY - toastH;
 
     ImU32 bgCol = IM_COL32(10, 15, 25, static_cast<int>(220.0f * alphaRatio));
-    ImU32 borderCol = IM_COL32(255, 190, 70, static_cast<int>(160.0f * alphaRatio));
-    ImU32 titleCol = IM_COL32(255, 255, 255, static_cast<int>(255.0f * alphaRatio));
+    ImU32 borderCol = t.isMini ? IM_COL32(70, 200, 255, static_cast<int>(200.0f * alphaRatio))
+                               : IM_COL32(255, 190, 70, static_cast<int>(160.0f * alphaRatio));
+    ImU32 titleCol = t.isMini ? IM_COL32(120, 230, 255, static_cast<int>(255.0f * alphaRatio))
+                              : IM_COL32(255, 255, 255, static_cast<int>(255.0f * alphaRatio));
     ImU32 descCol = IM_COL32(180, 180, 180, static_cast<int>(200.0f * alphaRatio));
 
     drawList->AddRectFilled(ImVec2(toastX, toastY), ImVec2(toastX + toastW, toastY + toastH), bgCol, 6.0f);
@@ -4190,6 +4352,15 @@ void AppGL::drawWorldLabels() {
 
     drawList->AddText(font, 14.0f, ImVec2(toastX + padX, toastY + padY), titleCol, line1.c_str());
     drawList->AddText(font, 12.0f, ImVec2(toastX + padX, toastY + padY + sz1.y + lineSpacing), descCol, line2.c_str());
+
+    if (t.isMini) {
+      float prog = std::clamp(age / dur, 0.0f, 1.0f);
+      float barW = toastW - padX * 2.0f;
+      float barY = toastY + toastH - 4.0f;
+      drawList->AddLine(ImVec2(toastX + padX, barY),
+                        ImVec2(toastX + padX + barW * (1.0f - prog), barY),
+                        IM_COL32(70, 200, 255, static_cast<int>(240.0f * alphaRatio)), 2.0f);
+    }
 
     curToastBottomY = toastY - 8.0f;
   }
@@ -4793,6 +4964,8 @@ void AppGL::disengageWarp() {
 
 void AppGL::setShipStyleNow(int style) {
   m_shipStyle = std::min(std::max(style, 0), 3);
+  m_pendingShipStyle = m_shipStyle;
+  m_shipSwitchTimer = 0.0f;
   m_shipCustomization.style = m_shipStyle;
   warpdrive::setShipStyle(m_shipStyle);
   warpdrive::setShipCustomization(m_shipCustomization);
@@ -6259,6 +6432,63 @@ void AppGL::toggleShipyard() {
   m_shipyardOpen = !m_shipyardOpen;
 }
 
+void AppGL::startDockSequence(const std::string& dockId) {
+  if (m_dockAnimState != DockAnimState::None || m_ship.isDocked) return;
+  m_dockTargetId = dockId;
+  m_dockTargetPos = m_camera.position;
+  if (m_sceneManager) {
+    const Station* stNow = m_sceneManager->getCurrentStation();
+    if (stNow) {
+      for (const auto& dock : m_sceneManager->dockSites()) {
+        if (dock.id == dockId || (dock.stationId == stNow->id && dockId.empty())) {
+          m_dockTargetId = dock.id;
+          m_dockTargetPos = dock.pos;
+          break;
+        }
+      }
+    }
+  }
+  m_dockAnimState = DockAnimState::DockPhase1_Clamps;
+  m_dockAnimTimer = 0.9f;
+  m_dockInitialFuel = m_ship.fuel;
+  m_dockInitialShield = m_ship.shield;
+  m_shipNotice = uiRu("Стыковочные манипуляторы захватывают корпус...",
+                      "Docking clamps engaging hull...");
+  m_shipNoticeT = 1.0f;
+  m_audio.playClick();
+}
+
+void AppGL::startUndockSequence() {
+  if (m_dockAnimState != DockAnimState::None || !m_ship.isDocked) return;
+  m_shipyardOpen = false;
+  m_ship.isDocked = false;
+  m_ship.dockedStationId.clear();
+  m_dockAnimState = DockAnimState::Undock_Release;
+  m_dockAnimTimer = 1.0f;
+  const Vec3 fwd = m_camera.forward();
+  m_shipVel = Vec3(fwd.x * 0.8, fwd.y * 0.8, fwd.z * 0.8);
+  m_shipNotice = uiRu("Отшвартовка: шлюзы освобождены, переход в дрейф...",
+                      "Undocking sequence: clamps released, drifting...");
+  m_shipNoticeT = 1.2f;
+  m_audio.playClick();
+}
+
+void AppGL::setShipStyleAnimated(int style) {
+  style = std::min(std::max(style, 0), 3);
+  if (style == m_shipStyle && m_shipSwitchTimer <= 0.0f) return;
+  m_pendingShipStyle = style;
+  m_shipSwitchTimer = 1.0f;
+  m_audio.playClick();
+}
+
+void AppGL::triggerWarpInHalo(float duration) {
+  if (s_harnessPinFps) return;
+  m_teleportHaloTimer = duration;
+  m_inputCooldown = duration;
+  m_warpFlash = 1.0f;
+  warpdrive::setState(m_warpK, m_warpFlash);
+}
+
 void AppGL::dockAtStation(const std::string& dockId) {
   m_ship.isDocked = true;
   m_ship.dockedStationId = dockId;
@@ -6330,9 +6560,9 @@ void AppGL::drawShipyard() {
         };
 
         for (int i = 0; i < 4; ++i) {
-          bool selected = (m_shipStyle == i);
+          bool selected = (m_shipStyle == i || (m_shipSwitchTimer > 0.0f && m_pendingShipStyle == i));
           if (ImGui::Selectable(styles[i], selected)) {
-            setShipStyleNow(i);
+            setShipStyleAnimated(i);
             saveProfileNow(false);
           }
         }
@@ -6506,13 +6736,13 @@ void AppGL::drawShipyard() {
         if (m_ship.isDocked) {
           ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.65f, 0.35f, 1.0f));
           if (ImGui::Button(uiRu("ОТСТЫКОВАТЬСЯ [K]", "UNDOCK SHIP [K]"), ImVec2(320.0f, 36.0f))) {
-            undockFromStation();
+            startUndockSequence();
           }
           ImGui::PopStyleColor();
         } else {
           ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.45f, 0.85f, 1.0f));
           if (ImGui::Button(uiRu("ПРИНУДИТЕЛЬНАЯ СТЫКОВКА [K]", "EMERGENCY DOCK [K]"), ImVec2(320.0f, 36.0f))) {
-            dockAtStation(m_dockHintId.empty() ? "dock-station" : m_dockHintId);
+            startDockSequence(m_dockHintId.empty() ? "dock-station" : m_dockHintId);
           }
           ImGui::PopStyleColor();
         }

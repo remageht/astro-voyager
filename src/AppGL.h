@@ -37,6 +37,8 @@ struct Toast {
   std::string title;
   std::string desc;
   float time = 0.0f;
+  float duration = 4.0f;
+  bool isMini = false;
 };
 
 class AppGL {
@@ -334,6 +336,31 @@ class AppGL {
   void dockAtStation(const std::string& dockId);
   void undockFromStation();
   void drawShipyard();
+  // === Batch A1: Action Feedback Animations ===
+  enum class DockAnimState {
+    None,
+    DockPhase1_Clamps,   // ~0.9s: speed damping and soft pull
+    DockPhase2_Service,  // ~0.9s: refueling & shield recharge
+    Undock_Release       // ~1.0s: undocking drift
+  };
+  DockAnimState m_dockAnimState = DockAnimState::None;
+  float m_dockAnimTimer = 0.0f;
+  std::string m_dockTargetId;
+  Vec3 m_dockTargetPos;
+  float m_dockInitialFuel = 0.0f;
+  float m_dockInitialShield = 0.0f;
+  void startDockSequence(const std::string& dockId);
+  void startUndockSequence();
+
+  // Ship switch animation (~1.0s transition in shipyard)
+  float m_shipSwitchTimer = 0.0f;
+  int m_pendingShipStyle = 0;
+  void setShipStyleAnimated(int style);
+
+  // Jump-to-station warp-in halo (~1.2s: white flash 0.15s + reveal 1.05s) & input cooldown
+  float m_teleportHaloTimer = 0.0f;
+  float m_inputCooldown = 0.0f;
+  void triggerWarpInHalo(float duration = 1.2f);
   // === Settings v3.6.0 ===: пользовательские настройки (сохраняются в профиль).
   int m_difficulty = 1;  // 0 Easy, 1 Normal, 2 Hard (см. difficultyTuning)
   int m_aaMode = 1;      // 0 Off, 1 FXAA (PostFX)
