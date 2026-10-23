@@ -35,6 +35,5 @@ blender/out/
 *.cer
 *.pvk
 
-# Raw cutscene source videos and frame dumps
+# Raw cutscene source videos (story frame dumps are tracked like egor_intro)
 res/story/raw/
-res/story/*-frames/
