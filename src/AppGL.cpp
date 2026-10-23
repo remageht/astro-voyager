@@ -4095,7 +4095,8 @@ void AppGL::drawWorldLabels() {
       glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
       glm::mat4 mvp = proj * view;
 
-      for (const auto& body : bodies) {
+      if (s_harnessPinFps) {
+        for (const auto& body : bodies) {
         if (!body.def) continue;
       glm::vec3 pos(static_cast<float>(body.pos.x),
                         static_cast<float>(body.pos.y),
@@ -4135,6 +4136,257 @@ void AppGL::drawWorldLabels() {
           std::snprintf(distBuf, sizeof(distBuf), "distance: %.1f units", dist);
           ImU32 distColor = IM_COL32(100, 230, 120, 255);
           drawList->AddText(font, 12.0f, ImVec2(textPos.x, currentY), distColor, distBuf);
+        }
+      }
+      } else {
+        // === DYNAMIC HUD LABEL ENGINE (L1) ===
+        auto raySphereHit = [](const Vec3& rayOrig, const Vec3& rayDir, const Vec3& sphCenter, double sphRadius, double maxDist) -> bool {
+          double ocX = rayOrig.x - sphCenter.x;
+          double ocY = rayOrig.y - sphCenter.y;
+          double ocZ = rayOrig.z - sphCenter.z;
+          double b = ocX * rayDir.x + ocY * rayDir.y + ocZ * rayDir.z;
+          double c = ocX * ocX + ocY * ocY + ocZ * ocZ - sphRadius * sphRadius;
+          double disc = b * b - c;
+          if (disc < 0.0) return false;
+          double tHit = -b - std::sqrt(disc);
+          return (tHit > 0.05 && tHit < maxDist);
+        };
+
+        Vec3 shipPos(warpdrive::shipX(), warpdrive::shipY(), warpdrive::shipZ());
+        const double shipRadius = 1.35;
+        const bool shipOcclActive = warpdrive::shipVisible();
+
+        Vec3 stPos(0.0, 0.0, 0.0);
+        bool stOcclActive = false;
+        if (warpdrive::dockSitesVisible()) {
+          for (const auto& dock : m_sceneManager->dockSites()) {
+            if (dock.stationId == "sol") {
+              stPos = dock.pos;
+              stOcclActive = true;
+              break;
+            }
+          }
+        }
+        const double stationRadius = 0.55;
+
+        struct LabelCandidate {
+          const BodyState* body = nullptr;
+          float sx = 0.0f;
+          float sy = 0.0f;
+          double dist = 0.0;
+          float alpha = 1.0f;
+          bool isHovered = false;
+          bool isCloseOccupied = false;
+          float textX = 0.0f;
+          float textY = 0.0f;
+          float boxW = 0.0f;
+          float boxH = 0.0f;
+          std::vector<std::pair<std::string, ImU32>> lines;
+        };
+
+        std::vector<LabelCandidate> candidates;
+        candidates.reserve(bodies.size());
+
+        ImGuiIO& io = ImGui::GetIO();
+        const float dt = (io.DeltaTime > 0.0001f && io.DeltaTime < 0.2f) ? io.DeltaTime : 0.016f;
+
+        std::string closeChipText = "";
+        double closeChipDist = 1e9;
+
+        for (const auto& body : bodies) {
+          if (!body.def) continue;
+          glm::vec3 pos(static_cast<float>(body.pos.x),
+                        static_cast<float>(body.pos.y),
+                        static_cast<float>(body.pos.z));
+          glm::vec4 clip = mvp * glm::vec4(pos, 1.0f);
+          if (clip.w <= 0.001f) continue;
+          glm::vec3 ndc = glm::vec3(clip) / clip.w;
+          if (ndc.x < -1.02f || ndc.x > 1.02f || ndc.y < -1.02f || ndc.y > 1.02f) continue;
+
+          double dx = cp.x - static_cast<double>(pos.x);
+          double dy = cp.y - static_cast<double>(pos.y);
+          double dz = cp.z - static_cast<double>(pos.z);
+          double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+          if (dist < 1e-4) continue;
+
+          Vec3 rayDir((pos.x - cp.x) / dist, (pos.y - cp.y) / dist, (pos.z - cp.z) / dist);
+
+          // A. Occlusion check against ship and station (L1-A)
+          bool occluded = false;
+          if (shipOcclActive && dist > 1.5) {
+            occluded = raySphereHit(cp, rayDir, shipPos, shipRadius, dist - 0.2);
+          }
+          if (!occluded && stOcclActive && dist > 1.0) {
+            occluded = raySphereHit(cp, rayDir, stPos, stationRadius, dist - 0.2);
+          }
+
+          // Smooth 0.25s alpha fade for occlusion
+          float& curAlpha = m_labelAlpha[body.def->id];
+          if (m_labelAlpha.find(body.def->id) == m_labelAlpha.end()) {
+            curAlpha = 1.0f;
+          }
+          const float fadeSpeed = dt / 0.25f;
+          if (occluded) {
+            curAlpha = std::max(0.0f, curAlpha - fadeSpeed);
+          } else {
+            curAlpha = std::min(1.0f, curAlpha + fadeSpeed);
+          }
+
+          if (curAlpha < 0.25f) continue;
+
+          // B. Close Camera check (>30% of screen height) (L1-D)
+          double bodyRadius = static_cast<double>(body.def->radius);
+          float tanHalfFov = std::tan(glm::radians(fov * 0.5f));
+          float apparentPixRad = static_cast<float>((bodyRadius / dist) * (displaySize.y * 0.5f / tanHalfFov));
+          float screenFrac = (apparentPixRad * 2.0f) / displaySize.y;
+
+          float& closeAlpha = m_labelCloseAlpha[body.def->id];
+          if (m_labelCloseAlpha.find(body.def->id) == m_labelCloseAlpha.end()) {
+            closeAlpha = 1.0f;
+          }
+          const float closeFadeSpeed = dt / 0.40f;
+          bool isClose = (screenFrac > 0.30f);
+          if (isClose) {
+            closeAlpha = std::max(0.0f, closeAlpha - closeFadeSpeed);
+            if (dist < closeChipDist) {
+              closeChipDist = dist;
+              char chipBuf[128];
+              if (dist < 1.0) {
+                std::snprintf(chipBuf, sizeof(chipBuf), "%s: %.2f км", body.def->name.c_str(), dist * 6371.0);
+              } else {
+                std::snprintf(chipBuf, sizeof(chipBuf), "%s: %.1f ед.", body.def->name.c_str(), dist);
+              }
+              closeChipText = chipBuf;
+            }
+          } else {
+            closeAlpha = std::min(1.0f, closeAlpha + closeFadeSpeed);
+          }
+
+          if (closeAlpha < 0.05f) continue;
+
+          float finalAlpha = curAlpha * closeAlpha;
+          if (finalAlpha < 0.25f) continue;
+
+          float sx = (ndc.x * 0.5f + 0.5f) * displaySize.x;
+          float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * displaySize.y;
+
+          // C. Dual Modes: DEFAULT (name only) vs FOCUS/HOVER (L1-B)
+          float mouseDx = io.MousePos.x - sx;
+          float mouseDy = io.MousePos.y - sy;
+          float mouseDistSq = mouseDx * mouseDx + mouseDy * mouseDy;
+          bool isHovered = (mouseDistSq < 32.0f * 32.0f) || (m_flyTargetName == body.def->name);
+
+          LabelCandidate cand;
+          cand.body = &body;
+          cand.sx = sx;
+          cand.sy = sy;
+          cand.dist = dist;
+          cand.alpha = finalAlpha;
+          cand.isHovered = isHovered;
+          cand.isCloseOccupied = isClose;
+
+          int alphaU8 = static_cast<int>(finalAlpha * 255.0f);
+          ImU32 nameCol = IM_COL32(255, 255, 255, alphaU8);
+          cand.lines.push_back({body.def->name, nameCol});
+
+          if (isHovered) {
+            int linesAdded = 0;
+            ImU32 factCol = IM_COL32(180, 215, 245, static_cast<int>(alphaU8 * 0.9f));
+            for (const auto& fact : body.def->facts) {
+              cand.lines.push_back({fact, factCol});
+              if (++linesAdded >= 2) break;
+            }
+            if (linesAdded < 2 && dist < 12.0) {
+              char dBuf[64];
+              std::snprintf(dBuf, sizeof(dBuf), "дистанция: %.1f ед.", dist);
+              cand.lines.push_back({dBuf, IM_COL32(120, 235, 140, alphaU8)});
+            }
+          }
+
+          float maxW = 0.0f;
+          float totalH = 0.0f;
+          for (size_t li = 0; li < cand.lines.size(); ++li) {
+            float fSize = (li == 0) ? 13.0f : 11.5f;
+            ImVec2 sz = font->CalcTextSizeA(fSize, 1000.0f, 0.0f, cand.lines[li].first.c_str());
+            if (sz.x > maxW) maxW = sz.x;
+            totalH += fSize + 2.0f;
+          }
+          cand.boxW = maxW + 8.0f;
+          cand.boxH = totalH + 4.0f;
+          cand.textX = sx + 9.0f;
+          cand.textY = sy - 7.0f;
+
+          candidates.push_back(cand);
+        }
+
+        // D. Stacking / Anti-Collision Solver (L1-C)
+        std::sort(candidates.begin(), candidates.end(), [](const LabelCandidate& a, const LabelCandidate& b) {
+          return a.sy < b.sy;
+        });
+
+        for (size_t i = 0; i < candidates.size(); ++i) {
+          for (size_t j = 0; j < i; ++j) {
+            float xi1 = candidates[i].textX, xi2 = candidates[i].textX + candidates[i].boxW;
+            float yi1 = candidates[i].textY, yi2 = candidates[i].textY + candidates[i].boxH;
+
+            float xj1 = candidates[j].textX, xj2 = candidates[j].textX + candidates[j].boxW;
+            float yj1 = candidates[j].textY, yj2 = candidates[j].textY + candidates[j].boxH;
+
+            bool overlapX = (xi1 < xj2 && xi2 > xj1);
+            bool overlapY = (yi1 < yj2 && yi2 > yj1);
+
+            if (overlapX && overlapY) {
+              float overlapDist = (yj2 - yi1) + 4.0f;
+              candidates[i].textY += overlapDist;
+            }
+          }
+        }
+
+        for (const auto& cand : candidates) {
+          int alphaU8 = static_cast<int>(cand.alpha * 255.0f);
+          ImU32 circCol = IM_COL32(255, 245, 225, static_cast<int>(alphaU8 * 0.85f));
+          float circRad = cand.isHovered ? 5.5f : 4.0f;
+
+          drawList->AddCircle(ImVec2(cand.sx, cand.sy), circRad, circCol, 16, 1.5f);
+
+          float dispY = std::abs(cand.textY - (cand.sy - 7.0f));
+          if (dispY > 10.0f) {
+            ImU32 leaderCol = IM_COL32(170, 200, 230, static_cast<int>(alphaU8 * 0.45f));
+            drawList->AddLine(ImVec2(cand.sx + circRad + 2.0f, cand.sy),
+                              ImVec2(cand.textX - 2.0f, cand.textY + 6.0f),
+                              leaderCol, 1.0f);
+          }
+
+          if (cand.isHovered) {
+            ImU32 bgCol = IM_COL32(14, 24, 40, static_cast<int>(alphaU8 * 0.75f));
+            ImU32 borderCol = IM_COL32(80, 160, 220, static_cast<int>(alphaU8 * 0.65f));
+            drawList->AddRectFilled(ImVec2(cand.textX - 4.0f, cand.textY - 2.0f),
+                                    ImVec2(cand.textX + cand.boxW, cand.textY + cand.boxH),
+                                    bgCol, 4.0f);
+            drawList->AddRect(ImVec2(cand.textX - 4.0f, cand.textY - 2.0f),
+                              ImVec2(cand.textX + cand.boxW, cand.textY + cand.boxH),
+                              borderCol, 4.0f);
+          }
+
+          float curY = cand.textY;
+          for (size_t li = 0; li < cand.lines.size(); ++li) {
+            float fSize = (li == 0) ? 13.0f : 11.5f;
+            drawList->AddText(font, fSize, ImVec2(cand.textX, curY), cand.lines[li].second, cand.lines[li].first.c_str());
+            curY += fSize + 2.0f;
+          }
+        }
+
+        if (!closeChipText.empty()) {
+          float chipW = font->CalcTextSizeA(13.0f, 1000.0f, 0.0f, closeChipText.c_str()).x + 16.0f;
+          float chipH = 26.0f;
+          float chipX = displaySize.x - chipW - 18.0f;
+          float chipY = displaySize.y - chipH - 36.0f;
+
+          ImU32 chipBg = IM_COL32(12, 22, 38, 210);
+          ImU32 chipBorder = IM_COL32(100, 200, 240, 180);
+          drawList->AddRectFilled(ImVec2(chipX, chipY), ImVec2(chipX + chipW, chipY + chipH), chipBg, 6.0f);
+          drawList->AddRect(ImVec2(chipX, chipY), ImVec2(chipX + chipW, chipY + chipH), chipBorder, 6.0f);
+          drawList->AddText(font, 13.0f, ImVec2(chipX + 8.0f, chipY + 5.0f), IM_COL32(230, 245, 255, 240), closeChipText.c_str());
         }
       }
       const std::string& selId = m_sceneManager->getSelected();
@@ -4389,6 +4641,72 @@ bool AppGL::saveScreenshot(const std::string& filepath) {
 
   int success = stbi_write_png(filepath.c_str(), width, height, 4, flipped.data(), rowBytes);
   return (success != 0);
+}
+
+int AppGL::captureStationCheck(const std::string& outPath) {
+  std::ofstream dbg("station_capture_debug.log");
+  dbg << "Started captureStationCheck, target: " << outPath << std::endl;
+  s_harnessPinFps = true;
+  warpdrive::setDockSitesVisible(true);
+  warpdrive::setShip(true, 0.0f, 0.0f, 0.0f, 0.0f);
+  try {
+    std::filesystem::create_directories(std::filesystem::path(outPath).parent_path());
+    dbg << "Directories created\n";
+  } catch (const std::exception& e) {
+    dbg << "create_directories failed: " << e.what() << "\n";
+  }
+
+  dbg << "Creating AppGL...\n";
+  dbg.flush();
+  std::unique_ptr<AppGL> appPtr;
+  try {
+    appPtr = std::make_unique<AppGL>(1280, 720, false);
+    dbg << "AppGL created successfully\n";
+  } catch (const std::exception& e) {
+    dbg << "AppGL constructor failed: " << e.what() << "\n";
+    return 1;
+  }
+  AppGL& app = *appPtr;
+
+  dbg << "Teleporting to sol...\n";
+  dbg.flush();
+  app.m_sceneManager->teleportTo("sol", app.m_camera);
+
+  int fbWidth = 1280, fbHeight = 720;
+  app.m_window->getFramebufferSize(fbWidth, fbHeight);
+  glViewport(0, 0, fbWidth, fbHeight);
+
+  // Warmup render to compute planet orbits and populate m_dockSites
+  dbg << "Initial warmup render...\n";
+  dbg.flush();
+  app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+
+  Vec3 stPos(0.0, 0.0, 0.0);
+  for (const auto& dock : app.m_sceneManager->dockSites()) {
+    if (dock.stationId == "sol") {
+      stPos = dock.pos;
+      dbg << "Found sol dock at: " << stPos.x << ", " << stPos.y << ", " << stPos.z << "\n";
+      break;
+    }
+  }
+
+  app.m_camera.position = Vec3(stPos.x - 0.70, stPos.y + 0.35, stPos.z + 0.75);
+  app.computeLookYawPitch(app.m_camera.position, stPos, app.m_camera.yaw, app.m_camera.pitch);
+
+  dbg << "Rendering 10 frames...\n";
+  dbg.flush();
+  for (int frame = 0; frame < 10; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+
+  dbg << "Saving screenshot to " << outPath << "...\n";
+  dbg.flush();
+  bool ok = app.saveScreenshot(outPath);
+  dbg << "saveScreenshot returned: " << (ok ? "true" : "false") << "\n";
+  dbg.flush();
+  return ok ? 0 : 1;
 }
 
 int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {

@@ -699,6 +699,10 @@ int main(int argc, char** argv) {
     std::string outDir = diskOn ? "docs/screens/disk" : "docs/screens";
     return astro::AppGL::captureAllScreenshots(outDir, diskOn);
   }
+  if (arg == "--capture-station") {
+    std::string outPng = (argc > 2) ? argv[2] : "blender/out/ingame_station_check.png";
+    return astro::AppGL::captureStationCheck(outPng);
+  }
   if (arg == "--gl" || arg.empty()) {
     try {
       astro::AppGL app;

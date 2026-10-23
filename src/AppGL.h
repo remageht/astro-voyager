@@ -52,6 +52,7 @@ class AppGL {
   int run();
   bool saveScreenshot(const std::string& filepath);
   static int captureAllScreenshots(const std::string& outDir = "docs/screens", bool diskOn = false);
+  static int captureStationCheck(const std::string& outPath);
 
  private:
   void processInput(float deltaTime);
@@ -216,6 +217,9 @@ class AppGL {
   bool m_hideUI = false;
   bool m_helpOverlay = false;
   bool m_showLabels = true;
+  // === HUD Label Engine (v3.12.0 / L1) ===
+  std::unordered_map<std::string, float> m_labelAlpha;
+  std::unordered_map<std::string, float> m_labelCloseAlpha;
   bool m_prevEscPressed = false;
   bool m_prevHPressed = false;
   bool m_prevF1Pressed = false;
@@ -522,6 +526,11 @@ namespace warpdrive {
 void setState(float k, float flash);
 void setBurst(float b);
 void setShip(bool v, float x, float y, float z, float yaw);
+bool shipVisible();
+float shipX();
+float shipY();
+float shipZ();
+float shipYaw();
 void setShipStyle(int s);  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model
 // v3.11.0: кастомизация корабля (ливрея, свечение, спин колец, апгрейды)
 void setShipCustomization(const ShipCustomization& c);
