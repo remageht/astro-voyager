@@ -34,3 +34,7 @@ blender/out/
 *.pfx
 *.cer
 *.pvk
+
+# Raw cutscene source videos and frame dumps
+res/story/raw/
+res/story/*-frames/

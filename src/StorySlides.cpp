@@ -457,6 +457,14 @@ const std::vector<StorySlide>& storyPrologueSlides() {
         "his chest, and through the canopy, spacetime collapsed into a "
         "relativistic warp tunnel. The first interstellar jump begins.",
         0, "res/story/05_egorka_cockpit.png"});
+    s.push_back(StorySlide{  // 5: Cinematic Warp Flight
+        "Разрывая пустоту, Astro-Voyager устремляется сквозь искривлённое "
+        "пространство. Гравитационные кольца ревут на пике мощности: "
+        "горизонт событий позади, впереди — неизведанные глубины космоса.",
+        "Tearing through the void, the Astro-Voyager hurtles across warped "
+        "space. Gravitational rings roar at peak power: the event horizon "
+        "behind, the uncharted depths of the cosmos ahead.",
+        0, "", "res/story/warp_flight-frames"});
     return s;
   }();
   return slides;
