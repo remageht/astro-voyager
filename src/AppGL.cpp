@@ -4644,32 +4644,21 @@ bool AppGL::saveScreenshot(const std::string& filepath) {
 }
 
 int AppGL::captureStationCheck(const std::string& outPath) {
-  std::ofstream dbg("station_capture_debug.log");
-  dbg << "Started captureStationCheck, target: " << outPath << std::endl;
   s_harnessPinFps = true;
   warpdrive::setDockSitesVisible(true);
   warpdrive::setShip(true, 0.0f, 0.0f, 0.0f, 0.0f);
   try {
     std::filesystem::create_directories(std::filesystem::path(outPath).parent_path());
-    dbg << "Directories created\n";
-  } catch (const std::exception& e) {
-    dbg << "create_directories failed: " << e.what() << "\n";
-  }
+  } catch (...) {}
 
-  dbg << "Creating AppGL...\n";
-  dbg.flush();
   std::unique_ptr<AppGL> appPtr;
   try {
     appPtr = std::make_unique<AppGL>(1280, 720, false);
-    dbg << "AppGL created successfully\n";
-  } catch (const std::exception& e) {
-    dbg << "AppGL constructor failed: " << e.what() << "\n";
+  } catch (...) {
     return 1;
   }
   AppGL& app = *appPtr;
 
-  dbg << "Teleporting to sol...\n";
-  dbg.flush();
   app.m_sceneManager->teleportTo("sol", app.m_camera);
 
   int fbWidth = 1280, fbHeight = 720;
@@ -4677,35 +4666,65 @@ int AppGL::captureStationCheck(const std::string& outPath) {
   glViewport(0, 0, fbWidth, fbHeight);
 
   // Warmup render to compute planet orbits and populate m_dockSites
-  dbg << "Initial warmup render...\n";
-  dbg.flush();
   app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
 
   Vec3 stPos(0.0, 0.0, 0.0);
   for (const auto& dock : app.m_sceneManager->dockSites()) {
     if (dock.stationId == "sol") {
       stPos = dock.pos;
-      dbg << "Found sol dock at: " << stPos.x << ", " << stPos.y << ", " << stPos.z << "\n";
       break;
     }
   }
 
-  app.m_camera.position = Vec3(stPos.x - 0.70, stPos.y + 0.35, stPos.z + 0.75);
-  app.computeLookYawPitch(app.m_camera.position, stPos, app.m_camera.yaw, app.m_camera.pitch);
+  // Model scale is 0.38f. Model dock port (IDA-2 collar): (0.0, -0.041885, 0.422339).
+  // At time 1.0, station rotation around Y is 0.08f rad:
+  const double time = 1.0;
+  const double rotY = 0.08 * time;
+  const double dockModelZ = 0.422339 * 0.38;
+  const double dockModelY = -0.041885 * 0.38;
+  const double dockX = dockModelZ * std::sin(rotY);
+  const double dockY = dockModelY;
+  const double dockZ = dockModelZ * std::cos(rotY);
+  Vec3 dockTarget(stPos.x + dockX, stPos.y + dockY, stPos.z + dockZ);
 
-  dbg << "Rendering 10 frames...\n";
-  dbg.flush();
+  // 3/4 camera view facing the dock port and displaying full wing height:
+  // In station local space: dx = 0.50, dy = 0.30, dz = 0.82
+  const double locX = 0.50;
+  const double locY = 0.30;
+  const double locZ = 0.82;
+  const double locLen = std::sqrt(locX * locX + locY * locY + locZ * locZ);
+  const double normX = locX / locLen;
+  const double normY = locY / locLen;
+  const double normZ = locZ / locLen;
+
+  // Transform station-local camera direction by station rotation rotY:
+  const double dirX = normX * std::cos(rotY) + normZ * std::sin(rotY);
+  const double dirY = normY;
+  const double dirZ = -normX * std::sin(rotY) + normZ * std::cos(rotY);
+
+  const double camDist = 4.45;
+  app.m_camera.position = Vec3(dockTarget.x + dirX * camDist,
+                               dockTarget.y + dirY * camDist,
+                               dockTarget.z + dirZ * camDist);
+  app.computeLookYawPitch(app.m_camera.position, dockTarget, app.m_camera.yaw, app.m_camera.pitch);
+
+  // Frame the station so it occupies 30-45% of the 1280x720 frame (full wing height visible):
+  app.m_sceneManager->getSettings().fovDegrees = 7.5f;
+  app.m_sceneManager->setShowPlanets(false);
+  app.m_sceneManager->setShowOrbits(false);
+  app.m_sceneManager->setShowBelt(false);
+
   for (int frame = 0; frame < 10; ++frame) {
     app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
-    app.m_window->swapBuffers();
-    app.m_window->pollEvents();
+    if (frame < 9) {
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
   }
 
-  dbg << "Saving screenshot to " << outPath << "...\n";
-  dbg.flush();
   bool ok = app.saveScreenshot(outPath);
-  dbg << "saveScreenshot returned: " << (ok ? "true" : "false") << "\n";
-  dbg.flush();
+  app.m_window->swapBuffers();
+  app.m_window->pollEvents();
   return ok ? 0 : 1;
 }
 

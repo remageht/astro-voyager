@@ -139,6 +139,8 @@ class SceneManager {
   bool showOrbits() const { return m_showOrbits; }
   void setShowBelt(bool on) { m_showBelt = on; }
   bool showBelt() const { return m_showBelt; }
+  void setShowPlanets(bool on) { m_showPlanets = on; }
+  bool showPlanets() const { return m_showPlanets; }
 
   // === Ship survival === (v3.3.0): low-shield postfx amounts (0 = off;
   // the screenshot harness never calls this, so its PNGs stay byte-exact).
@@ -231,6 +233,7 @@ class SceneManager {
   float m_exposure = 1.0f;
   bool m_showOrbits = true;
   bool m_showBelt = true;
+  bool m_showPlanets = true;
 
   // Simulation clock for animated stations (solar system orbits).
   // Advanced from wall time inside render(); harness passes constant

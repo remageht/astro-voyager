@@ -41,6 +41,7 @@ uniform sampler2D u_EmissiveTex;  // запечённые наклейки/ок�
 uniform vec3 u_HullTint;          // v3.11.0: базовый оттенок корпуса (1,1,1 по умолчанию)
 uniform vec3 u_AccentTint;        // v3.11.0: оттенок акцентной ливреи (1,1,1 по умолчанию)
 uniform vec3 u_EmissiveTint;      // v3.11.0: оттенок плазменного свечения (1,1,1 по умолчанию)
+uniform float u_StationPbr;       // 1 = orbital station PBR lighting
 
 const float kPi = 3.14159265;
 
@@ -59,9 +60,35 @@ vec3 fSchlick(float u, vec3 f0) { return f0 + (1.0 - f0) * pow(1.0 - u, 5.0); }
 
 void main() {
   vec3 n = normalize(v_Normal);
+  vec3 V = normalize(u_CamPos - v_WorldPos);
+
+  if (u_StationPbr > 0.5) {
+    vec3 L = normalize(u_KeyDir);
+    float NoL = max(dot(n, L), 0.0);
+    vec3 earthDir = normalize(vec3(-0.2, -0.9, 0.3));
+    float earthNoL = max(dot(n, earthDir), 0.0);
+
+    vec3 texCol = textureLod(u_Albedo, v_UV, 0.0).rgb;
+    vec3 albDecoded = pow(max(texCol, vec3(0.0)), vec3(1.5));
+    vec3 baseAlb = mix(vec3(0.36), albDecoded, 0.72);
+
+    vec3 sunLight = vec3(1.0, 0.96, 0.90) * (0.225 * NoL);
+    vec3 earthBounce = vec3(0.22, 0.55, 0.95) * (0.11 * earthNoL);
+    vec3 ambientGI = vec3(0.09, 0.09, 0.11);
+
+    vec3 H = normalize(L + V);
+    float NoH = max(dot(n, H), 0.0);
+    float rough = clamp(textureLod(u_RoughTex, v_UV, 0.0).r, 0.05, 1.0);
+    float specPower = mix(50.0, 8.0, rough);
+    float spec = pow(NoH, specPower) * (0.35 * (1.0 - rough * 0.7));
+
+    vec3 col = baseAlb * (sunLight + earthBounce + ambientGI) + spec * vec3(1.0, 0.96, 0.90);
+    FragColor = vec4(col, 1.0);
+    return;
+  }
+
   vec3 geomN = n;  // rim/силуэт считают по ГЕОМЕТРИИ: нормаль-карта Model
                    // рваная (кластерные vt), rim по ней заливает корпус
-  vec3 V = normalize(u_CamPos - v_WorldPos);
   float NoV = max(dot(n, V), 1e-4);
   vec3 albedo;
   float rough;
@@ -90,6 +117,7 @@ void main() {
     vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
     float im = inversesqrt(max(dot(T, T), dot(B, B)) + 1e-12);
     n = normalize(T * (im * nmap.x) + B * (im * nmap.y) + n * nmap.z);
+    if (u_StationPbr > 0.5) n = geomN;
   } else {
     albedo = pow(max(u_BaseColor, vec3(0.0)), vec3(2.2)) * u_HullTint;
     rough = clamp(u_Rough, 0.05, 1.0);

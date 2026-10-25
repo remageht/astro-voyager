@@ -762,6 +762,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   m_clusterBright.clear();
   m_dockSites.clear();
   if (m_currentStation) {
+    if (m_currentStation->type == StationType::SolarSystem) {
+      m_sol.update(m_simTime);
+      m_lastBodies = m_sol.bodies();
+    }
     if (m_currentStation->id == "sol") {
       Vec3 earthPos(0.0, 0.0, 10.0);
       for (const auto& b : m_lastBodies) {
@@ -1286,6 +1290,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     }
     m_linesShader->unbind();
 
+    if (m_showPlanets) {
     m_planetShader->bind();
     m_planetShader->setUniformMat4f("u_MVP", mvp);
     m_planetShader->setUniform1f("u_Time", time);
@@ -1562,6 +1567,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glDepthMask(GL_TRUE);
         s_sunCorona->unbind();
       }
+    }
     }
     glDisable(GL_DEPTH_TEST);
   }
@@ -1909,10 +1915,18 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_shipShader->setUniform3f("u_KeyColor", keyCol.x, keyCol.y, keyCol.z);
           // IBL: мипованный локальный скайбокс (S1), 512 => 9 мипов.
           s_shipShader->setUniform1i("u_Env", 0);
+          s_shipShader->setUniform1i("u_Albedo", 1);
+          s_shipShader->setUniform1i("u_NormalTex", 2);
+          s_shipShader->setUniform1i("u_RoughTex", 3);
+          s_shipShader->setUniform1i("u_MetalTex", 4);
+          s_shipShader->setUniform1i("u_EmissiveTex", 5);
+          s_shipShader->setUniform1i("u_SkinAlbedo", 6);
+          s_shipShader->setUniform1i("u_SkinRough", 7);
           s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
           // v3.6.0: тумблер зеркальных отражений из настроек (по умолчанию 1.0
           // — эталон ship.png не меняется, умножение на 1.0f точное).
           s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
+          s_shipShader->setUniform1f("u_StationPbr", 0.0f);
           const ShipCustomization& shipCust = warpdrive::shipCustomization();
           s_shipShader->setUniform3f("u_HullTint", shipCust.primaryColor[0], shipCust.primaryColor[1], shipCust.primaryColor[2]);
           s_shipShader->setUniform3f("u_AccentTint", shipCust.accentColor[0], shipCust.accentColor[1], shipCust.accentColor[2]);
@@ -2123,21 +2137,30 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             if (!m_currentStation || dock.stationId != m_currentStation->id) continue;
             glm::vec3 stPos(static_cast<float>(dock.pos.x), static_cast<float>(dock.pos.y), static_cast<float>(dock.pos.z));
 
-            if (s_stationModel.ready()) {
+            if (s_stationModel.ready() && s_shipShader) {
               // High-detail PBR ISS / Orbital Station model (normalized 1.0 wingspan -> scale 0.38)
               const float stScale = 0.38f;
               glm::mat4 stModel = glm::translate(glm::mat4(1.0f), stPos) *
                                   glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
                                   glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
 
+              glm::vec3 stKeyDir = glm::normalize(glm::vec3(0.55f, 0.45f, 0.70f));
+
               s_shipShader->bind();
               s_shipShader->setUniformMat4f("u_MVP", mvp);
               s_shipShader->setUniformMat4f("u_Model", stModel);
               s_shipShader->setUniformMat4f("u_ShipInv", glm::inverse(stModel));
               s_shipShader->setUniform3f("u_CamPos", eye);
-              s_shipShader->setUniform3f("u_KeyDir", keyDir.x, keyDir.y, keyDir.z);
-              s_shipShader->setUniform3f("u_KeyColor", keyCol.x, keyCol.y, keyCol.z);
+              s_shipShader->setUniform3f("u_KeyDir", stKeyDir.x, stKeyDir.y, stKeyDir.z);
+              s_shipShader->setUniform3f("u_KeyColor", keyCol.x * 16.5f, keyCol.y * 16.5f, keyCol.z * 16.5f);
               s_shipShader->setUniform1i("u_Env", 0);
+              s_shipShader->setUniform1i("u_Albedo", 1);
+              s_shipShader->setUniform1i("u_NormalTex", 2);
+              s_shipShader->setUniform1i("u_RoughTex", 3);
+              s_shipShader->setUniform1i("u_MetalTex", 4);
+              s_shipShader->setUniform1i("u_EmissiveTex", 5);
+              s_shipShader->setUniform1i("u_SkinAlbedo", 6);
+              s_shipShader->setUniform1i("u_SkinRough", 7);
               s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
               s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
               s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
@@ -2148,6 +2171,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               s_shipShader->setUniform3f("u_HullTint", glm::vec3(1.0f));
               s_shipShader->setUniform3f("u_AccentTint", glm::vec3(1.0f));
               s_shipShader->setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
+              s_shipShader->setUniform1f("u_StationPbr", 1.0f);
               s_shipShader->setUniform1f("u_Metal", 0.75f);
               s_shipShader->setUniform1f("u_Rough", 0.35f);
 
