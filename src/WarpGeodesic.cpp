@@ -19,6 +19,12 @@ double evalHamiltonian(const WarpMetric& metric, const WarpRayState& s) {
 }
 
 void renormalizeNull(const WarpMetric& metric, WarpRayState& s) {
+  // If the spacetime metric is non-stationary, p_t evolves dynamically via dp_t/dlambda = -dH/dt.
+  // Artificially rescaling spatial momentum while holding p_t fixed corrupts energy conservation.
+  if (!metric.isStationary()) {
+    return;
+  }
+
   double g_inv[4][4];
   metric.evalInv4Metric(s.x, s.y, s.z, s.t, g_inv);
 
@@ -82,8 +88,18 @@ void evalHamiltonianDerivatives(const WarpMetric& metric, const WarpRayState& s,
     }
   }
 
-  // dp_t / dlambda = -dH / dt = 0 for stationary metric
-  dpdlambda[0] = 0.0;
+  // dp_t / dlambda = -dH / dt = -1/2 sum_{alpha, beta} (d g^{alpha beta} / dt) p_alpha p_beta
+  double sum_t = 0.0;
+  if (!metric.isStationary()) {
+    double dg_inv_dt[4][4];
+    metric.evalDerivTimeInv4Metric(s.x, s.y, s.z, s.t, dg_inv_dt);
+    for (int alpha = 0; alpha < 4; ++alpha) {
+      for (int beta = 0; beta < 4; ++beta) {
+        sum_t += dg_inv_dt[alpha][beta] * p[alpha] * p[beta];
+      }
+    }
+  }
+  dpdlambda[0] = -0.5 * sum_t;
 
   // dp_i / dlambda = -dH / dx^i = -1/2 sum_{alpha, beta} (d g^{alpha beta} / dx^i) p_alpha p_beta
   for (int i = 0; i < 3; ++i) {
@@ -207,21 +223,36 @@ WarpRayState makeWarpInwardRay(const WarpMetric& metric, double r0, double b) {
   s.y = 0.0;
   s.z = 0.0;
   s.pt = -1.0;  // Conserved energy E = 1
-
-  const double rh = metric.horizonRadius();
-  const double f0 = 1.0 - (rh > 0.0 ? rh / r0 : 0.0);
-
-  // In equatorial plane launching from +X towards origin with impact parameter b in +Y:
-  // p_y = b / r0
-  s.py = b / r0;
+  s.py = (r0 > 1e-12) ? (b / r0) : 0.0;
   s.pz = 0.0;
-
-  // p_x determined from null condition H = 1/2 g^{mu nu} p_mu p_nu = 0:
-  // At (r0, 0, 0): g^{00} = -1/f0, g^{xx} = f0, g^{yy} = 1
-  // -1/f0 * (-1)^2 + f0 * px^2 + py^2 = 0 => px = -sqrt((1/f0 - py^2) / f0)
-  const double radArg = (1.0 / f0) - s.py * s.py;
-  s.px = (radArg > 0.0) ? -std::sqrt(radArg / f0) : 0.0;
   s.lambda = 0.0;
+
+  double g_inv[4][4];
+  metric.evalInv4Metric(s.x, s.y, s.z, s.t, g_inv);
+
+  // Inward null ray condition: g^{mu nu} p_mu p_nu = 0
+  // Quadratic in p_x: A * p_x^2 + B * p_x + C = 0
+  const double A = g_inv[1][1];
+  const double B = 2.0 * (g_inv[0][1] * s.pt + g_inv[1][2] * s.py + g_inv[1][3] * s.pz);
+  const double C = g_inv[0][0] * s.pt * s.pt +
+                   2.0 * (g_inv[0][2] * s.pt * s.py + g_inv[0][3] * s.pt * s.pz) +
+                   g_inv[2][2] * s.py * s.py +
+                   2.0 * g_inv[2][3] * s.py * s.pz +
+                   g_inv[3][3] * s.pz * s.pz;
+
+  if (std::abs(A) > 1e-30) {
+    const double disc = B * B - 4.0 * A * C;
+    if (disc >= 0.0) {
+      // Inward motion along -X requires coordinate velocity dx/dlambda = g^{x mu} p_mu < 0.
+      // Since dx/dlambda = 1/2 B + A * px, choosing the root with -sqrt(disc) ensures:
+      // dx/dlambda = -1/2 * sqrt(disc) <= 0.
+      s.px = (-B - std::sqrt(disc)) / (2.0 * A);
+    } else {
+      s.px = 0.0;
+    }
+  } else {
+    s.px = 0.0;
+  }
 
   renormalizeNull(metric, s);
   return s;
@@ -280,7 +311,7 @@ double integrateProfile(double uTarget, double alpha, double& totalIntegral) {
 
 std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
     const double start[3], const double end[3],
-    double vMax, double sigma, int steps) {
+    double vMax, double sigma, int steps, double bubbleRadius) {
   const int N = std::max(steps, 2);
   std::vector<SkiffWaypoint> result(N);
 
@@ -291,7 +322,7 @@ std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
 
   const double effSigma = (sigma > 1e-6) ? sigma : 0.5;
   const double effVMax = (vMax > 1e-6) ? vMax : 1.0;
-  const double bubbleR = std::max(5.0 * effSigma, 2.0);
+  const double bubbleR = (bubbleRadius > 0.0) ? bubbleRadius : std::max(5.0 * effSigma, 2.0);
   const double alpha = 0.15;  // 15% acceleration, cruise, 15% deceleration
 
   double totalIntegral = 0.0;
@@ -313,7 +344,7 @@ std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
     frac[N - 1 - k] = 1.0 - frac[k];
   }
 
-  const double wallDist = bubbleR - 2.0 * effSigma;  // Distance from center ship to inner wall edge
+  const double wallDist = bubbleR - 2.0 * effSigma;  // Clearance from center ship to inner wall edge
   const double denomTheta = 2.0 * effSigma * std::tanh(bubbleR / effSigma);
 
   for (int k = 0; k < N; ++k) {
@@ -330,11 +361,11 @@ std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
     wp.vy = dir[1] * v;
     wp.vz = dir[2] * v;
     wp.v = v;
-    wp.tau = wp.t;  // No time dilation inside the comoving Eulerian bubble
+    wp.tau = wp.t;  // No time dilation inside the comoving Eulerian bubble (alpha = 1)
     wp.thetaMax = (denomTheta > 1e-30) ? (v / denomTheta) : 0.0;
     wp.wallDist = wallDist;
     wp.wallSafe = (wallDist > 0.0);
-    wp.dtsDtauValid = true;  // Outside bubble |dtau/dt| <= 1 Eulerian invariant holds
+    wp.dtsDtauValid = (wallDist > 0.0 && totalTime >= 0.0);
 
     result[k] = wp;
   }
@@ -344,8 +375,8 @@ std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
 
 std::vector<SkiffWaypoint> skiffPath(
     const double start[3], const double end[3],
-    double vMax, double sigma, int steps) {
-  return WarpGeodesic::skiffPath(start, end, vMax, sigma, steps);
+    double vMax, double sigma, int steps, double bubbleRadius) {
+  return WarpGeodesic::skiffPath(start, end, vMax, sigma, steps, bubbleRadius);
 }
 
 }  // namespace astro

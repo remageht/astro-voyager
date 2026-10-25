@@ -288,6 +288,131 @@ int main() {
     if (!test10Ok) return 1;
   }
 
-  std::cout << "\nAll test_warp_geodesic checks passed successfully (10/10 PASS)!\n";
+  // 11. Warp blueshift and Killing charge conservation in moving Alcubierre bubble (Issue N1)
+  {
+    const double R = 5.0;
+    const double sigma = 0.5;
+    const double vMax = 0.5;
+    const double T = 10000.0;
+    const double tau = 1000.0;
+    astro::AlcubierreMetric alc(R, sigma, vMax, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, T, tau);
+
+    // Mid-cruise state at t0 = 5000.0 where v(t) = vMax = 0.5
+    const double t0 = 5000.0;
+    double center0[3];
+    alc.bubbleCenter(t0, center0);
+
+    // Launch photon 20 units ahead of the bubble, propagating in -X direction
+    astro::WarpRayState ray;
+    ray.t = t0;
+    ray.x = center0[0] + 20.0;
+    ray.y = center0[1];
+    ray.z = center0[2];
+    ray.pt = -1.0;
+    ray.px = -1.0;  // In Minkowski exterior, null condition gives px = -1
+    ray.py = 0.0;
+    ray.pz = 0.0;
+    ray.lambda = 0.0;
+
+    const double vInit = alc.velocity(ray.t);
+    const double C_initial = ray.pt + vInit * ray.px;  // Expected C = -1.0 + 0.5*(-1.0) = -1.5
+
+    double maxCDrift = 0.0;
+    bool reachedCenter = false;
+    double finalECom = 0.0;
+
+    const double h = 0.01;
+    for (int step = 0; step < 4000; ++step) {
+      astro::warpRk4Step(alc, h, ray);
+
+      double curCenter[3];
+      alc.bubbleCenter(ray.t, curCenter);
+      const double curV = alc.velocity(ray.t);
+      const double C = ray.pt + curV * ray.px;
+      const double drift = std::abs(C - C_initial);
+      if (drift > maxCDrift) maxCDrift = drift;
+
+      // Check when photon passes through the bubble center
+      if (std::abs(ray.x - curCenter[0]) < 0.05 && !reachedCenter) {
+        reachedCenter = true;
+        finalECom = -(ray.pt + curV * ray.px);
+      }
+    }
+
+    const double expectedECom = 1.0 + vMax;  // 1.5
+    const double eComErr = std::abs(finalECom - expectedECom);
+    const bool test11Ok = reachedCenter && (maxCDrift < 1e-6) && (eComErr < 1e-5);
+
+    std::cout << "Test 11 (Alcubierre blueshift & Killing charge: reachedCenter=" << reachedCenter
+              << " E_com=" << finalECom << " expected=" << expectedECom
+              << " max_C_drift=" << maxCDrift << "): "
+              << (test11Ok ? "PASS" : "FAIL") << "\n";
+    if (!test11Ok) return 1;
+  }
+
+  // 12. Analytical vs Numerical time derivative of Alcubierre inverse 4-metric
+  {
+    astro::AlcubierreMetric alc(4.0, 0.5, 2.5, 1.0, 2.0, 3.0, 0.6, 0.8, 0.0, 100.0, 15.0);
+    double dg_dt_an[4][4], dg_dt_num[4][4];
+    alc.evalDerivTimeInv4Metric(2.5, 3.0, 0.5, 30.0, dg_dt_an);
+    alc.WarpMetric::evalDerivTimeInv4Metric(2.5, 3.0, 0.5, 30.0, dg_dt_num);
+
+    double maxDiffTime = 0.0;
+    for (int mu = 0; mu < 4; ++mu) {
+      for (int nu = 0; nu < 4; ++nu) {
+        const double d = std::abs(dg_dt_an[mu][nu] - dg_dt_num[mu][nu]);
+        if (d > maxDiffTime) maxDiffTime = d;
+      }
+    }
+    const bool test12Ok = (maxDiffTime < 1e-5);
+    std::cout << "Test 12 (Alcubierre analytic vs numeric dg/dt: max_diff="
+              << maxDiffTime << "): " << (test12Ok ? "PASS" : "FAIL") << "\n";
+    if (!test12Ok) return 1;
+  }
+
+  // 13. Analytical bubbleCenter vs high-precision numerical Simpson quadrature (Issue N4)
+  {
+    const double invSqrt3 = 1.0 / std::sqrt(3.0);
+    astro::AlcubierreMetric alc(5.0, 0.5, 3.0, 5.0, -10.0, 15.0, invSqrt3, invSqrt3, invSqrt3, 120.0, 18.0);
+    const double testTimes[] = {0.0, 1.5, 18.0, 60.0, 110.0, 120.0, 150.0};
+    double maxCenterDiff = 0.0;
+
+    for (double t : testTimes) {
+      double cAna[3];
+      alc.bubbleCenter(t, cAna);
+
+      // Numerical Simpson integration with 50000 intervals
+      const double tClamped = std::min(t, alc.totalTime());
+      double sNum = 0.0;
+      if (tClamped > 0.0) {
+        const int N = 50000;
+        const double dt = tClamped / N;
+        double sum = alc.velocity(0.0) + alc.velocity(tClamped);
+        for (int i = 1; i < N; ++i) {
+          const double ti = i * dt;
+          const double w = (i % 2 == 1) ? 4.0 : 2.0;
+          sum += w * alc.velocity(ti);
+        }
+        sNum = (dt / 3.0) * sum;
+      }
+      const double cNum[3] = {
+          5.0 + invSqrt3 * sNum,
+          -10.0 + invSqrt3 * sNum,
+          15.0 + invSqrt3 * sNum
+      };
+
+      for (int i = 0; i < 3; ++i) {
+        const double d = std::abs(cAna[i] - cNum[i]);
+        if (d > maxCenterDiff) maxCenterDiff = d;
+      }
+    }
+
+    const bool test13Ok = (maxCenterDiff < 1e-9);
+    std::cout << "Test 13 (Alcubierre analytic bubbleCenter vs 50000-pt Simpson: max_diff="
+              << maxCenterDiff << "): " << (test13Ok ? "PASS" : "FAIL") << "\n";
+    if (!test13Ok) return 1;
+  }
+
+  std::cout << "\nAll test_warp_geodesic checks passed successfully (13/13 PASS)!\n";
   return 0;
 }

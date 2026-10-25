@@ -76,12 +76,14 @@ public:
   // - Exact time-reversal and roundtrip symmetry
   static std::vector<SkiffWaypoint> skiffPath(
       const double start[3], const double end[3],
-      double vMax = 5.0, double sigma = 0.5, int steps = 100);
+      double vMax = 5.0, double sigma = 0.5, int steps = 100,
+      double bubbleRadius = -1.0);
 };
 
 // Direct namespace-level helper
 std::vector<SkiffWaypoint> skiffPath(
     const double start[3], const double end[3],
-    double vMax = 5.0, double sigma = 0.5, int steps = 100);
+    double vMax = 5.0, double sigma = 0.5, int steps = 100,
+    double bubbleRadius = -1.0);
 
 }  // namespace astro

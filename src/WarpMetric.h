@@ -49,6 +49,13 @@ public:
   virtual void evalDerivInv4Metric(double x, double y, double z, double t,
                                    double dg_inv_dx[3][4][4]) const;
 
+  // Check if metric is stationary (time-independent): if true, d(g^{mu nu})/dt = 0 identically
+  virtual bool isStationary() const { return true; }
+
+  // Time derivative of inverse 4-metric: dg_inv_dt[mu][nu] = d(g^{mu nu})/dt
+  virtual void evalDerivTimeInv4Metric(double x, double y, double z, double t,
+                                       double dg_inv_dt[4][4]) const;
+
   // Check if coordinates lie inside event horizon / singular region
   virtual bool isInsideHorizon(double x, double y, double z) const = 0;
 
@@ -126,6 +133,11 @@ public:
   void evalDerivInv4Metric(double x, double y, double z, double t,
                            double dg_inv_dx[3][4][4]) const override;
 
+  bool isStationary() const override { return false; }
+
+  void evalDerivTimeInv4Metric(double x, double y, double z, double t,
+                               double dg_inv_dt[4][4]) const override;
+
   bool isInsideHorizon(double x, double y, double z) const override {
     (void)x; (void)y; (void)z;
     return false;
@@ -137,8 +149,9 @@ public:
   double shapeFunction(double rs) const;
   double shapeFunctionDeriv(double rs) const;
 
-  // Velocity profile v(t) and center position x_s(t)
+  // Velocity profile v(t), its analytical derivative dv/dt, and center position x_s(t)
   double velocity(double t) const;
+  double velocityDeriv(double t) const;
   void bubbleCenter(double t, double center[3]) const;
 
   // York time / expansion scalar theta(x, y, z, t) and analytical maximum theta_max(t)

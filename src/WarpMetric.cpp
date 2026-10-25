@@ -61,6 +61,31 @@ void WarpMetric::evalDerivInv4Metric(double x, double y, double z, double t,
   }
 }
 
+void WarpMetric::evalDerivTimeInv4Metric(double x, double y, double z, double t,
+                                         double dg_inv_dt[4][4]) const {
+  if (isStationary()) {
+    std::memset(dg_inv_dt, 0, sizeof(double) * 4 * 4);
+    return;
+  }
+
+  // 4th-order central finite difference fallback for time derivative
+  const double eps = 1e-5;
+  double g_p2[4][4], g_p1[4][4], g_m1[4][4], g_m2[4][4];
+
+  evalInv4Metric(x, y, z, t + 2.0 * eps, g_p2);
+  evalInv4Metric(x, y, z, t + 1.0 * eps, g_p1);
+  evalInv4Metric(x, y, z, t - 1.0 * eps, g_m1);
+  evalInv4Metric(x, y, z, t - 2.0 * eps, g_m2);
+
+  for (int mu = 0; mu < 4; ++mu) {
+    for (int nu = 0; nu < 4; ++nu) {
+      dg_inv_dt[mu][nu] =
+          (-g_p2[mu][nu] + 8.0 * g_p1[mu][nu] - 8.0 * g_m1[mu][nu] + g_m2[mu][nu]) /
+          (12.0 * eps);
+    }
+  }
+}
+
 SchwarzschildADM::SchwarzschildADM(double rs) : m_rs(rs > 0.0 ? rs : 1.0) {}
 
 void SchwarzschildADM::evalADM(double x, double y, double z, double /*t*/,
@@ -190,7 +215,29 @@ double AlcubierreMetric::velocity(double t) const {
   return m_vMax * (std::tanh(u1) * std::tanh(u2)) / normSq;
 }
 
+double AlcubierreMetric::velocityDeriv(double t) const {
+  if (m_totalTime <= 0.0 || t <= 0.0 || t >= m_totalTime) return 0.0;
+  const double u1 = t / m_tauAcc;
+  const double u2 = (m_totalTime - t) / m_tauAcc;
+  const double mid = 0.5 * m_totalTime / m_tauAcc;
+  const double norm = std::tanh(mid);
+  const double normSq = norm * norm;
+  if (normSq < 1e-30) return 0.0;
+  const double t1 = std::tanh(u1);
+  const double t2 = std::tanh(u2);
+  const double s1 = 1.0 - t1 * t1;  // sech^2(u1)
+  const double s2 = 1.0 - t2 * t2;  // sech^2(u2)
+  return (m_vMax / (m_tauAcc * normSq)) * (s1 * t2 - t1 * s2);
+}
+
 void AlcubierreMetric::bubbleCenter(double t, double center[3]) const {
+  if (m_totalTime <= 0.0) {
+    const double s = m_vMax * t;
+    center[0] = m_pos0[0] + m_dir[0] * s;
+    center[1] = m_pos0[1] + m_dir[1] * s;
+    center[2] = m_pos0[2] + m_dir[2] * s;
+    return;
+  }
   if (t <= 0.0) {
     center[0] = m_pos0[0];
     center[1] = m_pos0[1];
@@ -198,15 +245,23 @@ void AlcubierreMetric::bubbleCenter(double t, double center[3]) const {
     return;
   }
   const double tClamped = std::min(t, m_totalTime);
-  const int N = 64;
-  const double dt = tClamped / N;
-  double sum = velocity(0.0) + velocity(tClamped);
-  for (int i = 1; i < N; ++i) {
-    const double ti = i * dt;
-    const double w = (i % 2 == 1) ? 4.0 : 2.0;
-    sum += w * velocity(ti);
+  const double U = m_totalTime / m_tauAcc;
+  const double k = std::tanh(U * 0.5);
+  const double kSq = k * k;
+  if (kSq < 1e-30) {
+    center[0] = m_pos0[0];
+    center[1] = m_pos0[1];
+    center[2] = m_pos0[2];
+    return;
   }
-  const double s = (dt / 3.0) * sum;
+  const double u = tClamped / m_tauAcc;
+  const double z = std::tanh((2.0 * u - U) * 0.5);
+  const double kz = std::clamp(k * z, -0.999999999999999, 0.999999999999999);
+  const double k2 = std::clamp(kSq, -0.999999999999999, 0.999999999999999);
+  const double term1 = ((1.0 + kSq) / k) * (std::atanh(kz) + std::atanh(k2));
+  const double term2 = u;
+  const double s = (m_vMax * m_tauAcc / kSq) * (term1 - term2);
+
   center[0] = m_pos0[0] + m_dir[0] * s;
   center[1] = m_pos0[1] + m_dir[1] * s;
   center[2] = m_pos0[2] + m_dir[2] * s;
@@ -269,6 +324,45 @@ void AlcubierreMetric::evalDerivInv4Metric(double x, double y, double z, double 
       for (int j = 0; j < 3; ++j) {
         dg_inv_dx[k][i + 1][j + 1] = -2.0 * (v * v) * (m_dir[i] * m_dir[j]) * (f * df) * rHat[k];
       }
+    }
+  }
+}
+
+void AlcubierreMetric::evalDerivTimeInv4Metric(double x, double y, double z, double t,
+                                              double dg_inv_dt[4][4]) const {
+  std::memset(dg_inv_dt, 0, sizeof(double) * 4 * 4);
+
+  double c[3];
+  bubbleCenter(t, c);
+  const double diff[3] = {x - c[0], y - c[1], z - c[2]};
+  const double rs = std::sqrt(diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2]);
+  if (rs < 1e-12) return;
+
+  const double invRs = 1.0 / rs;
+  const double f = shapeFunction(rs);
+  const double df = shapeFunctionDeriv(rs);
+  const double v = velocity(t);
+  const double vDot = velocityDeriv(t);
+  const double dot_n = (diff[0] * m_dir[0] + diff[1] * m_dir[1] + diff[2] * m_dir[2]) * invRs;
+
+  // d(beta0)/dt = - [ vDot * f - v^2 * df * (diff . n / rs) ]
+  const double dbeta0_dt = -(vDot * f - (v * v) * df * dot_n);
+  const double beta0 = -v * f;
+
+  // d(g^00)/dt = 0
+  dg_inv_dt[0][0] = 0.0;
+
+  // d(g^0i)/dt = d(beta^i)/dt = d(beta0)/dt * n^i
+  for (int i = 0; i < 3; ++i) {
+    const double val = dbeta0_dt * m_dir[i];
+    dg_inv_dt[0][i + 1] = val;
+    dg_inv_dt[i + 1][0] = val;
+  }
+
+  // d(g^ij)/dt = -2 * beta0 * d(beta0)/dt * n^i * n^j
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      dg_inv_dt[i + 1][j + 1] = -2.0 * beta0 * dbeta0_dt * (m_dir[i] * m_dir[j]);
     }
   }
 }
