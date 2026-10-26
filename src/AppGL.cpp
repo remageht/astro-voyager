@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstdlib>
+#include <cfloat>
 #include <ctime>
 #include <filesystem>
 #include <iostream>
@@ -1597,6 +1598,7 @@ void AppGL::startExpeditionIntro() {
   m_slidesIdx = 0;
   m_slidesOpen = true;
   m_inMenu = false;
+  m_slideAnimIdx = -1;
   invalidateVideoSlide();
 }
 
@@ -1610,6 +1612,7 @@ void AppGL::startNewAdventure() {
   m_slidesOpen = true;
   m_inMenu = false;
   m_expedition = ExpeditionState{};
+  m_slideAnimIdx = -1;
   saveExpeditionFileNow();
   invalidateVideoSlide();
 }
@@ -1710,6 +1713,7 @@ void AppGL::openChapterSlide(int slideIdx) {
   m_slidesIntro = false;
   m_slidesIdx = 0;
   m_slidesOpen = true;
+  m_slideAnimIdx = -1;
 }
 
 void AppGL::saveExpeditionFileNow() {
@@ -1736,6 +1740,171 @@ void AppGL::loadExpeditionFileNow() {
   }
 }
 
+namespace {
+
+constexpr double kSlideCharsPerSec = 42.0;
+constexpr double kSlideAutoAdvanceDelay = 2.2;
+constexpr double kSlideKenBurnsSec = 14.0;
+
+size_t slideUtf8Next(const std::string& s, size_t i) {
+  if (i >= s.size()) return s.size();
+  const unsigned char c = static_cast<unsigned char>(s[i]);
+  size_t n = 1;
+  if ((c & 0xE0) == 0xC0) {
+    n = 2;
+  } else if ((c & 0xF0) == 0xE0) {
+    n = 3;
+  } else if ((c & 0xF8) == 0xF0) {
+    n = 4;
+  }
+  return std::min(s.size(), i + n);
+}
+
+size_t slideUtf8Length(const char* text) {
+  if (!text) return 0;
+  const std::string s(text);
+  size_t count = 0;
+  size_t i = 0;
+  while (i < s.size()) {
+    i = slideUtf8Next(s, i);
+    ++count;
+  }
+  return count;
+}
+
+struct SlideTextLine {
+  std::string text;
+  std::vector<size_t> offsets;  // UTF-8 codepoint offsets, last == text.size()
+};
+
+std::vector<size_t> slideUtf8Offsets(const std::string& s) {
+  std::vector<size_t> out;
+  size_t i = 0;
+  while (i < s.size()) {
+    out.push_back(i);
+    i = slideUtf8Next(s, i);
+  }
+  out.push_back(s.size());
+  return out;
+}
+
+float slideTextWidth(ImFont* font, float px, const std::string& text) {
+  return font->CalcTextSizeA(px, FLT_MAX, 0.0f, text.c_str()).x;
+}
+
+// The font atlas covers Latin-1 + Cyrillic, not General Punctuation. Replace
+// typographic dashes/quotes from the story data with ASCII equivalents so the
+// player branch does not print '?' boxes. The harness keeps the raw string.
+std::string slideNormalizeText(const char* text) {
+  if (!text) return {};
+  const std::string in(text);
+  std::string out;
+  out.reserve(in.size());
+  for (size_t i = 0; i < in.size();) {
+    const unsigned char c = static_cast<unsigned char>(in[i]);
+    if (c == 0xE2 && i + 2 < in.size()) {
+      const unsigned char c2 = static_cast<unsigned char>(in[i + 1]);
+      const unsigned char c3 = static_cast<unsigned char>(in[i + 2]);
+      if (c2 == 0x80 && (c3 == 0x93 || c3 == 0x94)) {  // en/em dash
+        out += '-';
+        i += 3;
+        continue;
+      }
+      if (c2 == 0x80 && c3 == 0xA6) {  // ellipsis
+        out += "...";
+        i += 3;
+        continue;
+      }
+      if (c2 == 0x80 && (c3 == 0x98 || c3 == 0x99)) {  // curly apostrophe
+        out += '\'';
+        i += 3;
+        continue;
+      }
+      if (c2 == 0x80 && (c3 == 0x9C || c3 == 0x9D)) {  // curly quotes
+        out += '"';
+        i += 3;
+        continue;
+      }
+    }
+    if (c == 0xC2 && i + 1 < in.size() &&
+        static_cast<unsigned char>(in[i + 1]) == 0xA0) {  // NBSP
+      out += ' ';
+      i += 2;
+      continue;
+    }
+    out += in[i];
+    ++i;
+  }
+  return out;
+}
+
+// Greedy word wrap with a hard cap on visible lines. If the text does not fit,
+// the tail of the last line is replaced with an ASCII ellipsis (the font atlas
+// is not guaranteed to contain U+2026).
+std::vector<SlideTextLine> slideWrapText(ImFont* font, float px, float maxW,
+                                         const std::string& text, int maxLines) {
+  std::vector<SlideTextLine> lines;
+  size_t lineStart = 0;
+  while (lineStart < text.size() &&
+         static_cast<int>(lines.size()) < maxLines) {
+    while (lineStart < text.size() && text[lineStart] == ' ') ++lineStart;
+    if (lineStart >= text.size()) break;
+
+    size_t i = lineStart;
+    size_t bestEnd = lineStart;
+    size_t lastSpace = std::string::npos;
+    while (i < text.size()) {
+      const size_t next = slideUtf8Next(text, i);
+      if (text[i] == ' ') lastSpace = i;
+      const float w = font->CalcTextSizeA(
+          px, FLT_MAX, 0.0f, text.c_str() + lineStart, text.c_str() + next).x;
+      if (w > maxW && bestEnd > lineStart) break;
+      bestEnd = next;
+      i = next;
+      if (w > maxW) break;
+    }
+    if (bestEnd <= lineStart) bestEnd = slideUtf8Next(text, lineStart);
+
+    size_t lineEnd = bestEnd;
+    if (i < text.size() && lastSpace != std::string::npos &&
+        lastSpace > lineStart) {
+      lineEnd = lastSpace;
+    }
+    while (lineEnd > lineStart && text[lineEnd - 1] == ' ') --lineEnd;
+    if (lineEnd <= lineStart) lineEnd = slideUtf8Next(text, lineStart);
+
+    SlideTextLine line;
+    line.text = text.substr(lineStart, lineEnd - lineStart);
+    line.offsets = slideUtf8Offsets(line.text);
+    lines.push_back(std::move(line));
+
+    if (lineEnd >= text.size()) {
+      lineStart = text.size();
+      break;
+    }
+    lineStart = lineEnd;
+  }
+
+  if (lineStart < text.size() && !lines.empty()) {
+    SlideTextLine& last = lines.back();
+    const std::vector<size_t> offsets = last.offsets;
+    size_t keep = offsets.empty() ? 0 : offsets.size() - 1;
+    for (;;) {
+      const std::string candidate =
+          last.text.substr(0, offsets[keep]) + "...";
+      if (slideTextWidth(font, px, candidate) <= maxW || keep == 0) {
+        last.text = candidate;
+        last.offsets = slideUtf8Offsets(last.text);
+        break;
+      }
+      --keep;
+    }
+  }
+  return lines;
+}
+
+}  // namespace
+
 void AppGL::drawSlidesOverlay() {
   // === Expedition === (v3.5.0): фуллскрин-экран слайдов: тёмное стекло,
   // векторная миниатюра сверху, текст в центре, подсказка внизу.
@@ -1748,6 +1917,16 @@ void AppGL::drawSlidesOverlay() {
   }
   const StorySlide& sl = m_slidesCurrent[m_slidesIdx];
   const ImVec2 disp = io.DisplaySize;
+  const double now = ImGui::GetTime();
+  const bool playerLayout = !s_harnessPinFps;
+
+  // P1: the player-facing overlay runs its own typewriter/Ken-Burns clock.
+  // The harness branch keeps the historical static drawing path byte-for-byte.
+  if (playerLayout && m_slideAnimIdx != m_slidesIdx) {
+    m_slideAnimIdx = m_slidesIdx;
+    m_slideTextStart = now;
+    m_slideShownAt = now;
+  }
 
   // v4.0 видео-слайд: счёт кадров и старт аудио/таймера при первом показе.
   const bool hasVideo = !sl.videoDir.empty();
@@ -1762,23 +1941,53 @@ void AppGL::drawSlidesOverlay() {
         m_videoFrames = i;
       }
       if (m_videoFrames > 0) {
-        m_slideVStart = ImGui::GetTime();
+        m_slideVStart = now;
         m_audio.playFile(sl.videoDir + "/audio.wav", -6.0f);
       }
     }
-    if (m_slideVStart >= 0.0) vTime = ImGui::GetTime() - m_slideVStart;
+    if (m_slideVStart >= 0.0) vTime = now - m_slideVStart;
   }
   // Автолистание: кадры кончились — как если бы нажали Space.
   const bool videoDone = hasVideo && m_videoFrames > 0 &&
                          vTime * 12.0 >= static_cast<double>(m_videoFrames);
 
-  const bool advance = ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
-                       ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
-                       ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false) ||
-                       ImGui::IsMouseClicked(0);
+  const bool advancePressed =
+      ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
+      ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+      ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false) ||
+      ImGui::IsMouseClicked(0);
   const bool skip = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
 
-  if (m_slidesIntro && (advance || skip || videoDone)) {
+  std::string bodyStorage;
+  const char* bodyTxt = uiRu(sl.textRu.c_str(), sl.textEn.c_str());
+  if (playerLayout) {
+    bodyStorage = slideNormalizeText(bodyTxt);
+    bodyTxt = bodyStorage.c_str();
+  }
+  const bool animatedText =
+      playerLayout && m_slidesIntro && bodyTxt && bodyTxt[0] != '\0';
+  const int bodyChars =
+      animatedText ? static_cast<int>(slideUtf8Length(bodyTxt)) : 0;
+  bool textDone =
+      !animatedText ||
+      (now - m_slideTextStart) * kSlideCharsPerSec >= bodyChars;
+
+  bool advance = advancePressed;
+  if (animatedText && !textDone && advance) {
+    // First Space/Enter/click completes the print; the next one advances.
+    m_slideTextStart =
+        now - static_cast<double>(bodyChars) / kSlideCharsPerSec;
+    textDone = true;
+    advance = false;
+  }
+  const double printDoneAt =
+      m_slideTextStart + static_cast<double>(bodyChars) / kSlideCharsPerSec;
+  const bool autoAdvance =
+      playerLayout && !s_harnessPinFps && m_slidesAdv && !hasVideo &&
+      bodyChars > 0 && textDone &&
+      (now - printDoneAt) >= kSlideAutoAdvanceDelay;
+
+  if (m_slidesIntro && (advance || skip || videoDone || autoAdvance)) {
     // Пролог: Space/клик листают, Esc досматривает до конца; конец ==
     // старт миссии (teleport в sol сам завершит главу «Дом»).
     if (skip || m_slidesIdx + 1 >= static_cast<int>(m_slidesCurrent.size())) {
@@ -1821,6 +2030,9 @@ void AppGL::drawSlidesOverlay() {
                    ImGuiWindowFlags_NoBringToFrontOnFocus);
 
   ImDrawList* dl = ImGui::GetWindowDrawList();
+  // Byte-stable harness path: capture builds keep the historical layout,
+  // typewriter and text sizes exactly as they were.
+  if (!playerLayout) {
   // v4.0: фотослайд (res/story/*.jpg) перекрывает векторную миниатюру:
   // рисуем текстурой с сохранением пропорций в той же сетке, что и арт.
   // Видео-слайд крупнее (0.56 высоты экрана, letterbox) и живёт своей
@@ -1905,6 +2117,192 @@ void AppGL::drawSlidesOverlay() {
   ImGui::SetWindowFontScale(0.9f);
   ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.60f, 1.0f), "%s", hint);
   ImGui::SetWindowFontScale(1.0f);
+  } else {
+    // P1: player-facing prologue layout. The frame grows to 55-62% of the
+    // screen height, stays aspect-fit, and the body moves into a glass panel.
+    ImFont* font = m_cineFont ? m_cineFont : ImGui::GetFont();
+    const float ui = std::max(1.0f, disp.y / 1080.0f);
+    const float bodyPx = 26.0f * ui;
+    const float headPx = 30.0f * ui;
+    const float lineH = bodyPx * 1.35f;
+    const float pad = 24.0f * ui;
+    const float gap = 18.0f * ui;
+    const float textW = disp.x * 0.76f - 2.0f * pad;
+    const std::vector<SlideTextLine> lines =
+        slideWrapText(font, bodyPx, textW, bodyTxt ? bodyTxt : "", 3);
+
+    int iw = 0;
+    int ih = 0;
+    unsigned int uiTex = 0;
+    if (!sl.image.empty()) uiTex = loadUiTexture(sl.image, &iw, &ih);
+
+    if (hasVideo && m_videoFrames > 0) {
+      int fi = static_cast<int>(vTime * 12.0);
+      if (fi >= m_videoFrames) fi = m_videoFrames - 1;
+      if (fi != m_videoIdx) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s/frame_%03d.jpg", sl.videoDir.c_str(),
+                 fi + 1);
+        int w = 0;
+        int h = 0;
+        unsigned char* px = stbi_load(buf, &w, &h, nullptr, 4);
+        if (px) {
+          if (m_videoTex != 0) {
+            glDeleteTextures(1, &m_videoTex);
+            m_videoTex = 0;
+          }
+          m_videoTex = uploadRgba(px, w, h);
+          stbi_image_free(px);
+          m_videoW = w;
+          m_videoH = h;
+        }
+        m_videoIdx = fi;
+      }
+    }
+
+    const bool videoFrame = hasVideo && m_videoFrames > 0 && m_videoTex != 0;
+    const bool photoFrame = !videoFrame && uiTex != 0 && iw > 0 && ih > 0;
+    const float aspect =
+        videoFrame
+            ? static_cast<float>(m_videoW) / static_cast<float>(m_videoH)
+            : (photoFrame ? static_cast<float>(iw) / static_cast<float>(ih)
+                          : 1.0f);
+
+    float imgH = disp.y * 0.58f;
+    float imgW = imgH * aspect;
+    const float maxImgW = disp.x * 0.88f;
+    if (imgW > maxImgW) {
+      imgW = maxImgW;
+      imgH = imgW / aspect;
+    }
+
+    const char* headTxt =
+        m_slidesAdv
+            ? uiRu("Егорка · пролог", "Yegorka · Prologue")
+            : (m_slidesIntro
+                   ? uiRu("Экспедиция · пролог", "Expedition · Prologue")
+                   : m_slidesHead.c_str());
+    const float headY = disp.y * 0.055f;
+    const float imageTop = headY + headPx * 1.35f + disp.y * 0.012f;
+
+    const float panelH =
+        pad * 2.0f +
+        static_cast<float>(std::max<size_t>(1, lines.size())) * lineH;
+    const float hintPx = std::max(14.0f, 15.0f * ui);
+    const float hintY = disp.y - 46.0f * ui;
+    const float bottomLimit = hintY - hintPx - 18.0f * ui;
+    if (imageTop + imgH + gap + panelH > bottomLimit) {
+      imgH = std::max(disp.y * 0.55f,
+                      bottomLimit - gap - panelH - imageTop);
+      imgW = imgH * aspect;
+      if (imgW > maxImgW) {
+        imgW = maxImgW;
+        imgH = imgW / aspect;
+      }
+    }
+    const float panelTop = imageTop + imgH + gap;
+    const ImVec2 imgMin((disp.x - imgW) * 0.5f, imageTop);
+    const ImVec2 imgMax(imgMin.x + imgW, imageTop + imgH);
+
+    // Soft radial vignette behind the frame (layered ellipses).
+    const ImVec2 vc(disp.x * 0.5f, imageTop + imgH * 0.5f);
+    for (int i = 0; i < 36; ++i) {
+      const float t = static_cast<float>(i) / 35.0f;
+      const float r = std::max(imgW, imgH) * (0.82f - 0.42f * t);
+      dl->AddEllipseFilled(vc, ImVec2(r, r * 0.82f),
+                           IM_COL32(0, 0, 0, 5 + i / 6), 0.0f, 64);
+    }
+
+    if (videoFrame) {
+      // The clip is already letterboxed in its own pixels; do not add a frame.
+      dl->AddImage((ImTextureID)(intptr_t)m_videoTex, imgMin, imgMax);
+    } else if (photoFrame) {
+      float kb = 1.0f;
+      if (m_slidesIntro) {
+        const double shown = now - m_slideShownAt;
+        kb = 1.0f +
+             0.06f * static_cast<float>(
+                         std::min(std::max(shown / kSlideKenBurnsSec, 0.0), 1.0));
+      }
+      if (kb > 1.0001f) {
+        const float zW = imgW * kb;
+        const float zH = imgH * kb;
+        const ImVec2 zMin(disp.x * 0.5f - zW * 0.5f,
+                          imageTop + imgH * 0.5f - zH * 0.5f);
+        dl->PushClipRect(imgMin, imgMax, true);
+        dl->AddImage((ImTextureID)(intptr_t)uiTex, zMin,
+                     ImVec2(zMin.x + zW, zMin.y + zH));
+        dl->PopClipRect();
+      } else {
+        dl->AddImage((ImTextureID)(intptr_t)uiTex, imgMin, imgMax);
+      }
+    } else {
+      drawStoryArt(dl, sl.art,
+                   ImVec2((disp.x - imgH) * 0.5f, imageTop), imgH);
+    }
+
+    if (headTxt && headTxt[0] != '\0') {
+      const float headW =
+          font->CalcTextSizeA(headPx, FLT_MAX, 0.0f, headTxt).x;
+      dl->AddText(font, headPx, ImVec2((disp.x - headW) * 0.5f, headY),
+                  IM_COL32(255, 191, 71, 255), headTxt);
+    }
+
+    const ImVec2 panelMin((disp.x - (textW + 2.0f * pad)) * 0.5f, panelTop);
+    const ImVec2 panelMax(panelMin.x + textW + 2.0f * pad, panelTop + panelH);
+    dl->AddRectFilled(panelMin, panelMax, IM_COL32(0, 0, 0, 140), 8.0f * ui);
+    dl->AddRect(panelMin, panelMax, IM_COL32(255, 196, 120, 70), 8.0f * ui, 0,
+                1.0f);
+
+    const int reveal =
+        animatedText
+            ? std::max(0, std::min(bodyChars,
+                                   static_cast<int>((now - m_slideTextStart) *
+                                                    kSlideCharsPerSec)))
+            : bodyChars;
+    int globalChar = 0;
+    for (size_t li = 0; li < lines.size(); ++li) {
+      const SlideTextLine& line = lines[li];
+      const float lineW =
+          font->CalcTextSizeA(bodyPx, FLT_MAX, 0.0f, line.text.c_str()).x;
+      const float x0 = disp.x * 0.5f - lineW * 0.5f;
+      const float y = panelTop + pad + static_cast<float>(li) * lineH;
+      if (!animatedText) {
+        dl->AddText(font, bodyPx, ImVec2(x0, y),
+                    IM_COL32(242, 239, 233, 255), line.text.c_str());
+        continue;
+      }
+      for (size_t ci = 0; ci + 1 < line.offsets.size(); ++ci) {
+        if (globalChar >= reveal) break;
+        const double charAt = m_slideTextStart +
+                              static_cast<double>(globalChar) /
+                                  kSlideCharsPerSec;
+        const float age = static_cast<float>(now - charAt);
+        const float alpha =
+            0.25f + 0.75f * std::min(1.0f, std::max(0.0f, age / 0.18f));
+        const float x =
+            x0 + font->CalcTextSizeA(bodyPx, FLT_MAX, 0.0f,
+                                     line.text.c_str(),
+                                     line.text.c_str() + line.offsets[ci])
+                     .x;
+        dl->AddText(font, bodyPx, ImVec2(x, y),
+                    IM_COL32(242, 239, 233,
+                             static_cast<int>(255.0f * alpha)),
+                    line.text.c_str() + line.offsets[ci],
+                    line.text.c_str() + line.offsets[ci + 1]);
+        ++globalChar;
+      }
+    }
+
+    const char* hint =
+        m_slidesIntro
+            ? uiRu("Пробел / Enter - далее, Esc - пропуск целиком",
+                   "Space / Enter - next, Esc - skip all")
+            : uiRu("Пробел / клик - продолжить", "Space / click - continue");
+    const float hintW = font->CalcTextSizeA(hintPx, FLT_MAX, 0.0f, hint).x;
+    dl->AddText(font, hintPx, ImVec2((disp.x - hintW) * 0.5f, hintY),
+                IM_COL32(140, 140, 153, 255), hint);
+  }
 
   ImGui::End();
   ImGui::PopStyleVar(2);

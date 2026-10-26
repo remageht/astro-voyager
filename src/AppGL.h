@@ -169,6 +169,11 @@ class AppGL {
   unsigned int m_videoTex = 0;
   int m_videoW = 0;
   int m_videoH = 0;
+  // P1: player-facing prologue animation state (typewriter + Ken-Burns).
+  // The screenshot harness never touches these; it keeps the old static path.
+  int m_slideAnimIdx = -1;
+  double m_slideTextStart = 0.0;
+  double m_slideShownAt = 0.0;
   static unsigned int uploadRgba(const unsigned char* px, int w, int h);
   void invalidateVideoSlide();
 
