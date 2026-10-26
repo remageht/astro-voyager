@@ -5133,6 +5133,10 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
 
   // Create AppGL (with window 1280x720)
   AppGL app(1280, 720, false);
+  // F4/I1: the reference harness keeps the legacy stylized frequency shifts
+  // so the stored PNGs remain byte-exact; the interactive game uses the
+  // invariant-based physical path.
+  app.m_sceneManager->setPhysicalRelativity(false);
 
   const std::vector<std::string> targetStations = {
       "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104",

@@ -843,6 +843,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_ThinDisk", isSgra ? 1.0f : 0.0f);
     m_bhShader->setUniform1f("u_BandK", isSgra ? 1.3f : 1.0f);
     m_bhShader->setUniform1f("u_RedshiftK", m_settings.gravRedshift ? 1.0f : 0.0f);
+    // F4/I1: physical invariant-based frequency shifts (0 = legacy harness).
+    m_bhShader->setUniform1f("u_RelK", m_physicalRel ? 1.0f : 0.0f);
     // v3.10: RKF45 адаптивный шаг марша предметно-LID (0 = legacy rk4+step law).
     m_bhShader->setUniform1f("u_Rkf45K", m_settings.rkf45Adaptive ? 1.0f : 0.0f);
     // Close-camera distance in Rs: drives disk-detail smoothing and pole

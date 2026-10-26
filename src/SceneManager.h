@@ -169,6 +169,12 @@ class SceneManager {
     m_relBeta = 0.0f;
   }
 
+  // === Relativity === (F4): the physical static-observer frequency shift in
+  // bh.frag is on in the interactive game. The screenshot harness flips this
+  // off so reference PNGs stay byte-exact. The crew-frame tint in post_comp
+  // uses the same linear invariant for every station (beta == 0 disables it).
+  void setPhysicalRelativity(bool on) { m_physicalRel = on; }
+
   void togglePause() { m_paused = !m_paused; }
   bool isPaused() const { return m_paused; }
   void setTimeScale(float s) {
@@ -251,6 +257,7 @@ class SceneManager {
   Vec3 m_relDir{0.0, 0.0, 1.0};
   float m_relTime = -1.0f;
   float m_relBeta = 0.0f;
+  bool m_physicalRel = true;  // F4/I1 gate; harness sets false (see above)
 
   // === Ship survival === (v3.3.0) low-shield FX amounts (см. setShipFx).
   float m_shipChroma = 0.0f;

@@ -61,7 +61,8 @@ uniform float u_Exposure;
 uniform float u_BHRingK;  // photon-ring/rim brightness gain (default 1.0; sgra 1.8, m87 1.25)
 uniform float u_ThinDisk;  // thin-disk mode 0/1 (sgra 1.0): radial x0.55 band + crisper edges
 uniform float u_BandK;  // milky-way band gain (default 1.0; sgra 1.7)
-uniform float u_RedshiftK;  // v3.9.0: sky gravitational redshift 0/1 (0 = legacy exact)
+uniform float u_RedshiftK;  // v3.9.0: legacy sky minR proxy (ignored on the physical path)
+uniform float u_RelK;       // F4/I1: 0 = legacy stylized shifts, 1 = physical invariant
 uniform float u_Rkf45K;  // v3.10.0: RKF45 adaptive march 0/1 (0 = legacy rk4+step law)
 uniform float u_CamDist;  // camera distance in Rs (set by SceneManager; <=0 = far/legacy)
 // v3.9.1 OJ 287 companion BH: silhouette + local weak-field deflection +
@@ -301,11 +302,19 @@ vec3 blackBodyColor(float tKelvin) {
   }
   return vec3(r, g, b) / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.001);
 }
-// Observer-side shift of the final radiance: sqrt(fCam) dimming plus a
-// reddening power stretch pow(color, vec3(1/max(sqrt(fCam), 0.2))).
-vec3 applyObserverShift(vec3 color, float fCamSqrt, vec3 camRedden) {
-  float b = max(fCamSqrt, 0.0);
+// Observer-side shift of the final radiance. Legacy (u_RelK = 0) keeps the
+// stylized sqrt(fCam) dimming and reddening for the reference frames. The
+// physical path uses the invariant g = nu_obs/nu_emit = 1/sqrt(fCam) for a
+// static observer at rCam: light from infinity is blueshifted by g and its
+// bolometric intensity is boosted by g^4 (F4: the old direction was inverted).
+vec3 applyObserverShift(vec3 color, float fCam, float fCamSqrt, vec3 camRedden) {
   vec3 c = max(color, vec3(0.0));
+  if (u_RelK > 0.5) {
+    float gObs = inversesqrt(max(fCam, 1e-4));
+    float g4 = gObs * gObs * gObs * gObs;
+    return g4 * pow(c, vec3(1.0 / gObs));
+  }
+  float b = max(fCamSqrt, 0.0);
   return b * pow(c, camRedden);
 }
 // Value-noise helpers for disk turbulence (ASCII only, 5 octaves).
@@ -484,10 +493,14 @@ void main() {
           float brightness = shape * g4 * fDisk * fDisk;
 
           // Black-body color: local temperature from Tn (13000 K at the
-          // flux peak -> 2400 K at the rim), observed through emission
-          // gravity redshift sqrt(fDisk) and Doppler sqrt(g).
+          // flux peak -> 2400 K at the rim). Legacy folded sqrt(g) into the
+          // temperature; the physical path uses the linear Doppler factor g
+          // (F4) and the emission-side gravity redshift sqrt(fDisk). The
+          // observer-side sqrt(fCam) is applied once in applyObserverShift.
           float tEmit = mix(2400.0, 13000.0, Tn);
-          float tObs = tEmit * sqrt(max(g, 0.001) * fDisk);
+          float tObs = (u_RelK > 0.5)
+                           ? tEmit * g * sqrt(fDisk)
+                           : tEmit * sqrt(max(g, 0.001) * fDisk);
           vec3 dcol = blackBodyColor(tObs);
           // Concentrated toward ISCO (high beaming contrast), dim floor outside.
           float xx = rIn / rDisk;
@@ -582,7 +595,7 @@ void main() {
             float glowLuma = dot(glowCol, vec3(0.299, 0.587, 0.114));
             float glowF = smoothstep(0.2, 0.8, glowLuma);
             glowCol += mix(mix(glowCol, vec3(1.0), 0.3), vec3(1.0), 0.5) * glowF * 0.35;
-            FragColor = vec4(applyFinish(applyObserverShift(glowCol, fCamSqrt, camRedden), v_TexCoord),
+            FragColor = vec4(applyFinish(applyObserverShift(glowCol, fCam, fCamSqrt, camRedden), v_TexCoord),
                              1.0);
             return;
           }
@@ -675,7 +688,7 @@ void main() {
     // Captured rays carry foreground emission (disk/jet accumulated before horizon crossing);
     // where nothing was accumulated (accumColor == 0), the horizon remains pure black shadow.
     if (u_DiskOn == 1) {
-      FragColor = vec4(applyFinish(applyObserverShift(accumColor, fCamSqrt, camRedden), v_TexCoord), 1.0);
+      FragColor = vec4(applyFinish(applyObserverShift(accumColor, fCam, fCamSqrt, camRedden), v_TexCoord), 1.0);
     } else {
       FragColor = vec4(accumColor, 1.0);
     }
@@ -684,15 +697,20 @@ void main() {
   if (r >= u_ShellRadius) {
     vec3 skyDir = aberrateDir(fb);
     vec3 sky = texture(u_Skybox, skyDir).rgb;
-    // v3.9.0: gravitational redshift on the lensed sky (roadmap): the ray's
-    // deepest approach (minR) stands in for the emission depth; g factor is
-    // sqrt(1 - Rs/minR), hue pushed toward red as photons climb out.
-    // Default-off keeps the legacy sky byte-exact (mix with 0.0 -> x1.0).
-    float gRaw = sqrt(clamp(1.0 - u_Rs / max(minR, u_Rs + 1e-4), 0.0, 1.0));
-    sky *= mix(vec3(1.0),
-               vec3(gRaw, gRaw * mix(1.0, gRaw, 0.35),
-                    gRaw * mix(1.0, gRaw, 0.7)),
-               u_RedshiftK);
+    // Sky frequency shift. Legacy keeps the minR proxy for byte-exact
+    // reference frames (u_RelK == 0). The physical path has no sky-local
+    // factor: the emitter is at infinity and the static-observer shift
+    // gObs = 1/sqrt(fCam) is applied exactly once for the whole radiance in
+    // applyObserverShift(); minR is not an emitter invariant.
+    if (u_RelK <= 0.5) {
+      float gRaw = sqrt(clamp(1.0 - u_Rs / max(minR, u_Rs + 1e-4), 0.0, 1.0));
+      sky *= mix(vec3(1.0),
+                 vec3(gRaw, gRaw * mix(1.0, gRaw, 0.35),
+                      gRaw * mix(1.0, gRaw, 0.7)),
+                 u_RedshiftK);
+    }
+    // I1: the crew spectral shift is applied once in post_comp.frag for the
+    // whole frame (all station types), so the lensed sky is not tinted here.
     // Milky-Way band gain: boost sky along the band plane (fb.y ~ 0),
     // same profile as the procedural cubemap. Neutral at u_BandK == 1.0.
     float bandW = exp(-abs(skyDir.y) * 5.0);
@@ -759,7 +777,7 @@ void main() {
       float cq = (minC - 1.5 * u_CompRs) / (0.055 * u_CompRs);
       col += vec3(1.0, 0.97, 0.92) * exp(-cq * cq) * 1.2;
     }
-    FragColor = vec4(applyFinish(applyObserverShift(col, fCamSqrt, camRedden), v_TexCoord), 1.0);
+    FragColor = vec4(applyFinish(applyObserverShift(col, fCam, fCamSqrt, camRedden), v_TexCoord), 1.0);
     return;
   }
 
@@ -770,12 +788,15 @@ void main() {
   // they were heading for.
   vec3 fbDir = aberrateDir(fb);
   vec3 skyFallback = texture(u_Skybox, fbDir).rgb * vec3(0.18, 0.16, 0.22);
-  // v3.9.0: same redshift rule as the escape branch (legacy-exact when off).
-  float gRawFb = sqrt(clamp(1.0 - u_Rs / max(minR, u_Rs + 1e-4), 0.0, 1.0));
-  skyFallback *= mix(vec3(1.0),
-                     vec3(gRawFb, gRawFb * mix(1.0, gRawFb, 0.35),
-                          gRawFb * mix(1.0, gRawFb, 0.7)),
-                     u_RedshiftK);
+  // Same frequency rule as the escape branch: legacy keeps the minR proxy,
+  // the physical path leaves the shift to the static observer at the camera.
+  if (u_RelK <= 0.5) {
+    float gRawFb = sqrt(clamp(1.0 - u_Rs / max(minR, u_Rs + 1e-4), 0.0, 1.0));
+    skyFallback *= mix(vec3(1.0),
+                       vec3(gRawFb, gRawFb * mix(1.0, gRawFb, 0.35),
+                            gRawFb * mix(1.0, gRawFb, 0.7)),
+                       u_RedshiftK);
+  }
   float bandWFb = exp(-abs(fbDir.y) * 5.0);
   skyFallback *= 1.0 + (u_BandK - 1.0) * bandWFb;
   // Same jet-glow rule as the escape branch: visible with disk off too.
@@ -801,5 +822,5 @@ void main() {
     float cqFb = (minC - 1.5 * u_CompRs) / (0.055 * u_CompRs);
     colFallback += vec3(1.0, 0.97, 0.92) * exp(-cqFb * cqFb) * 1.2;
   }
-  FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCamSqrt, camRedden), v_TexCoord), 1.0);
+  FragColor = vec4(applyFinish(applyObserverShift(colFallback, fCam, fCamSqrt, camRedden), v_TexCoord), 1.0);
 }

@@ -148,6 +148,10 @@ void main() {
       col = mix(col, vec3(1.05, 1.02, 0.98), u_HorizonFlash * 0.9);
     }
   }
+  // === Relativity === (I1): the CPU invariant is
+  //   g = 1 - beta * (n . dir), n = photon propagation, dir = observer motion.
+  // This pixel's ray points camera -> scene, so n = -ray and the code below
+  // computes s = g - 1 = beta * dot(ray, u_VelDir): blue ahead, red behind.
   if (u_Beta > 0.001) {
     vec2 ndc = v_TexCoord * 2.0 - 1.0;
     float t = tan(u_FovY * 0.5);
