@@ -62,28 +62,29 @@ struct SkiffWaypoint {
   double v = 0.0;          // scalar speed |v|
   double tau = 0.0;        // proper time of comoving observer inside bubble
   double thetaMax = 0.0;   // peak York time expansion scalar at this instant
-  double wallDist = 0.0;   // clearance distance from ship (center) to wall
-  bool wallSafe = true;    // true if ship is safely in flat interior (wall does not intersect waypoint)
-  bool dtsDtauValid = true;// true if |dts/dtau| <= 1 outside bubble
+  double wallClearance = 0.0; // R - 2*sigma: distance from the centred ship to the inner wall edge
+  double dtsDtau = 1.0;       // coordinate-to-proper time rate 1/lapse at this waypoint
 };
 
 class WarpGeodesic {
 public:
-  // Generates a deterministic Skiff warp path from start to end with tanh acceleration/deceleration.
-  // Performs internal safety checks:
-  // - |dts/dtau| <= 1 outside bubble (proper time invariant)
-  // - Bubble wall does not intersect waypoint
-  // - Exact time-reversal and roundtrip symmetry
+  // Generates a deterministic Skiff warp path from start to end with tanh
+  // acceleration/deceleration. The ship sits at the bubble centre by
+  // construction, so the inner-wall clearance is R - 2*sigma and the
+  // coordinate/proper time rate is 1/lapse. Both are reported as derived
+  // values; the caller decides whether they are acceptable. There are no
+  // boolean "safety" flags, which would be constant by definition here.
+  // Exact time-reversal and roundtrip symmetry are preserved.
   static std::vector<SkiffWaypoint> skiffPath(
       const double start[3], const double end[3],
       double vMax = 5.0, double sigma = 0.5, int steps = 100,
-      double bubbleRadius = -1.0);
+      double bubbleRadius = -1.0, double lapse = 1.0);
 };
 
 // Direct namespace-level helper
 std::vector<SkiffWaypoint> skiffPath(
     const double start[3], const double end[3],
     double vMax = 5.0, double sigma = 0.5, int steps = 100,
-    double bubbleRadius = -1.0);
+    double bubbleRadius = -1.0, double lapse = 1.0);
 
 }  // namespace astro

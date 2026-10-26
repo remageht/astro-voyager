@@ -311,7 +311,7 @@ double integrateProfile(double uTarget, double alpha, double& totalIntegral) {
 
 std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
     const double start[3], const double end[3],
-    double vMax, double sigma, int steps, double bubbleRadius) {
+    double vMax, double sigma, int steps, double bubbleRadius, double lapse) {
   const int N = std::max(steps, 2);
   std::vector<SkiffWaypoint> result(N);
 
@@ -323,6 +323,7 @@ std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
   const double effSigma = (sigma > 1e-6) ? sigma : 0.5;
   const double effVMax = (vMax > 1e-6) ? vMax : 1.0;
   const double bubbleR = (bubbleRadius > 0.0) ? bubbleRadius : std::max(5.0 * effSigma, 2.0);
+  const double effLapse = (lapse > 1e-12) ? lapse : 1e-12;
   const double alpha = 0.15;  // 15% acceleration, cruise, 15% deceleration
 
   double totalIntegral = 0.0;
@@ -344,7 +345,8 @@ std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
     frac[N - 1 - k] = 1.0 - frac[k];
   }
 
-  const double wallDist = bubbleR - 2.0 * effSigma;  // Clearance from center ship to inner wall edge
+  const double wallClearance = bubbleR - 2.0 * effSigma;  // Centred ship -> inner wall edge
+  const double dtsDtau = 1.0 / effLapse;
   const double denomTheta = 2.0 * effSigma * std::tanh(bubbleR / effSigma);
 
   for (int k = 0; k < N; ++k) {
@@ -361,11 +363,10 @@ std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
     wp.vy = dir[1] * v;
     wp.vz = dir[2] * v;
     wp.v = v;
-    wp.tau = wp.t;  // No time dilation inside the comoving Eulerian bubble (alpha = 1)
+    wp.tau = wp.t * effLapse;  // proper time for the assumed lapse at the bubble centre
     wp.thetaMax = (denomTheta > 1e-30) ? (v / denomTheta) : 0.0;
-    wp.wallDist = wallDist;
-    wp.wallSafe = (wallDist > 0.0);
-    wp.dtsDtauValid = (wallDist > 0.0 && totalTime >= 0.0);
+    wp.wallClearance = wallClearance;
+    wp.dtsDtau = dtsDtau;
 
     result[k] = wp;
   }
@@ -375,8 +376,8 @@ std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
 
 std::vector<SkiffWaypoint> skiffPath(
     const double start[3], const double end[3],
-    double vMax, double sigma, int steps, double bubbleRadius) {
-  return WarpGeodesic::skiffPath(start, end, vMax, sigma, steps, bubbleRadius);
+    double vMax, double sigma, int steps, double bubbleRadius, double lapse) {
+  return WarpGeodesic::skiffPath(start, end, vMax, sigma, steps, bubbleRadius, lapse);
 }
 
 }  // namespace astro

@@ -240,7 +240,7 @@ int main() {
     if (!test9Ok) return 1;
   }
 
-  // 10. WarpGeodesic::skiffPath roundtrip symmetry, |dts/dtau| <= 1, and wall safety
+  // 10. WarpGeodesic::skiffPath roundtrip symmetry, derived wall clearance and time rate
   {
     const double pA[3] = {10.0, -20.0, 5.0};
     const double pB[3] = {110.0, 30.0, -45.0};
@@ -251,15 +251,20 @@ int main() {
     std::vector<astro::SkiffWaypoint> pathAB = astro::WarpGeodesic::skiffPath(pA, pB, vMax, sigma, N);
     std::vector<astro::SkiffWaypoint> pathBA = astro::WarpGeodesic::skiffPath(pB, pA, vMax, sigma, N);
 
-    bool allWallSafe = true;
-    bool allDtauValid = true;
+    bool allClearanceOk = true;
+    bool allDtauOk = true;
+    bool allClearanceEqual = true;
     double maxSymPosDiff = 0.0;
     double maxSymVelDiff = 0.0;
     double maxSymThetaDiff = 0.0;
 
     for (int k = 0; k < N; ++k) {
-      if (!pathAB[k].wallSafe || !pathBA[k].wallSafe) allWallSafe = false;
-      if (!pathAB[k].dtsDtauValid || !pathBA[k].dtsDtauValid) allDtauValid = false;
+      if (pathAB[k].wallClearance <= 0.0 || pathBA[k].wallClearance <= 0.0) allClearanceOk = false;
+      if (std::abs(pathAB[k].dtsDtau - 1.0) > 1e-12 ||
+          std::abs(pathBA[k].dtsDtau - 1.0) > 1e-12)
+        allDtauOk = false;
+      if (std::abs(pathAB[k].wallClearance - pathAB.front().wallClearance) > 1e-12)
+        allClearanceEqual = false;
 
       // Roundtrip symmetry: pathAB[k] should correspond to pathBA[N - 1 - k]
       const int opp = N - 1 - k;
@@ -276,15 +281,34 @@ int main() {
       if (thetaDiff > maxSymThetaDiff) maxSymThetaDiff = thetaDiff;
     }
 
+    // Tight bubble: R=0.5, sigma=0.5 -> inner wall is 0.5 behind the ship centre.
+    const double tightPath[3] = {0.0, 0.0, 0.0};
+    const double tightEnd[3] = {1.0, 0.0, 0.0};
+    std::vector<astro::SkiffWaypoint> pathTight =
+        astro::WarpGeodesic::skiffPath(tightPath, tightEnd, 1.0, 0.5, 4, 0.5);
+    const bool tightClearanceOk =
+        (pathTight.front().wallClearance < 0.0) &&
+        (std::abs(pathTight.front().wallClearance + 0.5) < 1e-12);
+
+    // Lapse 0.5 -> coordinate time runs twice as fast as proper time.
+    std::vector<astro::SkiffWaypoint> pathLapse =
+        astro::WarpGeodesic::skiffPath(tightPath, tightEnd, 1.0, 0.5, 4, -1.0, 0.5);
+    const bool lapseRateOk =
+        (std::abs(pathLapse.front().dtsDtau - 2.0) < 1e-12);
+
     const bool endpointsOk = (std::abs(pathAB.front().x - pA[0]) < 1e-10) &&
                              (std::abs(pathAB.back().x - pB[0]) < 1e-10);
     const bool symOk = (maxSymPosDiff < 1e-10) && (maxSymVelDiff < 1e-10) && (maxSymThetaDiff < 1e-10);
-    const bool test10Ok = allWallSafe && allDtauValid && endpointsOk && symOk;
+    const bool test10Ok = allClearanceOk && allDtauOk && allClearanceEqual &&
+                          tightClearanceOk && lapseRateOk && endpointsOk && symOk;
 
-    std::cout << "Test 10 (skiffPath roundtrip symmetry & safety: "
+    std::cout << "Test 10 (skiffPath roundtrip symmetry & derived safety: "
               << "pos_sym_err=" << maxSymPosDiff << ", vel_sym_err=" << maxSymVelDiff
-              << ", theta_sym_err=" << maxSymThetaDiff << ", wallSafe=" << allWallSafe
-              << ", dts/dtau=" << allDtauValid << "): " << (test10Ok ? "PASS" : "FAIL") << "\n";
+              << ", theta_sym_err=" << maxSymThetaDiff << ", clearance=" << pathAB.front().wallClearance
+              << ", dts/dtau=" << pathAB.front().dtsDtau
+              << ", tight_clearance=" << pathTight.front().wallClearance
+              << ", lapse_dts/dtau=" << pathLapse.front().dtsDtau
+              << "): " << (test10Ok ? "PASS" : "FAIL") << "\n";
     if (!test10Ok) return 1;
   }
 

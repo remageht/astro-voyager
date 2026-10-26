@@ -661,10 +661,12 @@ int main(int argc, char** argv) {
     const double wallLength = 3.0 * sigma;
 
     double maxThetaObserved = 0.0;
-    bool allSafe = true;
+    double minWallClearance = 1e9;
+    double maxDtsDtau = 0.0;
     for (const auto& wp : path) {
       if (wp.thetaMax > maxThetaObserved) maxThetaObserved = wp.thetaMax;
-      if (!wp.wallSafe || !wp.dtsDtauValid) allSafe = false;
+      minWallClearance = std::min(minWallClearance, wp.wallClearance);
+      maxDtsDtau = std::max(maxDtsDtau, wp.dtsDtau);
     }
 
     std::cout << "Flight plan: Sol (Earth) -> Proxima-16 (Skyluck)\n";
@@ -672,10 +674,12 @@ int main(int argc, char** argv) {
     std::cout << "Peak velocity: " << vMax << " c\n";
     std::cout << "Bubble wall thickness: " << sigma << " units (transition length ~" << wallLength << ")\n";
     std::cout << "York time theta_max: " << maxThetaObserved << " s^-1\n";
-    std::cout << "Waypoints: " << path.size() << " | Wall-safe: " << (allSafe ? "YES" : "NO")
-              << " | Outside |dt_s/dtau| <= 1: " << (allSafe ? "PASS" : "FAIL") << "\n";
+    std::cout << "Waypoints: " << path.size() << " | Inner-wall clearance: " << minWallClearance
+              << " units (ship at bubble centre)\n";
+    std::cout << "dt_s/dtau at cruise: " << maxDtsDtau << "\n";
 
-    const bool passE = allSafe && (maxThetaObserved > 0.0) && (path.size() == steps);
+    const bool passE = (minWallClearance > 0.0) && (maxDtsDtau <= 1.0 + 1e-9) &&
+                       (maxThetaObserved > 0.0) && (path.size() == static_cast<size_t>(steps));
     std::cout << "Part (E) Result: " << (passE ? "PASS" : "FAIL") << "\n\n";
 
     const bool allWarpOk = passA && passB && passC && passD && passE;
