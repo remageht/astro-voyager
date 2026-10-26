@@ -682,7 +682,69 @@ int main(int argc, char** argv) {
                        (maxThetaObserved > 0.0) && (path.size() == static_cast<size_t>(steps));
     std::cout << "Part (E) Result: " << (passE ? "PASS" : "FAIL") << "\n\n";
 
-    const bool allWarpOk = passA && passB && passC && passD && passE;
+    // --- (F) Crew frame Doppler: stars ahead/behind (Issue I1) ---
+    std::cout << "--- (F) Crew frame Doppler: stars ahead/behind (Issue I1) ---\n";
+    const double dopplerV = 0.5;
+    astro::AlcubierreMetric crewMetric(5.0, 0.5, dopplerV,
+                                       0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+                                       10000.0, 1000.0);
+    const double crewT = 5000.0;
+    double crewCenter[3];
+    crewMetric.bubbleCenter(crewT, crewCenter);
+
+    auto traceCrewPhoton = [&](double startX, double px, double& gInvariant) {
+      astro::WarpRayState ray;
+      ray.t = crewT;
+      ray.x = crewCenter[0] + startX;
+      ray.y = crewCenter[1];
+      ray.z = crewCenter[2];
+      ray.pt = -1.0;
+      ray.px = px;
+      ray.py = 0.0;
+      ray.pz = 0.0;
+      for (int step = 0; step < 4000; ++step) {
+        astro::warpRk4Step(crewMetric, 0.01, ray);
+        double c[3];
+        crewMetric.bubbleCenter(ray.t, c);
+        if (std::abs(ray.x - c[0]) < 0.05) {
+          const double v = crewMetric.velocity(ray.t);
+          // The distant static emitter has E = -p_t = 1 at launch, so the
+          // comoving energy -p.u_obs is exactly the frequency ratio.
+          gInvariant = -(ray.pt + v * ray.px);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    double gAhead = 0.0;
+    double gBehind = 0.0;
+    const bool aheadHit = traceCrewPhoton(+10.0, -1.0, gAhead);
+    const bool behindHit = traceCrewPhoton(-10.0, +1.0, gBehind);
+    const double nAhead[3] = {-1.0, 0.0, 0.0};
+    const double nBehind[3] = {1.0, 0.0, 0.0};
+    const double dirX[3] = {1.0, 0.0, 0.0};
+    const double formulaAhead =
+        astro::alcubierreCrewShift(dopplerV, nAhead, dirX);
+    const double formulaBehind =
+        astro::alcubierreCrewShift(dopplerV, nBehind, dirX);
+
+    std::cout.precision(12);
+    std::cout << "Bubble speed: " << dopplerV << " c\n";
+    std::cout << "Ahead:  g_invariant=" << gAhead << " formula=" << formulaAhead
+              << " (expected 1.5)\n";
+    std::cout << "Behind: g_invariant=" << gBehind << " formula=" << formulaBehind
+              << " (expected 0.5)\n";
+    std::cout.precision(6);
+
+    const bool passF = aheadHit && behindHit &&
+                       std::abs(gAhead - 1.5) < 1e-6 &&
+                       std::abs(gBehind - 0.5) < 1e-6 &&
+                       std::abs(gAhead - formulaAhead) < 1e-6 &&
+                       std::abs(gBehind - formulaBehind) < 1e-6;
+    std::cout << "Part (F) Result: " << (passF ? "PASS" : "FAIL") << "\n\n";
+
+    const bool allWarpOk = passA && passB && passC && passD && passE && passF;
     std::cout << "Warp ADM validation result: " << (allWarpOk ? "ALL PASS" : "FAIL") << "\n";
     return allWarpOk ? 0 : 1;
   }

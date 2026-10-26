@@ -437,6 +437,73 @@ int main() {
     if (!test13Ok) return 1;
   }
 
-  std::cout << "\nAll test_warp_geodesic checks passed successfully (13/13 PASS)!\n";
+  // 14. Crew frame frequency shift (Issue I1): invariant ratio, Alcubierre
+  //     closed form, and the traced-ray blueshift/redshift through the bubble.
+  {
+    const double beta = 0.5;
+    const double gamma = 1.0 / std::sqrt(1.0 - beta * beta);
+
+    // Local invariant in Minkowski: photon along -X, observer moving +X.
+    const double pFront[4] = {-1.0, -1.0, 0.0, 0.0};
+    const double uObs[4] = {gamma, gamma * beta, 0.0, 0.0};
+    const double uEmit[4] = {1.0, 0.0, 0.0, 0.0};
+    const double gSr = astro::observedFrequencyRatio(pFront, uObs, uEmit);
+    const double gSrExpected = gamma * (1.0 + beta);
+
+    // Alcubierre comoving frame: the closed form is linear in beta.
+    const double dirX[3] = {1.0, 0.0, 0.0};
+    const double nAhead[3] = {-1.0, 0.0, 0.0};
+    const double nBehind[3] = {1.0, 0.0, 0.0};
+    const double gAhead = astro::alcubierreCrewShift(beta, nAhead, dirX);
+    const double gBehind = astro::alcubierreCrewShift(beta, nBehind, dirX);
+
+    // Traced rays through a mid-cruise bubble (same setup as the demo).
+    astro::AlcubierreMetric alc(5.0, 0.5, beta, 0.0, 0.0, 0.0,
+                                1.0, 0.0, 0.0, 10000.0, 1000.0);
+    const double t0 = 5000.0;
+    double c0[3];
+    alc.bubbleCenter(t0, c0);
+    auto tracedShift = [&](double startX, double px, double& g) {
+      astro::WarpRayState ray;
+      ray.t = t0;
+      ray.x = c0[0] + startX;
+      ray.y = c0[1];
+      ray.z = c0[2];
+      ray.pt = -1.0;
+      ray.px = px;
+      for (int step = 0; step < 4000; ++step) {
+        astro::warpRk4Step(alc, 0.01, ray);
+        double c[3];
+        alc.bubbleCenter(ray.t, c);
+        if (std::abs(ray.x - c[0]) < 0.05) {
+          const double v = alc.velocity(ray.t);
+          g = -(ray.pt + v * ray.px);
+          return true;
+        }
+      }
+      return false;
+    };
+    double gTracedAhead = 0.0;
+    double gTracedBehind = 0.0;
+    const bool hitAhead = tracedShift(+10.0, -1.0, gTracedAhead);
+    const bool hitBehind = tracedShift(-10.0, +1.0, gTracedBehind);
+
+    const bool test14Ok =
+        (std::abs(gSr - gSrExpected) < 1e-12) &&
+        (std::abs(gAhead - 1.5) < 1e-12) &&
+        (std::abs(gBehind - 0.5) < 1e-12) &&
+        hitAhead && hitBehind &&
+        (std::abs(gTracedAhead - gAhead) < 1e-6) &&
+        (std::abs(gTracedBehind - gBehind) < 1e-6);
+
+    std::cout << "Test 14 (crew Doppler: SR_invariant=" << gSr
+              << " expected=" << gSrExpected << ", Alcubierre ahead=" << gAhead
+              << " behind=" << gBehind << ", traced ahead=" << gTracedAhead
+              << " behind=" << gTracedBehind << "): "
+              << (test14Ok ? "PASS" : "FAIL") << "\n";
+    if (!test14Ok) return 1;
+  }
+
+  std::cout << "\nAll test_warp_geodesic checks passed successfully (14/14 PASS)!\n";
   return 0;
 }

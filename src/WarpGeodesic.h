@@ -48,6 +48,23 @@ WarpTraceResult traceWarpRay(const WarpMetric& metric, WarpRayState s,
 // Energy E = 1 (p_t = -1), angular momentum L = b, directed inward along -X axis.
 WarpRayState makeWarpInwardRay(const WarpMetric& metric, double r0, double b);
 
+// Frequency ratio g = nu_obs / nu_emit for a photon with covariant momentum
+// p[4] seen by an observer with contravariant 4-velocity uObs[4] and emitted
+// by a source with 4-velocity uEmit[4], all at the same event:
+//   g = (-p_mu uObs^mu) / (-p_mu uEmit^mu).
+// Future-directed null rays and timelike 4-velocities give a positive ratio.
+double observedFrequencyRatio(const double p[4], const double uObs[4],
+                              const double uEmit[4]);
+
+// Crew-frame shift in the Alcubierre bubble. A photon arrives along the
+// coordinate direction n[3] (unit, direction of propagation) while the bubble
+// moves with speed beta along dir[3] (unit). The comoving observer measures
+//   g = 1 - beta * (n . dir),
+// so a star ahead (n = -dir) gives 1 + beta and a star behind 1 - beta.
+// This is the exact small-wall Alcubierre result and must match the invariant
+// g = (-p.u_obs)/(-p.u_emit) along a traced ray.
+double alcubierreCrewShift(double beta, const double n[3], const double dir[3]);
+
 // ============================================================================
 // Skiff Warp Waypoint & Trajectory Generator (M2 Framework)
 // ============================================================================

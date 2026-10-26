@@ -309,6 +309,25 @@ double integrateProfile(double uTarget, double alpha, double& totalIntegral) {
 
 }  // namespace
 
+double observedFrequencyRatio(const double p[4], const double uObs[4],
+                              const double uEmit[4]) {
+  double pDotObs = 0.0;
+  double pDotEmit = 0.0;
+  for (int mu = 0; mu < 4; ++mu) {
+    pDotObs += p[mu] * uObs[mu];
+    pDotEmit += p[mu] * uEmit[mu];
+  }
+  // Both contractions are negative for future-directed momenta.
+  const double denom = -pDotEmit;
+  if (std::abs(denom) < 1e-300) return 0.0;
+  return -pDotObs / denom;
+}
+
+double alcubierreCrewShift(double beta, const double n[3], const double dir[3]) {
+  const double nDotDir = n[0] * dir[0] + n[1] * dir[1] + n[2] * dir[2];
+  return 1.0 - beta * nDotDir;
+}
+
 std::vector<SkiffWaypoint> WarpGeodesic::skiffPath(
     const double start[3], const double end[3],
     double vMax, double sigma, int steps, double bubbleRadius, double lapse) {
