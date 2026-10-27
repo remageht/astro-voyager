@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 4.0.0 - 2026-10-27
+
+## What's new / Что нового
+- EN: Adventure mode foundation - the main menu now offers "New Game · Adventure": it plays Yegorka's illustrated prologue, creates a dedicated `save-adventure.json` profile (`SaveMode::Adventure`), resets the expedition state and drops the player at Sol. Sandbox keeps its own `save-sandbox.json`, so the two modes never overwrite each other. This release is the foundation only: the 6-8 chapter campaign with branching, the countdown meta-game and the finale is future work and is not claimed here.
+- RU: Основа режима «Приключение» - в главном меню появилась кнопка «Новая игра · Adventure»: запускается иллюстрированный пролог Егорки, создаётся отдельный профиль `save-adventure.json` (`SaveMode::Adventure`), экспедиция сбрасывается, игрок высаживается в Солнечной системе. Песочница сохраняется отдельно в `save-sandbox.json`, режимы не перезаписывают друг друга. Это именно фундамент: кампания на 6-8 глав с ветвлениями, мета-механикой обратного отсчёта и финалом остаётся будущей работой и в 4.0.0 не заявляется.
+- EN: Orbital shipyard (`K`) - docking at a station, fleet hangar (Dart 0, Ring Ship 1, Shuttle 2, Warp Cruiser 3), paint shop for hull/accent/emissive tints with presets, and engineering upgrades (boost +45%, shield capacity +37%, warp-coil harmonics -36% jump fuel). Everything persists in the profile.
+- RU: Орбитальная верфь (`K`) - стыковка со станцией, ангар флота (Dart 0, Ring Ship 1, Shuttle 2, Warp Cruiser 3), покрасочный цех обшивки/полос/свечения с пресетами и инженерные апгрейды (форсаж +45%, ёмкость щитов +37%, гармоника варп-катушек -36% топлива на прыжок). Всё сохраняется в профиле.
+- EN: Shipyard feedback animations - two-phase docking/undocking manipulators with a refuelling progress bar, smooth hull-swap transitions in the hangar and warp-in halo flashes when teleporting to stations.
+- RU: Анимации обратной связи верфи - двухфазная стыковка/отшвартовка манипуляторов с прогресс-баром заправки, плавная смена корпуса в ангаре и световые ореолы варп-входа при телепорте к станциям.
+- EN: ISS-quality orbital station - rebuilt high-detail International Space Station model with material-zone PBR and a high-density bake (ITS truss, eight solar arrays, radiators, Zvezda/Zarya/Destiny/Harmony/Kibo, Cupola, IDA), sane preview cameras and in-game PBR verification.
+- RU: Орбитальная станция уровня МКС - пересобранная высокодетализированная модель МКС с PBR по материальным зонам и плотным запеканием (ферма ITS, восемь солнечных массивов, радиаторы, Zvezda/Zarya/Destiny/Harmony/Kibo, Cupola, IDA), вменяемые камеры предпросмотра и проверка PBR прямо в игре.
+- EN: Planet label engine - screen-space labels for planets and bodies with depth occlusion and a collision solver, so captions no longer pile up or bleed through geometry.
+- RU: Движок подписей планет - экранные подписи тел с окклюзией по глубине и решателем коллизий: подписи больше не наслаиваются и не просвечивают сквозь геометрию.
+- EN: Prologue readability pass - glass-panel layout with a typewriter reveal and Ken-Burns motion for the photographic slides; the text stays legible at 1080p and ultrawide.
+- RU: Пасс читаемости пролога - раскладка на стеклянных панелях с печатной машинкой и Кен-Бёрнсом для фотослайдов; текст читается в 1080p и на ultrawide.
+- EN: Cinematic flight video slide (`warp_flight`) - bilingual clip slide with narration; its frames and audio are tracked after narrowing an overbroad `.gitignore` rule.
+- RU: Кинематографический видео-слайд полёта (`warp_flight`) - двуязычный клип с озвучкой; кадры и аудио внесены в git после сужения слишком широкого правила `.gitignore`.
+- EN: Warp core physics - N1-N4 metric time derivatives and the analytical bubble center fixed; `skiffPath` now derives wall clearance and coordinate-time rate instead of hard-coding them; crew-frame Doppler invariant added on CPU (`--demo-warp`), and the black-hole shader now shifts frequencies by invariants (I1/F4). The Alcubierre CPU skiff-path and the warp metric are documented.
+- RU: Физика варп-ядра - исправлены производные метрики по времени N1-N4 и аналитический центр пузыря; `skiffPath` вычисляет зазор до стенки и темп координатного времени вместо жёстких констант; добавлен инвариант доплер-сдвига в системе экипажа на CPU (`--demo-warp`), а шейдер ЧД переведён на инвариантные частотные сдвиги (И1/F4). Задокументированы CPU-траектория skiff и метрика Алькубьерре.
+- EN: New ship assets - tri-ring cruiser OBJ hull wired to Ring Ship style 1, refreshed Dart/Shuttle/Ring Ship showcases, and a James Webb Space Telescope asset with its own showcase (`--render-only` re-renders without re-baking). The telescope is an asset/showcase for now: only the `dock-webb` marker exists in the scene.
+- RU: Новые ассеты кораблей - OBJ-корпус три-кольцевого крейсера подключён к Ring Ship style 1, обновлены showcase Dart/Shuttle/Ring Ship, добавлен ассет космического телескопа Джеймса Уэбба с отдельным showcase (`--render-only` переснимает без повторного запекания). Телескоп пока остаётся ассетом/showcase: в сцене есть только маркер `dock-webb`.
+- EN: Window and taskbar icon - on Windows the window reuses the icon resource embedded in the exe (`packaging/app.ico`, id 1) via `WM_SETICON`, so taskbar, Alt-Tab and the file icon match; Linux/macOS load `res/icon.png` through `glfwSetWindowIcon`.
+- RU: Иконка окна и панели задач - на Windows окно берёт иконку из ресурса exe (`packaging/app.ico`, id 1) через `WM_SETICON`, поэтому панель задач, Alt-Tab и файл выглядят одинаково; Linux/macOS загружают `res/icon.png` через `glfwSetWindowIcon`.
+- EN: Reference harness - UI-bearing station frames were refreshed for the shipyard HUD (fuel/shield gauge, shipyard button) while 26 station frames stayed byte-identical.
+- RU: Харнесс референсов - обновлены UI-кадры станций под HUD верфи (шкалы топлива/щитов, кнопка верфи), 26 кадров станций остались байт-в-байт.
+- Gates / Гейты: GL Release build OK, static checks all pass, ctest 7/8 locally (test_save is the known OS-sandbox failure; CI green), demos warp/geodesic/binet/kerr PASS, screenshot refs SAME=34 CHANGED=0 after the planned ship_ring.png refresh.
+
 ## 3.10.1 - 2026-10-22
 
 ## What's new / Что нового
