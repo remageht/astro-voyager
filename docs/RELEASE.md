@@ -124,7 +124,9 @@ FP-генераторы на мелких unsigned-бинарях). Чеклис
 
 1. Exe содержит иконку + VERSIONINFO (packaging/app.win.rc.in +
    packaging/app.ico, версия синхронизируется из project(... VERSION ...)) —
-   не удалять, это заметно снижает генерик-срабатывания.
+   не удалять, это заметно снижает генерик-срабатывания. Оконная иконка
+   (панель задач / Alt-Tab) ставится в `src/Window.cpp`: на Windows — из
+   ресурса exe (тот же app.ico), на Linux/macOS — из `res/icon.png`.
 2. В windows zip входят `win-av-readme.txt` (EN-памятка) и `CHECKSUMS.txt`
    (SHA256 exe) — шаг Package в .github/workflows/build.yml.
 3. При появлении новых детектов: подать false-positive заявки —

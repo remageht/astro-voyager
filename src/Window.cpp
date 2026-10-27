@@ -2,6 +2,18 @@
 
 #include "GLCompat.h"
 #include <GLFW/glfw3.h>
+#include <stb_image.h>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#endif
 
 #include <stdexcept>
 #include <iostream>
@@ -27,6 +39,42 @@ Window::Window(int width, int height, const char* title, bool visible) {
     throw std::runtime_error("Failed to create GLFW window");
   }
 
+  // Window/taskbar icon. Windows takes the icon resource already embedded in
+  // the exe (packaging/app.ico, resource id 1), so the window icon matches the
+  // file icon exactly. Other platforms load the AppImage/desktop icon from
+  // res/icon.png; a missing file degrades to the toolkit default.
+#ifdef _WIN32
+  {
+    HMODULE module = GetModuleHandleW(nullptr);
+    HICON big = static_cast<HICON>(LoadImageW(
+        module, MAKEINTRESOURCEW(1), IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
+    HICON small = static_cast<HICON>(LoadImageW(
+        module, MAKEINTRESOURCEW(1), IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
+    HWND hwnd = glfwGetWin32Window(m_window);
+    if (hwnd && big) {
+      SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(big));
+      m_iconBig = big;
+    }
+    if (hwnd && small) {
+      SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(small));
+      m_iconSmall = small;
+    }
+  }
+#else
+  {
+    int iconW = 0, iconH = 0, channels = 0;
+    unsigned char* pixels =
+        stbi_load("res/icon.png", &iconW, &iconH, &channels, 4);
+    if (pixels) {
+      GLFWimage image{iconW, iconH, pixels};
+      glfwSetWindowIcon(m_window, 1, &image);
+      stbi_image_free(pixels);
+    }
+  }
+#endif
+
   glfwMakeContextCurrent(m_window);
   glfwSwapInterval(1);
 
@@ -51,6 +99,16 @@ Window::~Window() {
     glfwDestroyWindow(m_window);
     m_window = nullptr;
   }
+#ifdef _WIN32
+  if (m_iconBig) {
+    DestroyIcon(static_cast<HICON>(m_iconBig));
+    m_iconBig = nullptr;
+  }
+  if (m_iconSmall) {
+    DestroyIcon(static_cast<HICON>(m_iconSmall));
+    m_iconSmall = nullptr;
+  }
+#endif
   glfwTerminate();
 }
 

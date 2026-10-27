@@ -21,6 +21,11 @@ class Window {
 
  private:
   GLFWwindow* m_window = nullptr;
+#ifdef _WIN32
+  // Owned HICON handles installed with WM_SETICON; destroyed with the window.
+  void* m_iconBig = nullptr;
+  void* m_iconSmall = nullptr;
+#endif
 };
 
 }  // namespace astro
