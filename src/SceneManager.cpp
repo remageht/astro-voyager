@@ -772,6 +772,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         if (b.def && b.def->id == "earth") { earthPos = b.pos; break; }
       }
       m_dockSites.push_back(DockSite{"dock-sol", "Gateway Orbital Shipyard", "sol", Vec3(earthPos.x + 0.35, earthPos.y + 0.25, earthPos.z + 0.65), 4.5f});
+      m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
     } else if (m_currentStation->id == "m13") {
       m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
     } else if (m_currentStation->id == "sgra") {
@@ -1972,6 +1973,19 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             }
             if (s_dartModel.ready()) {
               activeModel = &s_dartModel;
+            }
+          } else if (style == 1) {
+            // Ring ship (Alcubierre Tri-Ring cruiser): меш из res/models/ring_ship.obj
+            static ObjModel s_ringShipModel;
+            static bool s_ringShipTried = false;
+            if (!s_ringShipTried) {
+              s_ringShipTried = true;
+              s_ringShipModel.load("res/models/ring_ship.obj");
+              s_ringShipModel.loadTextures("res/models/ring_ship");
+            }
+            if (s_ringShipModel.ready()) {
+              activeModel = &s_ringShipModel;
+              modelRingSpin = spinPhase;
             }
           } else if (style == 2) {
             // Shuttle explorer: меш из res/models/shuttle.obj

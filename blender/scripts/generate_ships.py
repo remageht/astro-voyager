@@ -506,6 +506,14 @@ def build_dart():
     ship.location = -center
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
+    # Smooth shading and edge split
+    for poly in ship.data.polygons:
+        poly.use_smooth = True
+    split_mod = ship.modifiers.new(name="EdgeSplit", type='EDGE_SPLIT')
+    split_mod.split_angle = math.radians(35)
+    bpy.context.view_layer.objects.active = ship
+    bpy.ops.object.modifier_apply(modifier="EdgeSplit")
+
     # UV Smart Project
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
@@ -749,6 +757,14 @@ def build_shuttle():
     ship.location = -center
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
+    # Smooth shading and edge split
+    for poly in ship.data.polygons:
+        poly.use_smooth = True
+    split_mod = ship.modifiers.new(name="EdgeSplit", type='EDGE_SPLIT')
+    split_mod.split_angle = math.radians(35)
+    bpy.context.view_layer.objects.active = ship
+    bpy.ops.object.modifier_apply(modifier="EdgeSplit")
+
     # UV Smart Project
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
@@ -767,7 +783,7 @@ def render_showcase(obj, out_png):
     scene = bpy.context.scene
     scene.render.engine = 'CYCLES'
     scene.cycles.device = 'CPU'
-    scene.cycles.samples = 64
+    scene.cycles.samples = 48
     scene.cycles.use_denoising = True
     scene.render.resolution_x = 1280
     scene.render.resolution_y = 720
@@ -776,13 +792,13 @@ def render_showcase(obj, out_png):
 
     # Camera
     cam_data = bpy.data.cameras.new("ShowcaseCam")
-    cam_data.lens = 48
+    cam_data.lens = 42
     cam_obj = bpy.data.objects.new("ShowcaseCam", cam_data)
     scene.collection.objects.link(cam_obj)
     scene.camera = cam_obj
     
-    cam_pos = Vector((-2.6, 1.4, -2.5))
-    target = Vector((0.0, 0.05, 0.0))
+    cam_pos = Vector((2.2, -2.5, 1.4))
+    target = Vector((0.0, 0.0, 0.0))
     direction = target - cam_pos
     rot_quat = direction.to_track_quat('-Z', 'Y')
     cam_obj.location = cam_pos
@@ -791,18 +807,20 @@ def render_showcase(obj, out_png):
     # Lighting
     # 1. Warm Sun Key Light
     sun_data = bpy.data.lights.new("SunKey", type='SUN')
-    sun_data.energy = 4.2
-    sun_data.color = (1.0, 0.96, 0.90)
+    sun_data.energy = 5.2
+    sun_data.color = (1.0, 0.98, 0.92)
     sun_obj = bpy.data.objects.new("SunKey", sun_data)
-    sun_obj.rotation_euler = (math.radians(45), math.radians(25), math.radians(-50))
+    sun_dir = Vector((-0.9, 1.1, -0.8)).normalized()
+    sun_obj.rotation_euler = sun_dir.to_track_quat('-Z', 'Y').to_euler()
     scene.collection.objects.link(sun_obj)
 
     # 2. Cool Blue Rim Light
     rim_data = bpy.data.lights.new("RimFill", type='SUN')
-    rim_data.energy = 2.5
-    rim_data.color = (0.45, 0.65, 1.0)
+    rim_data.energy = 3.2
+    rim_data.color = (0.40, 0.68, 1.0)
     rim_obj = bpy.data.objects.new("RimFill", rim_data)
-    rim_obj.rotation_euler = (math.radians(-35), math.radians(-40), math.radians(140))
+    rim_dir = Vector((1.0, -0.8, 1.0)).normalized()
+    rim_obj.rotation_euler = rim_dir.to_track_quat('-Z', 'Y').to_euler()
     scene.collection.objects.link(rim_obj)
 
     # Deep space world background
@@ -813,11 +831,18 @@ def render_showcase(obj, out_png):
     world.use_nodes = True
     bg = world.node_tree.nodes.get("Background")
     if bg:
-        bg.inputs["Color"].default_value = (0.012, 0.015, 0.025, 1.0) # Deep nebula tint
-        bg.inputs["Strength"].default_value = 0.35
+        bg.inputs["Color"].default_value = (0.010, 0.012, 0.022, 1.0)
+        bg.inputs["Strength"].default_value = 0.40
+
+    # Dynamic 3/4 cinematic flight tilt for 16:9 widescreen showcase
+    if "Shuttle" in obj.name:
+        obj.rotation_euler = (math.radians(65), math.radians(-18), math.radians(-35))
+    else:
+        obj.rotation_euler = (math.radians(-70), math.radians(18), math.radians(35))
 
     scene.render.filepath = out_png
     bpy.ops.render.render(write_still=True)
+    obj.rotation_euler = (0.0, 0.0, 0.0)
     print(f"Render saved to: {out_png}")
 
 
@@ -848,8 +873,9 @@ def main():
     )
     
     if "--obj-only" not in sys.argv:
-        # Bake textures
-        bake_pbr_set(dart_obj, dart_base, tex_size=2048)
+        if "--render-only" not in sys.argv:
+            # Bake textures
+            bake_pbr_set(dart_obj, dart_base, tex_size=2048)
         
         # Showcase render
         dart_showcase_out = os.path.join(OUT_SHOWCASE, "dart_showcase.png")
@@ -879,8 +905,9 @@ def main():
     )
     
     if "--obj-only" not in sys.argv:
-        # Bake textures
-        bake_pbr_set(shuttle_obj, shuttle_base, tex_size=2048)
+        if "--render-only" not in sys.argv:
+            # Bake textures
+            bake_pbr_set(shuttle_obj, shuttle_base, tex_size=2048)
         
         # Showcase render
         shuttle_showcase_out = os.path.join(OUT_SHOWCASE, "shuttle_showcase.png")
