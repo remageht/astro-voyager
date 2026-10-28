@@ -187,6 +187,15 @@ void main() {
       albedo *= mix(0.80, 1.0, panel) * (0.95 + 0.09 * h);
       rough = clamp(rough + (1.0 - panel) * 0.12, 0.05, 1.0);
     }
+    // v4.0.0: без тяжёлого набора ассетов (portable exe) скин не грузится,
+    // поэтому style 3 fallback всё равно должен показывать износ корпуса.
+    if (u_HullWear >= 0.0 && u_SkinOn != 1) {
+      float w = clamp(u_HullWear, 0.0, 1.0);
+      albedo = mix(albedo * 1.15, albedo * mix(1.0, 0.55, w), w);
+      rough = mix(clamp(rough * 0.65, 0.08, 1.0),
+                  clamp(rough + 0.10 * w, 0.05, 1.0), w);
+      metal = mix(clamp(metal + 0.06, 0.0, 1.0), metal, w);
+    }
   }
 
   vec3 f0 = mix(vec3(0.04), albedo, metal);
