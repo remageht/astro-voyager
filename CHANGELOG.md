@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 4.1.0 - Unreleased / В работе
+
+## What's new / Что нового
+- EN: Hull-mounted spinning warp rings - each Ring Ship hoop now has two static pylons anchoring it to the fuselage (rings 1/3 horizontal, ring 2 vertical), so the three rings no longer form a longitudinal cage. The shader spins only the torus band (r >= 0.372) in its own plane; mounts stay rigid while running lights ride with the ring. The procedural fallback and the Blender generator follow the same two-pylon rule.
+- RU: Кольца варп-корабля на пилонах - каждый обруч Ring Ship получил два статических пилона к корпусу (кольца 1/3 - горизонтальные, кольцо 2 - вертикальное), поэтому три кольца больше не образуют продольную «клетку». Шейдер вращает только тор (r >= 0.372) строго в его плоскости; пилоны неподвижны, а ходовые огни едут вместе с кольцом. Процедурный fallback и Blender-генератор используют то же правило двух пилонов.
+- EN: Adventure finale branch - after M13 Mia Sato asks the crew to choose: found the colony or spend the last fuel on a jump to the far horizon. Two ending slides, a persisted `finaleChoice` in `expedition.json`, and a one-time prompt for legacy finished saves.
+- RU: Финальная развилка Adventure - после M13 Мия Сато предлагает экипажу выбор: основать колонию или потратить последнее топливо на прыжок к дальнему горизонту. Две концовки, `finaleChoice` в `expedition.json` и однократное предложение выбора для старых завершённых сейвов.
+- EN: Warp aura is gated to actual warp distortion, Shift boost burns ordinary fuel and reads `[BOOST]`, and the cocoon/trail lines are dimmer.
+- RU: Аура варпа включается только при реальном искажении, Shift-форсаж тратит обычное топливо и показывается как `[BOOST]`, линии кокона/шлейфа стали прозрачнее.
+- Gates / Гейты: GL Release build OK, static checks all pass, ctest 7/8 locally (test_save - known OS-sandbox failure; CI green), demos warp/geodesic/binet/kerr/rkf45 PASS, screenshot refs SAME=35 CHANGED=0.
+
 ## 4.0.0 - 2026-10-28
 
 ## What's new / Что нового

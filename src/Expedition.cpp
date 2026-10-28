@@ -49,14 +49,44 @@ const std::vector<ExpeditionChapter>& expeditionChapters() {
                                   "for the colony.",
                                   4});
     c.push_back(ExpeditionChapter{"finale", "",
-                                  "Глава 6 · Новый Дом",
-                                  "Chapter 6 · The New Home",
-                                  "Экспедиция завершена: колония основана.",
-                                  "Expedition complete: colony founded.",
+                                  "Глава 6 · Выбор",
+                                  "Chapter 6 · The Choice",
+                                  "Решить судьбу экспедиции: колония или "
+                                  "дальний горизонт.",
+                                  "Decide the fate of the expedition: colony "
+                                  "or the far horizon.",
                                   5});
     return c;
   }();
   return chapters;
+}
+
+std::string finaleTitleRu(int choice) {
+  if (choice == kFinaleHorizon) return "Финал · Дальний горизонт";
+  if (choice == kFinaleColony) return "Финал · Новый Дом";
+  return "Глава 6 · Выбор";
+}
+
+std::string finaleTitleEn(int choice) {
+  if (choice == kFinaleHorizon) return "Finale · Far Horizon";
+  if (choice == kFinaleColony) return "Finale · New Home";
+  return "Chapter 6 · The Choice";
+}
+
+std::string finaleGoalRu(int choice) {
+  if (choice == kFinaleHorizon)
+    return "Экипаж ушёл к дальнему горизонту. История завершена.";
+  if (choice == kFinaleColony)
+    return "Колония основана у старых звёзд M13. История завершена.";
+  return "Решить судьбу экспедиции: колония или дальний горизонт.";
+}
+
+std::string finaleGoalEn(int choice) {
+  if (choice == kFinaleHorizon)
+    return "The crew flew for the far horizon. Story complete.";
+  if (choice == kFinaleColony)
+    return "Colony founded by the old stars of M13. Story complete.";
+  return "Decide the fate of the expedition: colony or the far horizon.";
 }
 
 void ExpeditionState::markVisited(const std::string& stationId) {
@@ -102,6 +132,7 @@ std::string serializeExpedition(const ExpeditionState& st) {
   os << "# expedition state (v3.5.0)\n";
   os << "chapterIndex=" << st.chapterIndex << "\n";
   os << "introSeen=" << (st.introSeen ? 1 : 0) << "\n";
+  os << "finaleChoice=" << st.finaleChoice << "\n";
   return os.str();
 }
 
@@ -126,6 +157,13 @@ bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
       any = true;
     } else if (key == "introSeen") {
       probe.introSeen = (std::atoi(val.c_str()) != 0);
+      any = true;
+    } else if (key == "finaleChoice") {
+      probe.finaleChoice = std::atoi(val.c_str());
+      if (probe.finaleChoice < kFinaleUnset ||
+          probe.finaleChoice > kFinaleHorizon) {
+        probe.finaleChoice = kFinaleUnset;
+      }
       any = true;
     }
   }

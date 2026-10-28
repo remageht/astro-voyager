@@ -312,6 +312,7 @@ Check 'expedition play hook' (($appCpp -match 'startExpeditionIntro') -and ($app
 Check 'free visit button' ($appCpp -match 'Free Visit')
 Check 'expedition map key N' (($appCpp -match 'm_keyMap') -and ($appCpp -match 'm_expeditionMapOpen'))
 Check 'expedition test wired' (($cmake -match 'tests/test_expedition\.cpp') -and ($cmake -match 'add_test\(NAME test_expedition'))
+Check 'adventure finale branch' (($appCpp -match 'drawFinaleChoice') -and ((Read-File 'src/Expedition.h') -match 'finaleChoice') -and ((Read-File 'src/Expedition.cpp') -match 'kFinaleHorizon') -and ((Read-File 'src/StorySlides.cpp') -match 'far horizon ending'))
 Check 'expedition intro shot' (($appCpp -match 'intro\.png') -and ($appCpp -match 'startExpeditionIntro\(\);'))
 Check 'prologue closed after intro shot' ($appCpp -match '(?s)introFile.*m_slidesCurrent\.clear\(\)')
 

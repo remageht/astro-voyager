@@ -79,14 +79,17 @@ int main() {
     ExpeditionState st;
     st.chapterIndex = 3;
     st.introSeen = true;
+    st.finaleChoice = astro::kFinaleHorizon;
     ExpeditionState out;
     if (!deserializeExpedition(serializeExpedition(st), out) ||
-        out.chapterIndex != 3 || !out.introSeen) {
+        out.chapterIndex != 3 || !out.introSeen ||
+        out.finaleChoice != astro::kFinaleHorizon) {
       std::cerr << "Test 4 failed: round trip lost state\n";
       return 1;
     }
     const std::string upper =
-        serializeExpedition(st) + "chapterIndex=999999\nintroSeen=7\n";
+        serializeExpedition(st) +
+        "chapterIndex=999999\nintroSeen=7\nfinaleChoice=99\n";
     ExpeditionState clamped;
     if (!deserializeExpedition(upper, clamped)) {
       std::cerr << "Test 4 failed: request clamped values rejected\n";
@@ -95,6 +98,11 @@ int main() {
     if (clamped.chapterIndex != 0) {
       std::cerr << "Test 4 failed: out-of-range index must clamp to 0, got "
                 << clamped.chapterIndex << '\n';
+      return 1;
+    }
+    if (clamped.finaleChoice != astro::kFinaleUnset) {
+      std::cerr << "Test 4 failed: out-of-range finale choice must clamp to 0, got "
+                << clamped.finaleChoice << '\n';
       return 1;
     }
   }
@@ -171,6 +179,42 @@ int main() {
     if (expeditionFilePathFor("D/user").find("/expedition.json") ==
         std::string::npos) {
       std::cerr << "Test 7 failed: bad expedition file name\n";
+      return 1;
+    }
+  }
+
+  // Test 8: Adventure finale branch labels differ per ending.
+  {
+    const std::string colony = astro::finaleTitleRu(astro::kFinaleColony);
+    const std::string horizon = astro::finaleTitleRu(astro::kFinaleHorizon);
+    if (colony.empty() || horizon.empty() || colony == horizon) {
+      std::cerr << "Test 8 failed: finale titles must differ\n";
+      return 1;
+    }
+    if (astro::finaleGoalRu(astro::kFinaleColony) ==
+        astro::finaleGoalRu(astro::kFinaleHorizon)) {
+      std::cerr << "Test 8 failed: finale goals must differ\n";
+      return 1;
+    }
+    if (astro::finaleTitleEn(astro::kFinaleColony) ==
+        astro::finaleTitleEn(astro::kFinaleHorizon)) {
+      std::cerr << "Test 8 failed: EN finale titles must differ\n";
+      return 1;
+    }
+    // Legacy expedition.json (pre-4.1) has no finaleChoice: defaults to unset
+    // and still reports the finished arc.
+    ExpeditionState legacy;
+    if (!deserializeExpedition("chapterIndex=5\nintroSeen=1\n", legacy) ||
+        legacy.finaleChoice != astro::kFinaleUnset || !legacy.finished()) {
+      std::cerr << "Test 8 failed: legacy finished save must load unset\n";
+      return 1;
+    }
+    // The chosen ending survives a save/load cycle.
+    legacy.finaleChoice = astro::kFinaleColony;
+    ExpeditionState reloaded;
+    if (!deserializeExpedition(serializeExpedition(legacy), reloaded) ||
+        reloaded.finaleChoice != astro::kFinaleColony || !reloaded.finished()) {
+      std::cerr << "Test 8 failed: chosen ending did not persist\n";
       return 1;
     }
   }

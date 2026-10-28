@@ -1617,6 +1617,8 @@ void AppGL::startNewAdventure() {
   m_slidesOpen = true;
   m_inMenu = false;
   m_expedition = ExpeditionState{};
+  m_finaleChoiceOpen = false;
+  m_pendingFinaleChoice = false;
   m_slideAnimIdx = -1;
   saveExpeditionFileNow();
   invalidateVideoSlide();
@@ -1721,6 +1723,22 @@ void AppGL::openChapterSlide(int slideIdx) {
   m_slideAnimIdx = -1;
 }
 
+void AppGL::openEndingSlide(int choice) {
+  // v4.1: две концовки Adventure. Индексы 6/7 — ветки colony/horizon
+  // в storyChapterSlides(); служебный слайд 5 остаётся fallback для
+  // старых сейвов без выбора.
+  const auto& slides = storyChapterSlides();
+  const int idx = (choice == kFinaleHorizon) ? 7 : 6;
+  if (idx >= static_cast<int>(slides.size())) return;
+  m_slidesCurrent.assign(1, slides[idx]);
+  m_slidesHead = uiRu(finaleTitleRu(choice).c_str(),
+                      finaleTitleEn(choice).c_str());
+  m_slidesIntro = false;
+  m_slidesIdx = 0;
+  m_slidesOpen = true;
+  m_slideAnimIdx = -1;
+}
+
 void AppGL::saveExpeditionFileNow() {
   // === Expedition === (v3.5.0): state в отдельном expedition.json рядом
   // с профилями игры (схема SaveGame не тронута — kSaveSchema=1).
@@ -1742,6 +1760,12 @@ void AppGL::loadExpeditionFileNow() {
   ExpeditionState st;
   if (deserializeExpedition(buf.str(), st)) {
     m_expedition = st;
+    // v4.1: старый сейв мог дойти до финала до появления развилки —
+    // предлагаем выбрать концовку при входе в игру.
+    if (m_expedition.finished() &&
+        m_expedition.finaleChoice == kFinaleUnset) {
+      m_finaleChoiceOpen = true;
+    }
   }
 }
 
@@ -2019,6 +2043,11 @@ void AppGL::drawSlidesOverlay() {
     m_slidesOpen = false;
     m_slidesCurrent.clear();
     invalidateVideoSlide();
+    // v4.1: после итогового слайда M13 показываем выбор концовки.
+    if (m_pendingFinaleChoice) {
+      m_pendingFinaleChoice = false;
+      m_finaleChoiceOpen = true;
+    }
     return;
   }
   if (m_slidesCurrent.empty() || m_slidesOpen == false) return;
@@ -2329,15 +2358,26 @@ void AppGL::drawExpeditionHud() {
                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
   if (!ch || ImGui::Begin("##expeditionHud", nullptr, fl)) {
     if (ch) {
+      std::string titleRu = ch->titleRu;
+      std::string titleEn = ch->titleEn;
+      std::string goalRu = ch->goalRu;
+      std::string goalEn = ch->goalEn;
+      if (m_expedition.finished()) {
+        const int fc = m_expedition.finaleChoice;
+        titleRu = finaleTitleRu(fc);
+        titleEn = finaleTitleEn(fc);
+        goalRu = finaleGoalRu(fc);
+        goalEn = finaleGoalEn(fc);
+      }
       ImGui::TextUnformatted(uiRu(m_expedition.statusRu().c_str(),
                                   m_expedition.statusEn().c_str()));
       ImGui::SameLine();
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.75f, 0.30f, 1.00f));
-      ImGui::TextUnformatted(uiRu(ch->titleRu.c_str(), ch->titleEn.c_str()));
+      ImGui::TextUnformatted(uiRu(titleRu.c_str(), titleEn.c_str()));
       ImGui::PopStyleColor();
       ImGui::SetWindowFontScale(0.88f);
       ImGui::TextColored(ImVec4(0.62f, 0.65f, 0.72f, 1.0f), "%s",
-                         uiRu(ch->goalRu.c_str(), ch->goalEn.c_str()));
+                         uiRu(goalRu.c_str(), goalEn.c_str()));
       ImGui::SetWindowFontScale(1.0f);
     }
   }
@@ -2374,7 +2414,14 @@ void AppGL::drawExpeditionMap() {
       ImGui::TextUnformatted(mark);
       ImGui::PopStyleColor();
       ImGui::SameLine();
-      ImGui::TextUnformatted(uiRu(c.titleRu.c_str(), c.titleEn.c_str()));
+      std::string rowRu = c.titleRu;
+      std::string rowEn = c.titleEn;
+      if (m_expedition.finished() &&
+          i == static_cast<int>(chapters.size()) - 1) {
+        rowRu = finaleTitleRu(m_expedition.finaleChoice);
+        rowEn = finaleTitleEn(m_expedition.finaleChoice);
+      }
+      ImGui::TextUnformatted(uiRu(rowRu.c_str(), rowEn.c_str()));
       if (current && !m_expedition.finished()) {
         ImGui::SetWindowFontScale(0.88f);
         ImGui::Indent();
@@ -2385,10 +2432,19 @@ void AppGL::drawExpeditionMap() {
       }
     }
     if (m_expedition.finished()) {
+      const int fc = m_expedition.finaleChoice;
+      const char* doneRu = "Экспедиция завершена. Сюжет завершён.";
+      const char* doneEn = "Expedition complete. Story complete.";
+      if (fc == kFinaleHorizon) {
+        doneRu = "Экипаж ушёл к дальнему горизонту. Сюжет завершён.";
+        doneEn = "The crew flew for the far horizon. Story complete.";
+      } else if (fc == kFinaleColony) {
+        doneRu = "Колония основана. Сюжет завершён.";
+        doneEn = "Colony founded. Story complete.";
+      }
       ImGui::Spacing();
-      ImGui::TextColored(
-          ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
-          uiRu("Колония основана. Сюжет завершён.", "Colony founded. Story complete."));
+      ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
+                         uiRu(doneRu, doneEn));
     }
     ImGui::Spacing();
     if (ImGui::Button(uiRu("Закрыть (N / Esc)", "Close (N / Esc)"))) {
@@ -2397,6 +2453,77 @@ void AppGL::drawExpeditionMap() {
   }
   ImGui::End();
   ImGui::PopStyleVar(1);
+  ImGui::PopStyleColor(2);
+}
+
+void AppGL::drawFinaleChoice() {
+  // v4.1: финальная развилка Adventure. Модальная карточка Мии поверх игры;
+  // выбор пишется в expedition.json и открывает одну из двух концовок.
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
+                          ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(620.0f, 0.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.025f, 0.045f, 0.94f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.35f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 18.0f));
+  const ImGuiWindowFlags fl =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+      ImGuiWindowFlags_NoSavedSettings;
+  if (ImGui::Begin("##finaleChoice", nullptr, fl)) {
+    ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
+                       uiRu("Мия Сато · Финал", "Mia Sato · Finale"));
+    ImGui::Spacing();
+    ImGui::TextWrapped(
+        "%s",
+        uiRu("Мия смотрит на M13 в иллюминатор. «Мы нашли второй дом. Но "
+             "двигатель ещё держит курс — и в баках осталось топливо на один "
+             "последний прыжок».",
+             "Mia looks at M13 through the window. \"We found a second home. "
+             "But the drive still holds a course - and the tanks have fuel "
+             "for one last jump.\""));
+    ImGui::Spacing();
+    ImGui::TextColored(
+        ImVec4(0.62f, 0.65f, 0.72f, 1.0f), "%s",
+        uiRu("Остаться — основать колонию и закончить экспедицию. Уйти — "
+             "потратить остаток на прыжок к дальнему горизонту и не "
+             "вернуться.",
+             "Staying means founding the colony and ending the expedition. "
+             "Leaving means spending the rest on a jump to the far horizon - "
+             "and never coming back."));
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    if (m_finaleChoiceOpen &&
+        ImGui::Button(uiRu("Остаться · основать колонию",
+                           "Stay · found the colony"),
+                      ImVec2(-1.0f, 0.0f))) {
+      m_expedition.finaleChoice = kFinaleColony;
+      m_finaleChoiceOpen = false;
+      saveExpeditionFileNow();
+      openEndingSlide(kFinaleColony);
+    }
+    if (m_finaleChoiceOpen &&
+        ImGui::Button(uiRu("Уйти · к дальнему горизонту",
+                           "Leave · for the far horizon"),
+                      ImVec2(-1.0f, 0.0f))) {
+      m_expedition.finaleChoice = kFinaleHorizon;
+      m_finaleChoiceOpen = false;
+      saveExpeditionFileNow();
+      openEndingSlide(kFinaleHorizon);
+    }
+    if (m_finaleChoiceOpen) {
+      ImGui::Spacing();
+      ImGui::SetWindowFontScale(0.85f);
+      ImGui::TextColored(ImVec4(0.50f, 0.53f, 0.60f, 1.0f), "%s",
+                         uiRu("Выбор сохранится в expedition.json.",
+                              "The choice is stored in expedition.json."));
+      ImGui::SetWindowFontScale(1.0f);
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(2);
   ImGui::PopStyleColor(2);
 }
 
@@ -2567,6 +2694,11 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   // они (игровой HUD не засоряет кадр истории).
   if (m_slidesOpen) {
     drawSlidesOverlay();
+    return;
+  }
+  // v4.1: модальная развилка финала — перекрывает игровой HUD.
+  if (m_finaleChoiceOpen && !m_inMenu) {
+    drawFinaleChoice();
     return;
   }
   // === Ship survival === (v3.3.0): HUD снизу слева, вне меню.
@@ -3150,6 +3282,16 @@ void AppGL::teleportToStation(const std::string& id, bool stopJumpCine) {
   m_expedition.markVisited(id);
   if (m_expedition.chapterIndex > expBefore && m_expedition.introSeen) {
     openChapterSlide(expeditionChapters()[expBefore].slideIdx);
+  }
+  // v4.1: M13 завершает кампанию. После итогового слайда M13 открываем
+  // развилку Мии: основать колонию или уйти к дальнему горизонту.
+  if (m_expedition.chapterIndex > expBefore && m_expedition.finished() &&
+      m_expedition.finaleChoice == kFinaleUnset) {
+    if (m_expedition.introSeen) {
+      m_pendingFinaleChoice = true;
+    } else {
+      m_finaleChoiceOpen = true;
+    }
   }
   saveExpeditionFileNow();
 }
@@ -4363,6 +4505,7 @@ void AppGL::drawMenu() {
 void AppGL::drawWorldLabels() {
   if (!m_showLabels) return;
   if (m_slidesOpen) return;  // === Expedition ===: катсцена чистая, без меток
+  if (m_finaleChoiceOpen) return;  // v4.1: развилка финала без меток
   const Station* curSt = m_sceneManager->getCurrentStation();
   if (!curSt) return;
 

@@ -23,12 +23,25 @@ struct ExpeditionChapter {
 
 const std::vector<ExpeditionChapter>& expeditionChapters();
 
+// v4.1 Adventure finale branch: 0 = decision pending, 1 = colony,
+// 2 = far horizon. Stored in expedition.json next to chapterIndex.
+constexpr int kFinaleUnset = 0;
+constexpr int kFinaleColony = 1;
+constexpr int kFinaleHorizon = 2;
+
+std::string finaleTitleRu(int choice);
+std::string finaleTitleEn(int choice);
+std::string finaleGoalRu(int choice);
+std::string finaleGoalEn(int choice);
+
 class ExpeditionState {
  public:
   // Index of the current chapter ([0..chapters().size()]); reaching
   // chapters().size() means the story is finished.
   int chapterIndex = 0;
   bool introSeen = false;
+  // 0 until the player picks an ending at the M13 finale.
+  int finaleChoice = kFinaleUnset;
 
   void markVisited(const std::string& stationId);  // advances chapters
   bool finished() const;
@@ -37,8 +50,8 @@ class ExpeditionState {
   std::string statusEn() const;
 };
 
-// Flat text serialization: chapterIndex=<int>, introSeen=<0|1> - tolerant
-// parser mirroring the SaveGame mini-reader style.
+// Flat text serialization: chapterIndex=<int>, introSeen=<0|1>,
+// finaleChoice=<0|1|2> - tolerant parser mirroring SaveGame style.
 std::string serializeExpedition(const ExpeditionState& st);
 bool deserializeExpedition(const std::string& text, ExpeditionState& out);
 

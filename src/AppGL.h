@@ -72,6 +72,9 @@ class AppGL {
   void drawExpeditionMap();
   void startExpeditionIntro();
   void openChapterSlide(int slideIdx);
+  // v4.1: финальная развилка Adventure (колония / дальний горизонт).
+  void openEndingSlide(int choice);
+  void drawFinaleChoice();
   // v4.0: "Новая игра" — пролог Егорки + создание слота Adventure.
   void startNewAdventure();
   void saveAdventureSlotNow(bool quiet);
@@ -155,6 +158,9 @@ class AppGL {
   std::string m_slidesHead;  // заголовок слайда главы (для done-карточек)
   bool m_slidesOpen = false;
   bool m_slidesIntro = false;
+  // v4.1: выбор концовки после M13 — модальная карточка Мии.
+  bool m_finaleChoiceOpen = false;
+  bool m_pendingFinaleChoice = false;
   // v4.0: пролог кнопки "Новая игра" (Егорка) — тот же оверлей слайдов,
   // но в конце создаётся слот save-adventure.json.
   bool m_slidesAdv = false;

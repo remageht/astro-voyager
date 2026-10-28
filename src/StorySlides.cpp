@@ -371,41 +371,63 @@ const std::vector<StorySlide>& storyChapterSlides() {
   static const std::vector<StorySlide> slides = [] {
     std::vector<StorySlide> s;
     s.push_back(StorySlide{  // 0: earth done
-        "Экипаж осмотрел дом и принял решение: возвращения может не быть. "
+        "Мия: «Мы посмотрели дом и поняли: возвращения может не быть». "
         "Курс проложен к центру Галактики.",
-        "The crew has looked at its home and made the choice: there may be "
-        "no return. Course set to the center of the Galaxy.",
+        "Mia: \"We looked at our home and understood: there may be no "
+        "return.\" Course set to the center of the Galaxy.",
         5});
     s.push_back(StorySlide{  // 1: sgra done
-        "Sgr A*: фотонное кольцо запечатлено, орбиты света вокруг горизонта "
-        "измерены. Следующая цель - M87*.",
-        "Sgr A*: the photon ring is recorded, light orbits around the "
-        "horizon measured. Next target - M87*.",
+        "Мия: «Свет огибает горизонт — и мы видим его кольцо». Фотонное "
+        "кольцо Sgr A* запечатлено, орбиты света измерены. Следующая цель — "
+        "M87*.",
+        "Mia: \"Light bends around the horizon - and we see its ring.\" The "
+        "photon ring of Sgr A* is recorded, light orbits measured. Next "
+        "target - M87*.",
         6});
     s.push_back(StorySlide{  // 2: m87 done
-        "Джет M87* брошен на тысячи световых лет. Доплер подтвердил: одна "
-        "сторона диска светит ярче другой.",
-        "The M87* jet reaches thousands of light-years. Doppler confirmed: "
-        "one side of the disk burns brighter than the other.",
+        "Мия: «Доплер не врёт: одна сторона диска ярче другой». Джет M87* "
+        "брошен на тысячи световых лет.",
+        "Mia: \"Doppler does not lie: one side of the disk burns brighter.\" "
+        "The M87* jet reaches thousands of light-years.",
         7});
     s.push_back(StorySlide{  // 3: qso done
-        "3C 273: ядро квазара ярче целой галактики. Его свет шёл к нам "
-        "2.4 миллиарда лет.",
-        "3C 273: the quasar core outshines an entire galaxy. Its light "
-        "traveled 2.4 billion years to reach us.",
+        "Мия: «Этот свет шёл к нам ещё до первых динозавров». 3C 273: ядро "
+        "квазара ярче целой галактики, его свет шёл к нам 2.4 миллиарда лет.",
+        "Mia: \"This light traveled to us before the first dinosaurs.\" 3C "
+        "273: the quasar core outshines a galaxy; its light traveled 2.4 "
+        "billion years.",
         8});
     s.push_back(StorySlide{  // 4: m13 done - new candidates
-        "Скопление M13: светила вдвое старше Солнца. Выбран мир для "
-        "колонии - вторая Земля найдена.",
-        "Cluster M13: stars twice as old as the Sun. A world for the "
-        "colony is chosen - a second Earth is found.",
+        "Мия: «Вот он — второй дом. Но у нас остался один выбор». Скопление "
+        "M13: светила вдвое старше Солнца; вторая Земля найдена.",
+        "Mia: \"There it is - a second home. But we have one choice left.\" "
+        "Cluster M13: stars twice as old as the Sun; a second Earth is found.",
         9});
-    s.push_back(StorySlide{  // 5: finale
-        "Финал экспедиции: Новому Дому - быть. Сюжетная арка завершена; "
+    s.push_back(StorySlide{  // 5: neutral finale fallback (legacy saves)
+        "Финал экспедиции: Новому Дому — быть. Сюжетная арка завершена; "
         "Галактика всё ещё ждёт исследователей.",
         "Expedition finale: the New Home shall be. The story arc is "
         "complete; the Galaxy is still waiting for explorers.",
         10});
+    s.push_back(StorySlide{  // 6: colony ending (branch A)
+        "Мия: «Мы остаёмся. Здесь будут дома, сады и дети, которые увидят "
+        "настоящее небо». Экипаж «Астронавигатора-1» основал Новый Дом у "
+        "старых звёзд M13. Экспедиция завершена — история только начинается.",
+        "Mia: \"We stay. There will be homes, gardens and children who see a "
+        "real sky.\" The crew of AstroNavigator-1 founds the New Home by the "
+        "old stars of M13. The expedition is over - the story is just "
+        "beginning.",
+        10});
+    s.push_back(StorySlide{  // 7: far horizon ending (branch B)
+        "Мия: «Мы не ставим точку. Один прыжок — и за горизонтом будет новый "
+        "свет». Последнее топливо уходит в двигатель. «Астронавигатор-1» "
+        "покидает M13 и уходит к краю Галактики. Колония останется мечтой; "
+        "экипаж — легендой.",
+        "Mia: \"We do not end the story. One jump - and there will be new "
+        "light beyond the horizon.\" The last fuel feeds the drive. "
+        "AstroNavigator-1 leaves M13 for the edge of the Galaxy. The colony "
+        "remains a dream; the crew becomes a legend.",
+        5});
     return s;
   }();
   return slides;
