@@ -37,6 +37,7 @@ float g_shipPos[3] = {0.0f, 0.0f, 0.0f};
 float g_shipYaw = 0.0f;
 float g_shipThruster = 0.7f;  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
 int g_shipStyle = 0;  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model (OBJ)
+float g_shipHull = 1.0f;  // v4.0.0: 1 = новый корпус, 0 = полностью побитый
 static ShipCustomization g_shipCustomization;
 static bool g_dockSitesVisible = true;
 // AV_WARP_DEMO=1: dev-режим для визуальной отладки варп-туннеля и кокона
@@ -97,6 +98,12 @@ void setThruster(float k) {
   g_shipThruster = k;
 }
 float thruster() { return g_shipThruster; }
+void setShipHull(float integrity) {
+  if (integrity < 0.0f) integrity = 0.0f;
+  if (integrity > 1.0f) integrity = 1.0f;
+  g_shipHull = integrity;
+}
+float shipHull() { return g_shipHull; }
 }  // namespace warpdrive
 
 SceneManager::SceneManager() {
@@ -1796,6 +1803,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         const glm::vec3 engineEmi = kEngineEmi[pal];
         std::vector<ShipPart> parts;
         const int style = warpdrive::shipStyle();
+        // v4.0.0: износ OBJ-корпуса. -1 = состояние не применяется
+        // (Dart/Ring Ship/Shuttle сохраняют эталонный вид байт-в-байт).
+        const float hullWear = (style == 3) ? (1.0f - warpdrive::shipHull()) : -1.0f;
         // Стиль 3 (Model OBJ) при недоступном файле откатывается на процедурный
         // Ring Ship: разделы ниже строят тот же parts-набор, что и style 1.
         const int styleParts = (style == 3) ? 1 : style;
@@ -1930,6 +1940,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           // — эталон ship.png не меняется, умножение на 1.0f точное).
           s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
           s_shipShader->setUniform1f("u_StationPbr", 0.0f);
+          s_shipShader->setUniform1f("u_HullWear", hullWear);
           const ShipCustomization& shipCust = warpdrive::shipCustomization();
           s_shipShader->setUniform3f("u_HullTint", shipCust.primaryColor[0], shipCust.primaryColor[1], shipCust.primaryColor[2]);
           s_shipShader->setUniform3f("u_AccentTint", shipCust.accentColor[0], shipCust.accentColor[1], shipCust.accentColor[2]);
@@ -2057,9 +2068,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_skinAlbedo = loadBmpTexture("res/models/ring_skin_albedo.bmp");
             s_skinRough = loadBmpTexture("res/models/ring_skin_rough.bmp");
           }
-          // Панельный скин — только у процедурного Ring Ship (стиль 1);
-          // Dart и Shuttle сохраняют эталонный вид (ship.png не меняется).
-          const bool skinOn = (style == 1) && s_skinAlbedo != 0;
+          // Панельный скин — у процедурного Ring Ship (стиль 1) и у fallback
+          // стиля 3 (когда OBJ-файла нет): так побитый/новый вид работает и в
+          // релизе без тяжёлых ассетов. Dart и Shuttle сохраняют эталон.
+          const bool skinOn = (style == 1 || style == 3) && s_skinAlbedo != 0;
           s_shipShader->setUniform1i("u_SkinOn", skinOn ? 1 : 0);
           s_shipShader->setUniform1i("u_SkinAlbedo", 5);
           s_shipShader->setUniform1i("u_SkinRough", 6);

@@ -20,6 +20,7 @@ struct Vec3 {
 struct ShipState {
   float fuel = 100.0f;    // warp jumps cost kJumpFuelCost; regenerates near a star
   float shield = 100.0f;  // pulsar radiation drains it; death at 0
+  float hull = 100.0f;    // v4.0.0: armor/panel integrity (visual wear, dock repair)
   Vec3 gravVel;           // gravitational drift velocity (world units/s)
   bool fuelNoticeShown = false;  // one-shot "drift to star" notice flag
   bool boostActive = false;      // conventional boost engaged
@@ -56,6 +57,7 @@ constexpr float kLowShieldChroma = 30.0f;   // chromatic aberration gate
 constexpr float kLowShieldStatic = 10.0f;   // interference noise gate
 constexpr float kRespawnShield = 50.0f;     // after death, back at sol
 constexpr float kRespawnFuel = 30.0f;
+constexpr float kRespawnHull = 100.0f;      // v4.0.0: rebuilt at Sol
 constexpr float kGravDampPerSec = 0.35f;    // drift velocity damping
 constexpr float kGravVelMax = 2.0f;         // drift speed cap (units/s)
 constexpr float kGravMinDist = 0.5f;        // avoids the r->0 singularity
@@ -89,9 +91,28 @@ inline bool canJump(const ShipState& s, float costK = 1.0f) {
   return s.fuel >= kJumpFuelCost * costK;
 }
 
-// v3.6.0: варп-роли корпусов. Dart (0) и Ring Ship (1) несут варп-двигатель,
-// Shuttle (2) — локальный корабль: прыжок недоступен.
-inline bool styleCanWarp(int style) { return style != 2; }
+// v3.6.0: варп-роли корпусов. v4.0.0: варп-двигатель несут только Ring Ship
+// (1) и Model OBJ (3); Dart (0) и Shuttle (2) — досветовые корпуса.
+inline bool styleCanWarp(int style) { return style == 1 || style == 3; }
+
+// v4.0.0: форсаж досветовых корпусов ограничен. У Dart и Shuttle нет
+// варп-двигателя, поэтому и разгон у них «досветовый»: x1.35 / x1.20 вместо
+// x2.0 у Ring Ship и Model. Приёмистость снижена пропорционально.
+inline float styleBoostSpeedMult(int style) {
+  switch (style) {
+    case 0: return 1.35f;  // Dart: лёгкий перехватчик
+    case 2: return 1.20f;  // Shuttle: тяжёлый челнок
+    default: return kBoostSpeedMultiplier;
+  }
+}
+
+inline float styleBoostRespMult(int style) {
+  switch (style) {
+    case 0: return 1.45f;
+    case 2: return 1.30f;
+    default: return kBoostRespMultiplier;
+  }
+}
 
 // v3.11.0: инженерные модификации корпуса и оборудования
 inline float upgradeBoostSpeedMult(int lvl) {
@@ -125,10 +146,29 @@ inline void updateFuel(ShipState& s, float dt, bool nearStar, float rateK = 1.0f
   }
 }
 
+// v4.0.0: износ корпуса (0..100). Это не смерть: щит остаётся единственным
+// смертельным ресурсом, а корпус отвечает за «побитый/восстановленный» вид
+// OBJ-корпуса и чинится в доке.
+inline void damageHull(ShipState& s, float amount) {
+  if (amount <= 0.0f) return;
+  s.hull -= amount;
+  if (s.hull < 0.0f) s.hull = 0.0f;
+}
+
+inline void repairHull(ShipState& s) { s.hull = 100.0f; }
+
+inline float hullWear(const ShipState& s) {
+  const float h = s.hull < 0.0f ? 0.0f : (s.hull > 100.0f ? 100.0f : s.hull);
+  return 1.0f - h / 100.0f;
+}
+
 inline void applyRadiation(ShipState& s, float dt, bool inZone, float dmgK = 1.0f) {
   if (!inZone) return;
-  s.shield -= kPulsarDamagePerSec * dmgK * dt;
+  const float dmg = kPulsarDamagePerSec * dmgK * dt;
+  s.shield -= dmg;
   if (s.shield < 0.0f) s.shield = 0.0f;
+  // v4.0.0: радиация прожигает и обшивку — корпус копит визуальный износ.
+  damageHull(s, dmg * 0.35f);
 }
 
 inline bool isDead(const ShipState& s) { return s.shield <= 0.0f; }
@@ -136,6 +176,7 @@ inline bool isDead(const ShipState& s) { return s.shield <= 0.0f; }
 inline void respawn(ShipState& s) {
   s.shield = kRespawnShield;
   s.fuel = kRespawnFuel;
+  s.hull = kRespawnHull;
   s.gravVel = Vec3();
   s.fuelNoticeShown = false;
   s.boostActive = false;

@@ -42,6 +42,7 @@ uniform vec3 u_HullTint;          // v3.11.0: базовый оттенок ко
 uniform vec3 u_AccentTint;        // v3.11.0: оттенок акцентной ливреи (1,1,1 по умолчанию)
 uniform vec3 u_EmissiveTint;      // v3.11.0: оттенок плазменного свечения (1,1,1 по умолчанию)
 uniform float u_StationPbr;       // 1 = orbital station PBR lighting
+uniform float u_HullWear;         // v4.0.0: -1 off, 0 = restored, 1 = battered OBJ hull
 
 const float kPi = 3.14159265;
 
@@ -118,6 +119,24 @@ void main() {
     float im = inversesqrt(max(dot(T, T), dot(B, B)) + 1e-12);
     n = normalize(T * (im * nmap.x) + B * (im * nmap.y) + n * nmap.z);
     if (u_StationPbr > 0.5) n = geomN;
+    // v4.0.0: restored hull. At wear 1 the original PBR path is untouched
+    // (ship_model.png stays byte-identical); at 0 the hull is a clean, freshly
+    // repaired composite with crisp panel seams and no grime.
+    if (u_HullWear >= 0.0) {
+      float w = clamp(u_HullWear, 0.0, 1.0);
+      if (w < 0.999) {
+        vec3 cleanAlb = vec3(0.56, 0.62, 0.70) * u_HullTint;
+        vec3 pp = (v_ObjPos + vec3(0.17, -0.11, 0.23)) * 7.0;
+        vec3 g = abs(fract(pp) - 0.5);
+        float seam = min(min(g.x, g.y), g.z);
+        float panel = smoothstep(0.015, 0.055, seam);
+        cleanAlb *= mix(0.78, 1.0, panel);
+        albedo = mix(cleanAlb, albedo, w);
+        rough = mix(0.20 + (1.0 - panel) * 0.10, rough, w);
+        metal = mix(0.92, metal, w);
+        n = normalize(mix(geomN, n, w));
+      }
+    }
   } else {
     albedo = pow(max(u_BaseColor, vec3(0.0)), vec3(2.2)) * u_HullTint;
     rough = clamp(u_Rough, 0.05, 1.0);
@@ -146,6 +165,18 @@ void main() {
       float heat = smoothstep(0.55, 1.15, v_ObjPos.z);
       albedo *= mix(1.0, 0.72, heat);
       metal = clamp(metal + 0.08 * heat, 0.0, 1.0);
+      // v4.0.0: тот же restored/battered переход для процедурного fallback
+      // стиля 3 (когда OBJ-файла нет). Style 1 сюда не заходит: u_HullWear -1.
+      if (u_HullWear >= 0.0) {
+        float w = clamp(u_HullWear, 0.0, 1.0);
+        vec3 clean = vec3(0.56, 0.62, 0.70) * u_HullTint;
+        float lum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
+        clean *= mix(0.78, 1.05, clamp(lum * 2.0, 0.0, 1.0));
+        vec3 worn = albedo * mix(1.0, 0.55, w);
+        albedo = mix(clean, worn, w);
+        rough = mix(0.22, clamp(rough + 0.10 * w, 0.05, 1.0), w);
+        metal = mix(0.90, metal, w);
+      }
     } else if (metal >= 0.85) {
       vec3 pp = (v_PartPos + vec3(0.13, -0.07, 0.21)) * 5.0;
       vec3 g = abs(fract(pp) - 0.5);

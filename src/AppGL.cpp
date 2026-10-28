@@ -343,6 +343,8 @@ int AppGL::run() {
     // === Ship survival === (v3.3.0): топливо/щиты/гравитация; до render(),
     // чтобы пост-эффекты низкого щита попали в этот же кадр.
     updateShip(deltaTime);
+    // v4.0.0: износ корпуса -> шейдер OBJ-корпуса (побитый/восстановленный).
+    warpdrive::setShipHull(m_ship.hull / 100.0f);
 
     // === Batch A1: Teleport Warp-In Halo & Input Cooldown ===
     if (m_teleportHaloTimer > 0.0f) {
@@ -690,7 +692,10 @@ void AppGL::processInput(float deltaTime) {
   }
 
   const float upgradeSpeedMult = ship::upgradeBoostSpeedMult(m_shipCustomization.engineUpgrade);
-  const double boostMul = m_ship.boostActive ? (ship::kBoostSpeedMultiplier * static_cast<double>(upgradeSpeedMult)) : 1.0;
+  const double boostMul = m_ship.boostActive
+                              ? (static_cast<double>(ship::styleBoostSpeedMult(m_shipStyle)) *
+                                 static_cast<double>(upgradeSpeedMult))
+                              : 1.0;
   const Vec3 fwd = m_camera.forward();
   const Vec3 rgt = m_camera.right();
   const Vec3 want((fwd.x * axisF + rgt.x * axisR) * (m_camera.moveSpeed * boostMul),
@@ -699,7 +704,7 @@ void AppGL::processInput(float deltaTime) {
   // Разгон быстрее торможения: базовая тяга ~3/с (на форсаже ~5.4/с), свободный дрейф ~0.9/с.
   double resp = m_moveInputActive ? 3.0 : 0.9;
   if (m_moveInputActive && m_ship.boostActive) {
-    resp *= ship::kBoostRespMultiplier;
+    resp *= ship::styleBoostRespMult(m_shipStyle);
   }
   const double kAcc = 1.0 - std::exp(-static_cast<double>(deltaTime) * resp);
   m_shipVel = Vec3(m_shipVel.x + (want.x - m_shipVel.x) * kAcc,
@@ -3184,6 +3189,7 @@ void AppGL::updateShip(float deltaTime) {
     float p = std::clamp(1.0f - (m_dockAnimTimer / 0.9f), 0.0f, 1.0f);
     m_ship.fuel = m_dockInitialFuel + (100.0f - m_dockInitialFuel) * p;
     m_ship.shield = m_dockInitialShield + (100.0f - m_dockInitialShield) * p;
+    m_ship.hull = m_dockInitialHull + (100.0f - m_dockInitialHull) * p;
     if (m_dockAnimTimer <= 0.0f) {
       m_dockAnimState = DockAnimState::None;
       dockAtStation(m_dockTargetId);
@@ -3444,7 +3450,7 @@ void AppGL::updateShip(float deltaTime) {
 // Нижний левый HUD: полосы топлива (оранжевая) и щитов (синяя) + нотисы.
 void AppGL::drawShipHud() {
   ImGuiIO& io = ImGui::GetIO();
-  ImGui::SetNextWindowPos(ImVec2(12.0f, io.DisplaySize.y - 94.0f),
+  ImGui::SetNextWindowPos(ImVec2(12.0f, io.DisplaySize.y - 112.0f),
                           ImGuiCond_Always);
   ImGui::SetNextWindowBgAlpha(0.55f);
   if (ImGui::Begin("##shipHud", nullptr,
@@ -3465,6 +3471,12 @@ void AppGL::drawShipHud() {
     std::snprintf(buf, sizeof(buf), "%s %.0f", uiRu("Щиты", "Shields"),
                   m_ship.shield);
     ImGui::ProgressBar(m_ship.shield / 100.0f, ImVec2(180.0f, 12.0f), buf);
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
+                          ImVec4(0.55f, 0.85f, 0.45f, 1.0f));
+    std::snprintf(buf, sizeof(buf), "%s %.0f", uiRu("Корпус", "Hull"),
+                  m_ship.hull);
+    ImGui::ProgressBar(m_ship.hull / 100.0f, ImVec2(180.0f, 12.0f), buf);
     ImGui::PopStyleColor();
     // Вид камеры (v3.3.0): строка-подсказка для клавиши V.
     // v3.6.0: сложность Hard отключает подсказки (difficultyTuning().hints).
@@ -3767,6 +3779,7 @@ void AppGL::applySaveGame(const SaveGame& g) {
   // Корабль и стиль.
   m_ship.fuel = g.session.fuel;
   m_ship.shield = g.session.shield;
+  m_ship.hull = g.session.hull;
   m_ship.gravVel = Vec3{};
   m_shipVel = Vec3();
   m_orbitNoticeShown = false;
@@ -3839,6 +3852,7 @@ void AppGL::saveProfileNow(bool quiet) {
   g.session.timeScale = m_sceneManager->getTimeScale();
   g.session.fuel = m_ship.fuel;
   g.session.shield = m_ship.shield;
+  g.session.hull = m_ship.hull;
   g.session.shipStyle = m_shipStyle;
   const bool saveOk =
       saveWriteFile(saveFilePath(SaveMode::Sandbox), saveSerialize(g), err);
@@ -5334,6 +5348,9 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   {
     const int styleBackup = app.m_shipStyle;
     warpdrive::setShipStyle(3);
+    // v4.0.0: два состояния OBJ-корпуса — побитый (износ 100%) и новый после
+    // ремонта. ship_model.png остаётся «побитым» эталоном, restored — новый.
+    warpdrive::setShipHull(0.0f);
     warpdrive::setShip(true, 1.28f, -0.98f, 5.95f, 2.35f);
     warpdrive::setThruster(0.45f);
     for (int frame = 0; frame < 6; ++frame) {
@@ -5350,8 +5367,25 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
     if (app.saveScreenshot(shipModelFile)) {
       std::cout << "Captured screenshot: " << shipModelFile << "\n";
     }
+    // Тот же кадр после полного ремонта: чистый «новый» корпус.
+    warpdrive::setShipHull(1.0f);
+    for (int frame = 0; frame < 6; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
+    std::string shipModelRestoredFile = outDir + "/ship_model_restored.png";
+    if (app.saveScreenshot(shipModelRestoredFile)) {
+      std::cout << "Captured screenshot: " << shipModelRestoredFile << "\n";
+    }
     // Close-up того же корпуса: камера смотрит в -Z, ставим корабль в 3.5 ед.
     // перед ней — читаются карты PBR-набора (панели, нормали, металл).
+    warpdrive::setShipHull(0.0f);
     {
       const Vec3 cam = app.m_camera.position;
       warpdrive::setShip(true, static_cast<float>(cam.x) + 0.52f,
@@ -5397,6 +5431,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
     }
     warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
     warpdrive::setShipStyle(app.m_shipStyle);
+    warpdrive::setShipHull(1.0f);
     warpdrive::setThruster(0.7f);
   }
 
@@ -5723,8 +5758,9 @@ void AppGL::startWarpJump(const std::string& id) {
   if (!findStation(id)) return;
   // v3.6.0: варп-роли корпусов — без варп-двигателя прыжок не летит.
   if (!ship::styleCanWarp(m_shipStyle)) {
-    m_shipNotice = uiRu("У этого корпуса нет варп-двигателя (Shuttle)",
-                        "This hull has no warp drive (Shuttle)");
+    m_shipNotice = uiRu(
+        "У этого корпуса нет варп-двигателя (Dart/Shuttle — досветовые).",
+        "This hull has no warp drive (Dart/Shuttle are sublight).");
     m_shipNoticeT = 3.0f;
     return;
   }
@@ -5780,13 +5816,21 @@ bool AppGL::updateWarp(float deltaTime) {
     const bool xDown = (glfwGetKey(win, GLFW_KEY_X) == GLFW_PRESS);
     if (xDown && !m_prevXPressed) {
       if (!m_warpOn) {
-        m_warpOn = true;
-        m_warpStatus = 1;  // Cruise
-        m_warpBaseFov = m_sceneManager->getSettings().fovDegrees;
-        m_warpLastFov = m_warpBaseFov;
-        m_warpFovDirty = true;
-        warpRetarget(warpTargetK(m_warpFactor));
-        m_warpFlash = 0.4f;  // v3.6.0: мягкая вспышка входа (комфорт для глаз)
+        // v4.0.0: Dart и Shuttle — досветовые корпуса, варп им недоступен.
+        if (!ship::styleCanWarp(m_shipStyle)) {
+          m_shipNotice = uiRu(
+              "У этого корпуса нет варп-двигателя (Dart/Shuttle — досветовые).",
+              "This hull has no warp drive (Dart/Shuttle are sublight).");
+          m_shipNoticeT = 3.0f;
+        } else {
+          m_warpOn = true;
+          m_warpStatus = 1;  // Cruise
+          m_warpBaseFov = m_sceneManager->getSettings().fovDegrees;
+          m_warpLastFov = m_warpBaseFov;
+          m_warpFovDirty = true;
+          warpRetarget(warpTargetK(m_warpFactor));
+          m_warpFlash = 0.4f;  // v3.6.0: мягкая вспышка входа (комфорт для глаз)
+        }
       } else if (m_warpStatus == 1 || m_warpStatus == 4) {
         disengageWarp();  // в Charging/Jump игнор — катсцену досматриваем
       }
@@ -6000,6 +6044,8 @@ bool AppGL::updateJumpCine(float deltaTime) {
         WarpJump::kAstDamage * difficultyTuning(m_difficulty).hazardK;
     const float shieldBefore = m_ship.shield;
     m_ship.shield = std::max(0.0f, m_ship.shield - damage);
+    // v4.0.0: обломки вминают обшивку даже сквозь щит.
+    ship::damageHull(m_ship, damage * 0.45f);
     m_shieldFlashK = ship::shieldFlashHit(m_shieldFlashK,
                                           shieldBefore - m_ship.shield);
     char msg[96];
@@ -6323,7 +6369,7 @@ void AppGL::drawWarpPanel() {
   const bool warpCap = ship::styleCanWarp(m_shipStyle);
   if (!warpCap) {
     ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.35f, 1.0f),
-                       "No warp drive on this hull (Shuttle)");
+                       "No warp drive on this hull (Dart/Shuttle are sublight)");
   }
   const bool canJump =
       (m_warpStatus == 1 && curSt && curSt->id != tgtId && warpCap);
@@ -7191,6 +7237,7 @@ void AppGL::startDockSequence(const std::string& dockId) {
   m_dockAnimTimer = 0.9f;
   m_dockInitialFuel = m_ship.fuel;
   m_dockInitialShield = m_ship.shield;
+  m_dockInitialHull = m_ship.hull;
   m_shipNotice = uiRu("Стыковочные манипуляторы захватывают корпус...",
                       "Docking clamps engaging hull...");
   m_shipNoticeT = 1.0f;
@@ -7233,6 +7280,7 @@ void AppGL::dockAtStation(const std::string& dockId) {
   m_ship.dockedStationId = dockId;
   m_ship.fuel = 100.0f;
   m_ship.shield = 100.0f;
+  m_ship.hull = 100.0f;
   m_shipVel = Vec3();
   m_ship.gravVel = Vec3();
   m_shipyardOpen = true;
@@ -7311,8 +7359,8 @@ void AppGL::drawShipyard() {
         ImGui::TextColored(ImVec4(0.9f, 0.75f, 0.2f, 1.0f), "%s", uiRu("Характеристики корпуса:", "Vessel Specifications:"));
         if (m_shipStyle == 0) {
           ImGui::BulletText("%s", uiRu("Класс: Скоростной перехватчик / Разведчик", "Class: High-speed Interceptor / Scout"));
-          ImGui::BulletText("%s: %s", uiRu("Варп-двигатель", "Warp Drive"), uiRu("Установлен (Класс I)", "Installed (Class I)"));
-          ImGui::BulletText("%s", uiRu("Преимущество: Высокая маневренность и быстрый форсаж", "Advantage: Superior agility & rapid boost"));
+          ImGui::BulletText("%s: %s", uiRu("Варп-двигатель", "Warp Drive"), uiRu("Отсутствует (досветовый перехватчик)", "None (Sublight Interceptor)"));
+          ImGui::BulletText("%s", uiRu("Преимущество: Высокая маневренность и ограниченный досветовой форсаж", "Advantage: Superior agility & capped sublight boost"));
         } else if (m_shipStyle == 1) {
           ImGui::BulletText("%s", uiRu("Класс: Исследователь дальнего космоса IXS Enterprise", "Class: Deep Space Explorer IXS Enterprise"));
           ImGui::BulletText("%s: %s", uiRu("Варп-двигатель", "Warp Drive"), uiRu("Тороидальные катушки Алькубьерре", "Alcubierre Toroidal Coils"));
@@ -7458,6 +7506,7 @@ void AppGL::drawShipyard() {
                            uiRu("Статус систем корабля:", "Ship Diagnostic Status:"));
         ImGui::BulletText("%s: %.0f / 100", uiRu("Топливо", "Fuel"), m_ship.fuel);
         ImGui::BulletText("%s: %.0f / 100", uiRu("Щиты", "Shields"), m_ship.shield);
+        ImGui::BulletText("%s: %.0f / 100", uiRu("Корпус", "Hull"), m_ship.hull);
         ImGui::BulletText("%s: %s", uiRu("Статус дока", "Dock Status"),
                           m_ship.isDocked ? uiRu("Состыкован", "Docked") : uiRu("Свободный дрейф", "Free Flight"));
 
@@ -7468,6 +7517,10 @@ void AppGL::drawShipyard() {
         ImGui::SameLine();
         if (ImGui::Button(uiRu("Восстановление щитов (100%)", "Recharge Shields (100%)"), ImVec2(220.0f, 28.0f))) {
           m_ship.shield = 100.0f;
+        }
+        ImGui::Spacing();
+        if (ImGui::Button(uiRu("Ремонт корпуса (100%)", "Restore Hull (100%)"), ImVec2(220.0f, 28.0f))) {
+          m_ship.hull = 100.0f;
         }
 
         ImGui::Spacing();

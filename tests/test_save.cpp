@@ -60,6 +60,7 @@ int main() {
     g.session.timeScale = 300.0f;
     g.session.fuel = 73.5f;
     g.session.shield = 42.25f;
+    g.session.hull = 63.5f;
     g.session.shipStyle = 2;
 
     const std::string text = astro::saveSerialize(g);
@@ -106,6 +107,7 @@ int main() {
         !close(out.session.timeScale, g.session.timeScale) ||
         !close(out.session.fuel, g.session.fuel) ||
         !close(out.session.shield, g.session.shield) ||
+        !close(out.session.hull, g.session.hull) ||
         out.session.shipStyle != g.session.shipStyle) {
       std::cerr << "Test 1 failed: session mismatch\n";
       return 1;

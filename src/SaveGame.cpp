@@ -490,6 +490,7 @@ std::string saveSerialize(const SaveGame& g) {
   out += ind(2) + "\"timeScale\": " + numToJson(g.session.timeScale) + ",\n";
   out += ind(2) + "\"fuel\": " + numToJson(g.session.fuel) + ",\n";
   out += ind(2) + "\"shield\": " + numToJson(g.session.shield) + ",\n";
+  out += ind(2) + "\"hull\": " + numToJson(g.session.hull) + ",\n";
   out += ind(2) + "\"shipStyle\": " + std::to_string(g.session.shipStyle) + ",\n";
   out += ind(2) + "\"hullTint\": ";
   writeVec3(out, Vec3(g.session.custom.primaryColor[0], g.session.custom.primaryColor[1], g.session.custom.primaryColor[2]));
@@ -571,6 +572,7 @@ bool saveDeserialize(const std::string& text, SaveGame& out, std::string& err) {
     out.session.timeScale = readFloat(*se, "timeScale", out.session.timeScale);
     out.session.fuel = readFloat(*se, "fuel", out.session.fuel);
     out.session.shield = readFloat(*se, "shield", out.session.shield);
+    out.session.hull = readFloat(*se, "hull", out.session.hull);
     out.session.shipStyle = readInt(*se, "shipStyle", out.session.shipStyle);
     out.session.custom.style = out.session.shipStyle;
     Vec3 ht(out.session.custom.primaryColor[0], out.session.custom.primaryColor[1], out.session.custom.primaryColor[2]);

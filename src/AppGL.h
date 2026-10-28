@@ -358,6 +358,7 @@ class AppGL {
   Vec3 m_dockTargetPos;
   float m_dockInitialFuel = 0.0f;
   float m_dockInitialShield = 0.0f;
+  float m_dockInitialHull = 100.0f;
   void startDockSequence(const std::string& dockId);
   void startUndockSequence();
 
@@ -383,7 +384,7 @@ class AppGL {
   void warpRetarget(float to);
   void disengageWarp();
   // v3.6.0: смена корпуса с учётом варп-ролей: если у нового корпуса нет
-  // варп-двигателя (Shuttle), варп-режим аккуратно гасится.
+  // варп-двигателя (Dart/Shuttle), варп-режим аккуратно гасится.
   void setShipStyleNow(int style);
   void startWarpJump(const std::string& id);
   // Возвращает true, если кадр consumed (катсцена прыжка: WASD глушим,
@@ -543,6 +544,10 @@ const ShipCustomization& shipCustomization();
 void setDockSitesVisible(bool v);
 bool dockSitesVisible();
 void setThruster(float k);  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
+// v4.0.0: целостность корпуса 0..1 (1 = новый, 0 = побитый). Влияет на
+// визуальное состояние OBJ-корпуса и процедурного fallback стиля 3.
+void setShipHull(float integrity);
+float shipHull();
 // v3.6.0 (пасс D): астероидное поле в Travel. k 0..1 — плотность/видимость
 // (дефолт 0, харнесс чистый), lane -1..1 — сглаженный сдвиг полосы обломков
 // навстречу уклонению (D сдвигает поле влево; читается как манёвр корабля).

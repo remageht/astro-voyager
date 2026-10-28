@@ -137,13 +137,35 @@ int main() {
   astro::ship::updateFuel(refuelShip, 2.0f, true, easy.starFuelK);
   AssertNear(refuelShip.fuel, 56.4f, 0.0001f, "easy star refuel x1.6");
 
-  // Test 8c (v3.6.0): варп-роли корпусов и дистанция/ETA в варп-панели.
-  if (!astro::ship::styleCanWarp(0) || !astro::ship::styleCanWarp(1)) {
-    std::cerr << "Dart and Ring Ship must be warp-capable\n";
+  // Test 8c (v3.6.0, v4.0.0): варп-роли корпусов. Варп-двигатель несут только
+  // Ring Ship (1) и Model OBJ (3); Dart (0) и Shuttle (2) — досветовые.
+  if (astro::ship::styleCanWarp(0) || !astro::ship::styleCanWarp(1) ||
+      astro::ship::styleCanWarp(2) || !astro::ship::styleCanWarp(3)) {
+    std::cerr << "only Ring Ship and Model OBJ must be warp-capable\n";
     return 1;
   }
-  if (astro::ship::styleCanWarp(2)) {
-    std::cerr << "Shuttle must not be warp-capable\n";
+  // v4.0.0: у досветовых корпусов форсаж заметно слабее варп-корпусов.
+  if (!(astro::ship::styleBoostSpeedMult(0) <
+            astro::ship::kBoostSpeedMultiplier) ||
+      !(astro::ship::styleBoostSpeedMult(2) <
+            astro::ship::kBoostSpeedMultiplier) ||
+      astro::ship::styleBoostSpeedMult(1) !=
+          astro::ship::kBoostSpeedMultiplier ||
+      astro::ship::styleBoostSpeedMult(3) !=
+          astro::ship::kBoostSpeedMultiplier) {
+    std::cerr << "sublight hulls must have a capped boost\n";
+    return 1;
+  }
+  // v4.0.0: корпус изнашивается от радиации и чинится в доке.
+  astro::ShipState hullShip;
+  astro::ship::applyRadiation(hullShip, 2.0f, true, 1.0f);
+  if (hullShip.hull >= 100.0f || hullShip.hull <= 0.0f) {
+    std::cerr << "radiation must wear the hull without killing it\n";
+    return 1;
+  }
+  astro::ship::repairHull(hullShip);
+  if (hullShip.hull != 100.0f) {
+    std::cerr << "repairHull must restore the hull\n";
     return 1;
   }
   // Классическая шкала v = f^3 c: 26000 ly на Warp 9 => ~35.7 лет.
