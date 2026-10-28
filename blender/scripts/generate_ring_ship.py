@@ -361,9 +361,9 @@ def build_ring_ship():
     parts.append(deflector)
 
     # 5. Three Alcubierre Resonance Warp Rings (-0.44, 0.0, +0.44)
-    # v4.1: кольца намеренно НЕ соединены с корпусом пилонами/спицами —
-    # это свободные варп-обручи, вращающиеся в собственной плоскости.
-    # Не добавляйте support pylons: они визуально «сшивают» кольца в клетку.
+    # v4.1: каждое кольцо крепится к корпусу ДВУМЯ статическими пилонами,
+    # но кольца не связаны друг с другом. Ориентация чередуется (1/3 — по X,
+    # 2 — по Y), чтобы пилоны не образовывали продольные «рельсы»/клетку.
     ring_positions = [-0.44, 0.0, 0.44]
     for r_idx, rz in enumerate(ring_positions):
         r_tag = f"R{r_idx+1}"
@@ -404,6 +404,23 @@ def build_ring_ship():
             node_obj.name = f"Ring_Node_{r_tag}_{node_i}"
             node_obj.data.materials.append(m_accent)
             parts.append(node_obj)
+
+        # 5d. Hull mounts (static). Outer end at r=0.370 in pre-normalize
+        # space (< shader spin threshold 0.372 after ~0.987 normalize), so the
+        # strut never enters the spinning torus band. Inner end sits inside
+        # the fuselage. Two per ring, 180° apart, alternating axis per ring.
+        mount_axis = (0.0, 1.0) if r_idx == 1 else (1.0, 0.0)
+        for s in (-1.0, 1.0):
+            mx = s * 0.2325 * mount_axis[0]
+            my = s * 0.2325 * mount_axis[1]
+            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(mx, my, rz))
+            mount = bpy.context.active_object
+            mount.name = f"Ring_Mount_{r_tag}_{'P' if s < 0 else 'S'}"
+            mount.scale = (0.275 if mount_axis[0] else 0.016,
+                           0.275 if mount_axis[1] else 0.016,
+                           0.016)
+            mount.data.materials.append(m_accent)
+            parts.append(mount)
 
     # 6. Navigation Lights on Aft Ring (Z = 0.44)
     # Port (Left, -X = Red)

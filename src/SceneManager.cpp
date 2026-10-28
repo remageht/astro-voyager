@@ -1828,10 +1828,24 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           parts.push_back({{0.0f, 0.0f, -0.82f}, {0.075f, 0.075f, 0.20f}, hullCol, 0, 0.90f, 0.32f});
           parts.push_back({{0.0f, 0.0f, -1.10f}, {0.030f, 0.030f, 0.30f}, hullCol, 0, 0.90f, 0.32f});
           parts.push_back({{0.0f, 0.0f, -1.38f}, {0.013f, 0.013f, 0.10f}, wingCol, 0, 0.72f, 0.45f});
-          // v4.1: три свободных варп-обруча вокруг корпуса, без спиц/пилонов.
-          // Раньше 4 спицы на кольцо образовывали продольные «рельсы» и
-          // визуально сшивали все три кольца в одну клетку.
-          for (float ringZ : {-0.50f, 0.0f, 0.50f}) {
+          // v4.1: каждый варп-обруч крепится к корпусу двумя статическими
+          // пилонами (тонкие эллипсоиды, конец у внутренней кромки кольца).
+          // Ориентация чередуется: кольца 1/3 — по X, кольцо 2 — по Y, чтобы
+          // пилоны не выстраивались в продольные «рельсы» и не сшивали три
+          // кольца в клетку.
+          for (int ri = 0; ri < 3; ++ri) {
+            const float ringZ = -0.50f + 0.50f * static_cast<float>(ri);
+            const bool horizontal = (ri != 1);
+            for (int s = -1; s <= 1; s += 2) {
+              const float off = 0.19f * static_cast<float>(s);
+              const glm::vec3 pos = horizontal
+                                        ? glm::vec3(off, 0.0f, ringZ)
+                                        : glm::vec3(0.0f, off, ringZ);
+              const glm::vec3 sc = horizontal
+                                       ? glm::vec3(0.14f, 0.013f, 0.013f)
+                                       : glm::vec3(0.013f, 0.14f, 0.013f);
+              parts.push_back({pos, sc, wingCol, 0, 0.82f, 0.34f});
+            }
             parts.push_back({{0.0f, 0.0f, ringZ}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
           }
           // Корма: обтекатель + центральное сопло с горлом + венец из 6 сопел.
