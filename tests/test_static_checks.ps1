@@ -337,7 +337,7 @@ Check 'ship ref committed' (Test-Path (Join-Path $root 'docs/screens/ship.png'))
 Check 'ship nozzle emissive geometry' (($sceneCpp -match 'nozzleCol') -and ($sceneCpp -match 'engineEmi'))
 Check 'ship nav lights' (($sceneCpp -match 'navRed') -and ($sceneCpp -match 'navGreen'))
 Check 'ship panel line shading' (((Read-File 'shaders/ship.frag') -match 'u_Emissive') -and ((Read-File 'shaders/ship.frag') -match 'fract') -and ((Read-File 'shaders/ship.vert') -match 'v_PartPos'))
-Check 'ring ship ring pylons' (($sceneCpp -match 'ringZ') -and ($sceneCpp -match '0\.13f, 0\.014f'))
+Check 'ring ship free-floating rings' (($sceneCpp -match 'ringZ') -and ($sceneCpp -match '1, 0\.78f, 0\.28f') -and ($sceneCpp -notmatch '0\.13f, 0\.014f, 0\.035f'))
 
 # --- settings pass v3.6.0: raytracing quality + AA + ship + difficulty ---
 Check 'settings ray tracing section' (($appCpp -match 'Ray quality') -and ($appCpp -match 'Shell radius'))

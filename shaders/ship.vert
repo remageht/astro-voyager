@@ -22,9 +22,19 @@ out vec3 v_PartPos;  // object-space позиция: панельные лини
 out vec3 v_ObjPos;   // ship-space позиция: скин Ring Ship
 out vec2 v_UV;
 void main() {
-  // Спин колец Model-корабля: отключен скручивающий процедурный сдвиг вершин
-  // цельного OBJ-меша, предотвращая деформацию пилонов и искажение колец.
+  // Спин колец Ring Ship (style 1): кольца — отдельные торы в XY-плоскости,
+  // пилоны к корпусу удалены из ring_ship.obj, поэтому можно вращать только
+  // обод (r>0.35) в его трёх z-срезах, не деформируя крепления.
   float k = 0.0;
+  {
+    float rxy = length(position.xy);
+    float radial = smoothstep(0.350, 0.370, rxy);
+    float z = position.z;
+    float slab = max(step(-0.36, z) * step(z, -0.10),
+                     max(step(0.14, z) * step(z, 0.31),
+                         step(0.57, z) * step(z, 0.76)));
+    k = radial * slab;
+  }
   float ang = u_RingSpin * k;
   float ca = cos(ang);
   float sa = sin(ang);

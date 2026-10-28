@@ -544,6 +544,10 @@ const ShipCustomization& shipCustomization();
 void setDockSitesVisible(bool v);
 bool dockSitesVisible();
 void setThruster(float k);  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
+// v4.1: визуальный коэффициент обычного форсажа 0..1 (Shift + ход, топливо).
+// Расход топлива остаётся в ship::spendBoostFuel; аура от него не включается.
+void setFuelAccel(float k);
+float fuelAccel();
 // v4.0.0: целостность корпуса 0..1 (1 = новый, 0 = побитый). Влияет на
 // визуальное состояние OBJ-корпуса и процедурного fallback стиля 3.
 void setShipHull(float integrity);

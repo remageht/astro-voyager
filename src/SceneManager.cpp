@@ -36,6 +36,10 @@ bool g_shipVisible = false;
 float g_shipPos[3] = {0.0f, 0.0f, 0.0f};
 float g_shipYaw = 0.0f;
 float g_shipThruster = 0.7f;  // v3.3.0: тяга 0..1 (шлейф/движок от скорости)
+// v4.1: визуальный коэффициент обычного форсажа (0..1). Топливо живёт в
+// ShipState (m_ship.fuel), здесь только множитель для двигателя/эффектов,
+// чтобы не дублировать расход и не тратить его дважды.
+float g_fuelAccel = 0.0f;
 int g_shipStyle = 0;  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model (OBJ)
 float g_shipHull = 1.0f;  // v4.0.0: 1 = новый корпус, 0 = полностью побитый
 static ShipCustomization g_shipCustomization;
@@ -98,6 +102,12 @@ void setThruster(float k) {
   g_shipThruster = k;
 }
 float thruster() { return g_shipThruster; }
+void setFuelAccel(float k) {
+  if (k < 0.0f) k = 0.0f;
+  if (k > 1.0f) k = 1.0f;
+  g_fuelAccel = k;
+}
+float fuelAccel() { return g_fuelAccel; }
 void setShipHull(float integrity) {
   if (integrity < 0.0f) integrity = 0.0f;
   if (integrity > 1.0f) integrity = 1.0f;
@@ -1818,13 +1828,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           parts.push_back({{0.0f, 0.0f, -0.82f}, {0.075f, 0.075f, 0.20f}, hullCol, 0, 0.90f, 0.32f});
           parts.push_back({{0.0f, 0.0f, -1.10f}, {0.030f, 0.030f, 0.30f}, hullCol, 0, 0.90f, 0.32f});
           parts.push_back({{0.0f, 0.0f, -1.38f}, {0.013f, 0.013f, 0.10f}, wingCol, 0, 0.72f, 0.45f});
-          // Три кольца, каждое на кресте из 4 пилонов (±x/±y, без поворотов).
-          for (float ringZ : {-0.44f, 0.0f, 0.44f}) {
+          // v4.1: три свободных варп-обруча вокруг корпуса, без спиц/пилонов.
+          // Раньше 4 спицы на кольцо образовывали продольные «рельсы» и
+          // визуально сшивали все три кольца в одну клетку.
+          for (float ringZ : {-0.50f, 0.0f, 0.50f}) {
             parts.push_back({{0.0f, 0.0f, ringZ}, {1.0f, 1.0f, 1.0f}, wingCol, 1, 0.78f, 0.28f});
-            parts.push_back({{0.20f, 0.0f, ringZ}, {0.13f, 0.014f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
-            parts.push_back({{-0.20f, 0.0f, ringZ}, {0.13f, 0.014f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
-            parts.push_back({{0.0f, 0.20f, ringZ}, {0.014f, 0.13f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
-            parts.push_back({{0.0f, -0.20f, ringZ}, {0.014f, 0.13f, 0.035f}, wingCol, 0, 0.72f, 0.45f});
           }
           // Корма: обтекатель + центральное сопло с горлом + венец из 6 сопел.
           parts.push_back({{0.0f, 0.0f, 0.62f}, {0.135f, 0.135f, 0.16f}, hullCol, 0, 0.90f, 0.32f});
@@ -2266,10 +2274,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         // v3.9.0: варп-кокон — эллипсоидный ореол из бегущих струй,
         // носовой веер, кормовой хвост и хризалидная оболочка.
-        // Аура видна ТОЛЬКО при движении с варп-искажением (warpVis > 0.001f).
-        if (warpVis > 0.001f) {
+        // Аура видна ТОЛЬКО при движении с варп-искажением (warpVis > 0.1f)
+        // И при активной тяге (thruster > 0.05f) — не на холостом ходу.
+        const float thr0 = warpdrive::thruster();
+        if (warpVis > 0.1f && thr0 > 0.05f) {
           const float warpAuraFade = glm::smoothstep(0.01f, 0.20f, warpVis);
-          const float thr = warpdrive::thruster();
+          const float thr = thr0 * (1.0f + 0.3f * warpdrive::fuelAccel());
           const float driftK = 1.1f + 5.5f * warpVis + 1.2f * thr;
           const float elongK = 1.0f + 0.35f * warpVis + 0.05f * thr;
           const float energyK = warpAuraFade * (0.30f + 0.75f * warpVis + 0.10f * thr);
@@ -2303,6 +2313,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_tailLines.drawLines();
           m_trailShader->unbind();
         }
+        // v4.1: топливо обычного форсажа расходует ship::spendBoostFuel()
+        // в AppGL; здесь только визуальный отклик, без второго списания.
         // Движок: 1 крупная пульсирующая КРАСНАЯ точка за кормой.
         {
           const float sy = warpdrive::shipYaw();
@@ -2312,9 +2324,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           const float ex = warpdrive::shipX() + engineBack * std::sin(sy);
           const float ez = warpdrive::shipZ() + engineBack * std::cos(sy);
           // v3.3.0: яркость и размер движка растут с тягой.
+          // v4.1: обычный форсаж на топливе (Shift) даёт заметный факел,
+          // но не включает варп-ауру — она живёт только при warpVis > 0.1.
           const float thr2 = warpdrive::thruster();
+          const float boost = warpdrive::fuelAccel();
           const float mag = (0.1f + 0.35f * std::sin(time * 18.0f)) *
-                            (0.55f + 1.45f * thr2);
+                            (0.55f + 1.45f * thr2) * (1.0f + 0.85f * boost);
           s_engine.setStars({glm::vec3(ex, warpdrive::shipY(), ez)}, {mag});
           const float pixelScale = static_cast<float>(fbHeight) /
               (2.0f * std::tan(glm::radians(m_settings.fovDegrees) * 0.5f));
@@ -2322,7 +2337,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           m_starShader->setUniformMat4f("u_MVP", mvp);
           m_starShader->setUniformMat4f("u_MV", view);
           m_starShader->setUniform1f("u_PixelScale", pixelScale);
-          m_starShader->setUniform1f("u_SizeK", 0.22f * (0.75f + 0.75f * thr2));
+          m_starShader->setUniform1f("u_SizeK", 0.22f * (0.75f + 0.75f * thr2) *
+                                                   (1.0f + 0.55f * boost));
           m_starShader->setUniform1f("u_Time", time);
           m_starShader->setUniform3f("u_Tint", kGlowTint[pal].x, kGlowTint[pal].y,
                                      kGlowTint[pal].z);

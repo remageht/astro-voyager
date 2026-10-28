@@ -361,6 +361,9 @@ def build_ring_ship():
     parts.append(deflector)
 
     # 5. Three Alcubierre Resonance Warp Rings (-0.44, 0.0, +0.44)
+    # v4.1: кольца намеренно НЕ соединены с корпусом пилонами/спицами —
+    # это свободные варп-обручи, вращающиеся в собственной плоскости.
+    # Не добавляйте support pylons: они визуально «сшивают» кольца в клетку.
     ring_positions = [-0.44, 0.0, 0.44]
     for r_idx, rz in enumerate(ring_positions):
         r_tag = f"R{r_idx+1}"
@@ -391,22 +394,7 @@ def build_ring_ship():
         torus_emit.data.materials.append(m_emitter)
         parts.append(torus_emit)
 
-        # 5c. 4-Way Aerodynamic Support Pylons (+X, -X, +Y, -Y)
-        pylon_defs = [
-            ("PX",  0.25,  0.00, (0.24, 0.016, 0.038)),
-            ("NX", -0.25,  0.00, (0.24, 0.016, 0.038)),
-            ("PY",  0.00,  0.25, (0.016, 0.24, 0.038)),
-            ("NY",  0.00, -0.25, (0.016, 0.24, 0.038)),
-        ]
-        for p_name, px, py, p_scale in pylon_defs:
-            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, rz))
-            pylon = bpy.context.active_object
-            pylon.name = f"Ring_Pylon_{r_tag}_{p_name}"
-            pylon.scale = p_scale
-            pylon.data.materials.append(m_accent)
-            parts.append(pylon)
-
-        # 5d. Harmonic Field Nodes (8 per ring)
+        # 5c. Harmonic Field Nodes (8 per ring)
         for node_i in range(8):
             ang = node_i * math.pi / 4.0
             nx = 0.42 * math.cos(ang)

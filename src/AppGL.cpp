@@ -3599,6 +3599,9 @@ void AppGL::updateSpeedFx(float deltaTime) {
   // v3.3.0: тяга масштабирует шлейф/движок корабля и гул в audioUpdate.
   // На форсаже пламя сопел раскрывается на максимум (1.0f).
   warpdrive::setThruster(m_ship.boostActive ? std::max(speedK, 1.0f) : speedK);
+  // v4.1: обычный форсаж (Shift + ход, топливо) — визуальный факел двигателя.
+  // Варп-аура от этого НЕ включается: её гейт по warpVis в SceneManager.
+  warpdrive::setFuelAccel(m_ship.boostActive ? 1.0f : 0.0f);
   // Микро-FOV: +3° на полном эффекте поверх варп-кривой (+10° * m_warpK).
   auto& st = m_sceneManager->getSettings();
   if (m_warpBaseFov <= 1.0f) m_warpBaseFov = st.fovDegrees;  // ленивая база

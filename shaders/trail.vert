@@ -65,7 +65,7 @@ void main() {
     col *= (0.015 + 0.35 * fres) * flows * (0.75 + 0.25 * blotch);
     // Деликатный ободок у переднего полюса без избыточной засветки.
     col += vec3(0.90, 0.96, 1.0) * exp(-max(-zz, 0.0) * 2.2) * fres * 0.40;
-    col *= u_Energy * 0.70;
+    col *= u_Energy * 0.35;
     v_Color = col;
     return;
   }
@@ -95,7 +95,7 @@ void main() {
     // Мягкий полупрозрачный блик у носового полюса.
     col += vec3(1.0, 0.97, 0.92) * exp(-max(-zz, 0.0) * 2.6) * 0.40 * mixF;
     // Снижаем яркость в ~2.8 раза (0.36), чтобы корпус и звёзды читались сквозь линии.
-    col *= env * (0.85 + 0.45 * id) * u_Energy * 0.36;
+    col *= env * (0.85 + 0.45 * id) * u_Energy * 0.18;
     v_Color = col;
     return;
   }
@@ -105,7 +105,7 @@ void main() {
     float glow = 1.0 - f * f;
     float fl = 0.75 + 0.25 * sin(u_Time * 7.3 + position.y * 31.0);
     vec3 col = mix(u_CyanCol, vec3(1.0, 0.98, 0.95), 0.50) * glow * fl;
-    col *= u_Energy * (0.40 + 0.60 * glow) * 0.36;
+    col *= u_Energy * (0.40 + 0.60 * glow) * 0.18;
     v_Color = col;
     gl_Position = u_MVP * u_Model * vec4(position, 1.0);
     return;
@@ -118,6 +118,6 @@ void main() {
   float fade = 1.0 - clamp((p.z - 1.05) / 1.45, 0.0, 1.0);
   float fl = 0.80 + 0.20 * sin(u_Time * 3.1 + position.x * 23.0);
   vec3 col = u_RedCol * (0.55 + 0.45 * fade) * fade * fl;
-  col *= u_Energy * 0.36;
+  col *= u_Energy * 0.18;
   v_Color = col;
 }
