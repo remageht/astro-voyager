@@ -789,6 +789,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         if (b.def && b.def->id == "earth") { earthPos = b.pos; break; }
       }
       m_dockSites.push_back(DockSite{"dock-sol", "Gateway Orbital Shipyard", "sol", Vec3(earthPos.x + 0.35, earthPos.y + 0.25, earthPos.z + 0.65), 4.5f});
+      m_dockSites.push_back(DockSite{"dock-dragon", "SpaceX Crew Dragon (Endeavour)", "sol", Vec3(earthPos.x + 0.85, earthPos.y - 0.45, earthPos.z + 1.25), 3.0f});
       m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
       m_dockSites.push_back(DockSite{"dock-probe", "Helios Deep Space Relay", "sol", Vec3(earthPos.x - 1.85, earthPos.y + 0.65, earthPos.z - 2.45), 3.0f});
     } else if (m_currentStation->id == "m13") {
@@ -2179,6 +2180,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_telescopeModel;
           static ObjModel s_warpCoreModel;
           static ObjModel s_probeModel;
+          static ObjModel s_dragonModel;
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2193,6 +2195,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
 
             s_probeModel.load("res/models/probe.obj");
             s_probeModel.loadTextures("res/models/probe");
+
+            s_dragonModel.load("res/models/dragon.obj");
+            s_dragonModel.loadTextures("res/models/dragon");
           }
 
           glEnable(GL_DEPTH_TEST);
@@ -2210,7 +2215,17 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             float customMetal = 0.75f;
             float customRough = 0.35f;
 
-            if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
+            if (dock.id == "dock-dragon" && s_dragonModel.ready()) {
+              siteModel = &s_dragonModel;
+              stScale = 0.28f;
+              // SpaceX Crew Dragon: stable orbital attitude holding with subtle drift
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.03f * time + 0.45f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::rotate(glm::mat4(1.0f), -0.15f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+              customMetal = 0.82f;
+              customRough = 0.35f;
+            } else if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
               siteModel = &s_telescopeModel;
               stScale = 0.28f;
               // James Webb Telescope: oriented into deep space, sunshield facing Sol

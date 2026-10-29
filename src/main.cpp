@@ -769,6 +769,10 @@ int main(int argc, char** argv) {
     std::string outPng = (argc > 2) ? argv[2] : "blender/out/ingame_station_check.png";
     return astro::AppGL::captureStationCheck(outPng);
   }
+  if (arg == "--capture-dragon") {
+    std::string outPng = (argc > 2) ? argv[2] : "docs/screens/spacex_dragon_ingame.png";
+    return astro::AppGL::captureDragonCheck(outPng);
+  }
   if (arg == "--gl" || arg.empty()) {
     try {
       astro::AppGL app;
