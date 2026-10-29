@@ -8100,6 +8100,35 @@ void AppGL::drawShipyard() {
         }
       }
 
+      // === TAB 6: SOYUZ-MS AVIONICS (v3.11.0) ===
+      if (m_ship.dockedStationId == "dock-soyuz" || m_dockHintId == "dock-soyuz") {
+        if (ImGui::BeginTabItem(uiRu("Союз-МС", "Soyuz-MS"))) {
+          ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.25f, 1.0f), "%s",
+                             uiRu("Бортовой комплекс управления ТПК «Союз МС-25»:",
+                                  "Soyuz MS-25 Spacecraft Avionics Complex:"));
+          ImGui::Separator();
+          ImGui::BulletText("%s: %s", uiRu("Космический аппарат", "Spacecraft"), "Soyuz MS-25 (Roscosmos)");
+          ImGui::BulletText("%s: %s", uiRu("Конструкция", "Architecture"),
+                            uiRu("3 отсека: СА (спускаемый), БО (бытовой), ПАО (приборный)",
+                                 "3 modules: Descent (SA), Orbital (BO), Service (PAO)"));
+          ImGui::BulletText("%s: %s", uiRu("Двигательная установка", "Propulsion Unit"),
+                            "СКД 2.95 kN (300 kgf) + 28x ДПО 130 N (N2O4/UDMH) [READY]");
+          ImGui::BulletText("%s: %s", uiRu("Система сближения", "Rendezvous System"),
+                            uiRu("«Курс-НА» (автоматический захват маяка)", "Kurs-NA (automated beacon acquisition)"));
+          ImGui::BulletText("%s: %s", uiRu("Стыковочный механизм", "Docking Mechanism"),
+                            uiRu("ССВП-М (штырь-конус с гидроамортизатором) [СЦЕПКА / НОРМА]",
+                                 "SSVP-M Probe-and-Cone [LOCKED / NOMINAL]"));
+          ImGui::BulletText("%s: %s", uiRu("Солнечные батареи", "Solar Arrays"),
+                            "2 wings GaAs (10.6 m2, 1.35 kW generation)");
+          ImGui::BulletText("%s: 101.3 kPa (N2/O2 mix, CO2 nominal)", uiRu("Атмосфера СА/БО", "Cabin Atmosphere"));
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%s",
+                             uiRu("Статус: Самый надёжный пилотируемый космический корабль в истории.",
+                                  "Status: Most reliable human-rated spacecraft in history."));
+          ImGui::EndTabItem();
+        }
+      }
+
       ImGui::EndTabBar();
     }
   }

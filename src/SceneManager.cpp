@@ -790,6 +790,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       }
       m_dockSites.push_back(DockSite{"dock-sol", "Gateway Orbital Shipyard", "sol", Vec3(earthPos.x + 0.35, earthPos.y + 0.25, earthPos.z + 0.65), 4.5f});
       m_dockSites.push_back(DockSite{"dock-dragon", "SpaceX Crew Dragon (Endeavour)", "sol", Vec3(earthPos.x + 0.85, earthPos.y - 0.45, earthPos.z + 1.25), 3.0f});
+      m_dockSites.push_back(DockSite{"dock-soyuz", "Soyuz MS-25 (Roscosmos)", "sol", Vec3(earthPos.x - 0.85, earthPos.y - 0.35, earthPos.z + 1.35), 3.0f});
       m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
       m_dockSites.push_back(DockSite{"dock-probe", "Helios Deep Space Relay", "sol", Vec3(earthPos.x - 1.85, earthPos.y + 0.65, earthPos.z - 2.45), 3.0f});
     } else if (m_currentStation->id == "m13") {
@@ -2181,6 +2182,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_warpCoreModel;
           static ObjModel s_probeModel;
           static ObjModel s_dragonModel;
+          static ObjModel s_soyuzModel;
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2198,6 +2200,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
 
             s_dragonModel.load("res/models/dragon.obj");
             s_dragonModel.loadTextures("res/models/dragon");
+
+            s_soyuzModel.load("res/models/soyuz.obj");
+            s_soyuzModel.loadTextures("res/models/soyuz");
           }
 
           glEnable(GL_DEPTH_TEST);
@@ -2225,6 +2230,16 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
               customMetal = 0.82f;
               customRough = 0.35f;
+            } else if (dock.id == "dock-soyuz" && s_soyuzModel.ready()) {
+              siteModel = &s_soyuzModel;
+              stScale = 0.28f;
+              // Soyuz MS-25: orbital velocity alignment with solar arrays perpendicular to Sol
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.04f * time - 0.55f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::rotate(glm::mat4(1.0f), 0.18f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+              customMetal = 0.70f;
+              customRough = 0.42f;
             } else if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
               siteModel = &s_telescopeModel;
               stScale = 0.28f;
