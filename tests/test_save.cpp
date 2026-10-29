@@ -19,6 +19,7 @@ bool sameVec(const astro::Vec3& a, const astro::Vec3& b) {
 }  // namespace
 
 int main() {
+  try {
   // Test 1: полный round-trip SaveGame (прогресс, объекты, сессия)
   {
     astro::SaveGame g;
@@ -231,11 +232,12 @@ int main() {
 
   // Test 8: запись/чтение файла (с автосозданием директории) + отсутствие файла
   {
-    const std::filesystem::path dir =
-        std::filesystem::temp_directory_path() / "astro_save_test" / "nested";
-    const std::string path = (dir / "save-sandbox.json").string();
-    std::filesystem::remove_all(std::filesystem::temp_directory_path() /
-                                "astro_save_test");
+    const std::filesystem::path testRoot =
+        std::filesystem::current_path() / "test_save_tmp";
+    const std::filesystem::path dir = testRoot / "nested";
+    const std::string path = (dir / "save-sandbox.json").u8string();
+    std::error_code ec;
+    std::filesystem::remove_all(testRoot, ec);
 
     astro::SaveGame g;
     g.session.station = "ori";
@@ -265,16 +267,15 @@ int main() {
       return 1;
     }
     std::string missing;
-    if (astro::saveReadFile((dir / "nope.json").string(), missing, err)) {
+    if (astro::saveReadFile((dir / "nope.json").u8string(), missing, err)) {
       std::cerr << "Test 8 failed: expected failure on missing file\n";
       return 1;
     }
-    if (astro::saveFileExists((dir / "nope.json").string())) {
+    if (astro::saveFileExists((dir / "nope.json").u8string())) {
       std::cerr << "Test 8 failed: exists() true for missing file\n";
       return 1;
     }
-    std::filesystem::remove_all(std::filesystem::temp_directory_path() /
-                                "astro_save_test");
+    std::filesystem::remove_all(testRoot, ec);
   }
 
   // Test 9: пути слотов
@@ -422,4 +423,8 @@ int main() {
   }
   std::cout << "save tests: ALL PASS\n";
   return 0;
+  } catch (const std::exception& e) {
+    std::cerr << "Uncaught exception in test_save: " << e.what() << '\n';
+    return 1;
+  }
 }

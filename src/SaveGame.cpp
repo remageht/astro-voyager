@@ -1,11 +1,13 @@
 #include "SaveGame.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <system_error>
+#include <thread>
 #include <utility>
 
 namespace astro {
@@ -668,8 +670,17 @@ bool saveDeserializeSettings(const std::string& text, SaveSettings& out,
 std::string saveProfileDir() {
   std::string root;
 #if defined(_WIN32)
-  const std::string appdata = envVar("APPDATA");
-  root = appdata.empty() ? "." : appdata;
+  wchar_t* wbuf = nullptr;
+  size_t wlen = 0;
+  if (_wdupenv_s(&wbuf, &wlen, L"APPDATA") == 0 && wbuf) {
+    std::filesystem::path wp(wbuf);
+    std::free(wbuf);
+    root = wp.u8string();
+  }
+  if (root.empty()) {
+    const std::string appdata = envVar("APPDATA");
+    root = appdata.empty() ? "." : appdata;
+  }
 #elif defined(__APPLE__)
   const std::string home = envVar("HOME");
   root = home.empty() ? "." : home + "/Library/Application Support";
@@ -709,17 +720,28 @@ const char* saveModeName(SaveMode mode) {
 bool saveWriteFile(const std::string& path, const std::string& text,
                    std::string& err) {
   err.clear();
-  const std::filesystem::path p(path);
+  const std::filesystem::path p = std::filesystem::u8path(path);
   if (p.has_parent_path()) {
     std::error_code ec;
     std::filesystem::create_directories(p.parent_path(), ec);
+    for (int retry = 0; retry < 5 && ec; ++retry) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+      ec.clear();
+      std::filesystem::create_directories(p.parent_path(), ec);
+    }
     if (ec) {
-      err = "cannot create directory " + p.parent_path().string() + ": " +
+      err = "cannot create directory " + p.parent_path().u8string() + ": " +
             ec.message();
       return false;
     }
   }
-  std::ofstream f(path, std::ios::binary | std::ios::trunc);
+  std::ofstream f;
+  for (int retry = 0; retry < 10; ++retry) {
+    f.clear();
+    f.open(p, std::ios::binary | std::ios::trunc);
+    if (f) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
   if (!f) {
     err = "cannot open for write: " + path;
     return false;
@@ -735,7 +757,8 @@ bool saveWriteFile(const std::string& path, const std::string& text,
 bool saveReadFile(const std::string& path, std::string& out, std::string& err) {
   err.clear();
   out.clear();
-  std::ifstream f(path, std::ios::binary);
+  const std::filesystem::path p = std::filesystem::u8path(path);
+  std::ifstream f(p, std::ios::binary);
   if (!f) {
     err = "cannot open for read: " + path;
     return false;
@@ -752,7 +775,7 @@ bool saveReadFile(const std::string& path, std::string& out, std::string& err) {
 
 bool saveFileExists(const std::string& path) {
   std::error_code ec;
-  return std::filesystem::exists(path, ec);
+  return std::filesystem::exists(std::filesystem::u8path(path), ec);
 }
 
 std::string saveUtcNowISO8601() {

@@ -240,7 +240,7 @@ void main() {
       chev = chev * 0.8 + 0.2 * fbm3(sp * 3.0 + u_Seed * 1.3);
       albedo = mix(vec3(0.96, 0.88, 0.68), vec3(0.80, 0.66, 0.44), chev * 0.55);
     } else if (u_Body == 6) {
-      // MARS: basalt + wind-blown dust streaks, seasonal tint, polar caps.
+      // MARS: basalt + wind-blown dust streaks, seasonal tint, polar caps, rift canyons.
       float continents = fbm4(sp * 3.0 + u_Seed) * 0.9677 + 0.0323 * vnoise3((sp * 3.0 + u_Seed) * 16.9818);
       land = smoothstep(0.48, 0.56, continents);
       albedo = mix(u_ColA, u_ColB, land);
@@ -248,8 +248,15 @@ void main() {
       albedo = mix(albedo, vec3(0.85, 0.55, 0.35), dust * 0.45);
       float season = 0.5 + 0.5 * sin(u_Time * 0.07);
       albedo = mix(albedo, albedo * vec3(1.06, 0.92, 0.86), season * 0.5);
-      float cap = smoothstep(0.86, 0.93, abs(spN.y));
-      albedo = mix(albedo, vec3(0.92, 0.90, 0.88), cap);
+      // Craters and chasms
+      float crBig = smoothstep(0.66, 0.76, fbm3(sp * 16.0 + u_Seed * 2.3));
+      albedo *= 1.0 - crBig * 0.35;
+      float crSmall = smoothstep(0.72, 0.77, fbm3(sp * 38.0 + u_Seed * 5.1));
+      albedo *= 1.0 - crSmall * 0.22;
+      // Organic fractured polar ice cap
+      float capNoise = fbm4(sp * 7.5 + u_Seed * 3.7) * 0.06;
+      float cap = smoothstep(0.86, 0.93, abs(spN.y) + capNoise);
+      albedo = mix(albedo, vec3(0.94, 0.92, 0.90), cap);
     } else if (u_Body == 5) {
       // MOON family (Earth's Moon + Galileans + Titan): maria plains,
       // highlands, two-scale craters, tinted by u_ColA/u_ColB. The Moon def
@@ -268,8 +275,106 @@ void main() {
       albedo *= 1.0 - cr * 0.50;
       float micro = smoothstep(0.70, 0.74, fbm3(sp * 55.0 + u_Seed * 1.7));
       albedo *= 1.0 - micro * 0.28;
+    } else if (u_Body == 4) {
+      // EARTH: Multi-biome procedural Earth with bathymetry, organic ice caps, and directional cloud shadows.
+      float continents = fbm4(sp * 3.0 + u_Seed) * 0.9677 + 0.0323 * vnoise3((sp * 3.0 + u_Seed) * 16.9818);
+      land = smoothstep(0.48, 0.56, continents);
+
+      // --- Ocean Bathymetry (Depth Gradients) ---
+      float oceanDepth = smoothstep(0.20, 0.48, continents);
+      vec3 deepAbyss = vec3(0.015, 0.045, 0.14);
+      vec3 openOcean = mix(vec3(0.030, 0.115, 0.29), u_ColA * 0.35, 0.3);
+      vec3 shelfCol  = vec3(0.075, 0.460, 0.58);
+      vec3 lagoonCol = vec3(0.120, 0.580, 0.65);
+
+      vec3 oceanCol = mix(deepAbyss, openOcean, oceanDepth);
+      float shelf = smoothstep(0.40, 0.48, continents);
+      oceanCol = mix(oceanCol, shelfCol, shelf * 0.75);
+      float lagoon = smoothstep(0.46, 0.485, continents);
+      oceanCol = mix(oceanCol, lagoonCol, lagoon * 0.65);
+
+      // --- Multi-Biome Land Terrain ---
+      float lat = abs(spN.y);
+      float moisture = fbm4(sp * 2.5 + u_Seed * 1.7 + vec3(1.2, 3.4, 5.6));
+      float elevation = fbm4(sp * 6.5 + u_Seed * 3.3);
+
+      vec3 desertSand    = vec3(0.74, 0.60, 0.38); // Arid desert sand
+      vec3 desertDunes   = vec3(0.66, 0.48, 0.28); // Weathered reddish dunes
+      vec3 rainforest    = vec3(0.07, 0.28, 0.10); // Lush tropical canopy
+      vec3 savannaGrass  = vec3(0.38, 0.46, 0.20); // Subtropical grasslands
+      vec3 temperateWood = vec3(0.15, 0.36, 0.13); // Temperate broadleaf forests
+      vec3 plainsGreen   = vec3(0.25, 0.44, 0.18); // Rolling temperate plains
+      vec3 borealTaiga   = vec3(0.11, 0.23, 0.14); // Subpolar coniferous taiga
+      vec3 tundraMoss    = vec3(0.38, 0.38, 0.28); // High-latitude tundra
+      vec3 mountainRock  = vec3(0.34, 0.30, 0.26); // Craggy highland peaks
+      vec3 mountainSnow  = vec3(0.92, 0.95, 0.98); // High-altitude alpine snow
+
+      vec3 tropicalCol = mix(savannaGrass, rainforest, smoothstep(0.35, 0.65, moisture));
+      vec3 aridCol = mix(desertDunes, desertSand, smoothstep(0.30, 0.60, elevation));
+      vec3 subTropCol = mix(aridCol, savannaGrass, smoothstep(0.48, 0.70, moisture));
+      vec3 temperateCol = mix(plainsGreen, temperateWood, smoothstep(0.38, 0.65, moisture));
+      vec3 polarBorderCol = mix(tundraMoss, borealTaiga, smoothstep(0.40, 0.65, moisture));
+
+      vec3 landCol = tropicalCol;
+      landCol = mix(landCol, subTropCol, smoothstep(0.18, 0.30, lat));
+      landCol = mix(landCol, temperateCol, smoothstep(0.36, 0.48, lat));
+      landCol = mix(landCol, polarBorderCol, smoothstep(0.58, 0.70, lat));
+
+      // Mountain ridges and snow-capped peaks
+      float mountainMask = smoothstep(0.55, 0.75, elevation) * smoothstep(0.50, 0.58, continents);
+      landCol = mix(landCol, mountainRock, mountainMask * 0.85);
+      float peakSnowMask = smoothstep(0.70, 0.85, elevation + lat * 0.35) * smoothstep(0.51, 0.58, continents);
+      landCol = mix(landCol, mountainSnow, peakSnowMask * 0.95);
+
+      // Coastline sandy beach
+      landCol = mix(vec3(0.70, 0.64, 0.50), landCol, smoothstep(0.50, 0.53, continents));
+
+      // Blend land base color with u_ColB
+      landCol = mix(landCol, mix(landCol, u_ColB, 0.25), 0.5);
+
+      albedo = mix(oceanCol, landCol, land);
+
+      // --- Organic Fractured Polar Ice Caps & Sea Ice Floes ---
+      float iceNoise = fbm4(sp * 6.5 + u_Seed * 4.1) * 0.12 + fbm3(sp * 16.0 + vec3(2.1, 0.4, 1.8)) * 0.05;
+      float capLat = lat + iceNoise;
+      float cap = smoothstep(0.78, 0.87, capLat);
+      float seaIce = smoothstep(0.72, 0.80, capLat) * (1.0 - cap) * (1.0 - land);
+      vec3 glacialIce = mix(vec3(0.92, 0.95, 0.99), vec3(0.82, 0.91, 0.96), fbm3(sp * 12.0));
+      albedo = mix(albedo, glacialIce, cap);
+      albedo = mix(albedo, vec3(0.72, 0.86, 0.93), seaIce * 0.65);
+
+      // --- Two-Layer Cyclonic Cloud System with Directional Ground Shadows ---
+      vec3 sunDirLocal = sunDir;
+      if (u_SpinAngle != 0.0) {
+        float spinC = cos(u_SpinAngle);
+        float spinS = sin(u_SpinAngle);
+        sunDirLocal = vec3(spinC * sunDir.x + spinS * sunDir.z, sunDir.y,
+                           -spinS * sunDir.x + spinC * sunDir.z);
+      }
+      vec3 cp = sp * 4.8 + u_Seed + vec3(u_Time * 0.03, 0.0, 0.0);
+      float cl1 = fbm4(cp);
+      float cl2 = fbm3(cp * 2.4 + vec3(u_Time * 0.015, 0.0, 0.0));
+      float cloudVal = cl1 * 0.72 + cl2 * 0.28;
+      float clm = smoothstep(0.50, 0.72, cloudVal) * u_Clouds;
+
+      // Directional cloud shadow projected onto surface along local sun vector
+      vec3 shadowSp = sp - sunDirLocal * 0.026;
+      vec3 shadowCp = shadowSp * 4.8 + u_Seed + vec3(u_Time * 0.03, 0.0, 0.0);
+      float shadowCl1 = fbm4(shadowCp);
+      float shadowCl2 = fbm3(shadowCp * 2.4 + vec3(u_Time * 0.015, 0.0, 0.0));
+      float shadowVal = shadowCl1 * 0.72 + shadowCl2 * 0.28;
+      cloudShadow = smoothstep(0.51, 0.73, shadowVal) * u_Clouds * 0.42;
+
+      // Ground shadow dims diffuse direct sunlight on land & ocean
+      albedo *= 1.0 - cloudShadow * (0.2 + 0.8 * diff);
+
+      // Volumetric cloud self-shadowing and sun-side rim lighting
+      vec3 cloudIllumSp = cp + sunDirLocal * 0.12;
+      float cloudSunDiff = clamp(fbm4(cloudIllumSp) - cl1 + 0.65, 0.45, 1.15);
+      vec3 cloudCol = vec3(0.96, 0.98, 1.0) * cloudSunDiff;
+      albedo = mix(albedo, cloudCol, clm * 0.90);
     } else {
-      // EARTH + generic rocky: continents, craters, caps, clouds.
+      // Generic rocky: continents, craters, caps, clouds.
       float continents = fbm4(sp * 3.0 + u_Seed) * 0.9677 + 0.0323 * vnoise3((sp * 3.0 + u_Seed) * 16.9818);
       land = smoothstep(0.48, 0.56, continents);
       albedo = mix(u_ColA, u_ColB, land);
@@ -280,14 +385,6 @@ void main() {
       albedo *= 1.0 - cr * 0.45;
       float cap = smoothstep(0.80, 0.88, abs(spN.y));
       albedo = mix(albedo, vec3(0.9, 0.93, 0.95), cap);
-      if (u_Body == 4) {
-        vec3 cp = sp * 5.0 + u_Seed + vec3(u_Time * 0.03, 0.0, 0.0);
-        float cl = fbm4(cp);
-        float clm = smoothstep(0.55, 0.75, cl) * u_Clouds;
-        cloudShadow = clm * 0.35;
-        albedo *= 1.0 - cloudShadow * (0.2 + diff);
-        albedo = mix(albedo, vec3(1.0), clm * 0.85);
-      }
     }
   } else if (u_Type == 4) {
     albedo = vec3(0.75, 1.0, 0.85);
@@ -354,7 +451,7 @@ void main() {
     float twi = smoothstep(-0.08, 0.02, diff) * (1.0 - smoothstep(0.02, 0.25, diff));
     dayCol += albedo * vec3(0.9, 0.4, 0.2) * twi * 0.35;
     // Seasonal shine on the polar caps.
-    float capM = smoothstep(0.80, 0.88, abs(spN.y));
+    float capM = smoothstep(0.78, 0.87, abs(spN.y) + fbm4(sp * 6.5 + u_Seed * 4.1) * 0.12);
     vec3 rdir = reflect(-sunDir, n);
     float spec = pow(max(dot(rdir, viewDir), 0.0), 24.0);
     float season = 0.5 + 0.5 * sin(u_Time * 0.1);
@@ -400,6 +497,10 @@ void main() {
       // Venus: bright milky limb haze, surface stays hidden.
       rimColor = vec3(1.0, 0.92, 0.72);
       rimGain = 2.2;
+    } else if (u_Body == 4) {
+      // Earth: luminous sapphire/cyan Rayleigh limb veil.
+      rimColor = vec3(0.22, 0.58, 1.15);
+      rimGain = 1.45;
     }
     float atmRim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
     col += rimColor * atmRim * (0.25 + diff) * rimGain;

@@ -790,6 +790,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       }
       m_dockSites.push_back(DockSite{"dock-sol", "Gateway Orbital Shipyard", "sol", Vec3(earthPos.x + 0.35, earthPos.y + 0.25, earthPos.z + 0.65), 4.5f});
       m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
+      m_dockSites.push_back(DockSite{"dock-probe", "Helios Deep Space Relay", "sol", Vec3(earthPos.x - 1.85, earthPos.y + 0.65, earthPos.z - 2.45), 3.0f});
     } else if (m_currentStation->id == "m13") {
       m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
     } else if (m_currentStation->id == "sgra") {
@@ -1645,9 +1646,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         // Оверлей никогда не ломает кадр.
       }
     }
-    // Сплошной корабль: поверх оверлея, с depth-тестом между частями.
-    if (warpdrive::shipVisible()) {
-      try {
+    // 3D Scene Objects (Ship, Space Stations, Probes)
+    try {
         static bool s_shipFailed = false;
         static Shader* s_shipShader = nullptr;
         static SphereMesh s_shipSphere;
@@ -1770,7 +1770,56 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glm::vec3 up(cu.x, cu.y, cu.z);
         glm::mat4 view = glm::lookAt(eye, eye + fwd, up);
         glm::mat4 mvp = proj * view;
-        // Сплошные части: depth тест + запись, ламберт+френель через ship.frag.
+        glm::vec3 keyDir(0.42f, 0.70f, 0.56f);
+        glm::vec3 keyCol(1.00f, 0.95f, 0.88f);
+        if (const Station* st = getCurrentStation()) {
+          glm::vec3 anchor(0.0f);
+          glm::vec3 sunPos;
+          if (sunWorldPos(sunPos)) anchor = sunPos;
+          const glm::vec3 d = anchor - shipPos;
+          const float len = glm::length(d);
+          if (len > 1e-4f) keyDir = d / len;
+          switch (st->type) {
+            case StationType::BlackHole:
+              keyCol = glm::vec3(1.00f, 0.70f, 0.42f) * 1.25f; break;
+            case StationType::Quasar:
+              keyCol = glm::vec3(0.85f, 0.92f, 1.18f) * 1.45f; break;
+            case StationType::Pulsar:
+              keyCol = glm::vec3(0.78f, 0.90f, 1.12f) * 1.05f; break;
+            case StationType::Galaxy:
+            case StationType::StarCluster:
+              keyCol = glm::vec3(1.00f, 0.94f, 0.84f) * 0.70f; break;
+            case StationType::Nebula:
+              keyCol = glm::vec3(0.92f, 0.86f, 0.98f) * 0.60f; break;
+            case StationType::SolarSystem:
+              keyCol = glm::vec3(1.00f, 0.94f, 0.82f) * 1.45f; break;
+            case StationType::Constellation:
+              keyCol = glm::vec3(0.95f, 0.97f, 1.00f) * 0.50f; break;
+          }
+          keyDir = glm::normalize(keyDir + glm::vec3(0.0f, 0.30f, 0.0f));
+        }
+
+        static const glm::vec3 kEngineEmi[4] = {
+            {2.40f, 0.50f, 0.20f},
+            {0.55f, 1.30f, 2.60f},
+            {0.55f, 2.20f, 1.00f},
+            {1.90f, 0.85f, 2.60f}};
+        static const glm::vec3 kGlowTint[4] = {
+            {1.00f, 0.22f, 0.10f},
+            {0.35f, 0.60f, 1.00f},
+            {0.25f, 1.00f, 0.50f},
+            {0.90f, 0.55f, 1.00f}};
+        static const glm::vec3 kTrailBase[4] = {
+            {0.25f, 0.45f, 0.70f},
+            {0.30f, 0.50f, 1.00f},
+            {0.25f, 0.85f, 0.55f},
+            {0.70f, 0.45f, 1.00f}};
+        const int pal = std::min(std::max(m_settings.enginePalette, 0), 3);
+        const glm::vec3 engineEmi = kEngineEmi[pal];
+        const int style = warpdrive::shipStyle();
+
+        // Pass 1: Solid ship exterior (visible only when shipVisible is true)
+        if (warpdrive::shipVisible()) {
         glClear(GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
         glDepthMask(GL_TRUE);
@@ -1792,27 +1841,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         const glm::vec3 nozzleCol(0.16f, 0.17f, 0.20f);  // тёмный металл сопла
         const glm::vec3 navRed(1.80f, 0.16f, 0.12f);
         const glm::vec3 navGreen(0.16f, 1.60f, 0.55f);
-        // v3.6.0: палитра выхлопа из настроек. Индекс 0 — исторический
-        // красно-оранжевый (эталон ship.png не меняется), далее ион/изумруд/плазма.
-        static const glm::vec3 kEngineEmi[4] = {
-            {2.40f, 0.50f, 0.20f},
-            {0.55f, 1.30f, 2.60f},
-            {0.55f, 2.20f, 1.00f},
-            {1.90f, 0.85f, 2.60f}};
-        static const glm::vec3 kGlowTint[4] = {
-            {1.00f, 0.22f, 0.10f},
-            {0.35f, 0.60f, 1.00f},
-            {0.25f, 1.00f, 0.50f},
-            {0.90f, 0.55f, 1.00f}};
-        static const glm::vec3 kTrailBase[4] = {
-            {0.25f, 0.45f, 0.70f},
-            {0.30f, 0.50f, 1.00f},
-            {0.25f, 0.85f, 0.55f},
-            {0.70f, 0.45f, 1.00f}};
-        const int pal = std::min(std::max(m_settings.enginePalette, 0), 3);
-        const glm::vec3 engineEmi = kEngineEmi[pal];
         std::vector<ShipPart> parts;
-        const int style = warpdrive::shipStyle();
         // v4.0.0: износ OBJ-корпуса. -1 = состояние не применяется
         // (Dart/Ring Ship/Shuttle сохраняют эталонный вид байт-в-байт).
         const float hullWear = (style == 3) ? (1.0f - warpdrive::shipHull()) : -1.0f;
@@ -1906,39 +1935,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           parts.push_back({{-0.15f, 0.03f, 0.50f}, {0.012f, 0.12f, 0.16f}, wingCol, 0, 0.72f, 0.45f});
           parts.push_back({{0.15f, 0.03f, 0.50f}, {0.012f, 0.12f, 0.16f}, wingCol, 0, 0.72f, 0.45f});
         }
-        // === Ship lighting pass (S3): ключ — доминирующий источник сцены.
-        // Якорь: у mw — Солнце (sunWorldPos), иначе центр станции (origin);
-        // цвет/сила зависят от типа станции. Rim — холодный контр от
-        // обратного направления (в ship.frag), fill — IBL скайбокса.
-        glm::vec3 keyDir(0.42f, 0.70f, 0.56f);
-        glm::vec3 keyCol(1.00f, 0.95f, 0.88f);
-        if (const Station* st = getCurrentStation()) {
-          glm::vec3 anchor(0.0f);
-          glm::vec3 sunPos;
-          if (sunWorldPos(sunPos)) anchor = sunPos;
-          const glm::vec3 d = anchor - shipPos;
-          const float len = glm::length(d);
-          if (len > 1e-4f) keyDir = d / len;
-          switch (st->type) {
-            case StationType::BlackHole:  // раскалённый аккреционный диск
-              keyCol = glm::vec3(1.00f, 0.70f, 0.42f) * 1.25f; break;
-            case StationType::Quasar:  // сине-белое пекло
-              keyCol = glm::vec3(0.85f, 0.92f, 1.18f) * 1.45f; break;
-            case StationType::Pulsar:  // циановый маяк
-              keyCol = glm::vec3(0.78f, 0.90f, 1.12f) * 1.05f; break;
-            case StationType::Galaxy:
-            case StationType::StarCluster:  // суммарный звёздный свет
-              keyCol = glm::vec3(1.00f, 0.94f, 0.84f) * 0.70f; break;
-            case StationType::Nebula:
-              keyCol = glm::vec3(0.92f, 0.86f, 0.98f) * 0.60f; break;
-            case StationType::SolarSystem:  // солнце G2V
-              keyCol = glm::vec3(1.00f, 0.94f, 0.82f) * 1.45f; break;
-            case StationType::Constellation:
-              keyCol = glm::vec3(0.95f, 0.97f, 1.00f) * 0.50f; break;
-          }
-          // Лёгкий верхний уклон: плоский свет читается хуже.
-          keyDir = glm::normalize(keyDir + glm::vec3(0.0f, 0.30f, 0.0f));
-        }
+        // Key lighting (keyDir, keyCol) already computed above.
         if (s_shipShader) {
           s_shipShader->bind();
           s_shipShader->setUniformMat4f("u_MVP", mvp);
@@ -2173,27 +2170,90 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           }  // !meshDrawn (fallback procedural parts)
           s_shipShader->unbind();
         }
-        // === v3.11.0: Orbital Space Station & Shipyard Dock Rendering ===
-        if (warpdrive::dockSitesVisible() && warpdrive::shipVisible()) {
+        }  // end if (warpdrive::shipVisible()) [solid hull]
+
+        // === v3.11.0: Orbital Space Station, Observatory & Probe Rendering ===
+        // Decoupled from shipVisible(): rendered in 1st-person cockpit view, 2nd & 3rd-person views!
+        if (warpdrive::dockSitesVisible()) {
           static ObjModel s_stationModel;
-          static bool s_stationTried = false;
-          if (!s_stationTried) {
-            s_stationTried = true;
+          static ObjModel s_telescopeModel;
+          static ObjModel s_warpCoreModel;
+          static ObjModel s_probeModel;
+          static bool s_spaceAssetsTried = false;
+          if (!s_spaceAssetsTried) {
+            s_spaceAssetsTried = true;
             s_stationModel.load("res/models/station.obj");
             s_stationModel.loadTextures("res/models/station");
+
+            s_telescopeModel.load("res/models/telescope.obj");
+            s_telescopeModel.loadTextures("res/models/telescope");
+
+            s_warpCoreModel.load("res/models/warp_core.obj");
+            s_warpCoreModel.loadTextures("res/models/warp_core");
+
+            s_probeModel.load("res/models/probe.obj");
+            s_probeModel.loadTextures("res/models/probe");
           }
+
+          glEnable(GL_DEPTH_TEST);
+          glDepthMask(GL_TRUE);
+          glDisable(GL_BLEND);
 
           for (const auto& dock : m_dockSites) {
             if (!m_currentStation || dock.stationId != m_currentStation->id) continue;
             glm::vec3 stPos(static_cast<float>(dock.pos.x), static_cast<float>(dock.pos.y), static_cast<float>(dock.pos.z));
 
-            if (s_stationModel.ready() && s_shipShader) {
-              // High-detail PBR ISS / Orbital Station model (normalized 1.0 wingspan -> scale 0.38)
-              const float stScale = 0.38f;
-              glm::mat4 stModel = glm::translate(glm::mat4(1.0f), stPos) *
-                                  glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                  glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+            ObjModel* siteModel = &s_stationModel;
+            float stScale = 0.38f;
+            glm::mat4 stModel(1.0f);
+            glm::vec3 emOverride(0.0f);
+            float customMetal = 0.75f;
+            float customRough = 0.35f;
 
+            if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
+              siteModel = &s_telescopeModel;
+              stScale = 0.28f;
+              // James Webb Telescope: oriented into deep space, sunshield facing Sol
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.02f * time + 0.785f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::rotate(glm::mat4(1.0f), 0.25f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+              customMetal = 0.92f;
+              customRough = 0.25f;
+            } else if ((dock.id == "dock-sgra" || dock.id == "dock-m13") && s_warpCoreModel.ready()) {
+              siteModel = &s_warpCoreModel;
+              stScale = 0.35f;
+              // Alcubierre Warp Core / Quantum Singularity Station: concentric rings rotation
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.12f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::rotate(glm::mat4(1.0f), 0.35f, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+              const float pulse = 0.6f + 0.4f * std::sin(time * 3.5f);
+              emOverride = glm::vec3(0.18f, 0.55f, 0.95f) * pulse;
+              customMetal = 0.85f;
+              customRough = 0.30f;
+            } else if (dock.id == "dock-probe" && s_probeModel.ready()) {
+              siteModel = &s_probeModel;
+              stScale = 0.22f;
+              // Deep Space Science Probe: slow attitude stabilization roll
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                        glm::rotate(glm::mat4(1.0f), -0.30f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+              const float blink = (std::sin(time * 6.0f) > 0.65f) ? 1.0f : 0.0f;
+              emOverride = glm::vec3(0.1f, 0.85f, 0.65f) * blink;
+              customMetal = 0.80f;
+              customRough = 0.28f;
+            } else {
+              // Standard orbital space station (ISS)
+              siteModel = &s_stationModel;
+              stScale = 0.38f;
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+            }
+
+            if (siteModel->ready() && s_shipShader) {
               glm::vec3 stKeyDir = glm::normalize(glm::vec3(0.55f, 0.45f, 0.70f));
 
               s_shipShader->bind();
@@ -2222,24 +2282,28 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               s_shipShader->setUniform3f("u_AccentTint", glm::vec3(1.0f));
               s_shipShader->setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
               s_shipShader->setUniform1f("u_StationPbr", 1.0f);
-              s_shipShader->setUniform1f("u_Metal", 0.75f);
-              s_shipShader->setUniform1f("u_Rough", 0.35f);
+              s_shipShader->setUniform1f("u_HullWear", -1.0f);
+              s_shipShader->setUniform1f("u_Metal", customMetal);
+              s_shipShader->setUniform1f("u_Rough", customRough);
 
-              const bool texOn = s_stationModel.textured();
+              glActiveTexture(GL_TEXTURE0);
+              if (m_skyboxLocal) m_skyboxLocal->bind(0);
+
+              const bool texOn = siteModel->textured();
               s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
               if (texOn) {
                 s_shipShader->setUniform1i("u_Albedo", 1);
                 s_shipShader->setUniform1i("u_NormalTex", 2);
                 s_shipShader->setUniform1i("u_RoughTex", 3);
                 s_shipShader->setUniform1i("u_MetalTex", 4);
-                s_stationModel.bindTextures(1);
+                siteModel->bindTextures(1);
               }
-              const bool emOn = s_stationModel.emissive();
-              s_shipShader->setUniform1i("u_EmissiveOn", emOn ? 1 : 0);
+              const bool emOn = siteModel->emissive();
+              s_shipShader->setUniform1i("u_EmissiveOn", (emOn || glm::length(emOverride) > 0.01f) ? 1 : 0);
               s_shipShader->setUniform1i("u_EmissiveTex", 5);
-              s_shipShader->setUniform3f("u_Emissive", glm::vec3(0.0f));
+              s_shipShader->setUniform3f("u_Emissive", emOverride);
 
-              s_stationModel.draw();
+              siteModel->draw();
               if (texOn) glActiveTexture(GL_TEXTURE0);
               s_shipShader->unbind();
             } else {
@@ -2280,7 +2344,71 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             m_saturnRing.draw();
             glDisable(GL_BLEND);
           }
-        }
+        } // end if (warpdrive::dockSitesVisible())
+
+        // Pass 3: Exterior Ship Effects & Asteroid Hazard (when shipVisible is true)
+        if (warpdrive::shipVisible()) {
+          // 3D Asteroid Barrage during warp travel hazard
+          static ObjModel s_asteroidModels[3];
+          static bool s_astModelsTried = false;
+          if (!s_astModelsTried) {
+            s_astModelsTried = true;
+            s_asteroidModels[0].load("res/models/asteroid_1.obj");
+            s_asteroidModels[0].loadTextures("res/models/asteroid");
+            s_asteroidModels[1].load("res/models/asteroid_2.obj");
+            s_asteroidModels[1].loadTextures("res/models/asteroid");
+            s_asteroidModels[2].load("res/models/asteroid_3.obj");
+            s_asteroidModels[2].loadTextures("res/models/asteroid");
+          }
+          const float astFieldK = warpdrive::astK();
+          if (astFieldK > 0.01f && s_asteroidModels[0].ready() && s_shipShader) {
+            const float lane = warpdrive::astLane();
+            s_shipShader->bind();
+            s_shipShader->setUniformMat4f("u_MVP", mvp);
+            s_shipShader->setUniform3f("u_CamPos", eye);
+            s_shipShader->setUniform3f("u_KeyDir", 0.0f, 0.5f, -1.0f);
+            s_shipShader->setUniform3f("u_KeyColor", 1.8f, 1.6f, 1.4f);
+            s_shipShader->setUniform1i("u_Env", 0);
+            s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
+            s_shipShader->setUniform1f("u_ReflK", 0.0f);
+            s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
+            s_shipShader->setUniform1i("u_FlatNormal", 0);
+            s_shipShader->setUniform1f("u_RingSpin", 0.0f);
+            s_shipShader->setUniform1i("u_SkinOn", 0);
+            s_shipShader->setUniform3f("u_BaseColor", glm::vec3(0.6f, 0.58f, 0.55f));
+            s_shipShader->setUniform1f("u_StationPbr", 1.0f);
+            s_shipShader->setUniform1f("u_Metal", 0.20f);
+            s_shipShader->setUniform1f("u_Rough", 0.85f);
+            s_shipShader->setUniform1i("u_EmissiveOn", 0);
+
+            for (int k = 0; k < 4; ++k) {
+              const float zOff = -6.0f + 14.0f * std::fmod(time * 3.5f + k * 0.25f, 1.0f);
+              const float xOff = (k % 2 == 0 ? -1.0f : 1.0f) * (0.8f + 0.5f * k) - lane * 0.6f;
+              const float yOff = ((k / 2) % 2 == 0 ? 0.35f : -0.35f);
+
+              glm::mat4 astMat = shipModel *
+                                 glm::translate(glm::mat4(1.0f), glm::vec3(xOff, yOff, zOff)) *
+                                 glm::rotate(glm::mat4(1.0f), time * (1.5f + k), glm::vec3(0.5f, 0.8f, 0.3f)) *
+                                 glm::scale(glm::mat4(1.0f), glm::vec3(0.25f * astFieldK));
+
+              s_shipShader->setUniformMat4f("u_Model", astMat);
+              s_shipShader->setUniformMat4f("u_ShipInv", glm::inverse(astMat));
+
+              ObjModel& am = s_asteroidModels[k % 3];
+              const bool texOn = am.textured();
+              s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
+              if (texOn) {
+                s_shipShader->setUniform1i("u_Albedo", 1);
+                s_shipShader->setUniform1i("u_NormalTex", 2);
+                s_shipShader->setUniform1i("u_RoughTex", 3);
+                s_shipShader->setUniform1i("u_MetalTex", 4);
+                am.bindTextures(1);
+              }
+              am.draw();
+              if (texOn) glActiveTexture(GL_TEXTURE0);
+            }
+            s_shipShader->unbind();
+          }
         // Трейл + движок: без depth, аддитивно поверх корпуса.
         glDisable(GL_DEPTH_TEST);
         glDepthMask(GL_FALSE);
@@ -2427,11 +2555,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         }
         glDisable(GL_BLEND);
         glDepthMask(GL_TRUE);
+        }  // end if (warpdrive::shipVisible()) [pass 3]
       } catch (...) {
-        // Корабль никогда не ломает кадр.
+        // Корабль и станции никогда не ломают кадр.
       }
     }
-  }
 
   // === Relativity === базис камеры и скорость для доплера-тинта в композите.
   {

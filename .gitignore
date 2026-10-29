@@ -37,3 +37,8 @@ blender/out/
 
 # Raw cutscene source videos (story frame dumps are tracked like egor_intro)
 res/story/raw/
+
+Testing/
+__pycache__/
+save_out.txt
+test_save_out.txt
