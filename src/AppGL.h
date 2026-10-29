@@ -53,6 +53,7 @@ class AppGL {
   bool saveScreenshot(const std::string& filepath);
   static int captureAllScreenshots(const std::string& outDir = "docs/screens", bool diskOn = false);
   static int captureStationCheck(const std::string& outPath);
+  static int captureDragonCheck(const std::string& outPath);
 
  private:
   void processInput(float deltaTime);

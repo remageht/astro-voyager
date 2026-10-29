@@ -324,22 +324,22 @@ for (const dir of [-1, 1]) {
   const z0 = -0.20;
   const z1 = 0.28;
 
-  // Front face (solar cells)
+  // Front face (solar cells pointing in +Y)
   const normY = 1.0;
   const f1 = addVertex(xInner, y + 0.008, z0, 0.02, 0.02, 0, normY, 0);
   const f2 = addVertex(xOuter, y + 0.008, z0, 0.48, 0.02, 0, normY, 0);
   const f3 = addVertex(xOuter, y + 0.008, z1, 0.48, 0.48, 0, normY, 0);
   const f4 = addVertex(xInner, y + 0.008, z1, 0.02, 0.48, 0, normY, 0);
-  if (dir > 0) addQuad(f1, f2, f3, f4);
-  else addQuad(f2, f1, f4, f3);
+  if (dir > 0) addQuad(f1, f4, f3, f2);
+  else addQuad(f2, f3, f4, f1);
 
-  // Back face (substrate)
+  // Back face (substrate pointing in -Y)
   const b1 = addVertex(xInner, y - 0.008, z0, 0.75, 0.25, 0, -normY, 0);
   const b2 = addVertex(xOuter, y - 0.008, z0, 0.95, 0.25, 0, -normY, 0);
   const b3 = addVertex(xOuter, y - 0.008, z1, 0.95, 0.45, 0, -normY, 0);
   const b4 = addVertex(xInner, y - 0.008, z1, 0.75, 0.45, 0, -normY, 0);
-  if (dir > 0) addQuad(b4, b3, b2, b1);
-  else addQuad(b3, b4, b1, b2);
+  if (dir > 0) addQuad(b1, b2, b3, b4);
+  else addQuad(b2, b1, b4, b3);
 
   // Wingtip beacon strobe
   const bTip1 = addVertex(xOuter, y + 0.03, z1 + 0.02, 0.60, 0.15, dir, 1, 0);

@@ -5619,6 +5619,62 @@ int AppGL::captureStationCheck(const std::string& outPath) {
   return ok ? 0 : 1;
 }
 
+int AppGL::captureDragonCheck(const std::string& outPath) {
+  s_harnessPinFps = true;
+  warpdrive::setDockSitesVisible(true);
+  warpdrive::setShip(true, 0.0f, 0.0f, 0.0f, 0.0f);
+  try {
+    std::filesystem::create_directories(std::filesystem::path(outPath).parent_path());
+  } catch (...) {}
+
+  std::unique_ptr<AppGL> appPtr;
+  try {
+    appPtr = std::make_unique<AppGL>(1280, 720, false);
+  } catch (...) {
+    return 1;
+  }
+  AppGL& app = *appPtr;
+
+  app.m_sceneManager->teleportTo("sol", app.m_camera);
+
+  int fbWidth = 1280, fbHeight = 720;
+  app.m_window->getFramebufferSize(fbWidth, fbHeight);
+  glViewport(0, 0, fbWidth, fbHeight);
+
+  // Warmup render to compute planet orbits and populate m_dockSites
+  app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+
+  Vec3 dragonPos(0.0, 0.0, 0.0);
+  for (const auto& dock : app.m_sceneManager->dockSites()) {
+    if (dock.id == "dock-dragon") {
+      dragonPos = dock.pos;
+      break;
+    }
+  }
+
+  // Camera 3/4 hero view of SpaceX Dragon in Earth orbit
+  app.m_camera.position = Vec3(dragonPos.x + 0.65, dragonPos.y + 0.35, dragonPos.z + 1.25);
+  app.computeLookYawPitch(app.m_camera.position, dragonPos, app.m_camera.yaw, app.m_camera.pitch);
+
+  app.m_sceneManager->getSettings().fovDegrees = 30.0f;
+  app.m_sceneManager->setShowPlanets(true);
+  app.m_sceneManager->setShowOrbits(false);
+  app.m_sceneManager->setShowBelt(false);
+
+  for (int frame = 0; frame < 10; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    if (frame < 9) {
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
+  }
+
+  bool ok = app.saveScreenshot(outPath);
+  app.m_window->swapBuffers();
+  app.m_window->pollEvents();
+  return ok ? 0 : 1;
+}
+
 int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   s_harnessPinFps = true;
   warpdrive::setDockSitesVisible(false);
@@ -8019,6 +8075,29 @@ void AppGL::drawShipyard() {
         }
 
         ImGui::EndTabItem();
+      }
+
+      // === TAB 5: SPACEX DRAGON AVIONICS (v3.11.0) ===
+      if (m_ship.dockedStationId == "dock-dragon" || m_dockHintId == "dock-dragon") {
+        if (ImGui::BeginTabItem(uiRu("SpaceX Dragon", "SpaceX Dragon"))) {
+          ImGui::TextColored(ImVec4(0.2f, 0.85f, 1.0f, 1.0f), "%s",
+                             uiRu("Бортовой телеметрический комплекс SpaceX Crew Dragon:",
+                                  "SpaceX Crew Dragon (Endeavour) Telemetry Complex:"));
+          ImGui::Separator();
+          ImGui::BulletText("%s: %s", uiRu("Космический корабль", "Spacecraft"), "Crew Dragon C206 (Endeavour)");
+          ImGui::BulletText("%s: %s", uiRu("Полётная история", "Flight Heritage"), "Demo-2, Crew-2, Ax-1, Crew-6, Ax-3 (5 orbital flights)");
+          ImGui::BulletText("%s: %s", uiRu("Двигатели SuperDraco", "SuperDraco Engines"), "8x 71 kN MMH/NTO [ARMED / READY]");
+          ImGui::BulletText("%s: %s", uiRu("Тепловая защита", "Thermal Shield"), "PICA-X v3 (Phenolic-Impregnated Carbon)");
+          ImGui::BulletText("%s: %.1f C (276.1 K)", uiRu("Температура экрана", "PICA-X Sensor"), 3.2f);
+          ImGui::BulletText("%s: %s", uiRu("Солнечный транк", "Trunk Solar Array"), "4.8 kW (Body-mounted GaAs cells)");
+          ImGui::BulletText("%s: %s", uiRu("Стыковочный узел", "Docking Collar"), "NASA Docking System (NDS / IDA-2) [LOCKED]");
+          ImGui::BulletText("%s: 101.3 kPa (Nominal)", uiRu("Давление в гермокабине", "Cabin Pressure"));
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%s",
+                             uiRu("Статус: Все системы многоразового пилотируемого корабля в норме.",
+                                  "Status: All reusable crewed spacecraft systems nominal."));
+          ImGui::EndTabItem();
+        }
       }
 
       ImGui::EndTabBar();
