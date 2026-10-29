@@ -63,6 +63,7 @@ class AppGL {
   void drawHelpOverlay();
   void drawWorldLabels();
   void drawStoryPanel();
+  void drawConstellationAlignment();
   // v3.8.0: stopJumpCine=false — только для телепорта Бурста в jump-катсцене
   // (внутренний вызов не должен убивать собственный прыжок).
   void teleportToStation(const std::string& id, bool stopJumpCine = true);
@@ -149,6 +150,12 @@ class AppGL {
   StoryJournal m_story;
   bool m_storyOpen = false;
   bool m_prevJPressed = false;
+  // === Constellation Alignment Minigame ===
+  bool m_constellationAlignOpen = false;
+  std::string m_alignConstellationId = "ori";
+  int m_alignSelectedStar = -1;
+  std::set<std::pair<unsigned int, unsigned int>> m_alignedSegments;
+  bool m_constellationAligned = false;
 
   // === Expedition === (v3.5.0): сюжетная арка + вводные слайды (рестайл).
   ExpeditionState m_expedition;
