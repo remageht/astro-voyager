@@ -84,6 +84,31 @@
 - **Анимации обратной связи (Feedback Animations)**: Двухфазная стыковка и отшвартовка манипуляторов с HUD-прогресс-баром заправки, плавный переход смены корабля в ангаре и световой ореол телепорта к станциям.
   *Two-phase docking/undocking sequences with refueling progress bars, smooth hull swap transitions in the shipyard hangar, and warp-in halo flashes for station jumps.*
 
+### NASA Science: зонды дальнего космоса
+
+<p align="center">
+  <img src="docs/screens/voyager_showcase.png" alt="Voyager interstellar probe" width="100%">
+  <br>
+  <sub><b>Voyager</b>: межзвёздный зонд с «Золотой пластинкой», 3,7-метровой антенной и развёрнутыми штангами научных приборов. Модель — NASA 3D Resources (public domain), фон — Deep Star Maps 2020 (NASA/Goddard SVS).</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/screens/hubble_showcase.png" alt="Hubble Space Telescope" width="100%"><br>
+      <b>Hubble Space Telescope</b><br>
+      <sub>Орбитальная обсерватория с солнечными панелями и защитной блендой; модель NASA 3D Resources.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/screens/parker_showcase.png" alt="Parker Solar Probe" width="100%"><br>
+      <b>Parker Solar Probe</b><br>
+      <sub>Солнечный зонд с теплозащитным экраном и научной штангой; модель NASA 3D Resources.</sub>
+    </td>
+  </tr>
+</table>
+
+- **Источники**: официальные GLB-модели NASA 3D Resources и карта всего неба Deep Star Maps 2020. Тяжёлые исходники не коммитятся — их скачивает `tools/fetch_nasa_assets.ps1`, а витрины рендерит `blender/scripts/render_nasa_showcase.py`. Подробности, SHA256 и кредиты: [`docs/NASA_ASSETS.md`](docs/NASA_ASSETS.md).
+
 ---
 
 ## Галерея космических объектов

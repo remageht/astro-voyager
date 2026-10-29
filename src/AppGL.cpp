@@ -241,7 +241,6 @@ int AppGL::run() {
       ImGui::NewFrame();
 
       drawMenu();
-      drawWorldLabels();
 
       ImGui::Render();
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -1380,44 +1379,88 @@ void AppGL::applyModernThemeOnce() {
   if (done) return;
   done = true;
   ImGuiStyle& st = ImGui::GetStyle();
-  // Скругления 8px по всем элементам.
-  st.WindowRounding = 8.0f;
-  st.ChildRounding = 8.0f;
-  st.FrameRounding = 8.0f;
-  st.GrabRounding = 8.0f;
-  st.PopupRounding = 8.0f;
-  st.ScrollbarRounding = 8.0f;
-  st.TabRounding = 8.0f;
+
+  // === Obsidian Glass Aerospace Theme (v4.2.0) ===
+  // Строгий прецизионный радиус скругления 6px для окон, 4px для контролов.
+  st.WindowRounding = 6.0f;
+  st.ChildRounding = 6.0f;
+  st.FrameRounding = 4.0f;
+  st.PopupRounding = 6.0f;
+  st.ScrollbarRounding = 4.0f;
+  st.GrabRounding = 4.0f;
+  st.TabRounding = 5.0f;
+
   st.WindowBorderSize = 1.0f;
-  st.FrameBorderSize = 1.0f;
-  // "Стекло": alpha панелей ~0.92 поверх StyleColorsDark.
-  st.Colors[ImGuiCol_WindowBg].w = 0.92f;
-  st.Colors[ImGuiCol_ChildBg].w = 0.92f;
-  st.Colors[ImGuiCol_PopupBg].w = 0.94f;
-  // Акценты проекта: циан (0.40, 0.85, 1.00) + янтарь (1.00, 0.75, 0.28).
-  const ImVec4 cyan(0.40f, 0.85f, 1.00f, 1.00f);
-  const ImVec4 cyanDim(0.16f, 0.38f, 0.55f, 1.00f);
-  const ImVec4 cyanDeep(0.10f, 0.28f, 0.42f, 1.00f);
-  const ImVec4 amber(1.00f, 0.75f, 0.28f, 1.00f);
-  const ImVec4 amberDim(0.55f, 0.38f, 0.12f, 1.00f);
-  st.Colors[ImGuiCol_Button] = ImVec4(0.16f, 0.32f, 0.48f, 1.00f);
-  st.Colors[ImGuiCol_ButtonHovered] = cyanDim;
-  st.Colors[ImGuiCol_ButtonActive] = cyanDeep;
-  st.Colors[ImGuiCol_Header] = amberDim;
-  st.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.65f, 0.46f, 0.16f, 1.00f);
-  st.Colors[ImGuiCol_HeaderActive] = ImVec4(0.70f, 0.52f, 0.20f, 1.00f);
+  st.FrameBorderSize = 0.5f;
+  st.PopupBorderSize = 1.0f;
+
+  st.WindowPadding = ImVec2(14.0f, 12.0f);
+  st.FramePadding = ImVec2(8.0f, 5.0f);
+  st.ItemSpacing = ImVec2(8.0f, 6.0f);
+  st.ItemInnerSpacing = ImVec2(6.0f, 4.0f);
+  st.ScrollbarSize = 10.0f;
+  st.GrabMinSize = 10.0f;
+
+  // Фон: полупрозрачное обсидиановое стекло (глубокий космос).
+  st.Colors[ImGuiCol_WindowBg] = ImVec4(0.035f, 0.050f, 0.075f, 0.86f);
+  st.Colors[ImGuiCol_ChildBg] = ImVec4(0.045f, 0.065f, 0.095f, 0.65f);
+  st.Colors[ImGuiCol_PopupBg] = ImVec4(0.040f, 0.058f, 0.088f, 0.95f);
+
+  // Тонкая чистая кромка (без грязных золотых оттенков).
+  st.Colors[ImGuiCol_Border] = ImVec4(0.20f, 0.32f, 0.48f, 0.28f);
+  st.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+
+  // Текст: чистый холодный белый + приглушённый графит.
+  st.Colors[ImGuiCol_Text] = ImVec4(0.90f, 0.93f, 0.97f, 1.00f);
+  st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.48f, 0.55f, 0.65f, 1.00f);
+
+  // Акценты: аэрокосмический циан (#38BDF8) + чистый мягкий янтарь.
+  const ImVec4 cyan(0.22f, 0.74f, 0.97f, 1.00f);
+  const ImVec4 cyanHover(0.35f, 0.82f, 1.00f, 1.00f);
+  const ImVec4 amber(0.98f, 0.75f, 0.20f, 1.00f);
+
+  // Поля ввода (Frames)
+  st.Colors[ImGuiCol_FrameBg] = ImVec4(0.07f, 0.11f, 0.17f, 0.80f);
+  st.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.12f, 0.18f, 0.28f, 0.90f);
+  st.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.16f, 0.25f, 0.38f, 1.00f);
+
+  // Кнопки: тёмное стекло с элегантной подсветкой при наведении
+  st.Colors[ImGuiCol_Button] = ImVec4(0.10f, 0.16f, 0.25f, 0.75f);
+  st.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.18f, 0.28f, 0.44f, 0.95f);
+  st.Colors[ImGuiCol_ButtonActive] = ImVec4(0.14f, 0.38f, 0.60f, 1.00f);
+
+  // Заголовки (Headers)
+  st.Colors[ImGuiCol_Header] = ImVec4(0.12f, 0.20f, 0.32f, 0.60f);
+  st.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.18f, 0.30f, 0.48f, 0.85f);
+  st.Colors[ImGuiCol_HeaderActive] = ImVec4(0.22f, 0.38f, 0.60f, 0.95f);
+
+  // Заголовки окон: стильный обсидиан вместо старого коричнево-оранжевого
+  st.Colors[ImGuiCol_TitleBg] = ImVec4(0.05f, 0.08f, 0.12f, 0.92f);
+  st.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.08f, 0.13f, 0.20f, 0.95f);
+  st.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.04f, 0.06f, 0.09f, 0.75f);
+
+  // Разделители: тонкая деликатная линия
+  st.Colors[ImGuiCol_Separator] = ImVec4(0.22f, 0.32f, 0.46f, 0.30f);
+  st.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.35f, 0.65f, 0.95f, 0.60f);
+  st.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.35f, 0.65f, 0.95f, 0.90f);
+
+  // Индикаторы и ползунки
   st.Colors[ImGuiCol_CheckMark] = cyan;
-  st.Colors[ImGuiCol_SliderGrab] = cyan;
-  st.Colors[ImGuiCol_SliderGrabActive] = amber;
-  st.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.30f, 0.42f, 1.00f);
-  st.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.24f, 0.36f, 0.50f, 1.00f);
-  st.Colors[ImGuiCol_TitleBg] = ImVec4(0.32f, 0.22f, 0.07f, 0.92f);
-  st.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.45f, 0.31f, 0.10f, 0.92f);
-  st.Colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.75f, 0.28f, 0.35f);
-  st.Colors[ImGuiCol_SeparatorHovered] = amber;
-  st.Colors[ImGuiCol_SeparatorActive] = amber;
-  st.Colors[ImGuiCol_TabHovered] = cyanDim;
-  st.Colors[ImGuiCol_TabActive] = cyanDeep;
+  st.Colors[ImGuiCol_SliderGrab] = ImVec4(0.22f, 0.74f, 0.97f, 0.85f);
+  st.Colors[ImGuiCol_SliderGrabActive] = cyanHover;
+
+  // Скроллбары
+  st.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.03f, 0.05f, 0.08f, 0.45f);
+  st.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.18f, 0.26f, 0.38f, 0.60f);
+  st.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.25f, 0.36f, 0.50f, 0.85f);
+  st.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.30f, 0.46f, 0.65f, 1.00f);
+
+  // Вкладки
+  st.Colors[ImGuiCol_Tab] = ImVec4(0.08f, 0.13f, 0.20f, 0.80f);
+  st.Colors[ImGuiCol_TabHovered] = ImVec4(0.18f, 0.30f, 0.46f, 0.90f);
+  st.Colors[ImGuiCol_TabActive] = ImVec4(0.14f, 0.24f, 0.38f, 1.00f);
+  st.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.06f, 0.10f, 0.15f, 0.80f);
+  st.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.10f, 0.18f, 0.28f, 0.90f);
 }
 
 const char* AppGL::stationTypeRuShort(StationType t) {
@@ -1588,6 +1631,295 @@ void AppGL::drawStoryPanel() {
       ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.00f), "%s",
                          uiRu("Записи открываются по мере путешествия.",
                               "Entries unlock as you travel."));
+    }
+    ImGui::Spacing();
+    ImGui::Separator();
+    if (ImGui::Button(uiRu("★ Калибровка созвездия кулоном", "★ Align Constellation with Pendant"), ImVec2(-1, 0))) {
+      m_constellationAlignOpen = true;
+    }
+  }
+  ImGui::End();
+  if (pushed) ImGui::PopFont();
+}
+
+void AppGL::drawConstellationAlignment() {
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_FirstUseEver,
+                          ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(640.0f, 600.0f), ImGuiCond_FirstUseEver);
+
+  const bool pushed = modernPushFont();
+  if (ImGui::Begin(uiRu("Резонанс кулона: Калибровка созвездия",
+                        "Pendant Resonance: Constellation Alignment"),
+                   &m_constellationAlignOpen,
+                   ImGuiWindowFlags_NoCollapse)) {
+    // Top constellation selector
+    ImGui::Text("%s", uiRu("Выберите сектор созвездия:", "Select Constellation Sector:"));
+    ImGui::SameLine();
+    bool isOri = (m_alignConstellationId == "ori");
+    if (isOri) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+    if (ImGui::Button(uiRu("Орион (Orion)", "Orion (ori)"))) {
+      if (m_alignConstellationId != "ori") {
+        m_alignConstellationId = "ori";
+        m_alignSelectedStar = -1;
+        m_alignedSegments.clear();
+      }
+    }
+    if (isOri) ImGui::PopStyleColor();
+
+    ImGui::SameLine();
+    bool isUma = (m_alignConstellationId == "uma");
+    if (isUma) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+    if (ImGui::Button(uiRu("Большая Медведица (Ursa Major)", "Ursa Major (uma)"))) {
+      if (m_alignConstellationId != "uma") {
+        m_alignConstellationId = "uma";
+        m_alignSelectedStar = -1;
+        m_alignedSegments.clear();
+      }
+    }
+    if (isUma) ImGui::PopStyleColor();
+
+    const ConstellationInfo* cInfo = findConstellation(m_alignConstellationId);
+    if (!cInfo) cInfo = findConstellation("ori");
+
+    ImGui::TextColored(ImVec4(0.75f, 0.85f, 0.95f, 1.0f), "%s",
+                       uiRu("Кристалл кулона мерцает: соедините звёзды созвездия, чтобы зафиксировать метрику.",
+                            "The pendant crystal shimmers: connect constellation stars to lock the metric."));
+    ImGui::Separator();
+
+    // 2D Star Canvas
+    ImVec2 canvasP0 = ImGui::GetCursorScreenPos();
+    ImVec2 canvasAvail = ImGui::GetContentRegionAvail();
+    ImVec2 canvasSize = ImVec2(canvasAvail.x, 380.0f);
+    if (canvasSize.x < 150.0f) canvasSize.x = 150.0f;
+    ImVec2 canvasP1 = ImVec2(canvasP0.x + canvasSize.x, canvasP0.y + canvasSize.y);
+
+    ImGui::InvisibleButton("constellation_canvas", canvasSize);
+    bool isHovered = ImGui::IsItemHovered();
+    ImVec2 mousePos = ImGui::GetIO().MousePos;
+    bool mouseClicked = isHovered && ImGui::IsMouseClicked(0);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    // Space background
+    dl->AddRectFilled(canvasP0, canvasP1, IM_COL32(8, 12, 22, 245), 8.0f);
+    dl->AddRect(canvasP0, canvasP1, IM_COL32(45, 70, 115, 200), 8.0f, 0, 1.5f);
+
+    // Subtle coordinate reticle
+    float canMidX = canvasP0.x + canvasSize.x * 0.5f;
+    float canMidY = canvasP0.y + canvasSize.y * 0.5f;
+    dl->AddCircle(ImVec2(canMidX, canMidY), 60.0f, IM_COL32(35, 55, 90, 80), 32, 1.0f);
+    dl->AddCircle(ImVec2(canMidX, canMidY), 130.0f, IM_COL32(35, 55, 90, 60), 32, 1.0f);
+    dl->AddLine(ImVec2(canMidX - 140.0f, canMidY), ImVec2(canMidX + 140.0f, canMidY), IM_COL32(35, 55, 90, 60), 1.0f);
+    dl->AddLine(ImVec2(canMidX, canMidY - 140.0f), ImVec2(canMidX, canMidY + 140.0f), IM_COL32(35, 55, 90, 60), 1.0f);
+
+    if (cInfo && !cInfo->stars.empty()) {
+      float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f;
+      for (const auto& s : cInfo->stars) {
+        if (s.x < minX) minX = s.x;
+        if (s.x > maxX) maxX = s.x;
+        if (s.y < minY) minY = s.y;
+        if (s.y > maxY) maxY = s.y;
+      }
+      float spanX = std::max(maxX - minX, 1.0f);
+      float spanY = std::max(maxY - minY, 1.0f);
+      float pad = 42.0f;
+      float scale = std::min((canvasSize.x - 2.0f * pad) / spanX,
+                             (canvasSize.y - 2.0f * pad) / spanY);
+      float midX = (minX + maxX) * 0.5f;
+      float midY = (minY + maxY) * 0.5f;
+
+      auto getStarPos = [&](size_t idx) -> ImVec2 {
+        const auto& s = cInfo->stars[idx];
+        return ImVec2(canMidX + (s.x - midX) * scale,
+                      canMidY - (s.y - midY) * scale);
+      };
+
+      // 1. Guide lines (faint ghost lines for unaligned canonical segments)
+      for (const auto& seg : cInfo->segments) {
+        unsigned int u = std::min(seg.first, seg.second);
+        unsigned int v = std::max(seg.first, seg.second);
+        if (m_alignedSegments.find({u, v}) == m_alignedSegments.end()) {
+          if (u < cInfo->stars.size() && v < cInfo->stars.size()) {
+            ImVec2 pA = getStarPos(u);
+            ImVec2 pB = getStarPos(v);
+            dl->AddLine(pA, pB, IM_COL32(70, 95, 140, 55), 1.2f);
+          }
+        }
+      }
+
+      // 2. Aligned segments (glowing cyan neon lines)
+      float time = static_cast<float>(glfwGetTime());
+      float pulse = 0.85f + 0.15f * std::sin(time * 3.5f);
+      for (const auto& seg : m_alignedSegments) {
+        if (seg.first < cInfo->stars.size() && seg.second < cInfo->stars.size()) {
+          ImVec2 pA = getStarPos(seg.first);
+          ImVec2 pB = getStarPos(seg.second);
+          // Neon glow halo
+          dl->AddLine(pA, pB, IM_COL32(90, 160, 255, (int)(75 * pulse)), 4.5f);
+          // Core bright beam
+          dl->AddLine(pA, pB, IM_COL32(160, 245, 255, 240), 2.0f);
+        }
+      }
+
+      // 3. Line from selected star to mouse pointer
+      if (m_alignSelectedStar >= 0 && (size_t)m_alignSelectedStar < cInfo->stars.size() && isHovered) {
+        ImVec2 pA = getStarPos(m_alignSelectedStar);
+        dl->AddLine(pA, mousePos, IM_COL32(255, 220, 120, 190), 1.8f);
+      }
+
+      // 4. Stars
+      int hoveredStar = -1;
+      int clickedStar = -1;
+
+      for (size_t i = 0; i < cInfo->stars.size(); ++i) {
+        const auto& s = cInfo->stars[i];
+        ImVec2 pos = getStarPos(i);
+        float r = std::max(3.2f, 7.5f - s.mag * 0.75f);
+
+        float dx = mousePos.x - pos.x;
+        float dy = mousePos.y - pos.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        if (isHovered && dist <= (r + 8.0f)) {
+          hoveredStar = static_cast<int>(i);
+        }
+        if (mouseClicked && hoveredStar == static_cast<int>(i)) {
+          clickedStar = static_cast<int>(i);
+        }
+
+        // Color distinction
+        ImU32 starCol = IM_COL32(230, 240, 255, 255);
+        if (s.name == "Betelgeuse") {
+          starCol = IM_COL32(255, 160, 90, 255);  // red supergiant
+        } else if (s.name == "Rigel") {
+          starCol = IM_COL32(180, 220, 255, 255);  // blue-white
+        }
+
+        // Selected halo
+        if (m_alignSelectedStar == static_cast<int>(i)) {
+          float selPulse = 2.0f * std::sin(time * 6.0f);
+          dl->AddCircle(pos, r + 5.0f + selPulse, IM_COL32(255, 215, 80, 230), 24, 2.0f);
+        } else if (hoveredStar == static_cast<int>(i)) {
+          dl->AddCircle(pos, r + 4.0f, IM_COL32(255, 255, 255, 180), 20, 1.5f);
+        }
+
+        // Outer star glow
+        dl->AddCircleFilled(pos, r + 3.0f, IM_COL32(100, 150, 255, 45));
+        // Star core
+        dl->AddCircleFilled(pos, r, starCol);
+
+        // Name label
+        dl->AddText(ImVec2(pos.x + r + 3.0f, pos.y - 7.0f),
+                    IM_COL32(175, 195, 225, 180), s.name.c_str());
+      }
+
+      // Tooltip for hovered star
+      if (hoveredStar >= 0 && (size_t)hoveredStar < cInfo->stars.size()) {
+        const auto& hs = cInfo->stars[hoveredStar];
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.40f, 1.0f), "%s (%s)", hs.name.c_str(), hs.bayer.c_str());
+        ImGui::Text("Mag: %.2f | HIP: %d", hs.mag, hs.hip);
+        ImGui::TextColored(ImVec4(0.65f, 0.80f, 0.95f, 1.0f), "%s",
+                           uiRu("Нажмите, чтобы соединить с другой звездой",
+                                "Click to connect with another star"));
+        ImGui::EndTooltip();
+      }
+
+      // Handle click logic
+      if (clickedStar >= 0) {
+        if (m_alignSelectedStar < 0) {
+          m_alignSelectedStar = clickedStar;
+        } else if (m_alignSelectedStar == clickedStar) {
+          m_alignSelectedStar = -1;  // deselect on second click
+        } else {
+          unsigned int u = std::min(static_cast<unsigned int>(m_alignSelectedStar),
+                                    static_cast<unsigned int>(clickedStar));
+          unsigned int v = std::max(static_cast<unsigned int>(m_alignSelectedStar),
+                                    static_cast<unsigned int>(clickedStar));
+          bool isValid = false;
+          for (const auto& seg : cInfo->segments) {
+            if (std::min(seg.first, seg.second) == u &&
+                std::max(seg.first, seg.second) == v) {
+              isValid = true;
+              break;
+            }
+          }
+          if (isValid) {
+            m_alignedSegments.insert({u, v});
+            m_alignSelectedStar = clickedStar;  // chain to next star
+            m_audio.playChime();
+
+            if (m_alignedSegments.size() == cInfo->segments.size()) {
+              m_constellationAligned = true;
+              Toast t;
+              t.title = uiRu("РЕЗОНАНС ДОСТИГНУТ!", "RESONANCE ACHIEVED!");
+              t.desc = uiRu("Секрет созвездий открыт. Запись добавлена в журнал (J).",
+                            "Constellation secret decoded. Added to Journal (J).");
+              t.time = static_cast<float>(glfwGetTime());
+              m_toasts.push_back(t);
+              checkAchievements();
+            }
+          } else {
+            m_alignSelectedStar = clickedStar;
+          }
+        }
+      }
+
+      // Progress & Actions below canvas
+      ImGui::Spacing();
+      float progress = cInfo->segments.empty()
+                           ? 0.0f
+                           : static_cast<float>(m_alignedSegments.size()) /
+                                 static_cast<float>(cInfo->segments.size());
+      ImGui::ProgressBar(progress, ImVec2(-1, 0), "");
+
+      if (m_alignedSegments.size() == cInfo->segments.size()) {
+        ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.45f, 1.0f), "★ %s",
+                           uiRu("СОЗВЕЗДИЕ СИНХРОНИЗИРОВАНО! Метрика Пятой Вселенной активна.",
+                                "CONSTELLATION SYNCHRONIZED! Fifth Universe metric active."));
+      } else {
+        ImGui::Text("%s",
+                    uiRu(std::string("Связано сегментов: " +
+                                     std::to_string(m_alignedSegments.size()) + " из " +
+                                     std::to_string(cInfo->segments.size()) +
+                                     " (кликните первую звезду, затем вторую)")
+                             .c_str(),
+                         std::string("Connected: " +
+                                     std::to_string(m_alignedSegments.size()) + " of " +
+                                     std::to_string(cInfo->segments.size()) +
+                                     " (click star, then click neighbor)")
+                             .c_str()));
+      }
+
+      ImGui::Spacing();
+      if (ImGui::Button(uiRu("Сброс", "Reset"))) {
+        m_alignedSegments.clear();
+        m_alignSelectedStar = -1;
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("Авто-сборка", "Auto-Align"))) {
+        m_alignedSegments.clear();
+        for (const auto& s : cInfo->segments) {
+          m_alignedSegments.insert(
+              {std::min(s.first, s.second), std::max(s.first, s.second)});
+        }
+        m_constellationAligned = true;
+        m_audio.playChime();
+        Toast t;
+        t.title = uiRu("РЕЗОНАНС ДОСТИГНУТ!", "RESONANCE ACHIEVED!");
+        t.desc = uiRu("Запись добавлена в бортовой журнал (J).",
+                      "Log entry added to Journal (J).");
+        t.time = static_cast<float>(glfwGetTime());
+        m_toasts.push_back(t);
+        checkAchievements();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("Варп к созвездию", "Warp to Constellation"))) {
+        teleportToStation(cInfo->id);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("Закрыть", "Close"))) {
+        m_constellationAlignOpen = false;
+      }
     }
   }
   ImGui::End();
@@ -2707,6 +3039,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (m_storyOpen && !m_inMenu) drawStoryPanel();
   // === Orbital Shipyard === (v3.11.0): верфь и кастомизация кораблей.
   if (m_shipyardOpen && !m_inMenu) drawShipyard();
+  // === Constellation Alignment Minigame ===
+  if (m_constellationAlignOpen && !m_inMenu) drawConstellationAlignment();
   // === Expedition === (v3.5.0): HUD-карточка главы над сценой.
   if (!m_inMenu) {
     drawExpeditionHud();
@@ -2716,21 +3050,17 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
   ImGui::Begin("astro-voyager Navigator");
-  // === ModernUI ===: тело 15px (дефолт ~13px), заголовки ниже — 20px.
-  ImGui::SetWindowFontScale(1.15f);
 
   const Station* curSt = m_sceneManager->getCurrentStation();
   std::string curId = curSt ? curSt->id : "";
 
-  // === ModernUI ===: заголовок секции 20px.
-  ImGui::SetWindowFontScale(1.5f);
-  ImGui::Text("Active Station:");
-  ImGui::SetWindowFontScale(1.15f);
+  // Лаконичная инженерная шапка активной станции
+  ImGui::TextColored(ImVec4(0.48f, 0.58f, 0.72f, 1.0f), "%s",
+                     uiRu("ТЕКУЩИЙ ОБЪЕКТ", "ACTIVE STATION"));
   ImGui::SameLine();
-  ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s", curSt ? curSt->name.c_str() : "None");
-  // === ModernUI ===: перенос описания (при шрифте 15px иначе обрезается).
-  ImGui::TextWrapped("%s",
-                     curSt ? curSt->description.c_str() : "");
+  ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "%s",
+                     curSt ? curSt->name.c_str() : "None");
+  ImGui::TextWrapped("%s", curSt ? curSt->description.c_str() : "");
 
   // Station search box with hotkey '/' focus
   if (m_searchFocusRequest) {
@@ -2759,13 +3089,19 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (curSt && curSt->type == StationType::Constellation) {
     const ConstellationInfo* cInfo = findConstellation(curSt->id);
     if (cInfo) {
-      ImGui::Text("Constellation Stars (%zu Hipparcos):", cInfo->stars.size());
+      ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "%s (%zu):",
+                         uiRu("Звёзды созвездия (Hipparcos)", "Constellation Stars (Hipparcos)"),
+                         cInfo->stars.size());
       if (ImGui::BeginChild("StarList", ImVec2(0.0f, 95.0f), true)) {
         for (const auto& s : cInfo->stars) {
           ImGui::BulletText("%s (%s, mag %.2f, HIP %d)",
                             s.name.c_str(), s.bayer.c_str(), s.mag, s.hip);
         }
         ImGui::EndChild();
+      }
+      if (ImGui::Button(uiRu("★ Калибровка созвездия кулоном", "★ Align Constellation with Pendant"), ImVec2(-1, 0))) {
+        m_alignConstellationId = curSt->id;
+        m_constellationAlignOpen = true;
       }
     }
   }
@@ -2788,13 +3124,12 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   }
 
   // === ModernUI ===: карточки станций (сетка 2 колонки: имя + цветной
-  // чип типа + дистанция + факт + кнопка). Фильтр/Enter/очистка — 1:1.
-  ImGui::SetWindowFontScale(1.5f);
-  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Teleport Stations:");
-  ImGui::SetWindowFontScale(1.15f);
+  // чип типа + дистанция + факт + кнопка). Чёткий шрифт без мыла.
+  ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "%s",
+                     uiRu("СПИСОК НАЗНАЧЕНИЙ", "TELEPORT STATIONS"));
   if (!query.empty()) {
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(%zu station(s) matched)", matchedStations.size());
+    ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.75f, 1.0f), "(%zu)", matchedStations.size());
   }
 
   if (matchedStations.empty()) {
@@ -2806,19 +3141,20 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
         const auto& station = *stPtr;
         ImGui::TableNextColumn();
         const bool isCurrent = (station.id == curId);
-        // Карточка: рамка + скругление из темы; у текущей — янтарная рамка.
+        // Карточка: тёмное обсидиановое стекло; у текущей — циан-акцент
         if (isCurrent) {
-          ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                                ImVec4(0.20f, 0.30f, 0.20f, 0.92f));
-          ImGui::PushStyleColor(ImGuiCol_Border,
-                                ImVec4(1.0f, 0.75f, 0.28f, 1.0f));
+          ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.16f, 0.25f, 0.85f));
+          ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.80f));
+        } else {
+          ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.045f, 0.065f, 0.095f, 0.60f));
+          ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.18f, 0.28f, 0.42f, 0.28f));
         }
         std::string cardId = std::string("##card_") + station.id;
         if (ImGui::BeginChild(cardId.c_str(), ImVec2(0.0f, 0.0f), true)) {
-          ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s",
-                             station.name.c_str());
+          ImGui::TextColored(isCurrent ? ImVec4(0.22f, 0.74f, 0.97f, 1.0f)
+                                       : ImVec4(0.90f, 0.93f, 0.97f, 1.0f),
+                             "%s", station.name.c_str());
           // Чип типа (цветной) + дистанция в одну строку.
-          // RU — при киношрифте с кириллицей, иначе EN typeToString.
           const std::string tagOwn =
               m_cineFont ? std::string(stationTypeRuShort(station.type))
                          : typeToString(station.type);
@@ -2834,27 +3170,26 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
           ImGui::EndDisabled();
           ImGui::PopStyleColor(4);
           ImGui::SameLine();
-          ImGui::TextColored(ImVec4(0.65f, 0.68f, 0.72f, 1.0f), "%.0f",
+          ImGui::TextColored(ImVec4(0.60f, 0.68f, 0.78f, 1.0f), "%.0f Rs",
                              station.spawnDistanceRs);
           // Факт из Catalog (не выдумываем), затем кнопка телепорта.
           ImGui::TextWrapped("%s", station.description.c_str());
           if (isCurrent) {
-            ImGui::PushStyleColor(ImGuiCol_Button,
-                                  ImVec4(0.2f, 0.6f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.35f, 0.22f, 0.85f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.95f, 0.65f, 1.0f));
           }
-          if (ImGui::Button(isCurrent ? "Here" : "Fly here",
+          if (ImGui::Button(isCurrent ? uiRu("✓ На месте", "✓ Here")
+                                      : uiRu("Варп сюда", "Fly here"),
                             ImVec2(-1.0f, 0.0f))) {
             teleportToStation(station.id);
             triggerWarpInHalo();
           }
           if (isCurrent) {
-            ImGui::PopStyleColor();
+            ImGui::PopStyleColor(2);
           }
         }
         ImGui::EndChild();
-        if (isCurrent) {
-          ImGui::PopStyleColor(2);
-        }
+        ImGui::PopStyleColor(2);
       }
       ImGui::EndTable();
     }
@@ -4090,6 +4425,7 @@ void AppGL::checkAchievements() {
   sp.exported = st.exported;
   sp.imported = st.imported;
   sp.capturedHorizon = st.capturedHorizon;
+  sp.constellationAligned = m_constellationAligned;
   m_story.refresh(sp);
 
   std::vector<std::string> unlocked = achievementsCheck(st);
@@ -4145,57 +4481,53 @@ void AppGL::drawMenu() {
   ImGuiWindowFlags menuFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
 
-  // === MenuStyle === (v3.5.0): стеклянная панель поверх живого космоса —
-  // тёмное стекло с золотой кромкой, hover-кнопки теплеют.
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.72f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.20f));
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.060f, 0.105f, 0.160f, 0.78f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.110f, 0.190f, 0.290f, 0.92f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.150f, 0.240f, 0.360f, 1.00f));
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.82f, 0.86f, 0.92f, 1.00f));
-  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(1.00f, 0.75f, 0.28f, 0.28f));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+  // === MenuStyle (v4.2.0) ===: обсидиановое стекло аэрокосмического визира
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.030f, 0.045f, 0.070f, 0.88f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.35f, 0.52f, 0.35f));
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.080f, 0.135f, 0.210f, 0.80f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.150f, 0.240f, 0.360f, 0.95f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.140f, 0.380f, 0.600f, 1.00f));
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.93f, 0.97f, 1.00f));
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.22f, 0.32f, 0.46f, 0.30f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22.0f, 18.0f));
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(9.0f, 5.0f));
   ImGui::Begin("MainMenu", nullptr, menuFlags);
 
   if (m_menuPage == 0) {
-    // Title: чёрная тень + золотое свечение + золотая строка (DrawList).
+    // Title: лаконичный, чёткий аэрокосмический заголовок с циан-маркером
     {
       ImDrawList* tdl = ImGui::GetWindowDrawList();
-      const char* titleText = "ASTRO-VOYAGER";
-      ImGui::SetWindowFontScale(2.0f);
       const ImVec2 tpos = ImGui::GetCursorScreenPos();
-      const float tsize = ImGui::GetFontSize();
-      tdl->AddText(ImGui::GetFont(), tsize, ImVec2(tpos.x + 2.0f, tpos.y + 3.0f),
-                   IM_COL32(0, 0, 0, 200), titleText);
-      tdl->AddText(ImGui::GetFont(), tsize + 2.0f, ImVec2(tpos.x - 1.0f, tpos.y - 1.0f),
-                   IM_COL32(255, 191, 71, 60), titleText);
-      tdl->AddText(ImGui::GetFont(), tsize, tpos, IM_COL32(255, 196, 77, 255), titleText);
-      ImGui::Dummy(ImVec2(0.0f, tsize + 6.0f));
-      ImGui::SetWindowFontScale(1.0f);
-    }
-    ImGui::SetWindowFontScale(0.85f);
-    ImGui::TextColored(ImVec4(0.6f, 0.62f, 0.68f, 1.0f),
-                       "A journey through curved spacetime");
-    ImGui::SetWindowFontScale(1.0f);
+      const float gw = ImGui::GetContentRegionAvail().x;
+      // Инженерный маркер вверху карточки
+      tdl->AddLine(tpos, ImVec2(tpos.x + 38.0f, tpos.y), IM_COL32(56, 189, 248, 240), 2.0f);
+      tdl->AddLine(ImVec2(tpos.x + 38.0f, tpos.y), ImVec2(tpos.x + gw, tpos.y), IM_COL32(56, 189, 248, 40), 1.0f);
+      ImGui::Dummy(ImVec2(0.0f, 8.0f));
 
-    // Gold gradient divider (левый край ярче).
+      ImGui::TextColored(ImVec4(0.92f, 0.95f, 0.98f, 1.0f), "ASTRO-VOYAGER");
+      ImGui::TextColored(ImVec4(0.48f, 0.58f, 0.72f, 1.0f), "%s",
+                         uiRu("ИССЛЕДОВАНИЕ ИСКРИВЛЁННОГО ПРОСТРАНСТВА-ВРЕМЕНИ",
+                              "A JOURNEY THROUGH CURVED SPACETIME"));
+      ImGui::Spacing();
+    }
+
+    // Тонкий технический разделитель с акцентным штрихом
     auto menuGlow = [&]() {
       ImDrawList* gdl = ImGui::GetWindowDrawList();
       const ImVec2 gp = ImGui::GetCursorScreenPos();
       const float gw = ImGui::GetContentRegionAvail().x;
-      gdl->AddRectFilledMultiColor(gp, ImVec2(gp.x + gw, gp.y + 1.0f),
-                                   IM_COL32(255, 191, 71, 150), IM_COL32(255, 191, 71, 0),
-                                   IM_COL32(255, 191, 71, 0), IM_COL32(255, 191, 71, 150));
-      ImGui::Dummy(ImVec2(gw, 2.0f));
+      gdl->AddLine(gp, ImVec2(gp.x + gw, gp.y), IM_COL32(56, 189, 248, 40), 1.0f);
+      gdl->AddLine(gp, ImVec2(gp.x + 28.0f, gp.y), IM_COL32(56, 189, 248, 180), 1.5f);
+      ImGui::Dummy(ImVec2(gw, 6.0f));
     };
 
     ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.28f, 0.19f, 0.05f, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.42f, 0.29f, 0.08f, 1.00f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.34f, 0.09f, 1.00f));
+    // Главные действия: благородный глубокий циан-синий
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.22f, 0.35f, 0.85f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.32f, 0.50f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.42f, 0.68f, 1.00f));
     if (ImGui::Button(uiRu("Новая игра · Adventure", "New Game · Adventure"),
                       ImVec2(-1.0f, 42.0f))) {
       // v4.0: сюжетный слот Adventure: пролог Егорки (фотослайды),
@@ -4208,9 +4540,9 @@ void AppGL::drawMenu() {
     }
     ImGui::PopStyleColor(3);
 
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.28f, 0.19f, 0.05f, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.42f, 0.29f, 0.08f, 1.00f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.34f, 0.09f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.22f, 0.35f, 0.85f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.32f, 0.50f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.42f, 0.68f, 1.00f));
     if (ImGui::Button(uiRu("Начать экспедицию", "Begin Expedition"),
                       ImVec2(-1.0f, 42.0f))) {
       // === Expedition === (v3.5.0): сюжетный режим. Первый запуск — вводные
@@ -4229,9 +4561,9 @@ void AppGL::drawMenu() {
     ImGui::PopStyleColor(3);
 
     // === Expedition === (v3.5.0): свободный полёт — без пролога и сюжета.
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.12f, 0.17f, 0.90f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.16f, 0.19f, 0.26f, 1.00f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.24f, 0.32f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.13f, 0.20f, 0.75f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.14f, 0.22f, 0.34f, 0.90f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.16f, 0.28f, 0.44f, 1.00f));
     if (ImGui::Button(uiRu("Свободный визит", "Free Visit"),
                       ImVec2(-1.0f, 32.0f))) {
       m_inMenu = false;
@@ -4242,7 +4574,7 @@ void AppGL::drawMenu() {
     ImGui::PopStyleColor(3);
 
     menuGlow();
-    ImGui::TextColored(ImVec4(1.00f, 0.75f, 0.28f, 1.0f), "Destinations");
+    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "Destinations");
     ImGui::SetWindowFontScale(0.95f);
     {
       const int gridCols = 2;
@@ -4271,7 +4603,7 @@ void AppGL::drawMenu() {
     ImGui::SetWindowFontScale(1.0f);
 
     menuGlow();
-    ImGui::TextColored(ImVec4(1.00f, 0.75f, 0.28f, 1.0f), "Recent");
+    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "Recent");
     ImGui::SetWindowFontScale(0.95f);
     {
       const int gridCols = 2;
@@ -4504,6 +4836,7 @@ void AppGL::drawMenu() {
 
 void AppGL::drawWorldLabels() {
   if (!m_showLabels) return;
+  if (m_inMenu) return;  // Hide 3D world labels when in the main or pause menu
   if (m_slidesOpen) return;  // === Expedition ===: катсцена чистая, без меток
   if (m_finaleChoiceOpen) return;  // v4.1: развилка финала без меток
   const Station* curSt = m_sceneManager->getCurrentStation();

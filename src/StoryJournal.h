@@ -31,6 +31,7 @@ class StoryJournal {
     bool exported = false;
     bool imported = false;
     bool capturedHorizon = false;
+    bool constellationAligned = false;
   };
 
   void refresh(const Progress& progress);

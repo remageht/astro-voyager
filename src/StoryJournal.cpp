@@ -24,38 +24,41 @@ std::vector<StoryEntry> storyCatalog() {
   e.titleRu = "Отлёт";
   e.titleEn = "Departure";
   e.textRu =
-      "Отчёт экспедиции. Свет Солнца слабеет на доли процента за "
-      "десятилетие. Мы покидаем дом, чтобы найти мир, который его "
-      "переживёт.";
+      "Солнце красное. Земля — маленькая, тихая, слишком знакомая. Мы увозим "
+      "не только людей: мы увозим их несбывшиеся планы, первые влюблённости и "
+      "чьи-то несданные домашки. Планета умирает. Но мы ещё не закончили.";
   e.textEn =
-      "Expedition log. The Sun dims a fraction of a percent each decade. "
-      "We leave home to find a world that will outlive it.";
+      "The Sun is red. Earth is small, silent, too familiar. We carry not "
+      "just people: we carry unfulfilled plans, first loves, and someone's "
+      "overdue homework. The planet is dying. But we are not finished.";
   e.unlocked = true;
   c.push_back(e);
 
   e.id = "first-steps";
-  e.titleRu = "Первые прыжки";
-  e.titleEn = "First Steps";
+  e.titleRu = "Варп-фактор 9";
+  e.titleEn = "Warp Factor 9";
   e.textRu =
-      "Первые варп-прыжки записаны в бортовой журнал. Маршрут строится из "
-      "посещённых миров — открой карту и продолжай.";
+      "Варп-фактор 9. Корабль не «летит» — он договаривается с пространством, "
+      "чтобы расстояние перестало быть наглым. Внутри пузыря тишина. "
+      "Примечание: керосиновые ракеты были великолепны. Как велосипед у лайнера.";
   e.textEn =
-      "First warp jumps are on the log. The route builds itself from the "
-      "worlds you have seen - open the map and continue.";
+      "Warp factor 9. The ship doesn't 'fly' — it negotiates with space so "
+      "distance stops being insolent. Inside the bubble is silence. "
+      "Note: kerosene rockets were great. Like a bicycle next to an ocean liner.";
   e.unlocked = false;
   c.push_back(e);
 
   e.id = "sgra";
-  e.titleRu = "Сердце Галактики";
-  e.titleEn = "Heart of the Galaxy";
+  e.titleRu = "Sgr A* — Сердце Галактики";
+  e.titleEn = "Heart of the Galaxy (Sgr A*)";
   e.textRu =
-      "Sgr A* — сверхмассивная чёрная дыра в центре Млечного Пути. "
-      "Фотонное кольцо — это свет, сделавший оборот вокруг горизонта "
-      "прежде, чем попасть в камеру.";
+      "Подхожу к Sgr A*. Мои часы стали ленивыми, а Вселенная снаружи — "
+      "нетерпеливой. Горизонт событий не выглядит страшно: он как чёрная дверь "
+      "без ручки. Если не вернусь, передайте Земле: я всё-таки сдал физику.";
   e.textEn =
-      "Sgr A*, the supermassive black hole at the center of the Milky "
-      "Way. The photon ring is light that circled the horizon before "
-      "reaching the camera.";
+      "Approaching Sgr A*. My clocks grew lazy, and the Universe outside grew "
+      "impatient. The event horizon isn't terrifying: it's like a black door "
+      "without a handle. If I don't return, tell Earth: I passed physics after all.";
   c.push_back(e);
 
   e.id = "m87";
@@ -92,14 +95,16 @@ std::vector<StoryEntry> storyCatalog() {
   c.push_back(e);
 
   e.id = "horizon";
-  e.titleRu = "У горизонта";
-  e.titleEn = "At the Horizon";
+  e.titleRu = "У горизонта событий";
+  e.titleEn = "At the Event Horizon";
   e.textRu =
-      "Камера подошла к тени горизонта событий. Часы на HUD идут "
-      "медленнее, чем где-либо ещё — гравитационное замедление.";
+      "Я снова думаю о том вечере на Сене. О себе в мокрой куртке, с тройкой "
+      "по физике и верой, что космос — для избранных. Звёзды покоряют не "
+      "полубоги, а упрямые мечтатели с несданной домашкой.";
   e.textEn =
-      "The camera stands at the shadow of the event horizon. The HUD "
-      "clock runs slower here - gravitational time dilation, live.";
+      "I think back to that evening by the Seine. Myself in a soaked jacket, "
+      "C-grades in physics and a belief that space is for the chosen. "
+      "Stars are conquered not by demigods, but by stubborn dreamers with overdue homework.";
   c.push_back(e);
 
   e.id = "close-approach";
@@ -135,6 +140,17 @@ std::vector<StoryEntry> storyCatalog() {
       "a thousand reports - and a reason to fly on.";
   c.push_back(e);
 
+  e.id = "constellation-sync";
+  e.titleRu = "Секрет созвездий";
+  e.titleEn = "Secret of Constellations";
+  e.textRu =
+      "Созвездие собрано: звёздный кулон Егорки-5 срезонировал с метрикой Млечного Пути. "
+      "Опорные координаты Пятой Вселенной подтверждены. Расстояние снова уступило место упрямству.";
+  e.textEn =
+      "Constellation aligned: the star pendant of Yegorka-5 resonated with the Milky Way metric. "
+      "Reference coordinates of the Fifth Universe are locked. Distance has yielded to stubbornness once more.";
+  c.push_back(e);
+
   return c;
 }
 
@@ -167,6 +183,8 @@ void StoryJournal::refresh(const Progress& progress) {
       unlocked = progress.exported || progress.imported;
     } else if (e.id == "grand-tour") {
       unlocked = nVisited >= 8;
+    } else if (e.id == "constellation-sync") {
+      unlocked = progress.constellationAligned;
     }
     e.unlocked = unlocked;
   }

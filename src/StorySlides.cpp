@@ -448,20 +448,23 @@ const std::vector<StorySlide>& storyPrologueSlides() {
         "Yegorka from the Fifth Universe, holding a pulsing singularity.",
         0, "res/story/01_paris_portal.jpg"});
     s.push_back(StorySlide{  // 1: The Secret of Antimatter
-        "\"Не ищи отрицательную массу — используй фазовый сдвиг вакуума при "
-        "аннигиляции антиматерии в резонаторе Казимира\". Сияющий кулон-звезда "
-        "и кристалл сингулярности легли в дрожащие руки школьника.",
-        "\"Do not seek negative mass — use the vacuum phase shift of antimatter "
-        "annihilation inside a Casimir cavity\". The radiant star pendant and "
-        "the singularity crystal settled into the schoolboy's trembling hands.",
+        "«Ваш варп-проект застрял, потому что ищут отрицательную массу. "
+        "Нужен асимметричный резонатор Казимира: аннигиляция антиматерии создаёт "
+        "сдвиг вакуума, локально опуская плотность энергии ниже нуля. "
+        "Не антигравитация, Егорка. Инженерия метрики».",
+        "\"Your warp project stalled hunting for negative mass. You need an "
+        "asymmetric Casimir cavity: antimatter annihilation creates a coherent "
+        "vacuum shift, driving energy density below zero. Not antigravity, "
+        "Yegorka. Spacetime engineering\".",
         0, "res/story/02_pendant_handover.jpg"});
     s.push_back(StorySlide{  // 2: Decoding the Metric in the Attic
-        "Ночами в парижской мансарде звёздный кулон проецировал голограммы "
-        "уравнений метрики Алькубьерре. То, над чем бились институты "
-        "десятилетиями, сошлось в одной тетради: искривление пространства возможно.",
-        "Nights in a Parisian attic, the star pendant projected holographic "
-        "equations of the Alcubierre metric. What institutions struggled over "
-        "for decades converged in a single notebook: spacetime warp is real.",
+        "«Портал нестабилен — у меня две минуты. Не жди, пока станешь великим. "
+        "Начни, пока ты всё ещё троечник с несданной домашкой. Именно такие "
+        "люди уводят корабли за горизонт... И да: выключи автопилот, он ужасно зануден».",
+        "\"The portal is unstable — I have two minutes. Don't wait until you "
+        "are great. Start while you are still a C-student with overdue homework. "
+        "Those are the ones who steer ships beyond horizons... And turn off "
+        "the autopilot, it is dreadfully boring\".",
         0, "res/story/03_attic_equation.jpg"});
     s.push_back(StorySlide{  // 3: Astro-Voyager in Orbit
         "На орбитальной верфи ожил колосс — корабль Astro-Voyager. "
@@ -472,12 +475,12 @@ const std::vector<StorySlide>& storyPrologueSlides() {
         "bending the very fabric of spacetime.",
         0, "res/story/04_ship_orbit.jpg"});
     s.push_back(StorySlide{  // 4: EgorKa at the Helm - The First Jump
-        "Егорка сжал штурвал корабля. На груди мерцает звёздный кулон, в "
-        "панорамном окне пространство схлопывается в релятивистский тоннель. "
-        "Первый межзвёздный прыжок начат — курс на неизведанный космос.",
-        "Yegorka gripped the ship's control yoke. The star pendant gleamed on "
-        "his chest, and through the canopy, spacetime collapsed into a "
-        "relativistic warp tunnel. The first interstellar jump begins.",
+        "Варп-фактор 9. Корабль не летит — он договаривается с пространством, "
+        "чтобы расстояние перестало быть наглым. Внутри тишина, снаружи звёзды "
+        "тянутся синими нитями. Первый межзвёздный прыжок начат.",
+        "Warp factor 9. The ship doesn't fly — it negotiates with spacetime "
+        "so distance stops being insolent. Silence inside, blue starthreads "
+        "outside. The first interstellar jump begins.",
         0, "res/story/05_egorka_cockpit.png"});
     s.push_back(StorySlide{  // 5: Cinematic Warp Flight
         "Разрывая пустоту, Astro-Voyager устремляется сквозь искривлённое "

@@ -131,6 +131,18 @@ int main() {
     }
   }
 
+  // Test 7b: constellation alignment unlocks constellation-sync entry.
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.constellationAligned = true;
+    j.refresh(p);
+    if (j.unlockedCount() != 2) {
+      std::cerr << "Test 7b failed: constellationAligned should unlock constellation-sync\n";
+      return 1;
+    }
+  }
+
   // Test 8: unread counting and markAllRead; read marks survive refresh.
   {
     StoryJournal j;
@@ -169,7 +181,7 @@ int main() {
       std::cerr << "Test 9 failed: repeated refresh changed unlock state\n";
       return 1;
     }
-    if (j.entries().size() != 10) {
+    if (j.entries().size() != 11) {
       std::cerr << "Test 9 failed: catalog size drifted ("
                 << j.entries().size() << ")\n";
       return 1;
