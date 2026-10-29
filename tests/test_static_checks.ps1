@@ -339,6 +339,7 @@ Check 'ship nozzle emissive geometry' (($sceneCpp -match 'nozzleCol') -and ($sce
 Check 'ship nav lights' (($sceneCpp -match 'navRed') -and ($sceneCpp -match 'navGreen'))
 Check 'ship panel line shading' (((Read-File 'shaders/ship.frag') -match 'u_Emissive') -and ((Read-File 'shaders/ship.frag') -match 'fract') -and ((Read-File 'shaders/ship.vert') -match 'v_PartPos'))
 Check 'ring ship hull-mounted rings' (($sceneCpp -match 'ringZ') -and ($sceneCpp -match '1, 0\.78f, 0\.28f') -and ($sceneCpp -match '0\.14f, 0\.013f, 0\.013f') -and ($sceneCpp -match '0\.013f, 0\.14f, 0\.013f') -and ((Read-File 'blender/scripts/generate_ring_ship.py') -match 'Ring_Mount_') -and ($sceneCpp -notmatch '0\.13f, 0\.014f, 0\.035f'))
+Check 'ring ship showcase renderer' ((Test-Path (Join-Path $root 'blender/scripts/render_ring_ship_showcase.py')) -and ((Read-File 'blender/scripts/render_ring_ship_showcase.py') -match 'ring_ship_albedo\.bmp') -and ((Read-File 'blender/scripts/render_ring_ship_showcase.py') -match 'no-flip-v'))
 
 # --- settings pass v3.6.0: raytracing quality + AA + ship + difficulty ---
 Check 'settings ray tracing section' (($appCpp -match 'Ray quality') -and ($appCpp -match 'Shell radius'))
