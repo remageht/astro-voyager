@@ -2145,6 +2145,7 @@ void AppGL::saveAdventureSlotNow(bool quiet) {
   g.progress.unlocked.assign(m_unlockedIds.begin(), m_unlockedIds.end());
   g.progress.route = m_route;
   g.progress.colonies = m_colonies;
+  g.progress.discoveries.assign(m_discoveredConstellations.begin(), m_discoveredConstellations.end());
   g.progress.minBhDistance = m_minBhDistance;
   g.session.custom = m_shipCustomization;
   if (const Station* cur = m_sceneManager->getCurrentStation()) {
@@ -3971,6 +3972,18 @@ void AppGL::updateShip(float deltaTime) {
   // радиация; Hard: наоборот). K=1 в difficultyTuning(Normal) - дефолт.
   const DifficultyTuning dtune = difficultyTuning(m_difficulty);
   ship::updateFuel(m_ship, deltaTime, nearStar, dtune.starFuelK);
+
+  // v4.2: Квантовый вакуумный конденсатор (Большая Медведица)
+  // Пассивный сбор нулевой энергии вакуума (+0.5 ед./с в дрейфе) и баки до 150 ед.
+  if (m_discoveredConstellations.count("uma") > 0) {
+    const float maxFuel = 150.0f;
+    if (m_ship.fuel < maxFuel) {
+      const float harvestRate = nearStar ? 2.5f : 0.5f;
+      m_ship.fuel += harvestRate * deltaTime;
+      if (m_ship.fuel > maxFuel) m_ship.fuel = maxFuel;
+    }
+  }
+
   const float shieldBefore = m_ship.shield;
   ship::applyRadiation(m_ship, deltaTime, inRadZone, dtune.radiationK);
   // Вспышка щита (v3.3.0): импульс от потери щита + экспоненциальное затухание.
@@ -4120,12 +4133,17 @@ void AppGL::drawShipHud() {
                        ImGuiWindowFlags_NoFocusOnAppearing |
                        ImGuiWindowFlags_NoNav |
                        ImGuiWindowFlags_NoSavedSettings)) {
-    char buf[48];
+    const float maxFuel = (m_discoveredConstellations.count("uma") > 0) ? 150.0f : 100.0f;
+    const bool hasZpe = (m_discoveredConstellations.count("uma") > 0);
+    const bool hasCasimir = (m_discoveredConstellations.count("ori") > 0);
+    char buf[64];
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
                           ImVec4(1.0f, 0.55f, 0.15f, 1.0f));
-    std::snprintf(buf, sizeof(buf), "%s %.0f%s", uiRu("Топливо", "Fuel"),
-                  m_ship.fuel, m_ship.boostActive ? " [BOOST]" : "");
-    ImGui::ProgressBar(m_ship.fuel / 100.0f, ImVec2(180.0f, 12.0f), buf);
+    std::snprintf(buf, sizeof(buf), "%s %.0f/%.0f%s%s", uiRu("Топливо", "Fuel"),
+                  m_ship.fuel, maxFuel,
+                  hasZpe ? " [ZPE]" : "",
+                  m_ship.boostActive ? " [BOOST]" : "");
+    ImGui::ProgressBar(m_ship.fuel / maxFuel, ImVec2(180.0f, 12.0f), buf);
     ImGui::PopStyleColor();
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
                           ImVec4(0.25f, 0.6f, 1.0f, 1.0f));
@@ -4139,6 +4157,9 @@ void AppGL::drawShipHud() {
                   m_ship.hull);
     ImGui::ProgressBar(m_ship.hull / 100.0f, ImVec2(180.0f, 12.0f), buf);
     ImGui::PopStyleColor();
+    if (hasCasimir) {
+      ImGui::TextColored(ImVec4(0.35f, 0.95f, 1.0f, 1.0f), "★ [CASIMIR WARP 9.9]");
+    }
     // Вид камеры (v3.3.0): строка-подсказка для клавиши V.
     // v3.6.0: сложность Hard отключает подсказки (difficultyTuning().hints).
     if (difficultyTuning(m_difficulty).hints) {
@@ -4427,6 +4448,13 @@ void AppGL::applySaveGame(const SaveGame& g) {
   m_sceneManager->setColonies(m_colonies);
   // v3.7.0: жизненный счётчик уклонений.
   m_asteroidDodges = g.progress.asteroidDodges;
+  m_discoveredConstellations.clear();
+  for (const auto& d : g.progress.discoveries) {
+    m_discoveredConstellations.insert(d);
+  }
+  if (!m_discoveredConstellations.empty()) {
+    m_constellationAligned = true;
+  }
   m_colonyHint.clear();
   m_colonyHintId.clear();
   // Станция и камера. teleportToStation сам добавит станцию в маршрут и
@@ -4500,6 +4528,7 @@ void AppGL::saveProfileNow(bool quiet) {
   g.progress.route = m_route;
   g.progress.colonies = m_colonies;
   g.progress.asteroidDodges = m_asteroidDodges;  // v3.7.0
+  g.progress.discoveries.assign(m_discoveredConstellations.begin(), m_discoveredConstellations.end());
   g.progress.minBhDistance = m_minBhDistance;
   g.progress.exported = m_journeyExported;
   g.progress.imported = m_journeyImported;
@@ -6485,13 +6514,15 @@ void AppGL::startWarpJump(const std::string& id) {
   }
   // === Ship survival === (v3.3.0): без пяти единиц топлива прыжок не летит.
   // v3.6.0: цена зависит от сложности (Hard x1.6, Easy x0.6).
+  // v4.2: Асимметричный резонатор Казимира (Орион) — скидка 50% на прыжки.
   const DifficultyTuning jtune = difficultyTuning(m_difficulty);
-  if (!ship::canJump(m_ship, jtune.jumpCostK)) {
+  const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
+  if (!ship::canJump(m_ship, jtune.jumpCostK * casimirK)) {
     char need[64];
     std::snprintf(need, sizeof(need),
                   uiRu("Недостаточно топлива (нужно %.0f)",
                        "Not enough fuel (%.0f needed)"),
-                  static_cast<double>(ship::kJumpFuelCost * jtune.jumpCostK));
+                  static_cast<double>(ship::kJumpFuelCost * jtune.jumpCostK * casimirK));
     m_shipNotice = need;
     m_shipNoticeT = 3.0f;
     return;
@@ -6603,7 +6634,8 @@ bool AppGL::updateWarp(float deltaTime) {
         const std::string tgt = m_warpJumpTarget;
         m_warpJumpTarget.clear();
         teleportToStation(tgt);  // штатный телепорт под вспышкой
-        ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK);
+        const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
+        ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK * casimirK);
         m_warpStatus = 4;        // Cooldown
         m_warpStateT = 0.0f;
         m_warpFlash = 0.5f;  // v3.6.0: мягкая вспышка прибытия (комфорт для глаз)
@@ -6859,7 +6891,8 @@ bool AppGL::updateJumpCine(float deltaTime) {
     m_jumpDidTeleport = true;
     m_warpStatus = 3;
     teleportToStation(m_jumpTarget, false);  // v3.8.0: свой телепорт внутри катсцены
-    ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK);
+    const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
+    ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK * casimirK);
     m_jumpShipPos = m_camera.position;
     m_jumpShipDir = m_camera.forward();
     m_jumpFpPos = m_camera.position;
@@ -8216,6 +8249,49 @@ void AppGL::drawShipyard() {
         ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  -> %s -%.0f%%",
                            uiRu("Экономия топлива при варп-прыжке:", "Warp jump fuel savings:"),
                            (1.0f - ship::upgradeJumpCostFactor(m_shipCustomization.warpUpgrade)) * 100.0f);
+
+        // 4. Fifth Universe Relic Technologies (Pendant)
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.95f, 0.82f, 0.35f, 1.0f), "★ %s",
+                           uiRu("Реликтовые технологии Пятой Вселенной (Кулон Егорки-5):",
+                                "Fifth Universe Relic Technologies (Egorka-5 Pendant):"));
+
+        // Ursa Major: Quantum Vacuum Condenser
+        bool hasUma = (m_discoveredConstellations.count("uma") > 0);
+        if (hasUma) {
+          ImGui::BulletText("%s: %s",
+                            uiRu("Квантовый вакуумный конденсатор [Большая Медведица]",
+                                 "Quantum Vacuum Condenser [Ursa Major]"),
+                            uiRu("АКТИВЕН (Баки 150 ед., пассивный сбор)", "ACTIVE (150 fuel, passive harvest)"));
+        } else {
+          ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "• %s",
+                             uiRu("Квантовый вакуумный конденсатор: [НЕ СИНХРОНИЗИРОВАН]",
+                                  "Quantum Vacuum Condenser: [NOT SYNCHRONIZED]"));
+          ImGui::SameLine();
+          if (ImGui::SmallButton(uiRu("Калибровать##uma", "Calibrate##uma"))) {
+            m_alignConstellationId = "uma";
+            m_constellationAlignOpen = true;
+          }
+        }
+
+        // Orion: Asymmetric Casimir Resonator
+        bool hasOri = (m_discoveredConstellations.count("ori") > 0);
+        if (hasOri) {
+          ImGui::BulletText("%s: %s",
+                            uiRu("Асимметричный резонатор Казимира [Орион]",
+                                 "Asymmetric Casimir Resonator [Orion]"),
+                            uiRu("АКТИВЕН (Варп 9.9, -50% расход на прыжки)", "ACTIVE (Warp 9.9, -50% jump cost)"));
+        } else {
+          ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "• %s",
+                             uiRu("Асимметричный резонатор Казимира: [НЕ СИНХРОНИЗИРОВАН]",
+                                  "Asymmetric Casimir Resonator: [NOT SYNCHRONIZED]"));
+          ImGui::SameLine();
+          if (ImGui::SmallButton(uiRu("Калибровать##ori", "Calibrate##ori"))) {
+            m_alignConstellationId = "ori";
+            m_constellationAlignOpen = true;
+          }
+        }
 
         if (upgraded) {
           warpdrive::setShipCustomization(m_shipCustomization);
