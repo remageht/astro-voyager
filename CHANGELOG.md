@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 4.1.0 - Unreleased / В работе
+## 4.1.0 - 2026-10-30
 
 ## What's new / Что нового
 - EN: Hull-mounted spinning warp rings - each Ring Ship hoop now has two static pylons anchoring it to the fuselage (rings 1/3 horizontal, ring 2 vertical), so the three rings no longer form a longitudinal cage. The shader spins only the torus band (r >= 0.372) in its own plane; mounts stay rigid while running lights ride with the ring. The procedural fallback and the Blender generator follow the same two-pylon rule.

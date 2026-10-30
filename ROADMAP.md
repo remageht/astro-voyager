@@ -47,10 +47,10 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 - Gates: тесты модели данных, полнота кодекса в static checks.
 
 ### v4.0 — Two modes: Adventure & Sandbox / Два режима: приключение и песочница
-- Status / Статус: **foundation shipped in 4.0.0** / **фундамент выпущен в 4.0.0**.
-- EN: Shipped: mode entry "New Game · Adventure", Yegorka's illustrated prologue, a dedicated `save-adventure.json` (`SaveMode::Adventure`) and the Sol landing; Sandbox keeps its own profile and the modes never overwrite each other. Still ahead: the 6–8 chapter campaign itself (prototype premise: the dying Sun and the deadline countdown, branching, candidate worlds to scout/analyze/choose, finale and credits), chapter state-machine/timer tests and a scripted full-run smoke.
-- RU: Выпущено: пункт выбора режима «Новая игра · Adventure», иллюстрированный пролог Егорки, отдельный `save-adventure.json` (`SaveMode::Adventure`) и высадка в Солнечной системе; песочница сохраняется отдельно, режимы не перезаписывают друг друга. Впереди: сама кампания на 6–8 глав (прототипный замысел: умирающее Солнце и обратный отсчёт до срока, ветвления, кандидаты-планеты для разведки/анализа/выбора, финал и титры), тесты стейт-машины глав и таймера, скриптованный полный smoke-прогон.
-- Gates: раздельные профили сохранений (уже есть), тесты стейт-машины глав и таймера кампании, скриптованный полный прогон (smoke).
+- Status / Статус: **shipped in 4.0.0 (foundation) & 4.1.0 (campaign)** / **выпущено в 4.0.0 (фундамент) и 4.1.0 (кампания)**.
+- EN: Shipped: mode entry "New Game · Adventure", Yegorka's illustrated prologue, dedicated save profiles, 7-chapter campaign with Mia Sato, "The Last Watch" fleet interlude, dual endings (Colony vs Horizon) and shared "Legacy" epilogue. Still ahead: in-chapter branching and deadline countdown meta-game.
+- RU: Выпущено: пункт «Новая игра · Adventure», иллюстрированный пролог Егорки, раздельные профили сохранений, кампания из 7 глав с репликами Мии Сато, интерлюдия «Последний караул», развилка двух концовок и эпилог «Наследие». Впереди: ветвления внутри глав и обратный отсчёт срока.
+- Gates: раздельные профили сохранений, тесты экспедиции и развилок (test_expedition), скриптованный smoke-прогон.
 
 ## Stage 3 — Production values / Продакшн-ценности (v4.1–v4.5)
 
