@@ -74,6 +74,8 @@ class AppGL {
   void drawExpeditionMap();
   void startExpeditionIntro();
   void openChapterSlide(int slideIdx);
+  // v4.1: advance the campaign for station arrivals and dock objectives.
+  void advanceExpedition(const std::string& objectiveId);
   // v4.1: финальная развилка Adventure (колония / дальний горизонт).
   void openEndingSlide(int choice);
   void drawFinaleChoice();

@@ -372,11 +372,23 @@ const std::vector<StorySlide>& storyChapterSlides() {
     std::vector<StorySlide> s;
     s.push_back(StorySlide{  // 0: earth done
         "Мия: «Мы посмотрели дом и поняли: возвращения может не быть». "
-        "Курс проложен к центру Галактики.",
+        "Курс проложен к орбитальному причалу: перед прыжком экипаж "
+        "прощается с первым флотом.",
         "Mia: \"We looked at our home and understood: there may be no "
-        "return.\" Course set to the center of the Galaxy.",
+        "return.\" Course set for the orbital pier: before the jump the crew "
+        "bids farewell to the first fleet.",
         5});
-    s.push_back(StorySlide{  // 1: sgra done
+    s.push_back(StorySlide{  // 1: fleet done - Dragon / Soyuz interlude
+        "Мия: «Мы уходим дальше, чем уходил любой экипаж. Но сначала — к тем, "
+        "кто открыл нам орбиту». Crew Dragon «Эндевор» и «Союз-МС» стоят на "
+        "вечной стоянке у Земли: две эпохи, один воздух. Экипаж касается их "
+        "шлюзов, как плеча старшего, и вносит имена в журнал.",
+        "Mia: \"We go farther than any crew before us. But first - to those "
+        "who opened orbit for us.\" Crew Dragon Endeavour and Soyuz-MS stand "
+        "on eternal watch by Earth: two eras, one air. The crew touches their "
+        "hatches like an elder's shoulder and writes the names into the log.",
+        0, "res/story/06_last_watch.png"});
+    s.push_back(StorySlide{  // 2: sgra done
         "Мия: «Свет огибает горизонт — и мы видим его кольцо». Фотонное "
         "кольцо Sgr A* запечатлено, орбиты света измерены. Следующая цель — "
         "M87*.",
@@ -384,32 +396,32 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "photon ring of Sgr A* is recorded, light orbits measured. Next "
         "target - M87*.",
         6});
-    s.push_back(StorySlide{  // 2: m87 done
+    s.push_back(StorySlide{  // 3: m87 done
         "Мия: «Доплер не врёт: одна сторона диска ярче другой». Джет M87* "
         "брошен на тысячи световых лет.",
         "Mia: \"Doppler does not lie: one side of the disk burns brighter.\" "
         "The M87* jet reaches thousands of light-years.",
         7});
-    s.push_back(StorySlide{  // 3: qso done
+    s.push_back(StorySlide{  // 4: qso done
         "Мия: «Этот свет шёл к нам ещё до первых динозавров». 3C 273: ядро "
         "квазара ярче целой галактики, его свет шёл к нам 2.4 миллиарда лет.",
         "Mia: \"This light traveled to us before the first dinosaurs.\" 3C "
         "273: the quasar core outshines a galaxy; its light traveled 2.4 "
         "billion years.",
         8});
-    s.push_back(StorySlide{  // 4: m13 done - new candidates
+    s.push_back(StorySlide{  // 5: m13 done - new candidates
         "Мия: «Вот он — второй дом. Но у нас остался один выбор». Скопление "
         "M13: светила вдвое старше Солнца; вторая Земля найдена.",
         "Mia: \"There it is - a second home. But we have one choice left.\" "
         "Cluster M13: stars twice as old as the Sun; a second Earth is found.",
         9});
-    s.push_back(StorySlide{  // 5: neutral finale fallback (legacy saves)
+    s.push_back(StorySlide{  // 6: neutral finale fallback (legacy saves)
         "Финал экспедиции: Новому Дому — быть. Сюжетная арка завершена; "
         "Галактика всё ещё ждёт исследователей.",
         "Expedition finale: the New Home shall be. The story arc is "
         "complete; the Galaxy is still waiting for explorers.",
         10});
-    s.push_back(StorySlide{  // 6: colony ending (branch A)
+    s.push_back(StorySlide{  // 7: colony ending (branch A)
         "Мия: «Мы остаёмся. Здесь будут дома, сады и дети, которые увидят "
         "настоящее небо». Экипаж «Астронавигатора-1» основал Новый Дом у "
         "старых звёзд M13. Экспедиция завершена — история только начинается.",
@@ -418,7 +430,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "old stars of M13. The expedition is over - the story is just "
         "beginning.",
         10});
-    s.push_back(StorySlide{  // 7: far horizon ending (branch B)
+    s.push_back(StorySlide{  // 8: far horizon ending (branch B)
         "Мия: «Мы не ставим точку. Один прыжок — и за горизонтом будет новый "
         "свет». Последнее топливо уходит в двигатель. «Астронавигатор-1» "
         "покидает M13 и уходит к краю Галактики. Колония останется мечтой; "
@@ -427,6 +439,16 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "light beyond the horizon.\" The last fuel feeds the drive. "
         "AstroNavigator-1 leaves M13 for the edge of the Galaxy. The colony "
         "remains a dream; the crew becomes a legend.",
+        5});
+    s.push_back(StorySlide{  // 9: epilogue - both endings continue here
+        "Эпилог · Наследие. Спустя годы сигнал «Астронавигатора» достиг "
+        "Земли. На орбите, где стоят Dragon и «Союз», вырос новый причал. "
+        "Первые корабли больше не летают — но каждый пилот, уходящий к "
+        "звёздам, оставляет на их обшивке свой позывной. История продолжается.",
+        "Epilogue · Legacy. Years later, the signal of AstroNavigator reached "
+        "Earth. A new pier has grown in the orbit where Dragon and Soyuz "
+        "stand. The first ships no longer fly - but every pilot heading for "
+        "the stars leaves a call sign on their hull. The story continues.",
         5});
     return s;
   }();

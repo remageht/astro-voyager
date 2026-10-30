@@ -27,10 +27,11 @@ int main() {
     }
   }
 
-  // Test 2: the full chain sol > sgra > m87 > qso-3c273 > m13 finishes.
+  // Test 2: the full chain sol > fleet > sgra > m87 > qso-3c273 > m13 finishes.
   {
     ExpeditionState st;
     st.markVisited("sol");
+    st.markVisited("dock-dragon");
     st.markVisited("sgra");
     st.markVisited("m87");
     st.markVisited("qso-3c273");
@@ -64,12 +65,18 @@ int main() {
     }
     st.markVisited("sol");
     if (st.chapterIndex != 1) {
-      std::cerr << "Test 3 failed: sol visit must open sgra chapter\n";
+      std::cerr << "Test 3 failed: sol visit must open the fleet chapter\n";
       return 1;
     }
     st.markVisited("sol");  // re-visit: no-op
     if (st.chapterIndex != 1) {
       std::cerr << "Test 3 failed: re-visit advanced chapter\n";
+      return 1;
+    }
+    // Either historic ship completes the fleet interlude.
+    st.markVisited("dock-soyuz");
+    if (st.chapterIndex != 2) {
+      std::cerr << "Test 3 failed: Soyuz dock must complete the fleet chapter\n";
       return 1;
     }
   }
@@ -123,11 +130,11 @@ int main() {
     (void)st;
   }
 
-  // Test 6: catalog shape - 6 chapters, unique targets and slides.
+  // Test 6: catalog shape - 7 chapters, unique targets and slides.
   {
     const auto& chapters = expeditionChapters();
-    if (chapters.size() != 6) {
-      std::cerr << "Test 6 failed: expected 6 chapters, got " << chapters.size()
+    if (chapters.size() != 7) {
+      std::cerr << "Test 6 failed: expected 7 chapters, got " << chapters.size()
                 << '\n';
       return 1;
     }
@@ -147,9 +154,16 @@ int main() {
         return 1;
       }
     }
-    if (goals != 5) {
-      std::cerr << "Test 6 failed: expected 5 station chapters, got " << goals
+    if (goals != 6) {
+      std::cerr << "Test 6 failed: expected 6 station chapters, got " << goals
                 << '\n';
+      return 1;
+    }
+    // The fleet interlude accepts either historic ship.
+    if (chapters[1].id != "fleet" ||
+        chapters[1].station.find("dock-dragon") == std::string::npos ||
+        chapters[1].station.find("dock-soyuz") == std::string::npos) {
+      std::cerr << "Test 6 failed: fleet chapter targets are incomplete\n";
       return 1;
     }
   }
@@ -157,21 +171,22 @@ int main() {
   // Test 7: status labels and file path.
   {
     ExpeditionState st;
-    if (st.statusRu() != "Экспедиция: 1/6" || st.statusEn() != "Expedition: 1/6") {
+    if (st.statusRu() != "Экспедиция: 1/7" || st.statusEn() != "Expedition: 1/7") {
       std::cerr << "Test 7 failed: unexpected status label\n";
       return 1;
     }
     st.markVisited("sol");
-    if (st.statusRu() != "Экспедиция: 2/6") {
+    if (st.statusRu() != "Экспедиция: 2/7") {
       std::cerr << "Test 7 failed: status did not advance: " << st.statusRu()
                 << '\n';
       return 1;
     }
+    st.markVisited("dock-dragon");
     st.markVisited("sgra");
     st.markVisited("m87");
     st.markVisited("qso-3c273");
     st.markVisited("m13");
-    if (st.statusRu() != "Экспедиция: 6/6") {
+    if (st.statusRu() != "Экспедиция: 7/7") {
       std::cerr << "Test 7 failed: finale label wrong: " << st.statusRu()
                 << '\n';
       return 1;
@@ -202,11 +217,19 @@ int main() {
       return 1;
     }
     // Legacy expedition.json (pre-4.1) has no finaleChoice: defaults to unset
-    // and still reports the finished arc.
+    // and still reports the finished arc. v4.1 also shifts old chapter
+    // numbering by one because the fleet interlude was inserted after Home.
     ExpeditionState legacy;
     if (!deserializeExpedition("chapterIndex=5\nintroSeen=1\n", legacy) ||
+        legacy.chapterIndex != 6 ||
         legacy.finaleChoice != astro::kFinaleUnset || !legacy.finished()) {
       std::cerr << "Test 8 failed: legacy finished save must load unset\n";
+      return 1;
+    }
+    ExpeditionState legacyMid;
+    if (!deserializeExpedition("chapterIndex=4\nintroSeen=1\n", legacyMid) ||
+        legacyMid.chapterIndex != 5 || legacyMid.finished()) {
+      std::cerr << "Test 8 failed: legacy mid-story index was not shifted\n";
       return 1;
     }
     // The chosen ending survives a save/load cycle.

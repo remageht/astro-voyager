@@ -1380,7 +1380,7 @@ void AppGL::applyModernThemeOnce() {
   done = true;
   ImGuiStyle& st = ImGui::GetStyle();
 
-  // === Obsidian Glass Aerospace Theme (v4.2.0) ===
+  // === Obsidian Glass Aerospace Theme (v4.1.0) ===
   // Строгий прецизионный радиус скругления 6px для окон, 4px для контролов.
   st.WindowRounding = 6.0f;
   st.ChildRounding = 6.0f;
@@ -2056,13 +2056,15 @@ void AppGL::openChapterSlide(int slideIdx) {
 }
 
 void AppGL::openEndingSlide(int choice) {
-  // v4.1: две концовки Adventure. Индексы 6/7 — ветки colony/horizon
-  // в storyChapterSlides(); служебный слайд 5 остаётся fallback для
-  // старых сейвов без выбора.
+  // v4.1: две концовки Adventure. Индексы 7/8 — ветки colony/horizon
+  // в storyChapterSlides(); служебный слайд 6 остаётся fallback для
+  // старых сейвов без выбора. После выбранной концовки идёт общий
+  // эпилог «Наследие» (слайд 9) — история не обрывается на финале.
   const auto& slides = storyChapterSlides();
-  const int idx = (choice == kFinaleHorizon) ? 7 : 6;
+  const int idx = (choice == kFinaleHorizon) ? 8 : 7;
   if (idx >= static_cast<int>(slides.size())) return;
   m_slidesCurrent.assign(1, slides[idx]);
+  if (slides.size() > 9) m_slidesCurrent.push_back(slides[9]);
   m_slidesHead = uiRu(finaleTitleRu(choice).c_str(),
                       finaleTitleEn(choice).c_str());
   m_slidesIntro = false;
@@ -3613,8 +3615,13 @@ void AppGL::teleportToStation(const std::string& id, bool stopJumpCine) {
 
   // === Expedition === (v3.5.0): посещение цели текущей главы прокручивает
   // сюжет; в прологе свои слайды — главы озвучиваем только после него.
+  // v4.1: the same helper runs for dock-based objectives (fleet interlude).
+  advanceExpedition(id);
+}
+
+void AppGL::advanceExpedition(const std::string& objectiveId) {
   const int expBefore = m_expedition.chapterIndex;
-  m_expedition.markVisited(id);
+  m_expedition.markVisited(objectiveId);
   if (m_expedition.chapterIndex > expBefore && m_expedition.introSeen) {
     openChapterSlide(expeditionChapters()[expBefore].slideIdx);
   }
@@ -4481,7 +4488,7 @@ void AppGL::drawMenu() {
   ImGuiWindowFlags menuFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
 
-  // === MenuStyle (v4.2.0) ===: обсидиановое стекло аэрокосмического визира
+  // === MenuStyle (v4.1.0) ===: обсидиановое стекло аэрокосмического визира
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.030f, 0.045f, 0.070f, 0.88f));
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.35f, 0.52f, 0.35f));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.080f, 0.135f, 0.210f, 0.80f));
@@ -7829,6 +7836,12 @@ void AppGL::dockAtStation(const std::string& dockId) {
 
   m_shipNotice = std::string(uiRu("Состыковано: ", "Docked: ")) + (m_dockHint.empty() ? dockId : m_dockHint);
   m_shipNoticeT = 4.0f;
+  // v4.1: the fleet interlude completes on docking with Dragon or Soyuz.
+  // If that opens the chapter slide, close the shipyard so the overlay is
+  // not hidden behind it.
+  const int expBefore = m_expedition.chapterIndex;
+  advanceExpedition(dockId);
+  if (m_expedition.chapterIndex > expBefore) m_shipyardOpen = false;
   saveProfileNow(false);
 }
 

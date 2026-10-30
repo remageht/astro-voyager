@@ -11,6 +11,36 @@ SRC_GLTF = os.path.join(PROJECT_ROOT, "out", "spacex_src", "dragon", "scene.gltf
 STARMAP = os.path.join(REPO_ROOT, "res", "textures", "starmap_2020_4k_gal.exr")
 OUT_PNG = os.path.join(REPO_ROOT, "docs", "screens", "spacex_dragon_hero.png")
 
+# Hero framing: full capsule + trunk, three-quarter orbital attitude.
+CAMERA_LENS = 45.0
+CAMERA_DIR = Vector((0.52, -0.72, 0.34)).normalized()
+FRAME_MARGIN = 1.0
+
+
+def flatten_meshes(scene):
+    """Bake parent/world transforms into mesh data so bounds are world-space."""
+    meshes = [o for o in scene.objects if o.type == "MESH"]
+    for o in meshes:
+        world = o.matrix_world.copy()
+        o.parent = None
+        o.data.transform(world)
+        o.matrix_world = Matrix.Identity(4)
+    bpy.context.view_layer.update()
+    return meshes
+
+
+def bounds(meshes):
+    mn = Vector((1e18, 1e18, 1e18))
+    mx = Vector((-1e18, -1e18, -1e18))
+    for o in meshes:
+        for corner in o.bound_box:
+            w = o.matrix_world @ Vector(corner)
+            for i in range(3):
+                mn[i] = min(mn[i], w[i])
+                mx[i] = max(mx[i], w[i])
+    return mn, mx
+
+
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
@@ -63,34 +93,38 @@ def main():
         nt.links.new(ambient.outputs["Background"], add.inputs[1])
         nt.links.new(add.outputs["Shader"], out.inputs["Surface"])
 
-    # Calculate center of spacecraft meshes
-    dragon_meshes = [o for o in scene.objects if o.type == "MESH"]
-    mn = Vector((1e9, 1e9, 1e9))
-    mx = Vector((-1e9, -1e9, -1e9))
-    for o in dragon_meshes:
-        for c in o.bound_box:
-            w = o.matrix_world @ Vector(c)
-            for i in range(3):
-                mn[i] = min(mn[i], w[i])
-                mx[i] = max(mx[i], w[i])
+    # Bake world transforms, then center the whole spacecraft on the origin.
+    meshes = flatten_meshes(scene)
+    mn, mx = bounds(meshes)
     center = (mn + mx) * 0.5
-    size = max(mx[i] - mn[i] for i in range(3))
+    for o in meshes:
+        o.data.transform(Matrix.Translation(-center))
 
-    # Center all meshes
-    for o in dragon_meshes:
-        o.location -= center
+    # Rotate into orbital flight attitude: a side-on three-quarter view so the
+    # nose, heat shield and full trunk read as one silhouette.
+    rot = (Matrix.Rotation(math.radians(-65), 4, "X") @
+           Matrix.Rotation(math.radians(215), 4, "Z"))
+    for o in meshes:
+        o.data.transform(rot)
+    bpy.context.view_layer.update()
 
-    # Rotate into orbital flight attitude (slight pitch & bank)
-    rot = Matrix.Rotation(math.radians(-65), 3, "X") @ Matrix.Rotation(math.radians(35), 3, "Z")
-    for o in dragon_meshes:
-        o.rotation_euler.rotate(rot.to_euler())
+    # Fit the camera around the rotated bounding sphere. The source glTF is
+    # not normalized, so deriving the distance from the actual bounds keeps
+    # the full capsule and trunk in frame at any asset scale.
+    mn, mx = bounds(meshes)
+    extent = mx - mn
+    radius = 0.5 * math.sqrt(extent.x ** 2 + extent.y ** 2 + extent.z ** 2)
+    sensor_h = 36.0 * scene.render.resolution_y / scene.render.resolution_x
+    half_v = math.atan((sensor_h * 0.5) / CAMERA_LENS)
+    distance = radius / math.sin(half_v) * FRAME_MARGIN
 
-    # Hero camera: close-up dynamic 3/4 orbital framing
     cam_data = bpy.data.cameras.new("HeroCam")
-    cam_data.lens = 45.0
+    cam_data.lens = CAMERA_LENS
+    cam_data.clip_start = max(0.01, distance * 0.001)
+    cam_data.clip_end = distance * 10.0
     cam = bpy.data.objects.new("HeroCam", cam_data)
-    cam.location = (4.8, -6.2, 3.2)
-    target = Vector((0.0, 0.0, 0.2))
+    cam.location = CAMERA_DIR * distance
+    target = Vector((0.0, 0.0, 0.0))
     cam.rotation_euler = (target - cam.location).to_track_quat("-Z", "Y").to_euler()
     scene.collection.objects.link(cam)
     scene.camera = cam
@@ -111,15 +145,18 @@ def main():
     rim.rotation_euler = Vector((1.0, -1.0, 0.8)).normalized().to_track_quat("-Z", "Y").to_euler()
     scene.collection.objects.link(rim)
 
-    # Soft Fill Light
+    # Soft Fill Light, scaled with the model so it stays a fill at any size
     fill_data = bpy.data.lights.new("Fill", type="AREA")
     fill_data.energy = 1100.0
-    fill_data.size = 12.0
+    fill_data.size = radius * 7.0
     fill_data.color = (0.75, 0.85, 1.0)
     fill = bpy.data.objects.new("Fill", fill_data)
-    fill.location = (5.5, -6.5, 4.0)
+    fill.location = CAMERA_DIR * distance * 0.9 + Vector((0.4, -0.2, 0.5)) * radius
     fill.rotation_euler = (target - fill.location).to_track_quat("-Z", "Y").to_euler()
     scene.collection.objects.link(fill)
+
+    print(f"Dragon bounds: {tuple(round(v, 3) for v in extent)}, "
+          f"radius={radius:.3f}, camera distance={distance:.3f}")
 
     os.makedirs(os.path.dirname(OUT_PNG), exist_ok=True)
     scene.render.filepath = OUT_PNG

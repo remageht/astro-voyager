@@ -2219,8 +2219,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             glm::vec3 emOverride(0.0f);
             float customMetal = 0.75f;
             float customRough = 0.35f;
-            // Docking-target halo. Crew capsules are much smaller than the
-            // station/telescope/probe, so their marker shrinks with them.
+            // Docking-target halo. The halo follows the visual size of each
+            // asset so a capsule never carries a station-sized marker.
             float dockRingScale = 0.28f;
 
             if (dock.id == "dock-dragon" && s_dragonModel.ready()) {
@@ -2254,7 +2254,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customRough = 0.42f;
             } else if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
               siteModel = &s_telescopeModel;
-              stScale = 0.28f;
+              // 2.2-unit model * 0.135 = 0.297 world units. The observatory
+              // stays below the 0.38 ISS and the 0.35 warp core, but above
+              // the 0.247 Dragon, instead of towering over the station.
+              stScale = 0.135f;
+              dockRingScale = 0.20f;
               // James Webb Telescope: oriented into deep space, sunshield facing Sol
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.02f * time + 0.785f, glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -2265,6 +2269,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             } else if ((dock.id == "dock-sgra" || dock.id == "dock-m13") && s_warpCoreModel.ready()) {
               siteModel = &s_warpCoreModel;
               stScale = 0.35f;
+              dockRingScale = 0.24f;
               // Alcubierre Warp Core / Quantum Singularity Station: concentric rings rotation
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.12f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -2276,7 +2281,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customRough = 0.30f;
             } else if (dock.id == "dock-probe" && s_probeModel.ready()) {
               siteModel = &s_probeModel;
-              stScale = 0.22f;
+              // 2.98-unit relay * 0.06 = 0.179 world units: a small robotic
+              // craft, clearly below the crew capsules and the observatory.
+              stScale = 0.06f;
+              dockRingScale = 0.14f;
               // Deep Space Science Probe: slow attitude stabilization roll
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *

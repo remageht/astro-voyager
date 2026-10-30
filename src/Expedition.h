@@ -5,15 +5,16 @@
 
 namespace astro {
 
-// Expedition (v3.5.0): the story arc of the journey - a person on Earth
+// Expedition (v4.1.0): the story arc of the journey - a person on Earth
 // dreams of space, the Sun is dying, the crew departs to find a new planet
 // (intro slides in StorySlides). Chapters chain the existing stations:
-// Earth (sol) -> Sgr A* -> M87* -> quasar 3C 273 -> cluster M13 -> finale.
-// State persists to its own small file (expedition.json next to the game
-// profiles) so the SaveGame schema stays pinned at v1.
+// Earth (sol) -> orbital fleet (Dragon/Soyuz) -> Sgr A* -> M87* ->
+// quasar 3C 273 -> cluster M13 -> finale. State persists to its own small
+// file (expedition.json next to the game profiles) so the SaveGame schema
+// stays pinned at v1.
 struct ExpeditionChapter {
   std::string id;        // chapter key (for tests/logs)
-  std::string station;   // station id that completes the chapter
+  std::string station;   // target id; '|' separates alternative targets
   std::string titleRu;
   std::string titleEn;
   std::string goalRu;
@@ -50,8 +51,9 @@ class ExpeditionState {
   std::string statusEn() const;
 };
 
-// Flat text serialization: chapterIndex=<int>, introSeen=<0|1>,
-// finaleChoice=<0|1|2> - tolerant parser mirroring SaveGame style.
+// Flat text serialization: version=2, chapterIndex=<int>, introSeen=<0|1>,
+// finaleChoice=<0|1|2> - tolerant parser mirroring SaveGame style. Files
+// without a version key are legacy (6-chapter) saves and are shifted by one.
 std::string serializeExpedition(const ExpeditionState& st);
 bool deserializeExpedition(const std::string& text, ExpeditionState& out);
 
