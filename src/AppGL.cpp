@@ -1606,35 +1606,110 @@ void AppGL::drawModernStatusBar() {
 }
 
 void AppGL::drawStoryPanel() {
-  // === StoryJournal === (v3.5.0): панель бортового журнала (клавиша J).
-  // Правый край, фиксированная высота; открытые записи — заголовок янтарным,
-  // текст светло-серым; закрытые не показываются вовсе.
+  // === StoryJournal === (v3.5.0 / UI Redesign): бортовой журнал с хронографом и зашифрованными интригами (J).
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   ImGui::SetNextWindowPos(ImVec2(disp.x - 20.0f, 64.0f), ImGuiCond_FirstUseEver,
                           ImVec2(1.0f, 0.0f));
-  ImGui::SetNextWindowSize(ImVec2(430.0f, disp.y * 0.60f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(450.0f, disp.y * 0.65f), ImGuiCond_FirstUseEver);
   const bool pushed = modernPushFont();
   if (ImGui::Begin(uiRu("Бортовой журнал (J)", "Story Journal (J)"), &m_storyOpen)) {
-    int shown = 0;
+    int unlockedCount = m_story.unlockedCount();
+    int totalCount = static_cast<int>(m_story.entries().size());
+
+    // Top status banner with chronograph counter
+    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "✦ %s [%d / %d]",
+                       uiRu("ХРОНИКА ЭКСПЕДИЦИИ", "EXPEDITION CHRONICLE"),
+                       unlockedCount, totalCount);
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
     for (const auto& e : m_story.entries()) {
-      if (!e.unlocked) continue;
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.75f, 0.30f, 1.00f));
-      ImGui::TextUnformatted(uiRu(e.titleRu.c_str(), e.titleEn.c_str()));
-      ImGui::PopStyleColor();
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.78f, 0.80f, 0.85f, 1.00f));
-      ImGui::TextWrapped("%s", uiRu(e.textRu.c_str(), e.textEn.c_str()));
-      ImGui::PopStyleColor();
+      ImVec2 p0 = ImGui::GetCursorScreenPos();
+      float availW = ImGui::GetContentRegionAvail().x;
+      ImGui::Indent(14.0f);
+
+      if (e.unlocked) {
+        // Unlocked story card: amber accent bar on left
+        ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.35f, 1.0f), "⏱  %s",
+                           uiRu(e.titleRu.c_str(), e.titleEn.c_str()));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.82f, 0.85f, 0.90f, 1.00f));
+        ImGui::TextWrapped("%s", uiRu(e.textRu.c_str(), e.textEn.c_str()));
+        ImGui::PopStyleColor();
+        ImGui::Unindent(14.0f);
+
+        ImVec2 p1 = ImVec2(p0.x + availW, ImGui::GetCursorScreenPos().y + 4.0f);
+        // Amber vertical accent bar
+        dl->AddLine(ImVec2(p0.x + 3.0f, p0.y + 1.0f), ImVec2(p0.x + 3.0f, p1.y - 3.0f),
+                    IM_COL32(245, 185, 65, 230), 3.0f);
+        // Soft bottom dividing rule
+        dl->AddLine(ImVec2(p0.x + 3.0f, p1.y), ImVec2(p1.x - 4.0f, p1.y),
+                    IM_COL32(50, 70, 95, 75), 1.0f);
+      } else {
+        // Locked encrypted slot: teaser with mission objective hint
+        std::string encTitle = std::string("[🔒 ") + uiRu("ЗАШИФРОВАНО: ", "ENCRYPTED: ") +
+                               uiRu(e.titleRu.c_str(), e.titleEn.c_str()) + "]";
+        ImGui::TextColored(ImVec4(0.48f, 0.53f, 0.62f, 1.0f), "%s", encTitle.c_str());
+
+        std::string hintRu, hintEn;
+        if (e.id == "first-steps") {
+          hintRu = "Требуется: совершить первый варп-прыжок к другой системе";
+          hintEn = "Requirement: complete your first warp jump to another system";
+        } else if (e.id == "sgra") {
+          hintRu = "Требуется: прибыть к сверхмассивной чёрной дыре Sgr A*";
+          hintEn = "Requirement: reach supermassive black hole Sgr A*";
+        } else if (e.id == "m87") {
+          hintRu = "Требуется: исследовать релятивистский джет галактики M87*";
+          hintEn = "Requirement: explore relativistic jet of M87*";
+        } else if (e.id == "qso") {
+          hintRu = "Требуется: зафиксировать маяк квазара 3C 273";
+          hintEn = "Requirement: lock onto beacon of quasar 3C 273";
+        } else if (e.id == "m13") {
+          hintRu = "Требуется: навигация в древнее шаровое скопление M13";
+          hintEn = "Requirement: navigate into ancient globular cluster M13";
+        } else if (e.id == "horizon") {
+          hintRu = "Требуется: фотофиксация горизонта событий (кнопка [F8])";
+          hintEn = "Requirement: photograph event horizon (key [F8])";
+        } else if (e.id == "close-approach") {
+          hintRu = "Требуется: опасное сближение с чёрной дырой (< 5 Rs)";
+          hintEn = "Requirement: perilous close approach to black hole (< 5 Rs)";
+        } else if (e.id == "archive") {
+          hintRu = "Требуется: сохранение или загрузка маршрута ([F9] / [F10])";
+          hintEn = "Requirement: save or load route ([F9] / [F10])";
+        } else if (e.id == "grand-tour") {
+          hintRu = "Требуется: исследовать 8 различных звёздных систем";
+          hintEn = "Requirement: explore 8 distinct star systems";
+        } else if (e.id == "constellation-sync") {
+          hintRu = "Требуется: калибровка созвездия сингулярным кулоном";
+          hintEn = "Requirement: calibrate constellation with singularity pendant";
+        } else {
+          hintRu = "Требуется: дальнейшие исследования глубин космоса";
+          hintEn = "Requirement: further deep space exploration";
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.45f, 0.55f, 0.85f));
+        ImGui::TextWrapped("> %s", uiRu(hintRu.c_str(), hintEn.c_str()));
+        ImGui::PopStyleColor();
+        ImGui::Unindent(14.0f);
+
+        ImVec2 p1 = ImVec2(p0.x + availW, ImGui::GetCursorScreenPos().y + 4.0f);
+        // Slate-dimmed vertical bar
+        dl->AddLine(ImVec2(p0.x + 3.0f, p0.y + 1.0f), ImVec2(p0.x + 3.0f, p1.y - 3.0f),
+                    IM_COL32(65, 80, 110, 140), 2.0f);
+        // Soft bottom dividing rule
+        dl->AddLine(ImVec2(p0.x + 3.0f, p1.y), ImVec2(p1.x - 4.0f, p1.y),
+                    IM_COL32(35, 45, 65, 50), 1.0f);
+      }
       ImGui::Spacing();
-      ++shown;
+      ImGui::Spacing();
     }
-    if (shown == 0) {
-      ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.00f), "%s",
-                         uiRu("Записи открываются по мере путешествия.",
-                              "Entries unlock as you travel."));
-    }
+
     ImGui::Spacing();
     ImGui::Separator();
-    if (ImGui::Button(uiRu("★ Калибровка созвездия кулоном", "★ Align Constellation with Pendant"), ImVec2(-1, 0))) {
+    if (ImGui::Button(uiRu("★ Сингулярный кулон: Калибровка созвездий",
+                           "★ Singularity Pendant: Constellation Alignment"),
+                      ImVec2(-1, 32.0f))) {
       m_constellationAlignOpen = true;
     }
   }
@@ -1648,60 +1723,111 @@ void AppGL::drawDiscoveryCard(const ConstellationInfo* cInfo) {
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_Always,
                           ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(560.0f, 0.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(600.0f, 0.0f), ImGuiCond_Always);
 
   const bool pushed = modernPushFont();
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.09f, 0.16f, 0.98f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.95f, 0.78f, 0.30f, 0.90f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.04f, 0.07f, 0.13f, 0.98f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.82f, 0.32f, 0.90f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
 
-  std::string winTitle = std::string("★ ") + uiRu("ЭВРИКА! НАУЧНЫЙ ПРОРЫВ", "EUREKA! DISCOVERY") + "###DiscoveryModal";
+  std::string winTitle = std::string("✦ ") +
+                         uiRu("ЭВРИКА! НАУЧНЫЙ ПРОРЫВ ПЯТОЙ ВСЕЛЕННОЙ",
+                              "EUREKA! FIFTH UNIVERSE BREAKTHROUGH") +
+                         "###DiscoveryModal";
   if (ImGui::Begin(winTitle.c_str(), &m_discoveryCardOpen,
                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
-    // Top banner
-    ImGui::TextColored(ImVec4(0.95f, 0.82f, 0.35f, 1.0f), "%s",
-                       uiRu("СИНГУЛЯРНЫЙ КУЛОН ЕГОРКИ-5: МАТРИЦА СИНХРОНИЗИРОВАНА",
-                            "EGORKA-5 SINGULARITY PENDANT: MATRIX SYNCHRONIZED"));
+    float time = static_cast<float>(glfwGetTime());
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 winP0 = ImGui::GetWindowPos();
+    ImVec2 winSize = ImGui::GetWindowSize();
+    ImVec2 winP1 = ImVec2(winP0.x + winSize.x, winP0.y + winSize.y);
+
+    // Tech chamfer brackets on modal window corners
+    float bLen = 14.0f;
+    ImU32 cornerCol = IM_COL32(255, 210, 75, 240);
+    dl->AddLine(ImVec2(winP0.x + 6, winP0.y + 6), ImVec2(winP0.x + 6 + bLen, winP0.y + 6), cornerCol, 2.0f);
+    dl->AddLine(ImVec2(winP0.x + 6, winP0.y + 6), ImVec2(winP0.x + 6, winP0.y + 6 + bLen), cornerCol, 2.0f);
+    dl->AddLine(ImVec2(winP1.x - 6, winP0.y + 6), ImVec2(winP1.x - 6 - bLen, winP0.y + 6), cornerCol, 2.0f);
+    dl->AddLine(ImVec2(winP1.x - 6, winP0.y + 6), ImVec2(winP1.x - 6, winP0.y + 6 + bLen), cornerCol, 2.0f);
+    dl->AddLine(ImVec2(winP0.x + 6, winP1.y - 6), ImVec2(winP0.x + 6 + bLen, winP1.y - 6), cornerCol, 2.0f);
+    dl->AddLine(ImVec2(winP0.x + 6, winP1.y - 6), ImVec2(winP0.x + 6, winP1.y - 6 - bLen), cornerCol, 2.0f);
+    dl->AddLine(ImVec2(winP1.x - 6, winP1.y - 6), ImVec2(winP1.x - 6 - bLen, winP1.y - 6), cornerCol, 2.0f);
+    dl->AddLine(ImVec2(winP1.x - 6, winP1.y - 6), ImVec2(winP1.x - 6, winP1.y - 6 - bLen), cornerCol, 2.0f);
+
+    // Pulsing banner
+    float pulse = 0.85f + 0.15f * std::sin(time * 4.5f);
+    ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.32f, pulse), "✦ %s",
+                       uiRu("СИНХРОНИЗАЦИЯ СИНГУЛЯРНОГО КУЛОНА: МАТРИЦА ЗАФИКСИРОВАНА",
+                            "SINGULARITY PENDANT SYNCHRONIZED: METRIC LOCKED"));
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Tech title
-    ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "%s",
+    // Tech title banner
+    ImGui::TextColored(ImVec4(0.35f, 0.95f, 1.0f, 1.0f), "★ %s",
                        uiRu(cInfo->techTitleRu.c_str(), cInfo->techTitleEn.c_str()));
     ImGui::Spacing();
 
-    // Equation display container
-    if (ImGui::BeginChild("EquationBox", ImVec2(0.0f, 46.0f), true)) {
-      ImGui::TextColored(ImVec4(0.25f, 1.0f, 0.70f, 1.0f), "> %s", cInfo->equation.c_str());
+    // Equation terminal container
+    ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.95f, 1.0f), "%s",
+                       uiRu("Уравнение метрики резонатора:", "Resonator Metric Equation:"));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.05f, 0.09f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.85f, 0.95f, 0.60f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+    if (ImGui::BeginChild("EquationTerminal", ImVec2(0.0f, 48.0f), true)) {
+      std::string cursor = (std::fmod(time, 0.9f) < 0.45f) ? "_" : " ";
+      std::string eqStr = "> RESONANCE_LOCK: " + cInfo->equation + " " + cursor;
+      ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.65f, 1.0f), "%s", eqStr.c_str());
       ImGui::EndChild();
     }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
     ImGui::Spacing();
 
-    // Egorka's quote box
-    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 1.0f), "%s",
-                       uiRu("Заметки Егорки:", "Egorka's Field Notes:"));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.12f, 0.20f, 0.70f));
-    if (ImGui::BeginChild("QuoteBox", ImVec2(0.0f, 68.0f), true)) {
-      ImGui::TextWrapped("%s", uiRu(cInfo->egorkaNoteRu.c_str(), cInfo->egorkaNoteEn.c_str()));
+    // Egorka's field notes notebook style
+    ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.45f, 1.0f), "✍ %s",
+                       uiRu("Полевой дневник Егорки (Париж, 2026):",
+                            "Egorka's Field Notes (Paris, 2026):"));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.10f, 0.15f, 0.85f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.85f, 0.70f, 0.35f, 0.45f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+    if (ImGui::BeginChild("QuoteBox", ImVec2(0.0f, 76.0f), true)) {
+      std::string quote = std::string("«") +
+                          uiRu(cInfo->egorkaNoteRu.c_str(), cInfo->egorkaNoteEn.c_str()) + "»";
+      ImGui::TextWrapped("%s", quote.c_str());
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.65f, 0.70f, 0.80f, 0.85f), "%s",
+                         uiRu("— Егорка-5 (из временного узла резонатора)",
+                              "— Egorka-5 (from temporal resonator node)"));
       ImGui::EndChild();
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
     ImGui::Spacing();
 
-    // Modernization effect
-    ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
-                       uiRu("Эффект модернизации корабля:", "Ship Upgrade Effect:"));
-    ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.50f, 1.0f), "✔ %s",
-                       uiRu(cInfo->effectRu.c_str(), cInfo->effectEn.c_str()));
+    // High contrast LED modernization badges
+    ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.40f, 1.0f), "%s",
+                       uiRu("Модернизация систем корабля:", "Ship Systems Upgrade:"));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f, 0.10f, 0.07f, 0.80f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.85f, 0.40f, 0.70f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+    if (ImGui::BeginChild("PerkBox", ImVec2(0.0f, 44.0f), true)) {
+      ImGui::TextColored(ImVec4(0.30f, 1.0f, 0.50f, 1.0f), "[✔ СИСТЕМА МОДЕРНИЗИРОВАНА]  ✔ %s",
+                         uiRu(cInfo->effectRu.c_str(), cInfo->effectEn.c_str()));
+      ImGui::EndChild();
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Action button
+    // Action buttons
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.42f, 0.65f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.55f, 0.85f, 1.0f));
     if (ImGui::Button(uiRu("★ Интегрировать открытие в системы корабля",
                            "★ Integrate Discovery into Ship Systems"),
-                      ImVec2(-1, 36.0f))) {
+                      ImVec2(-1, 38.0f))) {
       m_discoveredConstellations.insert(cInfo->id);
       m_constellationAligned = true;
       m_discoveryCardOpen = false;
@@ -1715,8 +1841,10 @@ void AppGL::drawDiscoveryCard(const ConstellationInfo* cInfo) {
       m_toasts.push_back(t);
       checkAchievements();
     }
+    ImGui::PopStyleColor(2);
 
-    if (ImGui::Button(uiRu("Повторить анимацию резонанса", "Replay Resonance Animation"), ImVec2(-1, 0.0f))) {
+    if (ImGui::Button(uiRu("↺ Повторить анимацию резонанса", "↺ Replay Resonance Animation"),
+                      ImVec2(-1, 0.0f))) {
       m_discoveryAnimT = 0.0f;
       m_discoveryCardOpen = false;
     }
@@ -1731,19 +1859,34 @@ void AppGL::drawConstellationAlignment() {
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_FirstUseEver,
                           ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(660.0f, 620.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(680.0f, 630.0f), ImGuiCond_FirstUseEver);
 
   const bool pushed = modernPushFont();
   if (ImGui::Begin(uiRu("Резонанс кулона: Калибровка созвездия",
                         "Pendant Resonance: Constellation Alignment"),
                    &m_constellationAlignOpen,
                    ImGuiWindowFlags_NoCollapse)) {
-    // Top constellation selector
-    ImGui::Text("%s", uiRu("Выберите сектор созвездия:", "Select Constellation Sector:"));
+    const ConstellationInfo* oriInfo = findConstellation("ori");
+    const ConstellationInfo* umaInfo = findConstellation("uma");
+    bool oriComplete = oriInfo && (m_discoveredConstellations.count("ori") > 0 ||
+                                  (m_alignConstellationId == "ori" &&
+                                   m_alignedSegments.size() == oriInfo->segments.size()));
+    bool umaComplete = umaInfo && (m_discoveredConstellations.count("uma") > 0 ||
+                                  (m_alignConstellationId == "uma" &&
+                                   m_alignedSegments.size() == umaInfo->segments.size()));
+
+    // Top constellation selector tabs with status badges
+    ImGui::TextColored(ImVec4(0.70f, 0.85f, 1.0f, 1.0f), "%s",
+                       uiRu("Сектор сингулярного интерферометра:", "Singular Interferometer Sector:"));
     ImGui::SameLine();
+
+    std::string oriBadge = oriComplete ? (" [★ " + std::string(uiRu("РЕЗОНАНС", "RESONANCE")) + "]")
+                                       : (" [" + std::to_string(m_alignConstellationId == "ori" ? m_alignedSegments.size() : (m_discoveredConstellations.count("ori") ? 9 : 0)) + "/9]");
+    std::string oriLabel = std::string(uiRu("Орион", "Orion")) + oriBadge;
+
     bool isOri = (m_alignConstellationId == "ori");
-    if (isOri) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
-    if (ImGui::Button(uiRu("Орион (Orion)", "Orion (ori)"))) {
+    if (isOri) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.75f, 1.0f));
+    if (ImGui::Button(oriLabel.c_str())) {
       if (m_alignConstellationId != "ori") {
         m_alignConstellationId = "ori";
         m_alignSelectedStar = -1;
@@ -1754,9 +1897,13 @@ void AppGL::drawConstellationAlignment() {
     if (isOri) ImGui::PopStyleColor();
 
     ImGui::SameLine();
+    std::string umaBadge = umaComplete ? (" [★ " + std::string(uiRu("РЕЗОНАНС", "RESONANCE")) + "]")
+                                       : (" [" + std::to_string(m_alignConstellationId == "uma" ? m_alignedSegments.size() : (m_discoveredConstellations.count("uma") ? 6 : 0)) + "/6]");
+    std::string umaLabel = std::string(uiRu("Большая Медведица", "Ursa Major")) + umaBadge;
+
     bool isUma = (m_alignConstellationId == "uma");
-    if (isUma) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
-    if (ImGui::Button(uiRu("Большая Медведица (Ursa Major)", "Ursa Major (uma)"))) {
+    if (isUma) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.75f, 1.0f));
+    if (ImGui::Button(umaLabel.c_str())) {
       if (m_alignConstellationId != "uma") {
         m_alignConstellationId = "uma";
         m_alignSelectedStar = -1;
@@ -1804,16 +1951,60 @@ void AppGL::drawConstellationAlignment() {
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     // Space background
-    dl->AddRectFilled(canvasP0, canvasP1, IM_COL32(8, 12, 22, 245), 8.0f);
-    dl->AddRect(canvasP0, canvasP1, IM_COL32(45, 70, 115, 200), 8.0f, 0, 1.5f);
+    dl->AddRectFilled(canvasP0, canvasP1, IM_COL32(7, 11, 20, 248), 6.0f);
+    dl->AddRect(canvasP0, canvasP1, IM_COL32(40, 68, 110, 220), 6.0f, 0, 1.5f);
 
-    // Subtle coordinate reticle
+    // Sci-Fi Cyber Bezel: 4 Corner brackets
+    float bLen = 16.0f;
+    ImU32 bCol = IM_COL32(0, 220, 255, 190);
+    dl->AddLine(ImVec2(canvasP0.x + 8.0f, canvasP0.y + 8.0f),
+                ImVec2(canvasP0.x + 8.0f + bLen, canvasP0.y + 8.0f), bCol, 2.0f);
+    dl->AddLine(ImVec2(canvasP0.x + 8.0f, canvasP0.y + 8.0f),
+                ImVec2(canvasP0.x + 8.0f, canvasP0.y + 8.0f + bLen), bCol, 2.0f);
+    dl->AddLine(ImVec2(canvasP1.x - 8.0f, canvasP0.y + 8.0f),
+                ImVec2(canvasP1.x - 8.0f - bLen, canvasP0.y + 8.0f), bCol, 2.0f);
+    dl->AddLine(ImVec2(canvasP1.x - 8.0f, canvasP0.y + 8.0f),
+                ImVec2(canvasP1.x - 8.0f, canvasP0.y + 8.0f + bLen), bCol, 2.0f);
+    dl->AddLine(ImVec2(canvasP0.x + 8.0f, canvasP1.y - 8.0f),
+                ImVec2(canvasP0.x + 8.0f + bLen, canvasP1.y - 8.0f), bCol, 2.0f);
+    dl->AddLine(ImVec2(canvasP0.x + 8.0f, canvasP1.y - 8.0f),
+                ImVec2(canvasP0.x + 8.0f, canvasP1.y - 8.0f - bLen), bCol, 2.0f);
+    dl->AddLine(ImVec2(canvasP1.x - 8.0f, canvasP1.y - 8.0f),
+                ImVec2(canvasP1.x - 8.0f - bLen, canvasP1.y - 8.0f), bCol, 2.0f);
+    dl->AddLine(ImVec2(canvasP1.x - 8.0f, canvasP1.y - 8.0f),
+                ImVec2(canvasP1.x - 8.0f, canvasP1.y - 8.0f - bLen), bCol, 2.0f);
+
+    // Perimeter RA / Dec ticks
+    for (int t = 1; t <= 5; ++t) {
+      float tx = canvasP0.x + (canvasSize.x * 0.1666f * t);
+      dl->AddLine(ImVec2(tx, canvasP0.y), ImVec2(tx, canvasP0.y + 5.0f),
+                  IM_COL32(50, 90, 140, 150), 1.0f);
+      dl->AddLine(ImVec2(tx, canvasP1.y - 5.0f), ImVec2(tx, canvasP1.y),
+                  IM_COL32(50, 90, 140, 150), 1.0f);
+    }
+    for (int t = 1; t <= 4; ++t) {
+      float ty = canvasP0.y + (canvasSize.y * 0.2f * t);
+      dl->AddLine(ImVec2(canvasP0.x, ty), ImVec2(canvasP0.x + 5.0f, ty),
+                  IM_COL32(50, 90, 140, 150), 1.0f);
+      dl->AddLine(ImVec2(canvasP1.x - 5.0f, ty), ImVec2(canvasP1.x, ty),
+                  IM_COL32(50, 90, 140, 150), 1.0f);
+    }
+
+    // Interferometer HUD status markings
+    dl->AddText(ImVec2(canvasP0.x + 14.0f, canvasP0.y + 10.0f),
+                IM_COL32(80, 180, 230, 160), "INTERFEROMETER // L-BAND");
+    dl->AddText(ImVec2(canvasP1.x - 175.0f, canvasP0.y + 10.0f),
+                IM_COL32(80, 180, 230, 160), "METRIC RESONATOR // 5TH");
+
+    // Central coordinate reticle
     float canMidX = canvasP0.x + canvasSize.x * 0.5f;
     float canMidY = canvasP0.y + canvasSize.y * 0.5f;
-    dl->AddCircle(ImVec2(canMidX, canMidY), 60.0f, IM_COL32(35, 55, 90, 80), 32, 1.0f);
-    dl->AddCircle(ImVec2(canMidX, canMidY), 130.0f, IM_COL32(35, 55, 90, 60), 32, 1.0f);
-    dl->AddLine(ImVec2(canMidX - 140.0f, canMidY), ImVec2(canMidX + 140.0f, canMidY), IM_COL32(35, 55, 90, 60), 1.0f);
-    dl->AddLine(ImVec2(canMidX, canMidY - 140.0f), ImVec2(canMidX, canMidY + 140.0f), IM_COL32(35, 55, 90, 60), 1.0f);
+    dl->AddCircle(ImVec2(canMidX, canMidY), 60.0f, IM_COL32(35, 55, 90, 75), 32, 1.0f);
+    dl->AddCircle(ImVec2(canMidX, canMidY), 130.0f, IM_COL32(35, 55, 90, 55), 32, 1.0f);
+    dl->AddLine(ImVec2(canMidX - 140.0f, canMidY), ImVec2(canMidX + 140.0f, canMidY),
+                IM_COL32(35, 55, 90, 55), 1.0f);
+    dl->AddLine(ImVec2(canMidX, canMidY - 140.0f), ImVec2(canMidX, canMidY + 140.0f),
+                IM_COL32(35, 55, 90, 55), 1.0f);
 
     if (cInfo && !cInfo->stars.empty()) {
       float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f;
@@ -1852,15 +2043,14 @@ void AppGL::drawConstellationAlignment() {
           if (u < cInfo->stars.size() && v < cInfo->stars.size()) {
             ImVec2 pA = getStarPos(u);
             ImVec2 pB = getStarPos(v);
-            dl->AddLine(pA, pB, IM_COL32(70, 95, 140, 55), 1.2f);
+            dl->AddLine(pA, pB, IM_COL32(70, 95, 140, 50), 1.2f);
           }
         }
       }
 
-      // 2. Aligned segments (glowing cyan neon lines)
+      // 2. Aligned segments (glowing cyan neon lines & photon runner pulses)
       float pulse = 0.85f + 0.15f * std::sin(time * 3.5f);
       if (animRunning && m_discoveryAnimT < 0.9f) {
-        // High frequency resonance pulse
         float fastPulseRate = 18.0f + 40.0f * (m_discoveryAnimT / 0.9f);
         pulse = 0.5f + 0.5f * std::sin(time * fastPulseRate);
       }
@@ -1874,28 +2064,45 @@ void AppGL::drawConstellationAlignment() {
           dl->AddLine(pA, pB, IM_COL32(90, 180, 255, (int)(80 * pulse)), haloThick);
           // Core bright beam
           dl->AddLine(pA, pB, IM_COL32(180, 245, 255, 245), coreThick);
+
+          // Dynamic photon runner packet along line
+          float dx = pB.x - pA.x;
+          float dy = pB.y - pA.y;
+          float segLen = std::sqrt(dx * dx + dy * dy);
+          if (segLen > 2.0f) {
+            float speed = 0.6f;
+            float offset = static_cast<float>((seg.first * 19 + seg.second * 37) % 100) * 0.01f;
+            float phase = std::fmod(time * speed + offset, 1.0f);
+            ImVec2 pktPos(pA.x + dx * phase, pA.y + dy * phase);
+            dl->AddCircleFilled(pktPos, 5.0f, IM_COL32(70, 220, 255, 90));
+            dl->AddCircleFilled(pktPos, 2.2f, IM_COL32(240, 255, 255, 245));
+          }
         }
       }
 
       // 3. Line from selected star to mouse pointer
-      if (!animRunning && m_alignSelectedStar >= 0 && (size_t)m_alignSelectedStar < cInfo->stars.size() && isHovered) {
+      if (!animRunning && m_alignSelectedStar >= 0 &&
+          (size_t)m_alignSelectedStar < cInfo->stars.size() && isHovered) {
         ImVec2 pA = getStarPos(m_alignSelectedStar);
         dl->AddLine(pA, mousePos, IM_COL32(255, 220, 120, 190), 1.8f);
       }
 
-      // 4. Stars
+      // 4. Stars with scintillation, diffraction spikes, and rotary HUD lock-on
       int hoveredStar = -1;
       int clickedStar = -1;
 
       for (size_t i = 0; i < cInfo->stars.size(); ++i) {
         const auto& s = cInfo->stars[i];
         ImVec2 pos = getStarPos(i);
-        float r = std::max(3.2f, 7.5f - s.mag * 0.75f);
+
+        // Scintillation / twinkle
+        float twinkle = 0.88f + 0.12f * std::sin(time * 5.5f + static_cast<float>(i) * 1.618f);
+        float r = std::max(3.2f, (7.5f - s.mag * 0.75f) * twinkle);
 
         float dx = mousePos.x - pos.x;
         float dy = mousePos.y - pos.y;
         float dist = std::sqrt(dx * dx + dy * dy);
-        if (isHovered && dist <= (r + 8.0f) && !animRunning) {
+        if (isHovered && dist <= (r + 10.0f) && !animRunning) {
           hoveredStar = static_cast<int>(i);
         }
         if (mouseClicked && hoveredStar == static_cast<int>(i) && !animRunning) {
@@ -1904,35 +2111,69 @@ void AppGL::drawConstellationAlignment() {
 
         // Color distinction
         ImU32 starCol = IM_COL32(230, 240, 255, 255);
+        ImU32 spikeCol = IM_COL32(200, 230, 255, 170);
         if (s.name == "Betelgeuse") {
           starCol = IM_COL32(255, 160, 90, 255);  // red supergiant
+          spikeCol = IM_COL32(255, 180, 110, 190);
         } else if (s.name == "Rigel") {
           starCol = IM_COL32(180, 220, 255, 255);  // blue-white
+          spikeCol = IM_COL32(190, 235, 255, 200);
         }
 
         // Selected halo
         if (m_alignSelectedStar == static_cast<int>(i)) {
           float selPulse = 2.0f * std::sin(time * 6.0f);
-          dl->AddCircle(pos, r + 5.0f + selPulse, IM_COL32(255, 215, 80, 230), 24, 2.0f);
+          dl->AddCircle(pos, r + 6.0f + selPulse, IM_COL32(255, 215, 80, 230), 24, 2.0f);
         } else if (hoveredStar == static_cast<int>(i)) {
-          dl->AddCircle(pos, r + 4.0f, IM_COL32(255, 255, 255, 180), 20, 1.5f);
+          // Rotary circular HUD reticle with targeting pips
+          float rot = time * 3.0f;
+          float hudR = r + 8.0f;
+          dl->AddCircle(pos, hudR, IM_COL32(0, 230, 255, 210), 32, 1.5f);
+          for (int k = 0; k < 4; ++k) {
+            float ang = rot + static_cast<float>(k) * 1.570796f;
+            ImVec2 pNotchA(pos.x + std::cos(ang) * (hudR - 3.0f),
+                           pos.y + std::sin(ang) * (hudR - 3.0f));
+            ImVec2 pNotchB(pos.x + std::cos(ang) * (hudR + 3.0f),
+                           pos.y + std::sin(ang) * (hudR + 3.0f));
+            dl->AddLine(pNotchA, pNotchB, IM_COL32(255, 220, 100, 240), 2.0f);
+          }
+          // Astrometric data chip near star
+          char chipBuf[48];
+          std::snprintf(chipBuf, sizeof(chipBuf), "MAG %.2f", s.mag);
+          dl->AddText(ImVec2(pos.x + hudR + 4.0f, pos.y + 4.0f),
+                      IM_COL32(110, 220, 255, 220), chipBuf);
         }
 
-        // Outer star glow
-        dl->AddCircleFilled(pos, r + 3.0f, IM_COL32(100, 150, 255, 45));
-        // Star core
+        // Diffraction spikes for prominent stars
+        bool hasSpikes = (s.mag < 1.6f || s.name == "Betelgeuse" || s.name == "Rigel");
+        if (hasSpikes) {
+          float spikeLen = (14.0f - s.mag * 3.5f) * twinkle;
+          if (spikeLen < 7.0f) spikeLen = 7.0f;
+          dl->AddLine(ImVec2(pos.x - spikeLen, pos.y), ImVec2(pos.x + spikeLen, pos.y),
+                      spikeCol, 1.2f);
+          dl->AddLine(ImVec2(pos.x, pos.y - spikeLen), ImVec2(pos.x, pos.y + spikeLen),
+                      spikeCol, 1.2f);
+        }
+
+        // Multi-layer star aura
+        dl->AddCircleFilled(pos, r + 5.0f, IM_COL32(90, 150, 255, 40));
+        dl->AddCircleFilled(pos, r + 2.5f, IM_COL32(130, 190, 255, 80));
         dl->AddCircleFilled(pos, r, starCol);
+        if (s.mag < 1.0f) {
+          dl->AddCircleFilled(pos, r * 0.45f, IM_COL32(255, 255, 255, 255));
+        }
 
         // Name label
-        dl->AddText(ImVec2(pos.x + r + 3.0f, pos.y - 7.0f),
-                    IM_COL32(175, 195, 225, 180), s.name.c_str());
+        dl->AddText(ImVec2(pos.x + r + 4.0f, pos.y - 7.0f),
+                    IM_COL32(185, 205, 235, 190), s.name.c_str());
       }
 
       // Tooltip for hovered star
       if (hoveredStar >= 0 && (size_t)hoveredStar < cInfo->stars.size()) {
         const auto& hs = cInfo->stars[hoveredStar];
         ImGui::BeginTooltip();
-        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.40f, 1.0f), "%s (%s)", hs.name.c_str(), hs.bayer.c_str());
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.40f, 1.0f), "%s (%s)",
+                           hs.name.c_str(), hs.bayer.c_str());
         ImGui::Text("Mag: %.2f | HIP: %d", hs.mag, hs.hip);
         ImGui::TextColored(ImVec4(0.65f, 0.80f, 0.95f, 1.0f), "%s",
                            uiRu("Нажмите, чтобы соединить с другой звездой",
@@ -1988,7 +2229,8 @@ void AppGL::drawConstellationAlignment() {
         } else if (m_discoveryAnimT >= 0.9f && m_discoveryAnimT < 2.3f) {
           // Phase 2: Hologram projection & blueprint decoding
           float darkAlpha = std::min(1.0f, (m_discoveryAnimT - 0.9f) / 0.4f);
-          dl->AddRectFilled(canvasP0, canvasP1, IM_COL32(4, 9, 20, static_cast<int>(230 * darkAlpha)), 8.0f);
+          dl->AddRectFilled(canvasP0, canvasP1,
+                            IM_COL32(4, 9, 20, static_cast<int>(230 * darkAlpha)), 8.0f);
 
           // Technical blueprint grid
           for (float gx = canvasP0.x + 20.0f; gx < canvasP1.x; gx += 38.0f) {
@@ -2002,21 +2244,29 @@ void AppGL::drawConstellationAlignment() {
 
           // Rotating holographic dials around center
           float dialRot = (m_discoveryAnimT - 0.9f) * 1.8f;
-          dl->AddCircle(ImVec2(canMidX, canMidY), 65.0f, IM_COL32(0, 220, 255, static_cast<int>(140 * darkAlpha)), 36, 1.5f);
-          dl->AddCircle(ImVec2(canMidX, canMidY), 135.0f, IM_COL32(255, 215, 80, static_cast<int>(110 * darkAlpha)), 48, 1.5f);
-          dl->AddLine(ImVec2(canMidX + std::cos(dialRot) * 140.0f, canMidY + std::sin(dialRot) * 140.0f),
-                      ImVec2(canMidX - std::cos(dialRot) * 140.0f, canMidY - std::sin(dialRot) * 140.0f),
+          dl->AddCircle(ImVec2(canMidX, canMidY), 65.0f,
+                        IM_COL32(0, 220, 255, static_cast<int>(140 * darkAlpha)), 36, 1.5f);
+          dl->AddCircle(ImVec2(canMidX, canMidY), 135.0f,
+                        IM_COL32(255, 215, 80, static_cast<int>(110 * darkAlpha)), 48, 1.5f);
+          dl->AddLine(ImVec2(canMidX + std::cos(dialRot) * 140.0f,
+                             canMidY + std::sin(dialRot) * 140.0f),
+                      ImVec2(canMidX - std::cos(dialRot) * 140.0f,
+                             canMidY - std::sin(dialRot) * 140.0f),
                       IM_COL32(0, 230, 255, static_cast<int>(130 * darkAlpha)), 1.2f);
 
           // Decoded equation display
-          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY - 50.0f), IM_COL32(255, 215, 80, 255),
+          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY - 50.0f),
+                      IM_COL32(255, 215, 80, 255),
                       uiRu("▲ МАТРИЦА ПЯТОЙ ВСЕЛЕННОЙ РАСШИФРОВАНА",
                            "▲ FIFTH UNIVERSE MATRIX DECODED"));
-          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY - 25.0f), IM_COL32(80, 240, 255, 255),
+          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY - 25.0f),
+                      IM_COL32(80, 240, 255, 255),
                       uiRu(cInfo->techTitleRu.c_str(), cInfo->techTitleEn.c_str()));
-          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY + 5.0f), IM_COL32(100, 255, 170, 240),
+          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY + 5.0f),
+                      IM_COL32(100, 255, 170, 240),
                       cInfo->equation.c_str());
-          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY + 35.0f), IM_COL32(190, 215, 245, 200),
+          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY + 35.0f),
+                      IM_COL32(190, 215, 245, 200),
                       uiRu("Когерентный фазовый сдвиг вакуума зафиксирован.",
                            "Coherent vacuum phase lock secured."));
         } else if (m_discoveryAnimT >= 2.3f && m_discoveryAnimT < 2.8f) {
@@ -2053,21 +2303,21 @@ void AppGL::drawConstellationAlignment() {
                                      std::to_string(cInfo->segments.size()) +
                                      " (кликните первую звезду, затем вторую)")
                              .c_str(),
-                         std::string("Connected: " +
-                                     std::to_string(m_alignedSegments.size()) + " of " +
-                                     std::to_string(cInfo->segments.size()) +
-                                     " (click star, then click neighbor)")
-                             .c_str()));
+                          std::string("Connected: " +
+                                      std::to_string(m_alignedSegments.size()) + " of " +
+                                      std::to_string(cInfo->segments.size()) +
+                                      " (click star, then click neighbor)")
+                              .c_str()));
       }
 
       ImGui::Spacing();
-      if (ImGui::Button(uiRu("Сброс", "Reset"))) {
+      if (ImGui::Button(uiRu("↺ Сброс", "↺ Reset"))) {
         m_alignedSegments.clear();
         m_alignSelectedStar = -1;
         m_discoveryAnimT = -1.0f;
       }
       ImGui::SameLine();
-      if (ImGui::Button(uiRu("Авто-сборка", "Auto-Align"))) {
+      if (ImGui::Button(uiRu("⚡ Авто-калибровка", "⚡ Auto-Align"))) {
         m_alignedSegments.clear();
         for (const auto& s : cInfo->segments) {
           m_alignedSegments.insert(
@@ -2079,16 +2329,16 @@ void AppGL::drawConstellationAlignment() {
       }
       if (isDiscovered) {
         ImGui::SameLine();
-        if (ImGui::Button(uiRu("Чертеж открытия", "Discovery Blueprint"))) {
+        if (ImGui::Button(uiRu("★ Чертёж открытия", "★ Discovery Blueprint"))) {
           m_discoveryCardOpen = true;
         }
       }
       ImGui::SameLine();
-      if (ImGui::Button(uiRu("Варп к созвездию", "Warp to Constellation"))) {
+      if (ImGui::Button(uiRu("✦ Варп к созвездию", "✦ Warp to Constellation"))) {
         teleportToStation(cInfo->id);
       }
       ImGui::SameLine();
-      if (ImGui::Button(uiRu("Закрыть", "Close"))) {
+      if (ImGui::Button(uiRu("✖ Закрыть", "✖ Close"))) {
         m_constellationAlignOpen = false;
       }
     }
@@ -2899,33 +3149,51 @@ void AppGL::drawExpeditionHud() {
 }
 
 void AppGL::drawExpeditionMap() {
-  // === Expedition ===: карта глав — сделано/текущая/закрыто.
+  // === Expedition ===: карта глав — интерактивная миссионная ось со светящимися узлами станций.
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
                           ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(430.0f, 0.0f), ImGuiCond_Always);
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.80f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.25f));
+  ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.018f, 0.028f, 0.048f, 0.95f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.78f, 0.30f, 0.65f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
   ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
   if (ImGui::Begin("##expeditionMap", nullptr, fl)) {
     const auto& chapters = expeditionChapters();
-    ImGui::TextColored(ImVec4(1.00f, 0.75f, 0.28f, 1.0f), "%s",
-                       uiRu("Карта экспедиции", "Expedition Map"));
+    float time = static_cast<float>(glfwGetTime());
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    // Header banner with overall progress bar
+    ImGui::TextColored(ImVec4(1.00f, 0.82f, 0.32f, 1.0f), "✦ %s",
+                       uiRu("МАРШРУТ ЭКСПЕДИЦИИ «ASTRO-VOYAGER»",
+                            "EXPEDITION ROUTE «ASTRO-VOYAGER»"));
+    int completedChapters = std::min(static_cast<int>(chapters.size()), m_expedition.chapterIndex);
+    float progress = chapters.empty()
+                         ? 0.0f
+                         : static_cast<float>(completedChapters) /
+                               static_cast<float>(chapters.size());
+    ImGui::ProgressBar(progress, ImVec2(-1, 5.0f), "");
     ImGui::Spacing();
+
+    // Timeline node axis
+    ImVec2 basePos = ImGui::GetCursorScreenPos();
+    float axisX = basePos.x + 14.0f;
+    std::vector<ImVec2> nodePositions;
+
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
       const ExpeditionChapter& c = chapters[i];
       const bool done = i < m_expedition.chapterIndex;
       const bool current = i == m_expedition.chapterIndex;
-      const char* mark = done ? "OK " : (current ? ">> " : "?? ");
-      if (i > 0) ImGui::Spacing();
-      ImGui::PushStyleColor(ImGuiCol_Text, done ? ImVec4(0.55f, 0.80f, 0.55f, 1.0f)
-                               : (current ? ImVec4(0.95f, 0.75f, 0.30f, 1.0f)
-                                          : ImVec4(0.45f, 0.47f, 0.52f, 1.0f)));
-      ImGui::TextUnformatted(mark);
-      ImGui::PopStyleColor();
-      ImGui::SameLine();
+
+      ImVec2 rowStart = ImGui::GetCursorScreenPos();
+      float nodeY = rowStart.y + 10.0f;
+      nodePositions.push_back(ImVec2(axisX, nodeY));
+
+      // Indent text so timeline markers fit nicely on the left
+      ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 34.0f);
+
       std::string rowRu = c.titleRu;
       std::string rowEn = c.titleEn;
       if (m_expedition.finished() &&
@@ -2933,16 +3201,59 @@ void AppGL::drawExpeditionMap() {
         rowRu = finaleTitleRu(m_expedition.finaleChoice);
         rowEn = finaleTitleEn(m_expedition.finaleChoice);
       }
-      ImGui::TextUnformatted(uiRu(rowRu.c_str(), rowEn.c_str()));
-      if (current && !m_expedition.finished()) {
-        ImGui::SetWindowFontScale(0.88f);
-        ImGui::Indent();
-        ImGui::TextColored(ImVec4(0.62f, 0.65f, 0.72f, 1.0f), "%s",
-                           uiRu(c.goalRu.c_str(), c.goalEn.c_str()));
-        ImGui::Unindent();
-        ImGui::SetWindowFontScale(1.0f);
+
+      if (current) {
+        // High contrast current chapter
+        ImGui::TextColored(ImVec4(1.0f, 0.88f, 0.38f, 1.0f), "%s",
+                           uiRu(rowRu.c_str(), rowEn.c_str()));
+        if (!m_expedition.finished()) {
+          ImGui::SetWindowFontScale(0.90f);
+          ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 34.0f);
+          ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "🎯 %s: %s",
+                             uiRu("Цель", "Objective"),
+                             uiRu(c.goalRu.c_str(), c.goalEn.c_str()));
+          ImGui::SetWindowFontScale(1.0f);
+        }
+      } else if (done) {
+        ImGui::TextColored(ImVec4(0.60f, 0.88f, 0.65f, 1.0f), "%s",
+                           uiRu(rowRu.c_str(), rowEn.c_str()));
+      } else {
+        ImGui::TextColored(ImVec4(0.48f, 0.52f, 0.60f, 0.85f), "%s",
+                           uiRu(rowRu.c_str(), rowEn.c_str()));
+      }
+      ImGui::Spacing();
+    }
+
+    // Connect timeline nodes with vertical lines
+    for (size_t i = 0; i + 1 < nodePositions.size(); ++i) {
+      bool segDone = static_cast<int>(i + 1) <= m_expedition.chapterIndex;
+      ImU32 segCol = segDone ? IM_COL32(70, 195, 110, 210) : IM_COL32(50, 65, 90, 130);
+      dl->AddLine(nodePositions[i], nodePositions[i + 1], segCol, 2.0f);
+    }
+
+    // Render luminous nodes
+    for (int i = 0; i < static_cast<int>(nodePositions.size()); ++i) {
+      ImVec2 nPos = nodePositions[i];
+      const bool done = i < m_expedition.chapterIndex;
+      const bool current = i == m_expedition.chapterIndex;
+
+      if (done) {
+        dl->AddCircleFilled(nPos, 6.0f, IM_COL32(60, 200, 100, 240));
+        dl->AddCircle(nPos, 7.5f, IM_COL32(20, 60, 30, 220), 16, 1.5f);
+        dl->AddCircleFilled(nPos, 2.2f, IM_COL32(255, 255, 255, 255));
+      } else if (current) {
+        float pulse = 0.7f + 0.3f * std::sin(time * 4.0f);
+        float pulseR = 7.0f + 3.5f * (1.0f - pulse);
+        dl->AddCircle(nPos, pulseR,
+                      IM_COL32(255, 215, 70, static_cast<int>(180 * pulse)), 20, 1.5f);
+        dl->AddCircleFilled(nPos, 6.5f, IM_COL32(255, 205, 50, 255));
+        dl->AddCircleFilled(nPos, 2.8f, IM_COL32(255, 255, 255, 255));
+      } else {
+        dl->AddCircleFilled(nPos, 4.5f, IM_COL32(30, 42, 60, 200));
+        dl->AddCircle(nPos, 5.5f, IM_COL32(70, 90, 120, 160), 16, 1.2f);
       }
     }
+
     if (m_expedition.finished()) {
       const int fc = m_expedition.finaleChoice;
       const char* doneRu = "Экспедиция завершена. Сюжет завершён.";
@@ -2959,12 +3270,12 @@ void AppGL::drawExpeditionMap() {
                          uiRu(doneRu, doneEn));
     }
     ImGui::Spacing();
-    if (ImGui::Button(uiRu("Закрыть (N / Esc)", "Close (N / Esc)"))) {
+    if (ImGui::Button(uiRu("✖ Закрыть (N / Esc)", "✖ Close (N / Esc)"), ImVec2(-1, 32.0f))) {
       m_expeditionMapOpen = false;
     }
   }
   ImGui::End();
-  ImGui::PopStyleVar(1);
+  ImGui::PopStyleVar(2);
   ImGui::PopStyleColor(2);
 }
 
