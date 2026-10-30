@@ -1642,11 +1642,96 @@ void AppGL::drawStoryPanel() {
   if (pushed) ImGui::PopFont();
 }
 
+void AppGL::drawDiscoveryCard(const ConstellationInfo* cInfo) {
+  if (!cInfo) return;
+
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_Always,
+                          ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(560.0f, 0.0f), ImGuiCond_Always);
+
+  const bool pushed = modernPushFont();
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.09f, 0.16f, 0.98f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.95f, 0.78f, 0.30f, 0.90f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+
+  std::string winTitle = std::string("★ ") + uiRu("ЭВРИКА! НАУЧНЫЙ ПРОРЫВ", "EUREKA! DISCOVERY") + "###DiscoveryModal";
+  if (ImGui::Begin(winTitle.c_str(), &m_discoveryCardOpen,
+                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
+    // Top banner
+    ImGui::TextColored(ImVec4(0.95f, 0.82f, 0.35f, 1.0f), "%s",
+                       uiRu("СИНГУЛЯРНЫЙ КУЛОН ЕГОРКИ-5: МАТРИЦА СИНХРОНИЗИРОВАНА",
+                            "EGORKA-5 SINGULARITY PENDANT: MATRIX SYNCHRONIZED"));
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Tech title
+    ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "%s",
+                       uiRu(cInfo->techTitleRu.c_str(), cInfo->techTitleEn.c_str()));
+    ImGui::Spacing();
+
+    // Equation display container
+    if (ImGui::BeginChild("EquationBox", ImVec2(0.0f, 46.0f), true)) {
+      ImGui::TextColored(ImVec4(0.25f, 1.0f, 0.70f, 1.0f), "> %s", cInfo->equation.c_str());
+      ImGui::EndChild();
+    }
+    ImGui::Spacing();
+
+    // Egorka's quote box
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 1.0f), "%s",
+                       uiRu("Заметки Егорки:", "Egorka's Field Notes:"));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.12f, 0.20f, 0.70f));
+    if (ImGui::BeginChild("QuoteBox", ImVec2(0.0f, 68.0f), true)) {
+      ImGui::TextWrapped("%s", uiRu(cInfo->egorkaNoteRu.c_str(), cInfo->egorkaNoteEn.c_str()));
+      ImGui::EndChild();
+    }
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
+
+    // Modernization effect
+    ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
+                       uiRu("Эффект модернизации корабля:", "Ship Upgrade Effect:"));
+    ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.50f, 1.0f), "✔ %s",
+                       uiRu(cInfo->effectRu.c_str(), cInfo->effectEn.c_str()));
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Action button
+    if (ImGui::Button(uiRu("★ Интегрировать открытие в системы корабля",
+                           "★ Integrate Discovery into Ship Systems"),
+                      ImVec2(-1, 36.0f))) {
+      m_discoveredConstellations.insert(cInfo->id);
+      m_constellationAligned = true;
+      m_discoveryCardOpen = false;
+      m_discoveryAnimT = -1.0f;
+      m_audio.playChime();
+
+      Toast t;
+      t.title = uiRu("ТЕХНОЛОГИЯ ИНТЕГРИРОВАНА!", "TECH INTEGRATED!");
+      t.desc = uiRu(cInfo->techTitleRu.c_str(), cInfo->techTitleEn.c_str());
+      t.time = static_cast<float>(glfwGetTime());
+      m_toasts.push_back(t);
+      checkAchievements();
+    }
+
+    if (ImGui::Button(uiRu("Повторить анимацию резонанса", "Replay Resonance Animation"), ImVec2(-1, 0.0f))) {
+      m_discoveryAnimT = 0.0f;
+      m_discoveryCardOpen = false;
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(2);
+  if (pushed) ImGui::PopFont();
+}
+
 void AppGL::drawConstellationAlignment() {
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_FirstUseEver,
                           ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(640.0f, 600.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(660.0f, 620.0f), ImGuiCond_FirstUseEver);
 
   const bool pushed = modernPushFont();
   if (ImGui::Begin(uiRu("Резонанс кулона: Калибровка созвездия",
@@ -1663,6 +1748,7 @@ void AppGL::drawConstellationAlignment() {
         m_alignConstellationId = "ori";
         m_alignSelectedStar = -1;
         m_alignedSegments.clear();
+        m_discoveryAnimT = -1.0f;
       }
     }
     if (isOri) ImGui::PopStyleColor();
@@ -1675,6 +1761,7 @@ void AppGL::drawConstellationAlignment() {
         m_alignConstellationId = "uma";
         m_alignSelectedStar = -1;
         m_alignedSegments.clear();
+        m_discoveryAnimT = -1.0f;
       }
     }
     if (isUma) ImGui::PopStyleColor();
@@ -1698,6 +1785,22 @@ void AppGL::drawConstellationAlignment() {
     bool isHovered = ImGui::IsItemHovered();
     ImVec2 mousePos = ImGui::GetIO().MousePos;
     bool mouseClicked = isHovered && ImGui::IsMouseClicked(0);
+
+    // Discovery animation timer tick
+    float dt = ImGui::GetIO().DeltaTime;
+    float time = static_cast<float>(glfwGetTime());
+    bool animRunning = (m_discoveryAnimT >= 0.0f);
+    if (animRunning) {
+      m_discoveryAnimT += dt;
+      if (m_discoveryAnimT >= 2.8f) {
+        m_discoveryAnimT = -1.0f;
+        m_discoveryCardOpen = true;
+        m_discoveredConstellations.insert(cInfo->id);
+        m_constellationAligned = true;
+        m_audio.playChime();
+        checkAchievements();
+      }
+    }
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     // Space background
@@ -1730,8 +1833,15 @@ void AppGL::drawConstellationAlignment() {
 
       auto getStarPos = [&](size_t idx) -> ImVec2 {
         const auto& s = cInfo->stars[idx];
-        return ImVec2(canMidX + (s.x - midX) * scale,
-                      canMidY - (s.y - midY) * scale);
+        float sx = canMidX + (s.x - midX) * scale;
+        float sy = canMidY - (s.y - midY) * scale;
+        // Phase 1 resonance vibration
+        if (animRunning && m_discoveryAnimT < 0.9f) {
+          float jitter = (m_discoveryAnimT / 0.9f) * 2.5f;
+          sx += std::sin(time * 38.0f + static_cast<float>(idx) * 2.1f) * jitter;
+          sy += std::cos(time * 32.0f + static_cast<float>(idx) * 1.7f) * jitter;
+        }
+        return ImVec2(sx, sy);
       };
 
       // 1. Guide lines (faint ghost lines for unaligned canonical segments)
@@ -1748,21 +1858,27 @@ void AppGL::drawConstellationAlignment() {
       }
 
       // 2. Aligned segments (glowing cyan neon lines)
-      float time = static_cast<float>(glfwGetTime());
       float pulse = 0.85f + 0.15f * std::sin(time * 3.5f);
+      if (animRunning && m_discoveryAnimT < 0.9f) {
+        // High frequency resonance pulse
+        float fastPulseRate = 18.0f + 40.0f * (m_discoveryAnimT / 0.9f);
+        pulse = 0.5f + 0.5f * std::sin(time * fastPulseRate);
+      }
       for (const auto& seg : m_alignedSegments) {
         if (seg.first < cInfo->stars.size() && seg.second < cInfo->stars.size()) {
           ImVec2 pA = getStarPos(seg.first);
           ImVec2 pB = getStarPos(seg.second);
+          float haloThick = animRunning ? (4.5f + 2.5f * pulse) : 4.5f;
+          float coreThick = animRunning ? (2.0f + 1.2f * pulse) : 2.0f;
           // Neon glow halo
-          dl->AddLine(pA, pB, IM_COL32(90, 160, 255, (int)(75 * pulse)), 4.5f);
+          dl->AddLine(pA, pB, IM_COL32(90, 180, 255, (int)(80 * pulse)), haloThick);
           // Core bright beam
-          dl->AddLine(pA, pB, IM_COL32(160, 245, 255, 240), 2.0f);
+          dl->AddLine(pA, pB, IM_COL32(180, 245, 255, 245), coreThick);
         }
       }
 
       // 3. Line from selected star to mouse pointer
-      if (m_alignSelectedStar >= 0 && (size_t)m_alignSelectedStar < cInfo->stars.size() && isHovered) {
+      if (!animRunning && m_alignSelectedStar >= 0 && (size_t)m_alignSelectedStar < cInfo->stars.size() && isHovered) {
         ImVec2 pA = getStarPos(m_alignSelectedStar);
         dl->AddLine(pA, mousePos, IM_COL32(255, 220, 120, 190), 1.8f);
       }
@@ -1779,10 +1895,10 @@ void AppGL::drawConstellationAlignment() {
         float dx = mousePos.x - pos.x;
         float dy = mousePos.y - pos.y;
         float dist = std::sqrt(dx * dx + dy * dy);
-        if (isHovered && dist <= (r + 8.0f)) {
+        if (isHovered && dist <= (r + 8.0f) && !animRunning) {
           hoveredStar = static_cast<int>(i);
         }
-        if (mouseClicked && hoveredStar == static_cast<int>(i)) {
+        if (mouseClicked && hoveredStar == static_cast<int>(i) && !animRunning) {
           clickedStar = static_cast<int>(i);
         }
 
@@ -1849,18 +1965,65 @@ void AppGL::drawConstellationAlignment() {
             m_audio.playChime();
 
             if (m_alignedSegments.size() == cInfo->segments.size()) {
-              m_constellationAligned = true;
-              Toast t;
-              t.title = uiRu("РЕЗОНАНС ДОСТИГНУТ!", "RESONANCE ACHIEVED!");
-              t.desc = uiRu("Секрет созвездий открыт. Запись добавлена в журнал (J).",
-                            "Constellation secret decoded. Added to Journal (J).");
-              t.time = static_cast<float>(glfwGetTime());
-              m_toasts.push_back(t);
-              checkAchievements();
+              if (m_discoveryAnimT < 0.0f) {
+                m_discoveryAnimT = 0.0f;
+                m_audio.playChime();
+              }
             }
           } else {
             m_alignSelectedStar = clickedStar;
           }
+        }
+      }
+
+      // === Discovery Animation Layers ===
+      if (animRunning) {
+        if (m_discoveryAnimT < 0.9f) {
+          // Phase 1: Resonance HUD text
+          float pulseAlpha = 0.6f + 0.4f * std::sin(time * 15.0f);
+          dl->AddText(ImVec2(canvasP0.x + 16.0f, canvasP0.y + 12.0f),
+                      IM_COL32(110, 240, 255, static_cast<int>(240 * pulseAlpha)),
+                      uiRu("▲ КВАНТОВЫЙ РЕЗОНАНС: ФАЗОВЫЙ ЗАХВАТ МЕТРИКИ...",
+                           "▲ QUANTUM RESONANCE: METRIC PHASE LOCKING..."));
+        } else if (m_discoveryAnimT >= 0.9f && m_discoveryAnimT < 2.3f) {
+          // Phase 2: Hologram projection & blueprint decoding
+          float darkAlpha = std::min(1.0f, (m_discoveryAnimT - 0.9f) / 0.4f);
+          dl->AddRectFilled(canvasP0, canvasP1, IM_COL32(4, 9, 20, static_cast<int>(230 * darkAlpha)), 8.0f);
+
+          // Technical blueprint grid
+          for (float gx = canvasP0.x + 20.0f; gx < canvasP1.x; gx += 38.0f) {
+            dl->AddLine(ImVec2(gx, canvasP0.y), ImVec2(gx, canvasP1.y),
+                        IM_COL32(25, 75, 125, static_cast<int>(50 * darkAlpha)), 1.0f);
+          }
+          for (float gy = canvasP0.y + 20.0f; gy < canvasP1.y; gy += 38.0f) {
+            dl->AddLine(ImVec2(canvasP0.x, gy), ImVec2(canvasP1.x, gy),
+                        IM_COL32(25, 75, 125, static_cast<int>(50 * darkAlpha)), 1.0f);
+          }
+
+          // Rotating holographic dials around center
+          float dialRot = (m_discoveryAnimT - 0.9f) * 1.8f;
+          dl->AddCircle(ImVec2(canMidX, canMidY), 65.0f, IM_COL32(0, 220, 255, static_cast<int>(140 * darkAlpha)), 36, 1.5f);
+          dl->AddCircle(ImVec2(canMidX, canMidY), 135.0f, IM_COL32(255, 215, 80, static_cast<int>(110 * darkAlpha)), 48, 1.5f);
+          dl->AddLine(ImVec2(canMidX + std::cos(dialRot) * 140.0f, canMidY + std::sin(dialRot) * 140.0f),
+                      ImVec2(canMidX - std::cos(dialRot) * 140.0f, canMidY - std::sin(dialRot) * 140.0f),
+                      IM_COL32(0, 230, 255, static_cast<int>(130 * darkAlpha)), 1.2f);
+
+          // Decoded equation display
+          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY - 50.0f), IM_COL32(255, 215, 80, 255),
+                      uiRu("▲ МАТРИЦА ПЯТОЙ ВСЕЛЕННОЙ РАСШИФРОВАНА",
+                           "▲ FIFTH UNIVERSE MATRIX DECODED"));
+          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY - 25.0f), IM_COL32(80, 240, 255, 255),
+                      uiRu(cInfo->techTitleRu.c_str(), cInfo->techTitleEn.c_str()));
+          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY + 5.0f), IM_COL32(100, 255, 170, 240),
+                      cInfo->equation.c_str());
+          dl->AddText(ImVec2(canvasP0.x + 22.0f, canMidY + 35.0f), IM_COL32(190, 215, 245, 200),
+                      uiRu("Когерентный фазовый сдвиг вакуума зафиксирован.",
+                           "Coherent vacuum phase lock secured."));
+        } else if (m_discoveryAnimT >= 2.3f && m_discoveryAnimT < 2.8f) {
+          // Phase 3: Flash of Insight
+          float flashRatio = (m_discoveryAnimT - 2.3f) / 0.5f;
+          int flashAlpha = static_cast<int>(230.0f * (1.0f - flashRatio));
+          dl->AddRectFilled(canvasP0, canvasP1, IM_COL32(230, 250, 255, flashAlpha), 8.0f);
         }
       }
 
@@ -1872,10 +2035,17 @@ void AppGL::drawConstellationAlignment() {
                                  static_cast<float>(cInfo->segments.size());
       ImGui::ProgressBar(progress, ImVec2(-1, 0), "");
 
+      bool isDiscovered = (m_discoveredConstellations.count(cInfo->id) > 0);
       if (m_alignedSegments.size() == cInfo->segments.size()) {
-        ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.45f, 1.0f), "★ %s",
-                           uiRu("СОЗВЕЗДИЕ СИНХРОНИЗИРОВАНО! Метрика Пятой Вселенной активна.",
-                                "CONSTELLATION SYNCHRONIZED! Fifth Universe metric active."));
+        if (isDiscovered) {
+          ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.45f, 1.0f), "★ %s: %s",
+                             uiRu("ТЕХНОЛОГИЯ РАСШИФРОВАНА", "TECH DECODED"),
+                             uiRu(cInfo->techTitleRu.c_str(), cInfo->techTitleEn.c_str()));
+        } else {
+          ImGui::TextColored(ImVec4(0.95f, 0.80f, 0.30f, 1.0f), "★ %s",
+                             uiRu("СОЗВЕЗДИЕ СИНХРОНИЗИРОВАНО! Метрика Пятой Вселенной активна.",
+                                  "CONSTELLATION SYNCHRONIZED! Fifth Universe metric active."));
+        }
       } else {
         ImGui::Text("%s",
                     uiRu(std::string("Связано сегментов: " +
@@ -1894,6 +2064,7 @@ void AppGL::drawConstellationAlignment() {
       if (ImGui::Button(uiRu("Сброс", "Reset"))) {
         m_alignedSegments.clear();
         m_alignSelectedStar = -1;
+        m_discoveryAnimT = -1.0f;
       }
       ImGui::SameLine();
       if (ImGui::Button(uiRu("Авто-сборка", "Auto-Align"))) {
@@ -1903,14 +2074,14 @@ void AppGL::drawConstellationAlignment() {
               {std::min(s.first, s.second), std::max(s.first, s.second)});
         }
         m_constellationAligned = true;
+        m_discoveryAnimT = 0.0f;  // Trigger discovery animation
         m_audio.playChime();
-        Toast t;
-        t.title = uiRu("РЕЗОНАНС ДОСТИГНУТ!", "RESONANCE ACHIEVED!");
-        t.desc = uiRu("Запись добавлена в бортовой журнал (J).",
-                      "Log entry added to Journal (J).");
-        t.time = static_cast<float>(glfwGetTime());
-        m_toasts.push_back(t);
-        checkAchievements();
+      }
+      if (isDiscovered) {
+        ImGui::SameLine();
+        if (ImGui::Button(uiRu("Чертеж открытия", "Discovery Blueprint"))) {
+          m_discoveryCardOpen = true;
+        }
       }
       ImGui::SameLine();
       if (ImGui::Button(uiRu("Варп к созвездию", "Warp to Constellation"))) {
@@ -1923,6 +2094,12 @@ void AppGL::drawConstellationAlignment() {
     }
   }
   ImGui::End();
+
+  // Eureka discovery card modal overlay
+  if (m_discoveryCardOpen) {
+    drawDiscoveryCard(findConstellation(m_alignConstellationId));
+  }
+
   if (pushed) ImGui::PopFont();
 }
 

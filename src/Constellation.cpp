@@ -65,6 +65,17 @@ std::vector<ConstellationInfo> initConstellations() {
       {5, 6}, // Alnitak - Saiph (belt to left leg)
       {3, 1}  // Mintaka - Rigel (belt to right leg)
   };
+  ori.techTitleRu = "Асимметричный резонатор Казимира";
+  ori.techTitleEn = "Asymmetric Casimir Resonator";
+  ori.equation = "ds^2 = -c^2 dt^2 + [dx - v(t)f(r)dt]^2 + dy^2 + dz^2  |  <T_00> < 0";
+  ori.egorkaNoteRu =
+      "«Три звезды Пояса — это же идеальный трёхуровневый фазовый резонатор! "
+      "Отрицательную массу искали зря: метрику вакуума нужно не сжимать, а закручивать!»";
+  ori.egorkaNoteEn =
+      "«The three Belt stars form a three-level phase cavity! "
+      "Hunting for negative mass was pointless: space doesn't need compression, it needs a phase twist!»";
+  ori.effectRu = "Варп-фактор повышен до 9.9 • Расход топлива на прыжки снижен на 50%";
+  ori.effectEn = "Warp factor unlocked to 9.9 • Jump fuel consumption cut by 50%";
   projectStars(ori, 0.9f);
   list.push_back(ori);
 
@@ -106,6 +117,17 @@ std::vector<ConstellationInfo> initConstellations() {
       {4, 5}, // Alioth - Mizar
       {5, 6}  // Mizar - Alkaid
   };
+  uma.techTitleRu = "Квантовый вакуумный конденсатор";
+  uma.techTitleEn = "Quantum Vacuum Condenser";
+  uma.equation = "E_0 = 1/2 hbar omega  |  div(E_vac) = rho_eff (ZPE Extraction)";
+  uma.egorkaNoteRu =
+      "«Медведица — как школьная шпаргалка по геометрии. Откалибровал фокус по Мегрецу и Дубхе — "
+      "и реактор начинает втягивать энергию прямо из вакуумного шума пустоты!»";
+  uma.egorkaNoteEn =
+      "«Ursa Major is like a geometry cheat-sheet. Aligning focus across Megrez and Dubhe "
+      "makes the reactor harvest energy straight from vacuum zero-point fluctuations!»";
+  uma.effectRu = "Емкость баков увеличена до 150 ед. • Пассивный сбор топлива (+0.5 ед./с в дрейфе)";
+  uma.effectEn = "Tank capacity expanded to 150 • Passive vacuum fuel harvesting (+0.5/s drift)";
   projectStars(uma, 0.85f);
   list.push_back(uma);
 

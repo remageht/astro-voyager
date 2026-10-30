@@ -28,6 +28,7 @@ struct ImDrawList;
 struct ImFont;
 
 namespace astro {
+struct ConstellationInfo;
 
 // === MenuSky ===: forward-decls (Shader/ScreenQuad отвечаются в .cpp).
 class Shader;
@@ -159,6 +160,11 @@ class AppGL {
   int m_alignSelectedStar = -1;
   std::set<std::pair<unsigned int, unsigned int>> m_alignedSegments;
   bool m_constellationAligned = false;
+  float m_discoveryAnimT = -1.0f;
+  bool m_discoveryCardOpen = false;
+  std::string m_discoveryConstellationId;
+  std::set<std::string> m_discoveredConstellations;
+  void drawDiscoveryCard(const ConstellationInfo* cInfo);
 
   // === Expedition === (v3.5.0): сюжетная арка + вводные слайды (рестайл).
   ExpeditionState m_expedition;
