@@ -18,44 +18,56 @@ const std::vector<ExpeditionChapter>& expeditionChapters() {
                                   "Reach the Solar System and see the Earth "
                                   "(Solar System station).",
                                   0});
+    // v4.1: интерлюдия на орбите Земли. Завершается стыковкой с любым из
+    // двух исторических кораблей - Dragon или «Союзом-МС» (цели через '|').
+    c.push_back(ExpeditionChapter{"fleet", "dock-dragon|dock-soyuz",
+                                  "Глава 2 · Последний караул",
+                                  "Chapter 2 · The Last Watch",
+                                  "Состыковаться с Crew Dragon или «Союзом-МС» "
+                                  "на орбите Земли - попрощаться с первым "
+                                  "орбитальным флотом.",
+                                  "Dock with Crew Dragon or Soyuz-MS in Earth "
+                                  "orbit - bid farewell to the first orbital "
+                                  "fleet.",
+                                  1});
     c.push_back(ExpeditionChapter{"sgra", "sgra",
-                                  "Глава 2 · Сердце Галактики",
-                                  "Chapter 2 · Heart of the Galaxy",
+                                  "Глава 3 · Сердце Галактики",
+                                  "Chapter 3 · Heart of the Galaxy",
                                   "Совершить прыжок к Sgr A* - чёрной дыре "
                                   "в центре Млечного Пути.",
                                   "Jump to Sgr A*, the black hole at the "
                                   "center of the Milky Way.",
-                                  1});
+                                  2});
     c.push_back(ExpeditionChapter{"m87", "m87",
-                                  "Глава 3 · Монстр с джетом",
-                                  "Chapter 3 · The Jet Monster",
+                                  "Глава 4 · Монстр с джетом",
+                                  "Chapter 4 · The Jet Monster",
                                   "Наблюдать релятивистский джет M87* и "
                                   "доплер диска.",
                                   "Watch the relativistic jet of M87* and "
                                   "the Doppler disk.",
-                                  2});
+                                  3});
     c.push_back(ExpeditionChapter{"qso", "qso-3c273",
-                                  "Глава 4 · Маяк ранней Вселенной",
-                                  "Chapter 4 · Beacon of the Early Universe",
+                                  "Глава 5 · Маяк ранней Вселенной",
+                                  "Chapter 5 · Beacon of the Early Universe",
                                   "Оценить яркость квазара 3C 273.",
                                   "Gauge the brightness of quasar 3C 273.",
-                                  3});
+                                  4});
     c.push_back(ExpeditionChapter{"m13", "m13",
-                                  "Глава 5 · Новые кандидаты",
-                                  "Chapter 5 · New Candidates",
+                                  "Глава 6 · Новые кандидаты",
+                                  "Chapter 6 · New Candidates",
                                   "Обследовать скопление M13 и выбрать мир "
                                   "для колонии.",
                                   "Survey cluster M13 and choose the world "
                                   "for the colony.",
-                                  4});
+                                  5});
     c.push_back(ExpeditionChapter{"finale", "",
-                                  "Глава 6 · Выбор",
-                                  "Chapter 6 · The Choice",
+                                  "Глава 7 · Выбор",
+                                  "Chapter 7 · The Choice",
                                   "Решить судьбу экспедиции: колония или "
                                   "дальний горизонт.",
                                   "Decide the fate of the expedition: colony "
                                   "or the far horizon.",
-                                  5});
+                                  6});
     return c;
   }();
   return chapters;
@@ -92,7 +104,24 @@ std::string finaleGoalEn(int choice) {
 void ExpeditionState::markVisited(const std::string& stationId) {
   const auto& chapters = expeditionChapters();
   if (chapterIndex >= static_cast<int>(chapters.size())) return;
-  if (chapters[chapterIndex].station != stationId) return;
+  // v4.1: a chapter may list several valid targets separated by '|'
+  // (the fleet interlude completes with either Crew Dragon or Soyuz).
+  const std::string& targets = chapters[chapterIndex].station;
+  bool match = false;
+  size_t start = 0;
+  while (start <= targets.size()) {
+    const size_t sep = targets.find('|', start);
+    const std::string target =
+        targets.substr(start, sep == std::string::npos ? std::string::npos
+                                                       : sep - start);
+    if (!target.empty() && target == stationId) {
+      match = true;
+      break;
+    }
+    if (sep == std::string::npos) break;
+    start = sep + 1;
+  }
+  if (!match) return;
   // Финальная глава (N) - без цели: визиты её не двигают; достигнув её,
   // сюжет завершён (finished чует индекс последней главы).
   ++chapterIndex;
@@ -129,7 +158,8 @@ std::string ExpeditionState::statusEn() const {
 
 std::string serializeExpedition(const ExpeditionState& st) {
   std::ostringstream os;
-  os << "# expedition state (v3.5.0)\n";
+  os << "# expedition state (v4.1.0)\n";
+  os << "version=2\n";
   os << "chapterIndex=" << st.chapterIndex << "\n";
   os << "introSeen=" << (st.introSeen ? 1 : 0) << "\n";
   os << "finaleChoice=" << st.finaleChoice << "\n";
@@ -140,6 +170,7 @@ bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
   ExpeditionState probe;
   probe.chapterIndex = 0;
   probe.introSeen = false;
+  int fileVersion = 0;
   std::istringstream is(text);
   std::string line;
   bool any = false;
@@ -148,7 +179,10 @@ bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
     if (eq == std::string::npos || line.empty() || line[0] == '#') continue;
     const std::string key = line.substr(0, eq);
     const std::string val = line.substr(eq + 1);
-    if (key == "chapterIndex") {
+    if (key == "version") {
+      fileVersion = std::atoi(val.c_str());
+      any = true;
+    } else if (key == "chapterIndex") {
       probe.chapterIndex = std::atoi(val.c_str());
       if (probe.chapterIndex < 0 ||
           probe.chapterIndex > static_cast<int>(expeditionChapters().size())) {
@@ -168,6 +202,13 @@ bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
     }
   }
   if (!any) return false;
+  // v4.1 inserted the fleet interlude after "Home". Legacy files (v1, no
+  // version key) keep their old chapter numbering, so indices 1..N shift by
+  // one; index 0 (Home) stays. The last index is clamped to the finale.
+  if (fileVersion < 2 && probe.chapterIndex > 0) {
+    const int last = static_cast<int>(expeditionChapters().size()) - 1;
+    probe.chapterIndex = std::min(probe.chapterIndex + 1, last);
+  }
   out = probe;
   return true;
 }
