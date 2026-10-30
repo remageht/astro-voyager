@@ -8077,7 +8077,7 @@ void AppGL::drawShipyard() {
         ImGui::EndTabItem();
       }
 
-      // === TAB 5: SPACEX DRAGON AVIONICS (v3.11.0) ===
+      // === TAB 5: SPACEX DRAGON AVIONICS (v4.1.0) ===
       if (m_ship.dockedStationId == "dock-dragon" || m_dockHintId == "dock-dragon") {
         if (ImGui::BeginTabItem(uiRu("SpaceX Dragon", "SpaceX Dragon"))) {
           ImGui::TextColored(ImVec4(0.2f, 0.85f, 1.0f, 1.0f), "%s",
@@ -8100,7 +8100,7 @@ void AppGL::drawShipyard() {
         }
       }
 
-      // === TAB 6: SOYUZ-MS AVIONICS (v3.11.0) ===
+      // === TAB 6: SOYUZ-MS AVIONICS (v4.1.0) ===
       if (m_ship.dockedStationId == "dock-soyuz" || m_dockHintId == "dock-soyuz") {
         if (ImGui::BeginTabItem(uiRu("Союз-МС", "Soyuz-MS"))) {
           ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.25f, 1.0f), "%s",
