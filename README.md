@@ -109,6 +109,11 @@
 
 - **Источники**: официальные GLB-модели NASA 3D Resources и карта всего неба Deep Star Maps 2020. Тяжёлые исходники не коммитятся — их скачивает `tools/fetch_nasa_assets.ps1`, а витрины рендерит `blender/scripts/render_nasa_showcase.py`. Подробности, SHA256 и кредиты: [`docs/NASA_ASSETS.md`](docs/NASA_ASSETS.md).
 
+### Атрибуция 3D-моделей
+
+- **SpaceX Crew Dragon 2 exterior** — Jon Ross ([zlsa](https://sketchfab.com/zlsa)), лицензия [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), источник: [Sketchfab](https://sketchfab.com/3d-models/spacex-dragon-2-exterior-2575398db20c406cab2cf72b89a9be8b). Модель локальная и не коммитится; экспорт и масштаб описаны в [`docs/SPACECRAFT_ASSETS.md`](docs/SPACECRAFT_ASSETS.md).
+- **Mir Station with Soyuz and Progress docked** — [tashtego](https://sketchfab.com/tashtego), лицензия [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), источник: [Sketchfab](https://sketchfab.com/3d-models/mir-station-with-soyuz-and-progress-docked-bd6ac084ae5645848a67597b17665579). **NC**: коммерческое использование модели запрещено без отдельного разрешения; для коммерческой поставки «Союз» нужно заменить на permissive-ассет.
+
 ---
 
 ## Галерея космических объектов

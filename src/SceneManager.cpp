@@ -2219,10 +2219,18 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             glm::vec3 emOverride(0.0f);
             float customMetal = 0.75f;
             float customRough = 0.35f;
+            // Docking-target halo. Crew capsules are much smaller than the
+            // station/telescope/probe, so their marker shrinks with them.
+            float dockRingScale = 0.28f;
 
             if (dock.id == "dock-dragon" && s_dragonModel.ready()) {
               siteModel = &s_dragonModel;
-              stScale = 0.28f;
+              // Dragon is 2.6 model units long. At 0.28 it was 0.73 world
+              // units - 63% of Earth's 1.16-unit diameter and almost twice the
+              // ISS model. 0.095 keeps it readable at 0.247 units (~21%),
+              // clearly below the station while still visible in Earth orbit.
+              stScale = 0.095f;
+              dockRingScale = 0.12f;
               // SpaceX Crew Dragon: stable orbital attitude holding with subtle drift
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.03f * time + 0.45f, glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -2232,7 +2240,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customRough = 0.35f;
             } else if (dock.id == "dock-soyuz" && s_soyuzModel.ready()) {
               siteModel = &s_soyuzModel;
-              stScale = 0.28f;
+              // Same compressed-scale rule as Dragon: 2.8 units * 0.085 =
+              // 0.238 world units, slightly shorter than the Crew Dragon and
+              // well under the orbital station.
+              stScale = 0.085f;
+              dockRingScale = 0.11f;
               // Soyuz MS-25: orbital velocity alignment with solar arrays perpendicular to Sol
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.04f * time - 0.55f, glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -2362,7 +2374,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             m_ringShader->setUniformMat4f("u_MVP", mvp);
             glm::mat4 dockRingModel = glm::translate(glm::mat4(1.0f), stPos) *
                                       glm::rotate(glm::mat4(1.0f), -0.15f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                      glm::scale(glm::mat4(1.0f), glm::vec3(0.28f));
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(dockRingScale));
             m_ringShader->setUniformMat4f("u_Model", dockRingModel);
             m_ringShader->setUniform1f("u_Seed", 42.0f);
             m_ringShader->setUniform1f("u_Time", time);

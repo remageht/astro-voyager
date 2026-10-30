@@ -43,7 +43,8 @@ void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
                "--demo-geodesic | --demo-binet | --demo-rkf45 | --demo-kerr | --demo-warp | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
-  std::cout << " | --gl | --screenshot-all [--disk]";
+  std::cout << " | --gl | --screenshot-all [--disk]"
+               " | --capture-station <png> | --capture-dragon <png>";
 #endif
   std::cout << "]\n";
 }
