@@ -62,7 +62,7 @@
       "id": "m1",
       "type": "nebula",
       "name": "Crab Nebula (M1)",
-      "description": "Supernova remnant impostor sprite.",
+      "description": "Pulsar Wind Nebula (PWN) supernova remnant: relativistic termination shock, equatorial synchrotron torus, dynamic wisps, and filamentary cage.",
       "spawnDistanceRs": 60.0,
       "mass": 0.0
     },
@@ -172,6 +172,14 @@
       "description": "Tidal disruption event: a solar-mass star shredded by a 10^6 M☉ black hole, relativistic spaghettification stream, super-Eddington accretion flare, and t^-5/3 fallback cooling.",
       "spawnDistanceRs": 28.0,
       "mass": 1000000.0
+    },
+    {
+      "id": "m16",
+      "type": "nebula",
+      "name": "Eagle Nebula (M16)",
+      "description": "Pillars of Creation: star-forming elephant trunks of cold interstellar gas and dust sculpted by UV photoevaporation from young massive stars in NGC 6611.",
+      "spawnDistanceRs": 35.0,
+      "mass": 0.0
     }
   ]
 }

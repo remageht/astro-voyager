@@ -3843,6 +3843,54 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
     ImGui::BulletText("%s: dM/dt ∝ (t - t0)^(-5/3) (Rees 1988)", uiRu("Закон затухания", "Fallback Law"));
   }
 
+  if (curSt && curSt->id == "m16") {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.35f, 1.0f), "%s",
+                       uiRu("Столпы Творения (M16 / NGC 6611):", "Pillars of Creation (M16 / NGC 6611):"));
+    float irBlend = m_sceneManager->getPillarsInfrared();
+    const char* specMode = "Hubble Optical ([S II] / Ha / [O III])";
+    if (irBlend >= 0.70f) specMode = "JWST Infrared (NIRCam/MIRI YSOs)";
+    else if (irBlend >= 0.30f) specMode = "HST-JWST Dual Composite";
+    ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "%s: %s",
+                       uiRu("Спектральный режим", "Spectral Band"), specMode);
+    if (ImGui::SliderFloat("IR Blend##m16", &irBlend, 0.0f, 1.0f, "%.2f (HST <-> JWST)")) {
+      m_sceneManager->setPillarsInfrared(irBlend);
+    }
+    float photoEvap = m_sceneManager->getPillarsPhotoEvap();
+    if (ImGui::SliderFloat(uiRu("УФ-фотоиспарение##m16", "UV Photoevaporation##m16"), &photoEvap, 0.2f, 2.5f, "%.2fx")) {
+      m_sceneManager->setPillarsPhotoEvap(photoEvap);
+    }
+    ImGui::BulletText("%s: Serpens (7,000 ly / 2.18 kpc)", uiRu("Локация", "Location"));
+    ImGui::BulletText("%s: NGC 6611 (OB Stars, 1-2 Myr)", uiRu("Ионизатор", "Ionizing Cluster"));
+    ImGui::BulletText("%s: ~4-5 ly (~1.5 pc, ~200 M☉)", uiRu("Высота Столпа I", "Pillar I Height"));
+    ImGui::BulletText("%s: EGGs (Evaporating Gaseous Globules)", uiRu("Протозвёзды", "Active YSOs"));
+    ImGui::BulletText("%s: [S II] 672nm, Ha 656nm, [O III] 501nm", uiRu("Эмиссионные линии", "Emission Lines"));
+  }
+
+  if (curSt && curSt->id == "m1") {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.45f, 0.78f, 1.0f, 1.0f), "%s",
+                       uiRu("Туманность Пульсарного Ветра (M1 Crab PWN):", "Pulsar Wind Nebula (M1 Crab PWN):"));
+    float pwnMode = m_sceneManager->getCrabPwnMode();
+    const char* pwnDesc = "Hubble Thermal Filaments (Ha+[O III])";
+    if (pwnMode >= 0.70f) pwnDesc = "Chandra X-Ray / Synchrotron Core";
+    else if (pwnMode >= 0.30f) pwnDesc = "Multi-wavelength Composite (X-Ray + Optical)";
+    ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "%s: %s",
+                       uiRu("Режим PWN", "PWN View"), pwnDesc);
+    if (ImGui::SliderFloat("PWN Mode##m1", &pwnMode, 0.0f, 1.0f, "%.2f (Optical <-> X-Ray)")) {
+      m_sceneManager->setCrabPwnMode(pwnMode);
+    }
+    float rShock = m_sceneManager->getCrabTerminationShock();
+    if (ImGui::SliderFloat(uiRu("Радиус удара торможения##m1", "Termination Shock R_ts##m1"), &rShock, 0.05f, 0.25f, "%.3f (~0.1 pc)")) {
+      m_sceneManager->setCrabTerminationShock(rShock);
+    }
+    ImGui::BulletText("%s: PSR B0531+21 (33.085 ms rotator)", uiRu("Пульсар", "Central Engine"));
+    ImGui::BulletText("%s: E_dot ~ 4.5e38 erg/s", uiRu("Потери вращения", "Spin-down Power"));
+    ImGui::BulletText("%s: R_ts ~ 0.1 pc (10 arcsec, shocked e- e+)", uiRu("Ударная волна", "Shock Radius"));
+    ImGui::BulletText("%s: Equatorial Torus (v_wisps ~ 0.5c)", uiRu("Релятивистские виспы", "Dynamic Wisps"));
+    ImGui::BulletText("%s: Rayleigh-Taylor Filamentary Cage", uiRu("Внешняя оболочка", "Filamentary Shell"));
+  }
+
   if (sliderChanged) {
     m_userOverrodePreset = true;
     m_benchmarking = false;

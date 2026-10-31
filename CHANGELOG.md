@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 4.2.0 - Unreleased
+
+## What's new / Что нового
+- EN: Stage 3 Pass 4 - Pillars of Creation (M16 / Eagle Nebula): Towering molecular gas and dust elephant trunks sculpted by UV photoevaporation from massive young O/B stars in open cluster NGC 6611. Procedural Linear HDR shader (`shaders/pillars.frag`) featuring Evaporating Gaseous Globules (EGGs), active embedded protostellar Young Stellar Objects (YSOs) with diffraction spikes, photoevaporative gas streamers, and a continuous multi-spectral blend slider from Hubble Optical (`[S II]`, H-alpha, `[O III]`) to penetrating JWST Infrared (NIRCam/MIRI).
+- RU: Stage 3 Pass 4 - Столпы Творения (M16 / Туманность Орёл): Величественные башни из холодного молекулярного водорода и космической пыли, сформированные ультрафиолетовым фотоиспарением от массивных молодых звёзд скопления NGC 6611. Процедурный HDR-шейдер (`shaders/pillars.frag`), испаряющиеся глобулы (EGGs), протозвёзды (YSOs) с дифракционными лучами, газовые стримеры и плавный скруббер от оптической палитры Hubble (`[S II]`, H-alpha, `[O III]`) к проникающему инфракрасному виду JWST (NIRCam/MIRI).
+- EN: Stage 3 Pass 4 - Crab Nebula (M1) Pulsar Wind Nebula (PWN) upgrade: Upgraded M1 shader (`shaders/nebula.frag`) to full relativistic PWN physics powered by the 33 ms Crab Pulsar (PSR B0531+21). Features a relativistic termination shock ring ($R_{\text{ts}} \approx 0.1\text{ pc}$), tilted equatorial synchrotron torus with Doppler-boosted expanding wisps ($v \sim 0.5c$), magnetically collimated polar relativistic jets, thermal Rayleigh-Taylor filamentary cage, and multi-wavelength blend slider (Optical Filaments <-> Chandra X-Ray Synchrotron).
+- RU: Stage 3 Pass 4 - Апгрейд Крабовидной туманности (M1) до Pulsar Wind Nebula (PWN): Обновление шейдера M1 (`shaders/nebula.frag`) с физической моделью туманности пульсарного ветра от 33-мс пульсара PSR B0531+21. Включает кольцо релятивистского удара торможения ($R_{\text{ts}} \approx 0.1\text{ пк}$), наклонённый экваториальный синхротронный тор с доплеровскими релятивистскими виспами ($v \sim 0.5c$), полярные релятивистские джеты, филаментную оболочку Рэлея-Тейлора и скруббер оптического/рентгеновского диапазонов.
+- EN: StoryJournal 18th chapter - "Pillars of Creation" (M16): Narrative entry exploring starbirth in the cold molecular dust towers, the cosmic cycle of supernova ash forming new suns, and Mia & Egorka reflecting on the foundation of their New Home.
+- RU: 18-я глава судового журнала - «Столпы Творения» (M16): Сюжетная запись о рождении звёзд в холодной пыли, замыкании космического круга (пепел сверхновых образует новые солнца) и размышлениях Мии и Егорки о будущем Новом Доме.
+
 ## 4.1.0 - 2026-10-30
 
 ## What's new / Что нового

@@ -24,7 +24,7 @@ const std::vector<Station>& builtinCatalog() {
       {"m104", StationType::Galaxy, "Sombrero (M104)",
        "Sombrero: bright bulge, dark dust lane.", 85.0, {}, 0.0, 0.0, 29.3e6},
       {"m1", StationType::Nebula, "Crab Nebula (M1)",
-       "Supernova remnant impostor sprite.", 60.0, {}, 0.0, 0.0, 6500.0},
+       "Pulsar Wind Nebula (PWN) supernova remnant: relativistic termination shock, equatorial synchrotron torus, dynamic wisps, and filamentary cage.", 60.0, {}, 0.0, 0.0, 6500.0},
       {"sol", StationType::SolarSystem, "Solar System",
        "Sun + 8 planets + Moon, rings, belt.", 70.0, {}, 0.0, 0.0, 0.0},
       {"m87", StationType::BlackHole, "M87*",
@@ -68,6 +68,9 @@ const std::vector<Station>& builtinCatalog() {
       {"at2019qiz", StationType::TidalDisruption, "TDE AT2019qiz",
        "Tidal disruption event: a solar-mass star shredded by a 10^6 M☉ black hole, relativistic spaghettification stream, super-Eddington accretion flare, and t^-5/3 fallback cooling.",
        28.0, {}, 2.0, 1.0e6, 215.0e6},
+      {"m16", StationType::Nebula, "Eagle Nebula (M16)",
+       "Pillars of Creation: star-forming elephant trunks of cold interstellar gas and dust sculpted by UV photoevaporation from young massive stars in NGC 6611.",
+       35.0, {}, 0.0, 0.0, 7000.0},
   };
   return kStations;
 }
