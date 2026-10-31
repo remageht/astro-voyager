@@ -151,6 +151,83 @@ std::vector<StoryEntry> storyCatalog() {
       "Reference coordinates of the Fifth Universe are locked. Distance has yielded to stubbornness once more.";
   c.push_back(e);
 
+  e.id = "sn1987a";
+  e.titleRu = "Нить жемчуга";
+  e.titleEn = "String of Pearls";
+  e.textRu =
+      "Мия считает тридцать две вспышки на кольце SN 1987A. Егорка смотрит не на кольцо, "
+      "а на отражение в её визоре. «Помнишь гирлянды на мосту Александра III под дождём? "
+      "Ты сказала, что они светят слишком ярко». Мия не отводит глаз от датчиков: "
+      "«Тогда вокруг не было вакуума, Егорка. И мы не летели сквозь пепел сверхновой. Но... да. Я помню».";
+  e.textEn =
+      "Mia counts thirty-two bright knots on the ring of SN 1987A. Yegorka looks not at the ring, "
+      "but at the reflection in her visor. \"Remember the streetlights on Pont Alexandre III in the rain? "
+      "You said they were far too bright.\" Mia keeps her eyes fixed on telemetry: "
+      "\"There was no vacuum around us back then, Yegorka. Nor were we flying through supernova ashes. But... yes. I remember.\"";
+  c.push_back(e);
+
+  e.id = "gw170817";
+  e.titleRu = "Золото для Мии";
+  e.titleEn = "Gold for Mia";
+  e.textRu =
+      "Килоновая GW170817: при столкновении нейтронных звёзд родились горы золота и платины. "
+      "Егорка вертит в пальцах звёздный кулон: «Миллиарды людей на Земле воевали за обручальные "
+      "кольца, не зная, что это просто осколки космических аварий. А я стою здесь и понимаю: "
+      "всё золото Вселенной не стоит того, чтобы вернуться на мостик одному». "
+      "Мия тихо сжимает его ладонь: «Мы не вернёмся одни, Егорка».";
+  e.textEn =
+      "Kilonova GW170817: the merger of two neutron stars forged oceans of gold and platinum. "
+      "Yegorka turns the star pendant between his fingers: \"Billions back on Earth fought wars over "
+      "wedding rings, never realizing they were merely wearing debris from cosmic collisions. "
+      "And standing here, I realize: all the gold in the Universe isn't worth returning to this bridge alone.\" "
+      "Mia quietly squeezes his hand: \"We won't return alone, Yegorka.\"";
+  c.push_back(e);
+
+  e.id = "m31";
+  e.titleRu = "Танец двух миров";
+  e.titleEn = "Dance of Two Worlds";
+  e.textRu =
+      "Андромеда несётся навстречу Млечному Пути. Четыре миллиарда лет до слияния. "
+      "Звёзды пройдут сквозь звёзды, ни одна не разобьётся — они просто сплетутся в общий танец. "
+      "«Мы как эти две галактики, Мия. Разные орбиты, но гравитация всё равно свела нас вместе». "
+      "Мия улыбается: «Твоя тройка по физике не мешает тебе быть поэтом, Егорка. Держи курс на ядро».";
+  e.textEn =
+      "Andromeda hurtles toward the Milky Way. Four billion years until the collision. "
+      "Stars will drift right past stars without crashing — they will merely intertwine in a mutual dance. "
+      "\"We're just like those two galaxies, Mia. Different orbits, yet gravity pulled us together anyway.\" "
+      "Mia smiles: \"Your C-grade in physics doesn't stop you from being a poet, Yegorka. Steady course to the core.\"";
+  c.push_back(e);
+
+  e.id = "crab-pulse";
+  e.titleRu = "Сердцебиение";
+  e.titleEn = "Heartbeat of the Void";
+  e.textRu =
+      "Пульсар отсчитывает импульсы с точностью атомных часов. Ритмичный стук сквозь радиоэфир корабля. "
+      "«Тридцать ударов в секунду, — замечает Егорка. — Моё бьётся втрое чаще, каждый раз когда ты глушишь "
+      "маршевые и бросаешь нас в свободный дрейф». Мия не спорит: «Потому что я знаю, что ты поймаешь наш "
+      "варп-пузырь, когда я скажу пора».";
+  e.textEn =
+      "The pulsar clicks with the precision of an atomic clock. A rhythmic pulse echoing through the ship's comms. "
+      "\"Thirty beats per second,\" Yegorka murmurs. \"Mine beats thrice as fast whenever you cut the "
+      "thrusters and throw us into free drift.\" Mia doesn't dispute it: \"Because I trust you to catch our "
+      "warp bubble the moment I say 'now'.\"";
+  c.push_back(e);
+
+  e.id = "letter-to-earth";
+  e.titleRu = "Письмо на остывающую Землю";
+  e.titleEn = "Letter to a Cooling Earth";
+  e.textRu =
+      "Пакетный квантовый сигнал направлен к Солнечной системе. Дойдёт нескоро. "
+      "«Земля, это мостик Astro-Voyager. Здесь, на краю изгиба пространства, очень темно и холодно. "
+      "Но если вы слышите нас сквозь годы — знайте: мы нашли не просто координаты нового дома. "
+      "Мы нашли то, ради чего стоит пережить любую зиму». Подпись в конце: Мия и Егорка.";
+  e.textEn =
+      "A quantum packet signal directed toward the Solar System. It won't arrive soon. "
+      "\"Earth, this is the bridge of Astro-Voyager. Out here, on the edge of warped space, it is terribly dark and cold. "
+      "But if you hear us across the years — know this: we found more than coordinates for a new home. "
+      "We found what makes any winter worth surviving.\" Signed at the bottom: Mia & Yegorka.";
+  c.push_back(e);
+
   return c;
 }
 
@@ -185,6 +262,18 @@ void StoryJournal::refresh(const Progress& progress) {
       unlocked = nVisited >= 8;
     } else if (e.id == "constellation-sync") {
       unlocked = progress.constellationAligned;
+    } else if (e.id == "sn1987a") {
+      unlocked = storyEntryHasVisited(progress.visited, "sn1987a");
+    } else if (e.id == "gw170817") {
+      unlocked = storyEntryHasVisited(progress.visited, "gw170817");
+    } else if (e.id == "m31") {
+      unlocked = storyEntryHasVisited(progress.visited, "m31");
+    } else if (e.id == "crab-pulse") {
+      unlocked = storyEntryHasVisited(progress.visited, "m1") ||
+                 storyEntryHasVisited(progress.visited, "psr-crab") ||
+                 storyEntryHasVisited(progress.visited, "psr-vela");
+    } else if (e.id == "letter-to-earth") {
+      unlocked = (nVisited >= 5) && (progress.minBhDistance < 10.0 || progress.capturedHorizon);
     }
     e.unlocked = unlocked;
   }

@@ -102,18 +102,18 @@ int main() {
     }
   }
 
-  // Test 6: grand-tour unlocks at 8 visited stations.
+  // Test 6: grand-tour unlocks at 8 visited stations (plus m31).
   {
     StoryJournal j;
     StoryJournal::Progress p;
     p.visited = {"sgra", "m87", "qso-3c273", "m13", "m31", "m51", "m104", "ori"};
     j.refresh(p);
-    int expect = 0;  // departure, first-steps, sgra, m87, qso, m13, grand-tour
+    int expect = 0;  // departure, first-steps, sgra, m87, qso, m13, grand-tour, m31
     for (const auto& e : j.entries()) {
       if (e.unlocked) ++expect;
     }
-    if (expect != 7) {
-      std::cerr << "Test 6 failed: grand tour should give 7 unlocked, got "
+    if (expect != 8) {
+      std::cerr << "Test 6 failed: grand tour should give 8 unlocked, got "
                 << expect << '\n';
       return 1;
     }
@@ -139,6 +139,71 @@ int main() {
     j.refresh(p);
     if (j.unlockedCount() != 2) {
       std::cerr << "Test 7b failed: constellationAligned should unlock constellation-sync\n";
+      return 1;
+    }
+  }
+
+  // Test 7c: supernova sn1987a visit unlocks sn1987a entry (String of Pearls).
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"sn1987a"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "sn1987a") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7c failed: sn1987a visit should unlock sn1987a\n";
+      return 1;
+    }
+  }
+
+  // Test 7d: kilonova gw170817 visit unlocks gw170817 entry (Gold for Mia).
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"gw170817"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "gw170817") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7d failed: gw170817 visit should unlock gw170817\n";
+      return 1;
+    }
+  }
+
+  // Test 7e: pulsar/nebula visit unlocks crab-pulse entry (Heartbeat of the Void).
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"psr-crab"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "crab-pulse") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7e failed: psr-crab visit should unlock crab-pulse\n";
+      return 1;
+    }
+  }
+
+  // Test 7f: 5 visited stations + close BH proximity unlocks letter-to-earth.
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"sol", "ori", "uma", "m13", "sgra"};
+    p.minBhDistance = 8.5;
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "letter-to-earth") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7f failed: 5 visits + BH proximity should unlock letter-to-earth\n";
       return 1;
     }
   }
@@ -181,7 +246,7 @@ int main() {
       std::cerr << "Test 9 failed: repeated refresh changed unlock state\n";
       return 1;
     }
-    if (j.entries().size() != 11) {
+    if (j.entries().size() != 16) {
       std::cerr << "Test 9 failed: catalog size drifted ("
                 << j.entries().size() << ")\n";
       return 1;

@@ -1687,6 +1687,21 @@ void AppGL::drawStoryPanel() {
         } else if (e.id == "constellation-sync") {
           hintRu = "Требуется: калибровка созвездия сингулярным кулоном";
           hintEn = "Requirement: calibrate constellation with singularity pendant";
+        } else if (e.id == "sn1987a") {
+          hintRu = "Требуется: исследовать тройные кольца сверхновой SN 1987A";
+          hintEn = "Requirement: investigate the triple rings of supernova SN 1987A";
+        } else if (e.id == "gw170817") {
+          hintRu = "Требуется: зафиксировать гравитационные волны килоновой GW170817";
+          hintEn = "Requirement: detect gravitational waves of kilonova GW170817";
+        } else if (e.id == "m31") {
+          hintRu = "Требуется: прибыть к галактике Андромеда (M31)";
+          hintEn = "Requirement: reach Andromeda Galaxy (M31)";
+        } else if (e.id == "crab-pulse") {
+          hintRu = "Требуется: поймать радиопульс Крабовидной туманности или пульсара";
+          hintEn = "Requirement: capture the radio pulse of Crab Nebula or a pulsar";
+        } else if (e.id == "letter-to-earth") {
+          hintRu = "Требуется: отправить квантовый пакет данных с дальнего рубежа (5+ систем)";
+          hintEn = "Requirement: transmit quantum data packet from deep space (5+ systems)";
         } else {
           hintRu = "Требуется: дальнейшие исследования глубин космоса";
           hintEn = "Requirement: further deep space exploration";
