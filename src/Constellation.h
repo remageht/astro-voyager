@@ -25,6 +25,14 @@ struct ConstellationInfo {
   float centerDec = 0.0f;
   std::vector<StarInfo> stars;
   std::vector<std::pair<unsigned int, unsigned int>> segments;
+  // v4.2: Научные открытия Пятой Вселенной (Discovery & Lore)
+  std::string techTitleRu;
+  std::string techTitleEn;
+  std::string equation;
+  std::string egorkaNoteRu;
+  std::string egorkaNoteEn;
+  std::string effectRu;
+  std::string effectEn;
 };
 
 // Returns built-in constellation data (mirrors res/constellations.json)

@@ -72,6 +72,8 @@ struct SaveProgress {
   bool capturedHorizon = false;
   // v3.7.0: успешные уклонения от обломков (жизненная статистика)
   int asteroidDodges = 0;
+  // v4.2: созвездия и научные открытия Пятой Вселенной
+  std::vector<std::string> discoveries;
 };
 
 struct SaveSession {
