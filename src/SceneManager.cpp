@@ -179,6 +179,7 @@ SceneManager::SceneManager() {
   }
 
   m_sphere.setSphere(48, 96);
+  m_sphereHiRes.setSphere(128, 256);
   m_saturnRing.setRing(1.7f, 2.7f, 128);
   // v3.2.0: denser, dimmer belt reads as a dust band instead of speckles.
   m_belt.setBelt(5200, 19.5f, 22.5f);
@@ -1433,6 +1434,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_planetShader->setUniform1f("u_Exposure", m_exposure);
     m_planetShader->setUniform3f("u_CamPos", static_cast<float>(cp.x),
                                  static_cast<float>(cp.y), static_cast<float>(cp.z));
+    m_planetShader->setUniform1i("u_PlanetRelief", m_settings.planetRelief ? 1 : 0);
+    m_planetShader->setUniform1i("u_PlanetAtmosphere", m_settings.planetAtmosphere ? 1 : 0);
     for (const auto& body : m_lastBodies) {
       const PlanetDef* def = body.def;
       if (!def) continue;
@@ -1477,7 +1480,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         ++occN;
       }
       m_planetShader->setUniform1i("u_MoonOccN", occN);
-      m_sphere.draw();
+      if (m_settings.planetHiResMesh && m_sphereHiRes.ready() && def->type != 0) {
+        m_sphereHiRes.draw();
+      } else {
+        m_sphere.draw();
+      }
       if (def->hasRing) {
         m_ringShader->bind();
         m_ringShader->setUniformMat4f("u_MVP", mvp);
@@ -1545,7 +1552,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_planetShader->setUniform1f("u_RingOuter", custom.ringOuter);
         m_planetShader->setUniform1f("u_RingTilt", 0.45f);
       }
-      m_sphere.draw();
+      if (m_settings.planetHiResMesh && m_sphereHiRes.ready() && custom.type != 0) {
+        m_sphereHiRes.draw();
+      } else {
+        m_sphere.draw();
+      }
       if (customRing) {
         m_ringShader->bind();
         m_ringShader->setUniformMat4f("u_MVP", mvp);
@@ -2478,14 +2489,15 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               // SpaceDrive Warp Tunnel (tamminen, CC BY 4.0): live differential 3D rotations
               const glm::mat4 dockBase = glm::translate(glm::mat4(1.0f), stPos) *
                                         glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 1.0f, 0.0f));
+              const glm::mat4 alignToZ = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
               if (s_warpTunnelTubeModel.ready() && s_shipShader) {
-                const glm::mat4 mTube = dockBase *
-                                        glm::rotate(glm::mat4(1.0f), 0.30f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                const glm::mat4 mTube = dockBase * alignToZ *
+                                        glm::rotate(glm::mat4(1.0f), 0.30f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
                                         glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
                 drawStationObjModel(&s_warpTunnelTubeModel, mTube, 0.80f, 0.35f, glm::vec3(0.1f, 0.5f, 1.0f));
                 if (s_warpTunnelScrapModel.ready()) {
-                  const glm::mat4 mScrap = dockBase *
-                                          glm::rotate(glm::mat4(1.0f), -0.60f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                  const glm::mat4 mScrap = dockBase * alignToZ *
+                                          glm::rotate(glm::mat4(1.0f), -0.60f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
                                           glm::scale(glm::mat4(1.0f), glm::vec3(stScale * 0.96f));
                   drawStationObjModel(&s_warpTunnelScrapModel, mScrap, 0.90f, 0.60f, glm::vec3(0.8f, 0.4f, 0.1f));
                 }
@@ -2493,8 +2505,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                   glEnable(GL_BLEND);
                   glBlendFunc(GL_SRC_ALPHA, GL_ONE);
                   glDepthMask(GL_FALSE);
-                  const glm::mat4 mCloud = dockBase *
-                                          glm::rotate(glm::mat4(1.0f), 1.20f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                  const glm::mat4 mCloud = dockBase * alignToZ *
+                                          glm::rotate(glm::mat4(1.0f), 1.20f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
                                           glm::scale(glm::mat4(1.0f), glm::vec3(stScale * 0.92f));
                   drawStationObjModel(&s_warpTunnelCloudModel, mCloud, 0.10f, 0.10f, glm::vec3(0.2f, 0.7f, 1.0f));
                   glDisable(GL_BLEND);
@@ -2838,10 +2850,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         if (warpActive && s_warpTunnelTubeModel.ready() && s_shipShader) {
           const float tAlpha = glm::clamp(warpTunnelK * 2.0f, 0.0f, 1.0f);
           if (tAlpha > 0.01f) {
-            const float tunnelScale = 4.2f;
-            const float segLen = 16.0f * (tunnelScale / 4.0f);
-            const float streamSpeed = 52.0f * (0.5f + 0.5f * warpTunnelK);
-            const float zStream = std::fmod(time * streamSpeed, segLen) - segLen;
+            const float tunnelScaleR = 8.5f;
+            const float segLen = 10.0f;
+            const float tunnelScaleL = segLen / 0.84f;  // seamless ring tiling
+            const float streamSpeed = 48.0f * (0.6f + 0.4f * warpTunnelK);
+            const float zStream = std::fmod(time * streamSpeed, segLen);
 
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_TRUE);
@@ -2851,21 +2864,24 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 glm::translate(glm::mat4(1.0f), shipPos) *
                 glm::rotate(glm::mat4(1.0f), warpdrive::shipYaw(), glm::vec3(0.0f, 1.0f, 0.0f));
 
-            for (int seg = -1; seg <= 1; ++seg) {
+            const glm::mat4 alignToZ =
+                glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+            for (int seg = -6; seg <= 2; ++seg) {
               const float zPos = zStream + static_cast<float>(seg) * segLen;
               const glm::mat4 segBase = tunnelOrient * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, zPos));
 
-              // Layer 1: Outer cylindrical tunnel wall (omega = +0.30 rad/s)
-              const glm::mat4 mTube = segBase *
-                                      glm::rotate(glm::mat4(1.0f), time * 0.30f, glm::vec3(0.0f, 0.0f, 1.0f)) *
-                                      glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScale));
+              // Layer 1: Outer cylindrical tunnel wall (omega = +0.30 rad/s around Y in model space)
+              const glm::mat4 mTube = segBase * alignToZ *
+                                      glm::rotate(glm::mat4(1.0f), time * 0.30f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScaleR, tunnelScaleL, tunnelScaleR));
               drawStationObjModel(&s_warpTunnelTubeModel, mTube, 0.82f, 0.32f, glm::vec3(0.20f, 0.70f, 1.30f) * tAlpha);
 
               // Layer 2: Inner structural scrap / debris rings (omega = -0.60 rad/s)
               if (s_warpTunnelScrapModel.ready()) {
-                const glm::mat4 mScrap = segBase *
-                                        glm::rotate(glm::mat4(1.0f), -time * 0.60f, glm::vec3(0.0f, 0.0f, 1.0f)) *
-                                        glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScale * 0.96f));
+                const glm::mat4 mScrap = segBase * alignToZ *
+                                        glm::rotate(glm::mat4(1.0f), -time * 0.60f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                                        glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScaleR * 0.96f, tunnelScaleL, tunnelScaleR * 0.96f));
                 drawStationObjModel(&s_warpTunnelScrapModel, mScrap, 0.88f, 0.55f, glm::vec3(0.95f, 0.50f, 0.18f) * tAlpha);
               }
 
@@ -2874,9 +2890,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE);
                 glDepthMask(GL_FALSE);
-                const glm::mat4 mCloud = segBase *
-                                        glm::rotate(glm::mat4(1.0f), time * 1.20f, glm::vec3(0.0f, 0.0f, 1.0f)) *
-                                        glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScale * 0.92f));
+                const glm::mat4 mCloud = segBase * alignToZ *
+                                        glm::rotate(glm::mat4(1.0f), time * 1.20f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                                        glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScaleR * 0.92f, tunnelScaleL, tunnelScaleR * 0.92f));
                 drawStationObjModel(&s_warpTunnelCloudModel, mCloud, 0.10f, 0.10f, glm::vec3(0.35f, 0.85f, 1.60f) * tAlpha);
                 glDisable(GL_BLEND);
                 glDepthMask(GL_TRUE);

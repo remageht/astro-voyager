@@ -72,6 +72,8 @@ class SphereMesh {
 
   void setSphere(int rings = 48, int sectors = 96);
   void draw() const;
+  unsigned int indexCount() const { return m_indexCount; }
+  bool ready() const { return m_vao != 0; }
 
  private:
   unsigned int m_vao = 0;

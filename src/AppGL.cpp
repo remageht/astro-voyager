@@ -4715,9 +4715,9 @@ void AppGL::drawShipHud() {
                          m_colonyHint.c_str());
     }
 
-    // v4.2.0: Build watermark & stage indicator
+    // v4.3.0: Build watermark & stage indicator
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.40f, 0.60f, 0.80f, 0.70f), "AV-%s-ALPHA", kVersion);
+    ImGui::TextColored(ImVec4(0.40f, 0.60f, 0.80f, 0.70f), "AV-%s-BETA", kVersion);
   }
   ImGui::End();
 }
@@ -5298,20 +5298,20 @@ void AppGL::drawMenu() {
                               "A JOURNEY THROUGH CURVED SPACETIME"));
       ImGui::Spacing();
 
-      // v4.2.0: Заметный бейдж релиза и стадии проекта
+      // v4.3.0: Заметный бейдж релиза и стадии проекта
       {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.22f, 0.35f, 0.75f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.14f, 0.34f, 0.52f, 0.90f));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.88f, 1.00f, 1.0f));
-        if (ImGui::Button(uiRu(" [ v4.2.0 • ALPHA STAGE ]  Что нового / Patch Notes ",
-                               " [ v4.2.0 • ALPHA STAGE ]  What's New / Patch Notes "),
+        if (ImGui::Button(uiRu(" [ v4.3.0 • BETA STAGE ]  Что нового / Patch Notes ",
+                               " [ v4.3.0 • BETA STAGE ]  What's New / Patch Notes "),
                           ImVec2(-1.0f, 26.0f))) {
           m_showPatchNotesModal = true;
         }
         ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("%s", uiRu("Открыть примечания к выпуску v4.2.0 [Alpha Stage]",
-                                       "Open v4.2.0 [Alpha Stage] Patch Notes"));
+          ImGui::SetTooltip("%s", uiRu("Открыть примечания к выпуску v4.3.0 [Beta Stage]",
+                                       "Open v4.3.0 [Beta Stage] Patch Notes"));
         }
         ImGui::Spacing();
       }
@@ -5490,7 +5490,7 @@ void AppGL::drawMenu() {
     ImGui::SetWindowFontScale(0.85f);
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "WASD fly | drag look | / search | dbl-click go");
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "P time | F1 help | H hide UI | ESC menu");
-    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "Version %s [ALPHA STAGE] • Build 2026.10", kVersion);
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "Version %s [BETA STAGE] • Build 2026.10", kVersion);
     ImGui::SetWindowFontScale(1.0f);
   } else if (m_menuPage == 1) {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "%s",
@@ -5506,6 +5506,55 @@ void AppGL::drawMenu() {
 
     if (ImGui::BeginTabBar("##SettingsTabs", ImGuiTabBarFlags_None)) {
       if (ImGui::BeginTabItem(uiRu("Графика и ОТО", "Graphics & GR"))) {
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Быстрые пресеты графики (v4.3.0)", "Aero Graphics Presets (v4.3.0)"));
+        float qBtnW = (ImGui::GetContentRegionAvail().x - 3.0f * ImGui::GetStyle().ItemSpacing.x) / 4.0f;
+        if (ImGui::Button("Ultra", ImVec2(qBtnW, 0.0f))) {
+          m_sceneManager->applyPreset(PerfPreset::Ultra);
+          menuSettings.planetRelief = true;
+          menuSettings.planetAtmosphere = true;
+          menuSettings.planetHiResMesh = true;
+          m_sceneManager->setFxaa(true);
+          m_aaMode = 1;
+          menuChanged = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("High", ImVec2(qBtnW, 0.0f))) {
+          m_sceneManager->applyPreset(PerfPreset::Med);
+          menuSettings.planetRelief = true;
+          menuSettings.planetAtmosphere = true;
+          menuSettings.planetHiResMesh = true;
+          m_sceneManager->setFxaa(true);
+          m_aaMode = 1;
+          menuChanged = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Balanced", ImVec2(qBtnW, 0.0f))) {
+          m_sceneManager->applyPreset(PerfPreset::Med);
+          menuSettings.planetRelief = true;
+          menuSettings.planetAtmosphere = true;
+          menuSettings.planetHiResMesh = true;
+          m_sceneManager->setFxaa(false);
+          m_aaMode = 0;
+          menuChanged = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Fast", ImVec2(qBtnW, 0.0f))) {
+          m_sceneManager->applyPreset(PerfPreset::Low);
+          menuSettings.planetRelief = false;
+          menuSettings.planetAtmosphere = false;
+          menuSettings.planetHiResMesh = false;
+          m_sceneManager->setFxaa(false);
+          m_aaMode = 0;
+          menuChanged = true;
+        }
+
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Поверхности планет и атмосфера (v4.3.0)", "Planetary Surfaces & Atmosphere (v4.3.0)"));
+        menuChanged |= ImGui::Checkbox(uiRu("LOD-сетка сферы (128x256 полигонов)", "Hi-Res Sphere LOD (128x256 mesh)"), &menuSettings.planetHiResMesh);
+        menuChanged |= ImGui::Checkbox(uiRu("Топографический рельеф (FBM Bump Map)", "Topographic Relief (FBM Bump Map)"), &menuSettings.planetRelief);
+        menuChanged |= ImGui::Checkbox(uiRu("Рэлеевская атмосфера (Rayleigh-Mie)", "Rayleigh-Mie Atmosphere Scattering"), &menuSettings.planetAtmosphere);
+
         ImGui::Spacing();
         ImGui::SeparatorText(uiRu("Трассировка лучей в ОТО (черные дыры)", "Ray tracing (black holes)"));
         const char* rayNames[] = {"Low", "Med", "Ultra", "Custom"};
@@ -5684,16 +5733,16 @@ void AppGL::drawPatchNotesModal() {
   ImGui::SetNextWindowSize(ImVec2(720.0f, 520.0f), ImGuiCond_Appearing);
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
                           ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-  if (ImGui::Begin(uiRu("Примечания к выпуску v4.2.0 [Alpha Stage]###PatchNotes",
-                        "Release Notes v4.2.0 [Alpha Stage]###PatchNotes"),
+  if (ImGui::Begin(uiRu("Примечания к выпуску v4.3.0 [Beta Stage]###PatchNotes",
+                        "Release Notes v4.3.0 [Beta Stage]###PatchNotes"),
                    &m_showPatchNotesModal,
                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f),
-                       "%s", uiRu("ASTRO-VOYAGER — ВЕРСИЯ 4.2.0 [ALPHA STAGE]",
-                                  "ASTRO-VOYAGER — VERSION 4.2.0 [ALPHA STAGE]"));
+                       "%s", uiRu("ASTRO-VOYAGER — ВЕРСИЯ 4.3.0 [BETA STAGE]",
+                                  "ASTRO-VOYAGER — VERSION 4.3.0 [BETA STAGE]"));
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
-                       "%s", uiRu("Этап Alpha: кокпит, коллиматорный HUD, SpaceDrive варп-туннель и авионика",
-                                  "Alpha Stage: Cockpit, Collimated HUD, SpaceDrive Warp Tunnel & Avionics"));
+                       "%s", uiRu("Этап Beta: топографический рельеф планет, рэлеевская атмосфера, сфера 128x256 LOD и 3D-аудио",
+                                  "Beta Stage: Topographic Planet Relief, Rayleigh-Mie Atmosphere, 128x256 LOD Sphere & 3D Audio"));
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -5701,32 +5750,44 @@ void AppGL::drawPatchNotesModal() {
       if (ImGui::BeginTabItem(uiRu("Что нового", "What's New"))) {
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("1. Диегетический 3D-кокпит и коллиматорный ИЛС (HUD)",
-                                      "1. Diegetic 3D Cockpit & Collimated Holographic HUD"));
-        ImGui::BulletText("%s", uiRu("Вид от 1-го лица с процедурным фонарём, лонжеронами, МФД и светодиодами статуса.",
-                                     "1st-person view with procedural canopy frame, struts, MFDs and status LEDs."));
-        ImGui::BulletText("%s", uiRu("Инерция головы пилота (spring-damper) под перегрузками, крен при виражах, тряска фонаря.",
-                                     "Pilot head spring-damper inertia under G-forces, banking head tilt, canopy rumble."));
-        ImGui::BulletText("%s", uiRu("Коллиматорный авиационный прицел на бесконечности: шкала тангажа, авиагоризонт, ленты скорости.",
-                                     "Infinity-collimated HUD: boresight reticle, pitch ladder, roll arc, velocity tapes."));
-        ImGui::BulletText("%s", uiRu("Фотохромный автотинт фонаря кабины против яркого звёздного излучения.",
-                                     "Photochromic canopy auto-tint reacting to extreme stellar and accretion radiation."));
+                           "%s", uiRu("1. Топографический рельеф планет и нормал-бамп маппинг",
+                                      "1. Topographic Planetary Relief & Normal Bump Mapping"));
+        ImGui::BulletText("%s", uiRu("Процедурная карта высот FBM для Земли, Марса, Луны и Меркурия: кратеры, каньоны и горы.",
+                                     "Procedural FBM heightmap for Earth, Mars, Moon and Mercury: craters, canyons and mountains."));
+        ImGui::BulletText("%s", uiRu("Конечно-разностное возмущение нормали в реальном времени с контрастными тенями рельефа.",
+                                     "Real-time finite-difference normal perturbation producing directional terrain shadows."));
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("2. Анимированный 3D варп-туннель SpaceDrive (tamminen, CC BY 4.0)",
-                                      "2. Animated 3D SpaceDrive Warp Tunnel (tamminen, CC BY 4.0)"));
-        ImGui::BulletText("%s", uiRu("Восстановлена трёхслойная кинематика из Sketchfab: дифференциальное вращение слоёв.",
-                                     "Restored 3-layer kinematics from Sketchfab: differential rotation of outer & inner layers."));
-        ImGui::BulletText("%s", uiRu("Бесшовный пролёт сквозь гиперпространственный туннель в видах от 1-го и 3-го лица.",
-                                     "Seamless continuous streaming through hyperspace wormhole in 1st & 3rd person views."));
+                           "%s", uiRu("2. Физическое рассеяние света в атмосфере (Rayleigh-Mie)",
+                                      "2. Physical Rayleigh-Mie Atmospheric Scattering"));
+        ImGui::BulletText("%s", uiRu("Спектральное рассеяние: лазурное небо и золотисто-янтарный закатный терминатор Земли.",
+                                     "Wavelength-dependent scattering: azure skies and golden-amber sunset terminator on Earth."));
+        ImGui::BulletText("%s", uiRu("Индивидуальные атмосферные профили: синие закаты Марса и опаловая дымка Венеры.",
+                                     "Custom atmospheric profiles: Martian butterscotch sunsets and dense Venusian opalescent haze."));
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("3. Модернизация настроек (Авионика и графика)",
-                                      "3. Modernized Avionics & Graphics Settings"));
-        ImGui::BulletText("%s", uiRu("Инженерные вкладки: [ Графика и ОТО ], [ Корабль и Кокпит ], [ Полет и Физика ], [ Управление ].",
-                                     "Engineering TabBar: [ Graphics & GR ], [ Ship & Cockpit ], [ Flight & Physics ], [ Controls ]."));
+                           "%s", uiRu("3. Высокополигональная LOD-сетка сферы (128x256)",
+                                      "3. High-Detail Sphere LOD Mesh (128x256)"));
+        ImGui::BulletText("%s", uiRu("33 153 вершины и 65 536 полигонов полностью устраняют гранёность силуэта планет.",
+                                     "33,153 vertices and 65,536 triangles completely eliminating planet silhouette faceting."));
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
+                           "%s", uiRu("4. Пространственный 3D-звук и релятивистский эффект Доплера",
+                                      "4. 3D Spatial Audio & Relativistic Doppler Shift"));
+        ImGui::BulletText("%s", uiRu("Стереопанорама радиоимпульсов пульсаров по азимуту визира корабля [-1.0 .. +1.0].",
+                                     "Stereo azimuth panning of pulsar radio pulses [-1.0 .. +1.0] relative to ship heading."));
+        ImGui::BulletText("%s", uiRu("Сдвиг частоты гула маршевых двигателей Доплера и тревожный суб-гул у горизонта ЧД.",
+                                     "Doppler frequency shift on main engine hum and tension drone near black hole horizons."));
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
+                           "%s", uiRu("5. Тактический сенсорный компас на коллиматорном ИЛС",
+                                      "5. Tactical Sensor Compass on Collimated HUD"));
+        ImGui::BulletText("%s", uiRu("Азимутальная лента курса с динамическими делениями по углам рыскания (Yaw).",
+                                     "Azimuth compass heading tape with dynamic sliding ticks driven by yaw angle."));
         ImGui::EndTabItem();
       }
 
@@ -8449,8 +8510,29 @@ void AppGL::audioUpdate(float deltaTime) {
 
   // Варп-хук polling-ом (без правок WarpDrive): уровень + дакинг внутри.
   m_audio.setWarpLevel(m_warpK);
-  // Гул двигателя (v3.3.0): от скорости полёта; в меню всегда тихо.
+  // Гул двигателя (v3.3.0 / v4.3.0): от скорости полёта; релятивистский сдвиг Доплера.
   m_audio.setEngineLevel(m_inMenu ? 0.0f : m_speedK);
+  const float doppler = 1.0f + static_cast<float>(m_camSpeed / 100.0) * 0.25f;
+  m_audio.setDopplerShift(doppler);
+
+  // Напряжение / зловещий гул (v4.3.0) при сближении с черной дырой или пульсаром
+  float tensionLevel = 0.0f;
+  if (const Station* st = m_sceneManager->getCurrentStation()) {
+    const double d = std::sqrt(m_camera.position.x * m_camera.position.x +
+                               m_camera.position.y * m_camera.position.y +
+                               m_camera.position.z * m_camera.position.z);
+    if (st->type == StationType::BlackHole) {
+      const double rs = static_cast<double>(m_sceneManager->getSettings().rs);
+      if (rs > 0.05 && d < rs * 4.0) {
+        tensionLevel = static_cast<float>(std::clamp((rs * 4.0 - d) / (rs * 3.0), 0.0, 1.0));
+      }
+    } else if (st->type == StationType::Pulsar) {
+      if (d < 15.0) {
+        tensionLevel = static_cast<float>(std::clamp((15.0 - d) / 10.0, 0.0, 1.0));
+      }
+    }
+  }
+  m_audio.setTensionLevel(tensionLevel);
 
   // Телепорт-whoosh polling-ом: смена станции любым путём
   // (меню/поиск/варп-прыжок/тур) — без правок teleportToStation.
@@ -8545,7 +8627,17 @@ void AppGL::audioUpdate(float deltaTime) {
       m_audioTickAcc += deltaTime;
       while (m_audioTickAcc >= tickPeriod) {
         m_audioTickAcc -= tickPeriod;
-        m_audio.playTick();
+        // v4.3.0: 3D spatial panning [-1.0 .. +1.0] across camera azimuth
+        glm::dvec3 toPulsar = -glm::dvec3(m_camera.position.x, m_camera.position.y, m_camera.position.z);
+        float pan = 0.0f;
+        const double dist = glm::length(toPulsar);
+        if (dist > 1e-4) {
+          glm::dvec3 dir = toPulsar / dist;
+          const Vec3 rt = m_camera.right();
+          glm::dvec3 camRight(rt.x, rt.y, rt.z);
+          pan = static_cast<float>(glm::dot(dir, camRight));
+        }
+        m_audio.playTick(pan);
       }
     } else {
       m_audioTickAcc = 0.0;

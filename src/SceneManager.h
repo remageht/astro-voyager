@@ -31,6 +31,10 @@ struct RenderSettings {
   // Дефолт OFF — референсы байт-в-байт (RK4 + степенной закон шага).
   bool rkf45Adaptive = false;
   int enginePalette = 0;        // палитра выхлопа двигателя (0..3)
+  // v4.3.0: Рельеф и атмосфера планет (Beta Stage)
+  bool planetRelief = true;       // микрорельеф и нормальный бамп поверхности
+  bool planetAtmosphere = true;   // физическое рэлеевское рассеяние атмосферы
+  bool planetHiResMesh = true;    // 128x256 HiRes сфера для планет
 };
 
 // User-spawned object (flexible object editor, v3.2.0).
@@ -399,6 +403,7 @@ class SceneManager {
 
   SolarSystem m_sol;
   SphereMesh m_sphere;
+  SphereMesh m_sphereHiRes;  // v4.3.0: 128x256 HiRes планетарная сфера
   RingMesh m_saturnRing;
   BeltPoints m_belt;
   LineMesh m_orbits;
