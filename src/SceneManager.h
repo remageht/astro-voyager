@@ -196,6 +196,13 @@ class SceneManager {
   void setSupernovaAutoPlay(bool a) { m_supernovaAutoPlay = a; }
   void triggerSupernovaExplosion() { m_supernovaPhase = 0.0f; m_supernovaAutoPlay = true; }
 
+  // === Cosmic Events: Tidal Disruption Event (TDE AT2019qiz) ===
+  float getTdePhase() const { return m_tdePhase; }
+  void setTdePhase(float phase) { m_tdePhase = phase; }
+  bool isTdeAutoPlay() const { return m_tdeAutoPlay; }
+  void setTdeAutoPlay(bool a) { m_tdeAutoPlay = a; }
+  void triggerTdeExplosion() { m_tdePhase = 0.0f; m_tdeAutoPlay = true; }
+
   // Object editor (custom bodies, sol station only).
   void spawnRockAt(const Vec3& p, const Vec3& v);
   // v3.2.0 editor: spawn from a full template (id/name auto-numbered by
@@ -271,6 +278,10 @@ class SceneManager {
   float m_supernovaPhase = 0.65f;
   bool m_supernovaAutoPlay = true;
 
+  // Cosmic Event phase (TDE AT2019qiz)
+  float m_tdePhase = 0.55f;
+  bool m_tdeAutoPlay = true;
+
   // === Relativity === скорость наблюдателя (дельта позиции камеры за кадр,
   // сглаженная). Харнесс передаёт константный time => dt == 0 => beta == 0
   // => шейдерные ветки выключены, PNG байт-в-байт.
@@ -335,6 +346,7 @@ class SceneManager {
   std::unique_ptr<Shader> m_pulsarShader;
   std::unique_ptr<Shader> m_kilonovaShader;
   std::unique_ptr<Shader> m_supernovaShader;
+  std::unique_ptr<Shader> m_tdeShader;
   std::unique_ptr<Shader> m_planetShader;
   std::unique_ptr<Shader> m_ringShader;
   std::unique_ptr<Shader> m_cometShader;

@@ -4,7 +4,7 @@
 
 namespace astro {
 
-enum class StationType { BlackHole, Quasar, Constellation, Galaxy, Nebula, SolarSystem, Pulsar, StarCluster, Kilonova, Supernova };
+enum class StationType { BlackHole, Quasar, Constellation, Galaxy, Nebula, SolarSystem, Pulsar, StarCluster, Kilonova, Supernova, TidalDisruption };
 
 struct StationParams {
   double rs = 1.0;

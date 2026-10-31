@@ -228,6 +228,21 @@ std::vector<StoryEntry> storyCatalog() {
       "We found what makes any winter worth surviving.\" Signed at the bottom: Mia & Yegorka.";
   c.push_back(e);
 
+  e.id = "at2019qiz";
+  e.titleRu = "Приливное спагетти";
+  e.titleEn = "Spaghettification";
+  e.textRu =
+      "Сверхмассивная чёрная дыра разорвала приблизившуюся звезду на тончайшие светящиеся нити. "
+      "«Даже звёзды гибнут, когда подходят слишком близко, — шепчет Мия у визора. — Но посмотри, "
+      "какой свет она отдала напоследок. Он виден сквозь двести миллионов световых лет». "
+      "Егорка берёт её за руку: «Гравитация может согнуть луч света, Мия, но не то, что держит нас».";
+  e.textEn =
+      "A supermassive black hole shredded a nearby star into ultra-thin, incandescent filaments. "
+      "\"Even stars break apart when they drift too close,\" Mia whispers at the visor. \"Yet look at "
+      "the brilliant light she gave back in return. Visible across two hundred million light-years.\" "
+      "Yegorka gently takes her hand: \"Gravity can bend a ray of light, Mia, but never what binds us.\"";
+  c.push_back(e);
+
   return c;
 }
 
@@ -274,6 +289,8 @@ void StoryJournal::refresh(const Progress& progress) {
                  storyEntryHasVisited(progress.visited, "psr-vela");
     } else if (e.id == "letter-to-earth") {
       unlocked = (nVisited >= 5) && (progress.minBhDistance < 10.0 || progress.capturedHorizon);
+    } else if (e.id == "at2019qiz") {
+      unlocked = storyEntryHasVisited(progress.visited, "at2019qiz");
     }
     e.unlocked = unlocked;
   }

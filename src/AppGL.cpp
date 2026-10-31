@@ -1475,6 +1475,7 @@ const char* AppGL::stationTypeRuShort(StationType t) {
     case StationType::StarCluster: return "Скопл.";
     case StationType::Kilonova: return "Килонова";
     case StationType::Supernova: return "Сверхн.";
+    case StationType::TidalDisruption: return "TDE";
   }
   return "?";
 }
@@ -1492,6 +1493,7 @@ unsigned int AppGL::stationTypeChip(StationType t) {
     case StationType::StarCluster: return IM_COL32(255, 215, 140, 255);
     case StationType::Kilonova: return IM_COL32(255, 175, 75, 255);
     case StationType::Supernova: return IM_COL32(255, 120, 150, 255);
+    case StationType::TidalDisruption: return IM_COL32(180, 140, 255, 255);
   }
   return IM_COL32(140, 140, 140, 255);
 }
@@ -1702,6 +1704,9 @@ void AppGL::drawStoryPanel() {
         } else if (e.id == "letter-to-earth") {
           hintRu = "Требуется: отправить квантовый пакет данных с дальнего рубежа (5+ систем)";
           hintEn = "Requirement: transmit quantum data packet from deep space (5+ systems)";
+        } else if (e.id == "at2019qiz") {
+          hintRu = "Требуется: исследовать приливное разрушение звезды чёрной дырой (TDE AT2019qiz)";
+          hintEn = "Requirement: investigate tidal disruption event by supermassive black hole (TDE AT2019qiz)";
         } else {
           hintRu = "Требуется: дальнейшие исследования глубин космоса";
           hintEn = "Requirement: further deep space exploration";
@@ -3807,6 +3812,37 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
     ImGui::BulletText("%s: Kamiokande-II / IMB (Feb 23, 1987)", uiRu("Нейтринный всплеск", "Neutrino Burst"));
   }
 
+  if (curSt && curSt->type == StationType::TidalDisruption) {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.72f, 0.55f, 1.0f, 1.0f), "%s",
+                       uiRu("Событие Приливное Разрушение (TDE AT2019qiz):", "Tidal Disruption Event (TDE AT2019qiz):"));
+    float phase = m_sceneManager->getTdePhase();
+    const char* phaseName = "Tidal Capture & Peeling (0.00-0.25)";
+    if (phase >= 0.75f) phaseName = "t^-5/3 Fallback Decay & Cooling (0.75-1.00)";
+    else if (phase >= 0.50f) phaseName = "Peak Accretion Flare & Relativistic Wind (0.50-0.75)";
+    else if (phase >= 0.25f) phaseName = "Spaghettification & Shock Knots (0.25-0.50)";
+
+    ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "%s: %s",
+                       uiRu("Стадия / Фаза", "Event Stage"), phaseName);
+    if (ImGui::SliderFloat("Phase##tde", &phase, 0.0f, 1.0f, "%.3f (t^-5/3 decay)")) {
+      m_sceneManager->setTdePhase(phase);
+    }
+    bool autoPlay = m_sceneManager->isTdeAutoPlay();
+    if (ImGui::Checkbox(uiRu("Авто-эволюция события##tde", "Auto-evolve event##tde"), &autoPlay)) {
+      m_sceneManager->setTdeAutoPlay(autoPlay);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(uiRu("💥 Спровоцировать разрушение", "💥 Trigger Disruption"))) {
+      m_sceneManager->triggerTdeExplosion();
+    }
+
+    ImGui::BulletText("%s: 2MASX J04463790-1013349 (215 Mly / 66 Mpc)", uiRu("Галактика", "Host"));
+    ImGui::BulletText("%s: ~10^6 M☉ (SMBH) + 1.0 M☉ (Star)", uiRu("Компоненты", "System"));
+    ImGui::BulletText("%s: r_t ~ 24 r_s (~100 R☉)", uiRu("Приливной радиус", "Tidal Radius"));
+    ImGui::BulletText("%s: L_peak ~ 10^44 erg/s (v_wind ~ 10,000 km/s)", uiRu("Пиковая вспышка", "Peak Luminosity"));
+    ImGui::BulletText("%s: dM/dt ∝ (t - t0)^(-5/3) (Rees 1988)", uiRu("Закон затухания", "Fallback Law"));
+  }
+
   if (sliderChanged) {
     m_userOverrodePreset = true;
     m_benchmarking = false;
@@ -4369,6 +4405,12 @@ void AppGL::updateShip(float deltaTime) {
                   m_camera.position.y * m_camera.position.y +
                   m_camera.position.z * m_camera.position.z);
     inRadZone = d < 7.5;
+  } else if (st->type == StationType::TidalDisruption) {
+    const double d =
+        std::sqrt(m_camera.position.x * m_camera.position.x +
+                  m_camera.position.y * m_camera.position.y +
+                  m_camera.position.z * m_camera.position.z);
+    inRadZone = d < 8.5;
   }
 
   // v3.6.0: сложность масштабирует баланс (Easy: быстрая заправка и мягкая
@@ -5477,7 +5519,8 @@ void AppGL::drawWorldLabels() {
   if (curSt->type == StationType::BlackHole ||
       curSt->type == StationType::Quasar ||
       curSt->type == StationType::Kilonova ||
-      curSt->type == StationType::Supernova) {
+      curSt->type == StationType::Supernova ||
+      curSt->type == StationType::TidalDisruption) {
     const float aspectM = displaySize.x / displaySize.y;
     const float fovM = m_sceneManager->getSettings().fovDegrees;
     const glm::mat4 projM =
@@ -7686,6 +7729,7 @@ const char* AppGL::cineTypeRu(StationType t) {
     case StationType::StarCluster: return "Скопление";
     case StationType::Kilonova: return "Килонова";
     case StationType::Supernova: return "Сверхновая";
+    case StationType::TidalDisruption: return "Приливное разрушение";
   }
   return "?";
 }
