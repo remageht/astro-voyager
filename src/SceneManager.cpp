@@ -797,6 +797,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
     } else if (m_currentStation->id == "sgra") {
       m_dockSites.push_back(DockSite{"dock-sgra", "Deep Core Outpost", "sgra", Vec3(0.0, 4.0, 18.0), 5.0f});
+       m_dockSites.push_back(DockSite{"dock-warp-bubble", "Alcubierre Warp Bubble", "sgra", Vec3(0.0, 6.0, 22.0), 5.0f});
     } else if (m_currentStation->id == "ori") {
       m_dockSites.push_back(DockSite{"dock-ori", "Rigel Orbital Dock", "ori", Vec3(3.0, 1.0, 15.0), 5.0f});
     } else {
@@ -2183,6 +2184,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_probeModel;
           static ObjModel s_dragonModel;
           static ObjModel s_soyuzModel;
+          static ObjModel s_warpBubbleModel;
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2203,6 +2205,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
 
             s_soyuzModel.load("res/models/soyuz.obj");
             s_soyuzModel.loadTextures("res/models/soyuz");
+
+            s_warpBubbleModel.load("res/models/warp_bubble.obj");
+            s_warpBubbleModel.loadTextures("res/models/warp_bubble");
           }
 
           glEnable(GL_DEPTH_TEST);
@@ -2252,6 +2257,17 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
               customMetal = 0.70f;
               customRough = 0.42f;
+            } else if (dock.id == "dock-warp-bubble" && s_warpBubbleModel.ready()) {
+              siteModel = &s_warpBubbleModel;
+              stScale = 0.30f;
+              dockRingScale = 0.22f;
+              // Alcubierre Warp Bubble: spinning spacetime distortion field
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+              customMetal = 0.60f;
+              customRough = 0.20f;
+              emOverride = glm::vec3(0.1f, 0.4f, 0.9f);
             } else if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
               siteModel = &s_telescopeModel;
               // 2.2-unit model * 0.135 = 0.297 world units. The observatory
