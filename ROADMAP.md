@@ -12,6 +12,15 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 - Platforms: Windows + Linux AppImage + macOS (GL) — все собираются в CI
 - UX: каждый новый экран проходит проход onboarding/подсказок и локализован EN+RU
 
+## Release Lifecycle & Milestones / Жизненный цикл релизов
+
+| Стадия / Stage | Версии / Versions | Фокус / Primary Focus | Статус / Status |
+|---|---|---|---|
+| **Pre-Alpha** | `v1.0.0` – `v4.1.0` | Физика ОТО, релятивистские чёрные дыры, Солнечная система, сюжетная кампания 7 глав | Завершено (Shipped) |
+| **Alpha Stage** | `v4.2.0` | Диегетический 3D-кокпит, коллиматорный ИЛС, динамика перегрузок, SpaceDrive 3D варп-туннель, авионика | **Текущий релиз (Current)** |
+| **Beta Stage** | `v4.3.0` – `v4.5.0` | Процедурные PBR-поверхности планет (LOD), Рэлей-Ми атмосфера, объёмные туманности, баланс экономики | В разработке (Planned) |
+| **Release 1.0** | `v5.0.0` | Полноценный AAA-релиз, Steam Deck верификация, Mod-API мастерская, 5+ языков | Финал карты (Target) |
+
 ## Stage 1 — Foundation / Фундамент (v3.4–v3.6)
 
 ### v3.4 — macOS GL + saves
@@ -57,8 +66,10 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 ### v4.1 — Cosmic events
 - Supernova, tidal disruption flares, gravitational-wave ripples (visual + gameplay hooks).
 
-### v4.2 — Cockpit & damage v2
-- 3D cockpit interior, module damage states, sparks/smoke, repair animations.
+### v4.2 — 3D Cockpit, SpaceDrive Warp Tunnel & Avionics / 3D-кокпит, варп-туннель SpaceDrive и авионика
+- Status / Статус: **shipped in 4.2.0 (Alpha Stage)** / **выпущено в 4.2.0 (Alpha Stage)**.
+- EN: Shipped: diegetic 3D cockpit with canopy struts and photochromic tinting, collimated holographic HUD at infinity (pitch ladder, boresight, horizon, velocity tapes), pilot head spring-damper G-force inertia, animated multi-layer 3D SpaceDrive warp tunnel (tamminen, CC BY 4.0) with differential rotation during warp cruise and jump flight, modernized multi-tab Settings menu.
+- RU: Выпущено: диегетический 3D-кокпит с лонжеронами и фотохромным автотинтом, коллиматорный голографический ИЛС (авиагоризонт, шкала тангажа, ленты скорости), пружинно-демпферная инерция головы пилота при перегрузках, анимированный трёхслойный 3D варп-туннель SpaceDrive (tamminen, CC BY 4.0) с дифференциальным вращением в прыжках и крейсерском варпе, модернизированное многовкладочное меню настроек авионики.
 
 ### v4.3 — Audio pass
 - Layered dynamic music on events, positional station audio, engine Doppler pitch by speed.

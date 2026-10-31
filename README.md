@@ -21,9 +21,9 @@
 - **Новая игра · Adventure**: сюжетный слот с прологом Егорки (иллюстрированные слайды), отдельным профилем `save-adventure.json` и высадкой в Солнечной системе.
 - **Кампания из 7 глав**: Дом (Солнечная система) → Последний караул (Crew Dragon и «Союз-МС» на орбите Земли) → Сердце Галактики (Sgr A*) → Монстр с джетом (M87*) → Маяк ранней Вселенной (3C 273) → Новые кандидаты (M13) → Выбор. Итоги глав комментирует пилот Мия Сато.
 - **Две концовки**: после M13 Мия предлагает остаться и основать колонию у старых звёзд или потратить последнее топливо на прыжок к дальнему горизонту. Выбор хранится в `expedition.json` (`finaleChoice`), а HUD и карта глав показывают выбранный финал. После любой концовки идёт общий эпилог «Наследие». Старые завершённые сейвы получают предложение выбрать концовку один раз.
-- **Статус**: кампания из 7 глав выпущена в 4.1.0; интерактивный 3D-кокпит пилота с коллиматорным HUD, физикой перегрузок и обновленным меню настроек выпущен в **v4.2.0 (Alpha)** (см. [`CHANGELOG.md`](CHANGELOG.md)). Впереди в **v4.3.0 (Beta)** — процедурный рельеф планет, атмосфера Рэлея-Ми и пространственный 3D-звук.
+- **Статус**: кампания из 7 глав выпущена в 4.1.0; интерактивный 3D-кокпит пилота с коллиматорным HUD, физикой перегрузок, анимированным 3D варп-туннелем SpaceDrive (tamminen, CC BY 4.0) и обновленным меню настроек выпущен в **v4.2.0 (Alpha Stage)** (см. [`CHANGELOG.md`](CHANGELOG.md)). Впереди в **v4.3.0 (Beta)** — процедурный рельеф планет (PBR LOD), атмосфера Рэлея-Ми и объемные туманности.
 
-*4.1.0 added the 7-chapter campaign. 4.2.0 (Alpha) introduces the interactive 3D Cockpit with collimated HUD, G-force inertia dynamics, and modernized aerospace Settings. 4.3.0 (Beta) will bring procedural planetary terrain, Rayleigh-Mie atmospheric scattering, and 3D spatial audio.*
+*4.1.0 added the 7-chapter campaign. 4.2.0 (Alpha Stage) introduces the interactive 3D Cockpit with collimated HUD, G-force inertia dynamics, animated 3D SpaceDrive warp tunnel, and modernized aerospace Settings. 4.3.0 (Beta) will bring procedural planetary terrain (PBR LOD), Rayleigh-Mie atmospheric scattering, and volumetric nebulae.*
 
 ---
 

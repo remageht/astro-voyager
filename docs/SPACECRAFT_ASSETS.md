@@ -127,34 +127,19 @@
 авторизованную сессию. Это известный пробел; при появлении стабильной
 публичной ссылки его стоит закрыть отдельным скриптом с проверкой SHA256.
 
-## Warp Tunnel (tamminen, CC BY 4.0) - скачиваемые, не интегрированы
+## SpaceDrive Warp Tunnel (tamminen, CC BY 4.0)
 
 | Поле | Значение |
 |---|---|
-| Модель | SpaceDrive / Free Tunnel wormhole (одна геометрия) |
-| Автор | tamminen (Sketchfab) |
-| Лицензия | CC BY 4.0 - коммерческое использование разрешено при указании автора |
-| Источник | https://sketchfab.com/3d-models/spacedrive-7b88110e3d2a4bb880824dba9aa81390 |
-| Формат | GLB/glTF, 44.5k полигонов, 23.5k вершин, анимирован (loop) |
-| Статус | Не скачано - требуется ручная загрузка с Sketchfab (нужен аккаунт) |
-
-**Инструкция по загрузке:**
-1. Войдите на sketchfab.com, скачайте модель (кнопка Download - GLB).
-2. Поместите файл в blender/out/warp_tunnel_src/scene.gltf (+ scene.bin).
-3. Запустите экспорт по шаблону export_dragon_game_asset.py (переименовав пути).
-
-
-## Warp Tunnel (tamminen, CC BY 4.0)
-
-| Поле | Значение |
-|---|---|
-| Модель | SpaceDrive / Free Tunnel wormhole (одна геометрия) |
-| Автор | tamminen (Sketchfab) |
-| Лицензия | CC BY 4.0 - коммерческое использование разрешено при указании автора |
-| Источник | https://sketchfab.com/3d-models/spacedrive-7b88110e3d2a4bb880824dba9aa81390 |
-| Игровые файлы | res/models/warp_tunnel.obj + 5 BMP-атласов 1024x1024 |
-| В сцене | dock-warp-tunnel (Sgr A*), масштаб 0.25 |
-| Витрина | docs/screens/warp_tunnel_hero.png |
+| Модель | SpaceDrive / Free Tunnel wormhole (трёхслойная кинематика) |
+| Автор | [tamminen](https://sketchfab.com/tamminen) (Sketchfab) |
+| Лицензия | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — коммерческое использование разрешено при указании автора |
+| Источник | <https://sketchfab.com/3d-models/spacedrive-7b88110e3d2a4bb880824dba9aa81390> |
+| Локальный исходник | `blender/out/warp_tunnel_src/scene.glb` |
+| Экспорт | `blender/scripts/export_warp_tunnel.py` |
+| Игровые файлы | `warp_tunnel_tube.obj` (внешняя труба), `warp_tunnel_scrap.obj` (кольца обломков), `warp_tunnel_cloud.obj` (плазменный тор) + 15 BMP PBR-атласов |
+| В сцене | Анимированный полёт в варп-туннеле (сверхсветовой прыжок и высокий варп) с дифференциальным вращением слоёв ($\omega_1=+0.30$, $\omega_2=-0.60$, $\omega_3=+1.20$ рад/с); экспонат `dock-warp-tunnel` (Sgr A*) |
+| Витрина | `docs/screens/warp_tunnel_hero.png` |
 
 
 ## Warp Drive Visualisation (процедурная)
