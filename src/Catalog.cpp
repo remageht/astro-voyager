@@ -62,6 +62,9 @@ const std::vector<Station>& builtinCatalog() {
       {"gw170817", StationType::Kilonova, "Kilonova GW170817",
        "Binary neutron star merger: gravitational-wave ripples, relativistic sGRB jet, r-process kilonova fireball.",
        28.0, {}, 2.0, 2.74, 130.0e6},
+      {"sn1987a", StationType::Supernova, "Supernova SN 1987A",
+       "Core-collapse supernova remnant in the Large Magellanic Cloud: glowing triple ring system, hot spot pearls, expanding shock wave.",
+       26.0, {}, 1.5, 1.4, 168000.0},
   };
   return kStations;
 }
@@ -84,6 +87,7 @@ std::string typeToString(StationType t) {
     case StationType::Pulsar: return "pulsar";
     case StationType::StarCluster: return "star_cluster";
     case StationType::Kilonova: return "kilonova";
+    case StationType::Supernova: return "supernova";
   }
   return "unknown";
 }

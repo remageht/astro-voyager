@@ -432,6 +432,12 @@ Check 'catalog has gw170817' (($catalogCpp -match '"gw170817"') -and ($catalogJs
 Check 'catalog type kilonova' (($catalogH -match 'Kilonova') -and ($catalogCpp -match 'kilonova'))
 Check 'kilonova render branch' (($sceneCpp -match 'StationType::Kilonova') -and ($sceneCpp -match 'm_kilonovaShader'))
 Check 'kilonova inspector controls' (($appCpp -match 'Kilonova Event') -and ($appCpp -match 'triggerKilonovaExplosion'))
+# v4.2.0: Cosmic Events Pass 2 - Supernova SN 1987A
+Check 'supernova frag exists' (Test-Path (Join-Path $root 'shaders/supernova.frag'))
+Check 'catalog has sn1987a' (($catalogCpp -match '"sn1987a"') -and ($catalogJson -match '"sn1987a"'))
+Check 'catalog type supernova' (($catalogH -match 'Supernova') -and ($catalogCpp -match 'supernova'))
+Check 'supernova render branch' (($sceneCpp -match 'StationType::Supernova') -and ($sceneCpp -match 'm_supernovaShader'))
+Check 'supernova inspector controls' (($appCpp -match 'Supernova Event') -and ($appCpp -match 'triggerSupernovaExplosion'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
