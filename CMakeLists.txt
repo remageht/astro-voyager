@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 4.3.0 LANGUAGES CXX)
+project(astro-voyager VERSION 4.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -195,6 +195,18 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_planet_lod.cpp")
     target_compile_options(test_planet_lod PRIVATE /W4 /permissive-)
   else()
     target_compile_options(test_planet_lod PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_cinematography.cpp")
+  add_executable(test_cinematography
+    tests/test_cinematography.cpp
+  )
+  target_include_directories(test_cinematography PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_cinematography PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_cinematography PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
 
@@ -398,6 +410,10 @@ endif()
 
 if(TARGET test_planet_lod)
   add_test(NAME test_planet_lod COMMAND test_planet_lod)
+endif()
+
+if(TARGET test_cinematography)
+  add_test(NAME test_cinematography COMMAND test_cinematography)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):

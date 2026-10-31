@@ -776,26 +776,210 @@ void AppGL::updateOrbit(float deltaTime) {
   m_camera.pitch = std::atan2(dy, horiz);
 }
 
+void AppGL::drawPhotoDirectorOverlay() {
+  if (m_photoGrid <= 0) return;
+  ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  const ImU32 gridCol = IM_COL32(200, 230, 255, 75);
+  const ImU32 dotCol = IM_COL32(255, 215, 64, 140);
+  const ImU32 centerCol = IM_COL32(0, 255, 200, 100);
+
+  if (m_photoGrid == 1) {
+    // Rule of Thirds (3x3 grid)
+    float x1 = disp.x / 3.0f;
+    float x2 = 2.0f * disp.x / 3.0f;
+    float y1 = disp.y / 3.0f;
+    float y2 = 2.0f * disp.y / 3.0f;
+    drawList->AddLine(ImVec2(x1, 0.0f), ImVec2(x1, disp.y), gridCol, 1.0f);
+    drawList->AddLine(ImVec2(x2, 0.0f), ImVec2(x2, disp.y), gridCol, 1.0f);
+    drawList->AddLine(ImVec2(0.0f, y1), ImVec2(disp.x, y1), gridCol, 1.0f);
+    drawList->AddLine(ImVec2(0.0f, y2), ImVec2(disp.x, y2), gridCol, 1.0f);
+
+    // Power points (intersections)
+    drawList->AddCircle(ImVec2(x1, y1), 4.5f, dotCol, 12, 1.5f);
+    drawList->AddCircle(ImVec2(x2, y1), 4.5f, dotCol, 12, 1.5f);
+    drawList->AddCircle(ImVec2(x1, y2), 4.5f, dotCol, 12, 1.5f);
+    drawList->AddCircle(ImVec2(x2, y2), 4.5f, dotCol, 12, 1.5f);
+  } else if (m_photoGrid == 2) {
+    // Golden Ratio (1 : 0.618 : 1) -> 0.382 and 0.618
+    float x1 = disp.x * 0.382f;
+    float x2 = disp.x * 0.618f;
+    float y1 = disp.y * 0.382f;
+    float y2 = disp.y * 0.618f;
+    drawList->AddLine(ImVec2(x1, 0.0f), ImVec2(x1, disp.y), gridCol, 1.0f);
+    drawList->AddLine(ImVec2(x2, 0.0f), ImVec2(x2, disp.y), gridCol, 1.0f);
+    drawList->AddLine(ImVec2(0.0f, y1), ImVec2(disp.x, y1), gridCol, 1.0f);
+    drawList->AddLine(ImVec2(0.0f, y2), ImVec2(disp.x, y2), gridCol, 1.0f);
+
+    drawList->AddCircle(ImVec2(x1, y1), 5.0f, dotCol, 16, 1.5f);
+    drawList->AddCircle(ImVec2(x2, y1), 5.0f, dotCol, 16, 1.5f);
+    drawList->AddCircle(ImVec2(x1, y2), 5.0f, dotCol, 16, 1.5f);
+    drawList->AddCircle(ImVec2(x2, y2), 5.0f, dotCol, 16, 1.5f);
+  } else if (m_photoGrid == 3) {
+    // Crosshair & Center Box
+    float cx = disp.x * 0.5f;
+    float cy = disp.y * 0.5f;
+    float sz = 24.0f;
+    drawList->AddLine(ImVec2(cx - sz, cy), ImVec2(cx + sz, cy), centerCol, 1.5f);
+    drawList->AddLine(ImVec2(cx, cy - sz), ImVec2(cx, cy + sz), centerCol, 1.5f);
+    drawList->AddCircle(ImVec2(cx, cy), sz * 0.75f, centerCol, 24, 1.2f);
+  }
+}
+
+void AppGL::drawGwDetectorHud() {
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  std::string stId = curSt ? curSt->id : "deep_space";
+  std::string stName = curSt ? curSt->name : "Deep Space";
+
+  ImGui::SetNextWindowSize(ImVec2(390.0f, 275.0f), ImGuiCond_FirstUseEver);
+  if (ImGui::Begin(uiRu("Гравитационно-волновой интерферометр (GW)###GWDet",
+                        "Gravitational Wave Interferometer (GW)###GWDet"),
+                   &m_showGwDetector, ImGuiWindowFlags_NoCollapse)) {
+    ImGui::TextColored(ImVec4(0.25f, 0.85f, 1.0f, 1.0f),
+                       "%s", uiRu("СЕНСОРНЫЙ КАНАЛ ДЕТЕКТОРА LIGO / LISA",
+                                  "LIGO / LISA SYNTHETIC STRAIN CHANNEL"));
+    ImGui::TextColored(ImVec4(0.65f, 0.70f, 0.75f, 1.0f), "%s: %s [%s]",
+                       uiRu("Источник", "Source"), stName.c_str(), stId.c_str());
+
+    float simTime = static_cast<float>(glfwGetTime());
+    float fBase = 45.0f;
+    float chirpAmp = 0.85f;
+    const char* eventType = "Stochastic Background";
+    float snr = 8.2f;
+
+    if (stId == "gw170817") {
+      eventType = "BNS Coalescence Chirp (GW170817)";
+      // Chirp sweep: frequency sweeps upwards
+      float tCycle = std::fmod(simTime, 6.0f);
+      fBase = 35.0f + 140.0f * (tCycle / 6.0f) * (tCycle / 6.0f);
+      chirpAmp = 0.3f + 0.7f * (tCycle / 6.0f);
+      snr = 32.4f;
+    } else if (stId == "sgra" || stId == "m87") {
+      eventType = "Supermassive BH Horizon QNM & Tidal Ringdown";
+      fBase = 8.5f;
+      chirpAmp = 0.95f;
+      snr = 28.1f;
+    } else if (stId == "sn1987a") {
+      eventType = "Core-Collapse Supernova Shock Burst";
+      fBase = 120.0f;
+      chirpAmp = 0.75f * (0.6f + 0.4f * std::sin(simTime * 4.0f));
+      snr = 19.8f;
+    } else if (stId == "m1") {
+      eventType = "Crab Pulsar Continuous CW (2x Spin)";
+      fBase = 59.3f;
+      chirpAmp = 0.65f;
+      snr = 15.2f;
+    }
+
+    ImGui::TextColored(ImVec4(0.95f, 0.80f, 0.30f, 1.0f), "%s: %s",
+                       uiRu("Тип сигнала", "Signal Class"), eventType);
+    ImGui::Text("f_GW: %.1f Hz  |  SNR: %.1f  |  h_peak: ~10^-21", fBase, snr);
+
+    // Oscilloscope canvas
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSz = ImVec2(ImGui::GetContentRegionAvail().x, 110.0f);
+    if (canvasSz.x < 50.0f) canvasSz.x = 50.0f;
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSz.x, canvasPos.y + canvasSz.y),
+                      IM_COL32(10, 16, 24, 240), 4.0f);
+    dl->AddRect(canvasPos, ImVec2(canvasPos.x + canvasSz.x, canvasPos.y + canvasSz.y),
+                IM_COL32(40, 80, 120, 180), 4.0f);
+
+    // Zero line and grid ticks
+    float midY = canvasPos.y + canvasSz.y * 0.5f;
+    dl->AddLine(ImVec2(canvasPos.x, midY), ImVec2(canvasPos.x + canvasSz.x, midY),
+                IM_COL32(60, 100, 140, 100), 1.0f);
+
+    // Dual polarization waveform traces
+    const int numSamples = 120;
+    const float dt = canvasSz.x / static_cast<float>(numSamples - 1);
+    const float halfH = canvasSz.y * 0.42f;
+
+    ImVec2 prevP(canvasPos.x, midY);
+    ImVec2 prevC(canvasPos.x, midY);
+
+    for (int i = 0; i < numSamples; ++i) {
+      float tSample = simTime + static_cast<float>(i) * 0.015f;
+      float phase = tSample * fBase * 0.25f;
+      float hp = chirpAmp * std::cos(phase);
+      float hc = chirpAmp * std::sin(phase);
+
+      ImVec2 curP(canvasPos.x + i * dt, midY - hp * halfH);
+      ImVec2 curC(canvasPos.x + i * dt, midY - hc * halfH);
+
+      if (i > 0) {
+        // h+ in cyan
+        dl->AddLine(prevP, curP, IM_COL32(0, 235, 255, 230), 1.8f);
+        // h_cross in magenta
+        dl->AddLine(prevC, curC, IM_COL32(255, 75, 180, 180), 1.4f);
+      }
+      prevP = curP;
+      prevC = curC;
+    }
+
+    ImGui::Dummy(canvasSz);
+    ImGui::TextColored(ImVec4(0.0f, 0.9f, 1.0f, 1.0f), "— h+(t) [Plus]");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.7f, 1.0f), "  — h_x(t) [Cross]");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "  (Strain h/h0)");
+  }
+  ImGui::End();
+}
+
 void AppGL::drawPhotoPopup() {
-  // Маленький попап в правом нижнем: exposure + Save PNG + подсказка.
-  // Рисуется даже при m_hideUI (фото-режим сам его выставил).
+  drawPhotoDirectorOverlay();
+
+  if (m_showGwDetector) {
+    drawGwDetectorHud();
+  }
+
+  // Cinematography Director Mode Console
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   ImGui::SetNextWindowPos(ImVec2(disp.x - 12.0f, disp.y - 12.0f),
                           ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-  ImGui::SetNextWindowBgAlpha(0.90f);
+  ImGui::SetNextWindowBgAlpha(0.92f);
   const ImGuiWindowFlags flags =
       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
       ImGuiWindowFlags_AlwaysAutoResize;
   if (ImGui::Begin("##photo_mode", nullptr, flags)) {
     ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f),
-                       "%s", uiRu("Фото-режим (F8)", "Photo mode (F8)"));
+                       "%s", uiRu("Режим кинорежиссёра / Фото (F8)", "Cinematography Director Mode (F8)"));
+    ImGui::Separator();
+
     float expNow = m_sceneManager->getExposure();
     if (ImGui::SliderFloat("Exposure", &expNow, 0.2f, 4.0f, "%.2f")) {
       m_sceneManager->setExposure(expNow);
     }
-    if (ImGui::Button(uiRu("Сохранить PNG", "Save PNG"))) {
-      // Имя по станции + unix-время — не перетирает эталоны docs/screens.
+
+    RenderSettings& rset = m_sceneManager->getSettings();
+    ImGui::SliderFloat("FOV (Lens)", &rset.fovDegrees, 15.0f, 120.0f, "%.1f deg");
+
+    const char* gradeItems[] = {
+      uiRu("0: Линейный / Raw Neutral", "0: Linear / Raw Neutral"),
+      uiRu("1: Интерстеллар янтарь", "1: Interstellar Amber"),
+      uiRu("2: Киберпанк неон", "2: Cyberpunk Neon"),
+      uiRu("3: NASA Kodak Tri-X 400", "3: NASA Kodak Tri-X 400"),
+      uiRu("4: Техниколор винтаж", "4: Technicolor Vintage")
+    };
+    ImGui::Combo(uiRu("Цвет (LUT)", "Color Grade"), &rset.colorGrade, gradeItems, 5);
+    ImGui::SliderFloat(uiRu("Виньетка", "Vignette"), &rset.filmicVignette, 0.0f, 1.0f, "%.2f");
+
+    const char* gridItems[] = {
+      uiRu("Сетка: Выкл", "Grid: Off"),
+      uiRu("Сетка: Правило третей (3x3)", "Grid: Rule of Thirds (3x3)"),
+      uiRu("Сетка: Золотое сечение (Phi)", "Grid: Golden Ratio (Phi)"),
+      uiRu("Сетка: Прицел / Центр", "Grid: Crosshair & Center")
+    };
+    ImGui::Combo(uiRu("Композиция", "Framing"), &m_photoGrid, gridItems, 4);
+
+    ImGui::Checkbox(uiRu("Кинематографическая орбита (O)", "Cinematic Orbit (O)"), &m_orbitOn);
+    ImGui::Checkbox(uiRu("Грав-волновой детектор (GW)", "Gravitational Wave Detector (GW)"), &m_showGwDetector);
+
+    ImGui::Separator();
+    if (ImGui::Button(uiRu("Сохранить снимок PNG", "Capture High-Res PNG"))) {
       const Station* st = m_sceneManager->getCurrentStation();
       char buf[128];
       std::snprintf(buf, sizeof(buf), "docs/photos/%s_%lld.png",
@@ -812,8 +996,8 @@ void AppGL::drawPhotoPopup() {
                          m_lastScreenshotStatus.c_str());
     }
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s",
-                       uiRu("O - орбита, H - UI, Esc - меню",
-                            "O - orbit, H - UI, Esc - menu"));
+                       uiRu("O - орбита, H - скрыть UI, Esc - меню",
+                            "O - orbit, H - hide UI, Esc - menu"));
   }
   ImGui::End();
 }
@@ -3566,6 +3750,10 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
     drawExpeditionHud();
     if (m_expeditionMapOpen) drawExpeditionMap();
   }
+  // === Scientific GW Instrument === (v4.4.0): детектор гравитационных волн
+  if (m_showGwDetector && !m_inMenu) {
+    drawGwDetectorHud();
+  }
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
@@ -5298,20 +5486,20 @@ void AppGL::drawMenu() {
                               "A JOURNEY THROUGH CURVED SPACETIME"));
       ImGui::Spacing();
 
-      // v4.3.0: Заметный бейдж релиза и стадии проекта
+      // v4.4.0: Заметный бейдж релиза и стадии проекта
       {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.22f, 0.35f, 0.75f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.14f, 0.34f, 0.52f, 0.90f));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.88f, 1.00f, 1.0f));
-        if (ImGui::Button(uiRu(" [ v4.3.0 • BETA STAGE ]  Что нового / Patch Notes ",
-                               " [ v4.3.0 • BETA STAGE ]  What's New / Patch Notes "),
+        if (ImGui::Button(uiRu(" [ v4.4.0 • BETA STAGE ]  Что нового / Patch Notes ",
+                               " [ v4.4.0 • BETA STAGE ]  What's New / Patch Notes "),
                           ImVec2(-1.0f, 26.0f))) {
           m_showPatchNotesModal = true;
         }
         ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("%s", uiRu("Открыть примечания к выпуску v4.3.0 [Beta Stage]",
-                                       "Open v4.3.0 [Beta Stage] Patch Notes"));
+          ImGui::SetTooltip("%s", uiRu("Открыть примечания к выпуску v4.4.0 [Beta Stage]",
+                                       "Open v4.4.0 [Beta Stage] Patch Notes"));
         }
         ImGui::Spacing();
       }
@@ -5597,6 +5785,20 @@ void AppGL::drawMenu() {
           m_sceneManager->setExposure(menuExposure);
           menuChanged = true;
         }
+
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Кинематография и цветокоррекция (v4.4.0)", "Cinematography & Color Grading (v4.4.0)"));
+        const char* menuGradeNames[] = {
+          uiRu("Линейный / Raw Neutral", "Linear / Raw Neutral"),
+          uiRu("Интерстеллар янтарь", "Interstellar Amber"),
+          uiRu("Киберпанк неон", "Cyberpunk Neon"),
+          uiRu("NASA Kodak Tri-X 400", "NASA Kodak Tri-X 400"),
+          uiRu("Техниколор винтаж", "Technicolor Vintage")
+        };
+        menuChanged |= ImGui::Combo(uiRu("Цветокоррекция (LUT)", "Color Grade (LUT)"), &menuSettings.colorGrade, menuGradeNames, 5);
+        menuChanged |= ImGui::SliderFloat(uiRu("Виньетка линзы", "Lens Vignette"), &menuSettings.filmicVignette, 0.0f, 1.0f, "%.2f");
+        menuChanged |= ImGui::Checkbox(uiRu("Гравитационно-волновой интерферометр (GW)", "Gravitational Wave Detector (GW)"), &m_showGwDetector);
+
         ImGui::EndTabItem();
       }
 
@@ -5733,16 +5935,16 @@ void AppGL::drawPatchNotesModal() {
   ImGui::SetNextWindowSize(ImVec2(720.0f, 520.0f), ImGuiCond_Appearing);
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
                           ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-  if (ImGui::Begin(uiRu("Примечания к выпуску v4.3.0 [Beta Stage]###PatchNotes",
-                        "Release Notes v4.3.0 [Beta Stage]###PatchNotes"),
+  if (ImGui::Begin(uiRu("Примечания к выпуску v4.4.0 [Beta Stage]###PatchNotes",
+                        "Release Notes v4.4.0 [Beta Stage]###PatchNotes"),
                    &m_showPatchNotesModal,
                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f),
-                       "%s", uiRu("ASTRO-VOYAGER — ВЕРСИЯ 4.3.0 [BETA STAGE]",
-                                  "ASTRO-VOYAGER — VERSION 4.3.0 [BETA STAGE]"));
+                       "%s", uiRu("ASTRO-VOYAGER — ВЕРСИЯ 4.4.0 [BETA STAGE]",
+                                  "ASTRO-VOYAGER — VERSION 4.4.0 [BETA STAGE]"));
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
-                       "%s", uiRu("Этап Beta: топографический рельеф планет, рэлеевская атмосфера, сфера 128x256 LOD и 3D-аудио",
-                                  "Beta Stage: Topographic Planet Relief, Rayleigh-Mie Atmosphere, 128x256 LOD Sphere & 3D Audio"));
+                       "%s", uiRu("Этап Beta: режим кинорежиссёра, кинематографическая цветокоррекция (LUT), виньетирование и гравитационно-волновой интерферометр",
+                                  "Beta Stage: Cinematography Director Mode, Filmic Color Grading (LUTs), Lens Vignette & Gravitational Wave Interferometer"));
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -5750,44 +5952,37 @@ void AppGL::drawPatchNotesModal() {
       if (ImGui::BeginTabItem(uiRu("Что нового", "What's New"))) {
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("1. Топографический рельеф планет и нормал-бамп маппинг",
-                                      "1. Topographic Planetary Relief & Normal Bump Mapping"));
-        ImGui::BulletText("%s", uiRu("Процедурная карта высот FBM для Земли, Марса, Луны и Меркурия: кратеры, каньоны и горы.",
-                                     "Procedural FBM heightmap for Earth, Mars, Moon and Mercury: craters, canyons and mountains."));
-        ImGui::BulletText("%s", uiRu("Конечно-разностное возмущение нормали в реальном времени с контрастными тенями рельефа.",
-                                     "Real-time finite-difference normal perturbation producing directional terrain shadows."));
+                           "%s", uiRu("1. Режим кинорежиссёра и сетки кадрирования (F8)",
+                                      "1. Cinematography Director Mode & Framing Grids (F8)"));
+        ImGui::BulletText("%s", uiRu("Сетки композиции: Правило третей (3x3), Золотое сечение (1:0.618:1) и Визирный прицел с точками фокуса.",
+                                     "Framing overlays: Rule of Thirds (3x3), Golden Ratio (Phi) and Center Crosshair with focal power points."));
+        ImGui::BulletText("%s", uiRu("Плавная кинематографическая автоорбита вокруг космических объектов и мгновенный экспорт в PNG.",
+                                     "Smooth cinematic auto-orbit around celestial bodies and high-resolution PNG snapshot capture."));
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("2. Физическое рассеяние света в атмосфере (Rayleigh-Mie)",
-                                      "2. Physical Rayleigh-Mie Atmospheric Scattering"));
-        ImGui::BulletText("%s", uiRu("Спектральное рассеяние: лазурное небо и золотисто-янтарный закатный терминатор Земли.",
-                                     "Wavelength-dependent scattering: azure skies and golden-amber sunset terminator on Earth."));
-        ImGui::BulletText("%s", uiRu("Индивидуальные атмосферные профили: синие закаты Марса и опаловая дымка Венеры.",
-                                     "Custom atmospheric profiles: Martian butterscotch sunsets and dense Venusian opalescent haze."));
+                           "%s", uiRu("2. Кинематографическая цветокоррекция и профили LUT",
+                                      "2. Filmic Color Grading & LUT Profiles"));
+        ImGui::BulletText("%s", uiRu("5 режимов калибровки: Raw Linear, Интерстеллар янтарь, Киберпанк неон, NASA Kodak Tri-X 400 и Техниколор 1950-х.",
+                                     "5 calibrated filmic grades: Raw Linear, Interstellar Amber, Cyberpunk Neon, NASA Kodak Tri-X 400 & 1950s Technicolor."));
+        ImGui::BulletText("%s", uiRu("Мягкое виньетирование краев кадра для создания эффекта анаморфотного кинообъектива.",
+                                     "Smooth lens vignette shading for an authentic anamorphic cinematography aesthetic."));
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("3. Высокополигональная LOD-сетка сферы (128x256)",
-                                      "3. High-Detail Sphere LOD Mesh (128x256)"));
-        ImGui::BulletText("%s", uiRu("33 153 вершины и 65 536 полигонов полностью устраняют гранёность силуэта планет.",
-                                     "33,153 vertices and 65,536 triangles completely eliminating planet silhouette faceting."));
+                           "%s", uiRu("3. Зум объектива и фокусное расстояние (FOV)",
+                                      "3. Camera Lens Zoom & Focal Length (FOV)"));
+        ImGui::BulletText("%s", uiRu("Регулировка угла обзора от 15° (мощный телеобъектив для деталей) до 120° (ультраширокий IMAX формат).",
+                                     "Dynamic FOV focal slider from 15 deg (deep telephoto close-up) to 120 deg (ultra-wide IMAX panorama)."));
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("4. Пространственный 3D-звук и релятивистский эффект Доплера",
-                                      "4. 3D Spatial Audio & Relativistic Doppler Shift"));
-        ImGui::BulletText("%s", uiRu("Стереопанорама радиоимпульсов пульсаров по азимуту визира корабля [-1.0 .. +1.0].",
-                                     "Stereo azimuth panning of pulsar radio pulses [-1.0 .. +1.0] relative to ship heading."));
-        ImGui::BulletText("%s", uiRu("Сдвиг частоты гула маршевых двигателей Доплера и тревожный суб-гул у горизонта ЧД.",
-                                     "Doppler frequency shift on main engine hum and tension drone near black hole horizons."));
-
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("5. Тактический сенсорный компас на коллиматорном ИЛС",
-                                      "5. Tactical Sensor Compass on Collimated HUD"));
-        ImGui::BulletText("%s", uiRu("Азимутальная лента курса с динамическими делениями по углам рыскания (Yaw).",
-                                     "Azimuth compass heading tape with dynamic sliding ticks driven by yaw angle."));
+                           "%s", uiRu("4. Научный интерферометр гравитационных волн (GW)",
+                                      "4. Scientific Gravitational Wave Interferometer (GW)"));
+        ImGui::BulletText("%s", uiRu("Двухполяризационный осциллограф натяжения метрики h+(t) и h_x(t) синтетического канала LIGO/LISA.",
+                                     "Dual-polarization metric strain oscilloscope h+(t) and h_x(t) modeling synthetic LIGO/LISA arrays."));
+        ImGui::BulletText("%s", uiRu("Автозахват чирп-сигналов слияний нейтронных звезд (GW170817), квазинормальных мод черных дыр и пульсаров.",
+                                     "Signal tracking: BNS coalescence chirp (GW170817), black hole QNM ringdowns (Sgr A*, M87) and pulsar CW."));
         ImGui::EndTabItem();
       }
 
@@ -5802,8 +5997,11 @@ void AppGL::drawPatchNotesModal() {
                           uiRu("3D-кокпит, коллиматорный ИЛС, SpaceDrive туннель, авионика",
                                "3D Cockpit, collimated HUD, SpaceDrive tunnel, avionics"));
         ImGui::BulletText("v4.3.0: Beta Stage (%s)",
-                          uiRu("PBR-поверхности планет LOD, объемные туманности, баланс экономики",
-                               "PBR planetary surface LOD, volumetric nebulae, economy polish"));
+                          uiRu("PBR-рельеф планет, рэлеевская атмосфера, 128x256 LOD сфера, 3D-аудио",
+                               "PBR planetary relief, Rayleigh atmosphere, 128x256 LOD sphere, 3D audio"));
+        ImGui::BulletText("v4.4.0: Beta Stage (%s)",
+                          uiRu("Режим кинорежиссёра, цветокоррекция LUT, виньетка, грав-волновой интерферометр",
+                               "Cinematography Director Mode, LUT color grading, vignette, GW interferometer"));
         ImGui::BulletText("v5.0.0: Release 1.0 (%s)",
                           uiRu("Финальный коммерческий AAA-релиз", "Full commercial AAA release"));
         ImGui::EndTabItem();
