@@ -143,3 +143,16 @@
 2. Поместите файл в blender/out/warp_tunnel_src/scene.gltf (+ scene.bin).
 3. Запустите экспорт по шаблону export_dragon_game_asset.py (переименовав пути).
 
+
+## Warp Tunnel (tamminen, CC BY 4.0)
+
+| Поле | Значение |
+|---|---|
+| Модель | SpaceDrive / Free Tunnel wormhole (одна геометрия) |
+| Автор | tamminen (Sketchfab) |
+| Лицензия | CC BY 4.0 - коммерческое использование разрешено при указании автора |
+| Источник | https://sketchfab.com/3d-models/spacedrive-7b88110e3d2a4bb880824dba9aa81390 |
+| Игровые файлы | res/models/warp_tunnel.obj + 5 BMP-атласов 1024x1024 |
+| В сцене | dock-warp-tunnel (Sgr A*), масштаб 0.25 |
+| Витрина | docs/screens/warp_tunnel_hero.png |
+
