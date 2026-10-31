@@ -712,7 +712,7 @@ void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
     // than any preset gives (companion orbit 4.8 Rs needs deflection
     // room; hyperdisk rOut 26 Rs needs shell >= spawn 45+13).
     if (st->id == "oj287" || st->id == "hyperdisk") {
-      m_settings.shellRadius = st->params.shellRadius;
+      m_settings.shellRadius = static_cast<float>(st->params.shellRadius);
       m_settings.maxSteps = st->params.maxSteps;
       m_settings.stepSize = static_cast<float>(st->params.step);
     }

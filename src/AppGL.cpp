@@ -6674,7 +6674,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
       }
     }
     warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
-    warpdrive::setShipStyle(app.m_shipStyle);
+    warpdrive::setShipStyle(styleBackup);
     warpdrive::setShipHull(1.0f);
     warpdrive::setThruster(0.7f);
   }
@@ -7255,10 +7255,10 @@ bool AppGL::updateJumpCine(float deltaTime) {
         (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS ? 1.0f : 0.0f) -
         (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS ? 1.0f : 0.0f);
     m_jump.setDodgeAxis(dodgeAxis);
-    const float laneK = 1.0f - std::exp(-static_cast<double>(deltaTime) * 6.0);
+    const float laneK = 1.0f - std::exp(-deltaTime * 6.0f);
     m_astLane += (dodgeAxis - m_astLane) * laneK;
   } else if (m_astLane != 0.0f) {
-    m_astLane *= 1.0f - std::exp(-static_cast<double>(deltaTime) * 6.0);
+    m_astLane *= 1.0f - std::exp(-deltaTime * 6.0f);
     if (std::fabs(m_astLane) < 0.01f) m_astLane = 0.0f;
   }
 
