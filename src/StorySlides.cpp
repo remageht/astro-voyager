@@ -347,7 +347,7 @@ const std::vector<StorySlide>& storyIntroSlides() {
         "В их руках карта прыжков: сверхмассивные дыры, квазары и старые скопления — "
         "все места, где жизнь ещё может удержаться.",
         "Mia leads the crew of the expedition AstroNavigator-1. Beside her on the "
-        "bridge is Yegorka with the asymmetric cavity schematics and a pulsing star pendant. "
+        "bridge is Egorka with the asymmetric cavity schematics and a pulsing star pendant. "
         "In their hands is a jump map: supermassive holes, quasars, old clusters — "
         "every place life might still hold on.",
         4});
@@ -360,7 +360,7 @@ const std::vector<StorySlide>& storyIntroSlides() {
         "Экспедиция начинается с Солнечной системы: Мия и Егорка осмотрят Землю "
         "и проложат курс к центру Галактики. Бортовой журнал открыт — "
         "клавиша J запишет всё.",
-        "The expedition begins with the Solar System: Mia and Yegorka will inspect Earth "
+        "The expedition begins with the Solar System: Mia and Egorka will inspect Earth "
         "and set course to the center of the Galaxy. The ship's log is open — "
         "key J will record everything.",
         6});
@@ -378,7 +378,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "сделаем домом всё, до чего дотянемся». Курс проложен к орбитальному причалу: "
         "перед прыжком экипаж прощается с первым флотом.",
         "Mia: \"We looked at our home and understood: there may be no "
-        "return.\" Yegorka monitors the warp bubble metric and murmurs: "
+        "return.\" Egorka monitors the warp bubble metric and murmurs: "
         "\"Then we'll make a home of whatever we can reach.\" Course set for the orbital pier: "
         "before the jump the crew bids farewell to the first fleet.",
         5});
@@ -388,7 +388,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "такие приборы. А теперь мы вдвоём летим к чёрным дырам». Две эпохи, один воздух. "
         "Экипаж касается их шлюзов, как плеча старшего, и вносит имена в журнал.",
         "Mia: \"We go farther than any crew before us. But first - to those "
-        "who opened orbit for us.\" Yegorka touches the Soyuz hatch: \"My grandfather "
+        "who opened orbit for us.\" Egorka touches the Soyuz hatch: \"My grandfather "
         "built instruments like these. And now we are flying to black holes together.\" Two eras, one air. "
         "The crew touches their hatches like an elder's shoulder and writes the names into the log.",
         0, "res/story/06_last_watch.png"});
@@ -397,7 +397,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "штурвал, когда приливная гравитация тянет корабль: «Не бойся, Мия. "
         "Я держу пузырь». Фотонное кольцо Sgr A* запечатлено, орбиты света измерены. "
         "Следующая цель — M87*.",
-        "Mia: \"Light bends around the horizon - and we see its ring.\" Yegorka steeps "
+        "Mia: \"Light bends around the horizon - and we see its ring.\" Egorka steeps "
         "the thrusters as tidal drag pulls toward the singularity: \"Don't be afraid, Mia. "
         "I've got the bubble.\" The photon ring of Sgr A* is recorded, light orbits measured. "
         "Next target - M87*.",
@@ -407,14 +407,14 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "брошен на тысячи световых лет. Егорка смотрит на спектрограф: «Релятивистский "
         "биминг ослепляет сенсоры. Держись за меня, мы разворачиваемся».",
         "Mia: \"Doppler does not lie: one side of the disk burns brighter.\" "
-        "The M87* jet reaches thousands of light-years. Yegorka glances at the spectrograph: "
+        "The M87* jet reaches thousands of light-years. Egorka glances at the spectrograph: "
         "\"Relativistic beaming is blinding the sensors. Hold on to me, we're turning.\"",
         7});
     s.push_back(StorySlide{  // 4: qso done
         "Мия: «Этот свет шёл к нам ещё до первых динозавров». Егорка достаёт звёздный кулон: "
         "«Два с половиной миллиарда лет... В этой тьме время теряет смысл. Главное — "
         "кто сидит в кресле рядом с тобой». Квазар 3C 273 позади.",
-        "Mia: \"This light traveled to us before the first dinosaurs.\" Yegorka reaches for "
+        "Mia: \"This light traveled to us before the first dinosaurs.\" Egorka reaches for "
         "his star pendant: \"Two and a half billion years... In this void, time loses meaning. All that "
         "matters is who sits in the seat beside you.\" Quasar 3C 273 behind them.",
         8});
@@ -423,7 +423,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "на древние звёзды: «Остаться и построить новый мир вместе? Или шагнуть дальше "
         "в неизведанное? Я пойду за тобой в любую сторону, Мия». Скопление "
         "M13: светила вдвое старше Солнца; вторая Земля найдена.",
-        "Mia: \"There it is - a second home. But we have one choice left.\" Yegorka "
+        "Mia: \"There it is - a second home. But we have one choice left.\" Egorka "
         "gazes at the ancient stars: \"Stay and build a new world together? Or step further "
         "into the unknown? I will follow you either way, Mia.\" Cluster "
         "M13: stars twice as old as the Sun; a second Earth is found.",
@@ -431,7 +431,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
     s.push_back(StorySlide{  // 6: neutral finale fallback (legacy saves)
         "Финал экспедиции: Новому Дому — быть. Мия и Егорка завершили сюжетную арку; "
         "Галактика всё ещё ждёт исследователей.",
-        "Expedition finale: the New Home shall be. Mia and Yegorka completed the story arc; "
+        "Expedition finale: the New Home shall be. Mia and Egorka completed the story arc; "
         "the Galaxy is still waiting for explorers.",
         10});
     s.push_back(StorySlide{  // 7: colony ending (branch A)
@@ -440,7 +440,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "наш кочевой варп-пузырь наконец-то причалил». Экипаж «Астронавигатора-1» "
         "основал Новый Дом у старых звёзд M13. Экспедиция завершена — история только начинается.",
         "Mia: \"We stay. There will be homes, gardens and children who see a "
-        "real sky.\" Yegorka rests his hand beside hers on the console: \"Then our "
+        "real sky.\" Egorka rests his hand beside hers on the console: \"Then our "
         "wandering warp bubble has finally docked.\" The crew of AstroNavigator-1 "
         "founds the New Home by the old stars of M13. The expedition is over - the story is just "
         "beginning.",
@@ -452,7 +452,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "«Астронавигатор-1» покидает M13 и уходит к краю Галактики. Колония останется "
         "мечтой; экипаж — легендой.",
         "Mia: \"We do not end the story. One jump - and there will be new "
-        "light beyond the horizon.\" Yegorka smiles as he dials the warp drive into "
+        "light beyond the horizon.\" Egorka smiles as he dials the warp drive into "
         "overdrive: \"Just you, me, and infinity. Lead on, navigator.\" The last fuel "
         "feeds the drive. AstroNavigator-1 leaves M13 for the edge of the Galaxy. "
         "The colony remains a dream; the crew becomes a legend.",
@@ -467,7 +467,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "Epilogue · Legacy. Years later, the signal of AstroNavigator reached "
         "Earth. A new pier has grown in the orbit where Dragon and Soyuz "
         "stand. On the panel of the ancient station, a simple engraving was found: "
-        "\"Mia + Yegorka = across spacetime\". "
+        "\"Mia + Egorka = across spacetime\". "
         "The first ships no longer fly - but every pilot heading for "
         "the stars leaves a call sign on their hull. The story continues.",
         5});
@@ -476,8 +476,8 @@ const std::vector<StorySlide>& storyChapterSlides() {
   return slides;
 }
 
-// v4.0 prologue of the "New Game / Adventure" slot: Yegorka's own path.
-// v4.0 prologue of the "New Game / Adventure" slot: Yegorka's own path.
+// v4.0 prologue of the "New Game / Adventure" slot: Egorka's own path.
+// v4.0 prologue of the "New Game / Adventure" slot: Egorka's own path.
 // Photos live in res/story/ (jpg/png, stb_image); art slides reuse the table.
 const std::vector<StorySlide>& storyPrologueSlides() {
   static const std::vector<StorySlide> slides = [] {
@@ -488,7 +488,7 @@ const std::vector<StorySlide>& storyPrologueSlides() {
         "Егорка из Пятой Вселенной с пульсирующей сингулярностью в руке.",
         "Paris. A rainy night by the Seine. Spacetime tore open with a crackling "
         "blue portal: a traveler in a starlight cloak stepped forward — older "
-        "Yegorka from the Fifth Universe, holding a pulsing singularity.",
+        "Egorka from the Fifth Universe, holding a pulsing singularity.",
         0, "res/story/01_paris_portal.jpg"});
     s.push_back(StorySlide{  // 1: The Secret of Antimatter
         "«Ваш варп-проект застрял, потому что ищут отрицательную массу. "
@@ -498,7 +498,7 @@ const std::vector<StorySlide>& storyPrologueSlides() {
         "\"Your warp project stalled hunting for negative mass. You need an "
         "asymmetric Casimir cavity: antimatter annihilation creates a coherent "
         "vacuum shift, driving energy density below zero. Not antigravity, "
-        "Yegorka. Spacetime engineering\".",
+        "Egorka. Spacetime engineering\".",
         0, "res/story/02_pendant_handover.jpg"});
     s.push_back(StorySlide{  // 2: Decoding the Metric in the Attic
         "«Портал нестабилен — у меня две минуты. Не жди, пока станешь великим. "

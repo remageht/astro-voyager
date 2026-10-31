@@ -2910,7 +2910,7 @@ void AppGL::drawSlidesOverlay() {
 
   const char* headTxt =
       m_slidesAdv
-          ? uiRu("Егорка · пролог", "Yegorka · Prologue")
+          ? uiRu("Егорка · пролог", "Egorka · Prologue")
           : (m_slidesIntro ? uiRu("Экспедиция · пролог", "Expedition · Prologue")
                            : m_slidesHead.c_str());
   if (headTxt && headTxt[0] != '\0') {
@@ -2998,7 +2998,7 @@ void AppGL::drawSlidesOverlay() {
 
     const char* headTxt =
         m_slidesAdv
-            ? uiRu("Егорка · пролог", "Yegorka · Prologue")
+            ? uiRu("Егорка · пролог", "Egorka · Prologue")
             : (m_slidesIntro
                    ? uiRu("Экспедиция · пролог", "Expedition · Prologue")
                    : m_slidesHead.c_str());

@@ -438,9 +438,9 @@ Check 'catalog has sn1987a' (($catalogCpp -match '"sn1987a"') -and ($catalogJson
 Check 'catalog type supernova' (($catalogH -match 'Supernova') -and ($catalogCpp -match 'supernova'))
 Check 'supernova render branch' (($sceneCpp -match 'StationType::Supernova') -and ($sceneCpp -match 'm_supernovaShader'))
 Check 'supernova inspector controls' (($appCpp -match 'Supernova Event') -and ($appCpp -match 'triggerSupernovaExplosion'))
-# Story & Romance Arc: Yegorka & Mia
+# Story & Romance Arc: Egorka & Mia
 Check 'story journal romance entries' (((Read-File 'src/StoryJournal.cpp') -match '"sn1987a"') -and ((Read-File 'src/StoryJournal.cpp') -match '"gw170817"') -and ((Read-File 'src/StoryJournal.cpp') -match '"letter-to-earth"'))
-Check 'story slides romance dialogues' (((Read-File 'src/StorySlides.cpp') -match 'Mia') -and ((Read-File 'src/StorySlides.cpp') -match 'Yegorka') -and ((Read-File 'src/StorySlides.cpp') -match 'Casimir'))
+Check 'story slides romance dialogues' (((Read-File 'src/StorySlides.cpp') -match 'Mia') -and ((Read-File 'src/StorySlides.cpp') -match 'Egorka') -and ((Read-File 'src/StorySlides.cpp') -match 'Casimir'))
 Check 'story test wired' (($cmake -match 'tests/test_story\.cpp') -and ($cmake -match 'add_test\(NAME test_story'))
 # v4.2.0: Cosmic Events Pass 3 - Tidal Disruption Event AT2019qiz (TDE)
 Check 'tde frag exists' (Test-Path (Join-Path $root 'shaders/tde.frag'))

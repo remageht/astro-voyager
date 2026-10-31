@@ -48,7 +48,7 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 
 ### v4.0 — Two modes: Adventure & Sandbox / Два режима: приключение и песочница
 - Status / Статус: **shipped in 4.0.0 (foundation) & 4.1.0 (campaign)** / **выпущено в 4.0.0 (фундамент) и 4.1.0 (кампания)**.
-- EN: Shipped: mode entry "New Game · Adventure", Yegorka's illustrated prologue, dedicated save profiles, 7-chapter campaign with Mia Sato, "The Last Watch" fleet interlude, dual endings (Colony vs Horizon) and shared "Legacy" epilogue. Still ahead: in-chapter branching and deadline countdown meta-game.
+- EN: Shipped: mode entry "New Game · Adventure", Egorka's illustrated prologue, dedicated save profiles, 7-chapter campaign with Mia Sato, "The Last Watch" fleet interlude, dual endings (Colony vs Horizon) and shared "Legacy" epilogue. Still ahead: in-chapter branching and deadline countdown meta-game.
 - RU: Выпущено: пункт «Новая игра · Adventure», иллюстрированный пролог Егорки, раздельные профили сохранений, кампания из 7 глав с репликами Мии Сато, интерлюдия «Последний караул», развилка двух концовок и эпилог «Наследие». Впереди: ветвления внутри глав и обратный отсчёт срока.
 - Gates: раздельные профили сохранений, тесты экспедиции и развилок (test_expedition), скриптованный smoke-прогон.
 

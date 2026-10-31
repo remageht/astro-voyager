@@ -33,7 +33,7 @@
 ## 4.0.0 - 2026-10-28
 
 ## What's new / Что нового
-- EN: Adventure mode foundation - the main menu now offers "New Game · Adventure": it plays Yegorka's illustrated prologue, creates a dedicated `save-adventure.json` profile (`SaveMode::Adventure`), resets the expedition state and drops the player at Sol. Sandbox keeps its own `save-sandbox.json`, so the two modes never overwrite each other. This release is the foundation only: the 6-8 chapter campaign with branching, the countdown meta-game and the finale is future work and is not claimed here.
+- EN: Adventure mode foundation - the main menu now offers "New Game · Adventure": it plays Egorka's illustrated prologue, creates a dedicated `save-adventure.json` profile (`SaveMode::Adventure`), resets the expedition state and drops the player at Sol. Sandbox keeps its own `save-sandbox.json`, so the two modes never overwrite each other. This release is the foundation only: the 6-8 chapter campaign with branching, the countdown meta-game and the finale is future work and is not claimed here.
 - RU: Основа режима «Приключение» - в главном меню появилась кнопка «Новая игра · Adventure»: запускается иллюстрированный пролог Егорки, создаётся отдельный профиль `save-adventure.json` (`SaveMode::Adventure`), экспедиция сбрасывается, игрок высаживается в Солнечной системе. Песочница сохраняется отдельно в `save-sandbox.json`, режимы не перезаписывают друг друга. Это именно фундамент: кампания на 6-8 глав с ветвлениями, мета-механикой обратного отсчёта и финалом остаётся будущей работой и в 4.0.0 не заявляется.
 - EN: Orbital shipyard (`K`) - docking at a station, fleet hangar (Dart 0, Ring Ship 1, Shuttle 2, Warp Cruiser 3), paint shop for hull/accent/emissive tints with presets, and engineering upgrades (boost +45%, shield capacity +37%, warp-coil harmonics -36% jump fuel). Everything persists in the profile.
 - RU: Орбитальная верфь (`K`) - стыковка со станцией, ангар флота (Dart 0, Ring Ship 1, Shuttle 2, Warp Cruiser 3), покрасочный цех обшивки/полос/свечения с пресетами и инженерные апгрейды (форсаж +45%, ёмкость щитов +37%, гармоника варп-катушек -36% топлива на прыжок). Всё сохраняется в профиле.
@@ -66,7 +66,7 @@
 ## 3.10.1 - 2026-10-22
 
 ## What's new / Что нового
-- EN: Cinematic story prologue overhaul ("Yegorka's Prologue: Legacy of the Fifth Universe") - fully illustrated 5-slide narrative sequence in res/story/ replacing procedural vector art; covers the Paris Seine dimensional portal encounter with Yegorka-5, the antimatter Casimir vacuum phase-shift revelation, attic equation decoding, orbital construction of the Astro-Voyager with Alcubierre rings, and pilot EgorKa (29078) at the helm initiating the first interstellar warp jump.
+- EN: Cinematic story prologue overhaul ("Egorka's Prologue: Legacy of the Fifth Universe") - fully illustrated 5-slide narrative sequence in res/story/ replacing procedural vector art; covers the Paris Seine dimensional portal encounter with Egorka-5, the antimatter Casimir vacuum phase-shift revelation, attic equation decoding, orbital construction of the Astro-Voyager with Alcubierre rings, and pilot EgorKa (29078) at the helm initiating the first interstellar warp jump.
 - EN: Updated bilingual story slide texts in StorySlides.cpp (Russian and English) with full hard sci-fi grounding.
 - RU: Кинематографический пролог сюжета («Пролог Егорки: Наследие Пятой Вселенной») - 5 фотореалистичных слайдов в res/story/ с полной заменой процедурных векторных заглушек: встреча на набережной Сены с Егоркой из Пятой Вселенной, передача секрета фазового сдвига вакуума антиматерии в резонаторе Казимира, разгадка метрики Алькубьерре в мансарде, орбитальная сборка корабля Astro-Voyager и пилот EgorKa (29078) за штурвалом перед первым варп-прыжком.
 - RU: Обновлены двуязычные художественные тексты слайдов в StorySlides.cpp (русский и английский) с опорой на твердую научную фантастику.
@@ -91,7 +91,7 @@
 ## 3.9.1 - 2026-10-20
 
 ## What's new / Что нового
-- EN: Yegorka prologue now opens with a video slide - res/story/egor_intro frames (320x180, 12 fps, ~10 s) stream as one glitchy CRT clip with wav narration audio, auto-advancing to the next slide when the clip ends; AudioEngine gained a file-voice (playFile) backend.
+- EN: Egorka prologue now opens with a video slide - res/story/egor_intro frames (320x180, 12 fps, ~10 s) stream as one glitchy CRT clip with wav narration audio, auto-advancing to the next slide when the clip ends; AudioEngine gained a file-voice (playFile) backend.
 - EN: Mouse-wheel zoom in the Chase/Overview ship views (hold the wheel outside menus/views: 0.35x..2.5x, smoothed, not persisted).
 - EN: Warp cocoon restyle - the tunnel now reads like the reference: translucent blue-white chrysalis shell with fresnel rim, long coherent meridian strands, slowed drift; warp overlay adds fbm tunnel walls, red entry nebula, white-hot exit core and a subtle prismatic rim.
 - EN: Two new black hole stations: `oj287` (binary SMBH - giant disk + companion punching the disk twice per 60 s orbit with flares) and `hyperdisk` (a hole dwarfed by its 26-Rs thin disk).
