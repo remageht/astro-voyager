@@ -37,7 +37,7 @@ const std::vector<StorySlide>& storyIntroSlides();
 // Shared finish-of-chapter slides; art ids reuse the same table as intro.
 const std::vector<StorySlide>& storyChapterSlides();
 
-// v4.0 "Новая игра / New Game" prologue: Yegorka's own story (dream
+// v4.0 "Новая игра / New Game" prologue: Egorka's own story (dream
 // revelation, dying planet, warp drive on antimatter, pilot's path) with
 // two photographic slides (res/story/*.jpg); hands off to the expedition
 // at Zemlya ("Дом").

@@ -147,7 +147,7 @@ std::vector<StoryEntry> storyCatalog() {
       "Созвездие собрано: звёздный кулон Егорки-5 срезонировал с метрикой Млечного Пути. "
       "Опорные координаты Пятой Вселенной подтверждены. Расстояние снова уступило место упрямству.";
   e.textEn =
-      "Constellation aligned: the star pendant of Yegorka-5 resonated with the Milky Way metric. "
+      "Constellation aligned: the star pendant of Egorka-5 resonated with the Milky Way metric. "
       "Reference coordinates of the Fifth Universe are locked. Distance has yielded to stubbornness once more.";
   c.push_back(e);
 
@@ -160,10 +160,10 @@ std::vector<StoryEntry> storyCatalog() {
       "Ты сказала, что они светят слишком ярко». Мия не отводит глаз от датчиков: "
       "«Тогда вокруг не было вакуума, Егорка. И мы не летели сквозь пепел сверхновой. Но... да. Я помню».";
   e.textEn =
-      "Mia counts thirty-two bright knots on the ring of SN 1987A. Yegorka looks not at the ring, "
+      "Mia counts thirty-two bright knots on the ring of SN 1987A. Egorka looks not at the ring, "
       "but at the reflection in her visor. \"Remember the streetlights on Pont Alexandre III in the rain? "
       "You said they were far too bright.\" Mia keeps her eyes fixed on telemetry: "
-      "\"There was no vacuum around us back then, Yegorka. Nor were we flying through supernova ashes. But... yes. I remember.\"";
+      "\"There was no vacuum around us back then, Egorka. Nor were we flying through supernova ashes. But... yes. I remember.\"";
   c.push_back(e);
 
   e.id = "gw170817";
@@ -177,10 +177,10 @@ std::vector<StoryEntry> storyCatalog() {
       "Мия тихо сжимает его ладонь: «Мы не вернёмся одни, Егорка».";
   e.textEn =
       "Kilonova GW170817: the merger of two neutron stars forged oceans of gold and platinum. "
-      "Yegorka turns the star pendant between his fingers: \"Billions back on Earth fought wars over "
+      "Egorka turns the star pendant between his fingers: \"Billions back on Earth fought wars over "
       "wedding rings, never realizing they were merely wearing debris from cosmic collisions. "
       "And standing here, I realize: all the gold in the Universe isn't worth returning to this bridge alone.\" "
-      "Mia quietly squeezes his hand: \"We won't return alone, Yegorka.\"";
+      "Mia quietly squeezes his hand: \"We won't return alone, Egorka.\"";
   c.push_back(e);
 
   e.id = "m31";
@@ -195,7 +195,7 @@ std::vector<StoryEntry> storyCatalog() {
       "Andromeda hurtles toward the Milky Way. Four billion years until the collision. "
       "Stars will drift right past stars without crashing — they will merely intertwine in a mutual dance. "
       "\"We're just like those two galaxies, Mia. Different orbits, yet gravity pulled us together anyway.\" "
-      "Mia smiles: \"Your C-grade in physics doesn't stop you from being a poet, Yegorka. Steady course to the core.\"";
+      "Mia smiles: \"Your C-grade in physics doesn't stop you from being a poet, Egorka. Steady course to the core.\"";
   c.push_back(e);
 
   e.id = "crab-pulse";
@@ -208,7 +208,7 @@ std::vector<StoryEntry> storyCatalog() {
       "варп-пузырь, когда я скажу пора».";
   e.textEn =
       "The pulsar clicks with the precision of an atomic clock. A rhythmic pulse echoing through the ship's comms. "
-      "\"Thirty beats per second,\" Yegorka murmurs. \"Mine beats thrice as fast whenever you cut the "
+      "\"Thirty beats per second,\" Egorka murmurs. \"Mine beats thrice as fast whenever you cut the "
       "thrusters and throw us into free drift.\" Mia doesn't dispute it: \"Because I trust you to catch our "
       "warp bubble the moment I say 'now'.\"";
   c.push_back(e);
@@ -225,7 +225,7 @@ std::vector<StoryEntry> storyCatalog() {
       "A quantum packet signal directed toward the Solar System. It won't arrive soon. "
       "\"Earth, this is the bridge of Astro-Voyager. Out here, on the edge of warped space, it is terribly dark and cold. "
       "But if you hear us across the years — know this: we found more than coordinates for a new home. "
-      "We found what makes any winter worth surviving.\" Signed at the bottom: Mia & Yegorka.";
+      "We found what makes any winter worth surviving.\" Signed at the bottom: Mia & Egorka.";
   c.push_back(e);
 
   e.id = "at2019qiz";
@@ -240,7 +240,7 @@ std::vector<StoryEntry> storyCatalog() {
       "A supermassive black hole shredded a nearby star into ultra-thin, incandescent filaments. "
       "\"Even stars break apart when they drift too close,\" Mia whispers at the visor. \"Yet look at "
       "the brilliant light she gave back in return. Visible across two hundred million light-years.\" "
-      "Yegorka gently takes her hand: \"Gravity can bend a ray of light, Mia, but never what binds us.\"";
+      "Egorka gently takes her hand: \"Gravity can bend a ray of light, Mia, but never what binds us.\"";
   c.push_back(e);
 
   return c;
