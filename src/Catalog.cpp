@@ -65,6 +65,9 @@ const std::vector<Station>& builtinCatalog() {
       {"sn1987a", StationType::Supernova, "Supernova SN 1987A",
        "Core-collapse supernova remnant in the Large Magellanic Cloud: glowing triple ring system, hot spot pearls, expanding shock wave.",
        26.0, {}, 1.5, 1.4, 168000.0},
+      {"at2019qiz", StationType::TidalDisruption, "TDE AT2019qiz",
+       "Tidal disruption event: a solar-mass star shredded by a 10^6 M☉ black hole, relativistic spaghettification stream, super-Eddington accretion flare, and t^-5/3 fallback cooling.",
+       28.0, {}, 2.0, 1.0e6, 215.0e6},
   };
   return kStations;
 }
@@ -88,6 +91,7 @@ std::string typeToString(StationType t) {
     case StationType::StarCluster: return "star_cluster";
     case StationType::Kilonova: return "kilonova";
     case StationType::Supernova: return "supernova";
+    case StationType::TidalDisruption: return "tidal_disruption";
   }
   return "unknown";
 }

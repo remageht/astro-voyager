@@ -164,6 +164,14 @@
       "description": "Core-collapse supernova remnant in the Large Magellanic Cloud: glowing triple ring system, hot spot pearls, expanding shock wave.",
       "spawnDistanceRs": 26.0,
       "mass": 1.4
+    },
+    {
+      "id": "at2019qiz",
+      "type": "tidal_disruption",
+      "name": "TDE AT2019qiz",
+      "description": "Tidal disruption event: a solar-mass star shredded by a 10^6 M☉ black hole, relativistic spaghettification stream, super-Eddington accretion flare, and t^-5/3 fallback cooling.",
+      "spawnDistanceRs": 28.0,
+      "mass": 1000000.0
     }
   ]
 }

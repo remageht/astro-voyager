@@ -208,6 +208,22 @@ int main() {
     }
   }
 
+  // Test 7g: TDE at2019qiz visit unlocks at2019qiz entry (Spaghettification).
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"at2019qiz"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "at2019qiz") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7g failed: at2019qiz visit should unlock at2019qiz\n";
+      return 1;
+    }
+  }
+
   // Test 8: unread counting and markAllRead; read marks survive refresh.
   {
     StoryJournal j;
@@ -246,7 +262,7 @@ int main() {
       std::cerr << "Test 9 failed: repeated refresh changed unlock state\n";
       return 1;
     }
-    if (j.entries().size() != 16) {
+    if (j.entries().size() != 17) {
       std::cerr << "Test 9 failed: catalog size drifted ("
                 << j.entries().size() << ")\n";
       return 1;

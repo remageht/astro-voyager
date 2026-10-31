@@ -442,6 +442,13 @@ Check 'supernova inspector controls' (($appCpp -match 'Supernova Event') -and ($
 Check 'story journal romance entries' (((Read-File 'src/StoryJournal.cpp') -match '"sn1987a"') -and ((Read-File 'src/StoryJournal.cpp') -match '"gw170817"') -and ((Read-File 'src/StoryJournal.cpp') -match '"letter-to-earth"'))
 Check 'story slides romance dialogues' (((Read-File 'src/StorySlides.cpp') -match 'Mia') -and ((Read-File 'src/StorySlides.cpp') -match 'Yegorka') -and ((Read-File 'src/StorySlides.cpp') -match 'Casimir'))
 Check 'story test wired' (($cmake -match 'tests/test_story\.cpp') -and ($cmake -match 'add_test\(NAME test_story'))
+# v4.2.0: Cosmic Events Pass 3 - Tidal Disruption Event AT2019qiz (TDE)
+Check 'tde frag exists' (Test-Path (Join-Path $root 'shaders/tde.frag'))
+Check 'catalog has at2019qiz' (($catalogCpp -match '"at2019qiz"') -and ($catalogJson -match '"at2019qiz"'))
+Check 'catalog type tidal_disruption' (($catalogH -match 'TidalDisruption') -and ($catalogCpp -match 'tidal_disruption'))
+Check 'tde render branch' (($sceneCpp -match 'StationType::TidalDisruption') -and ($sceneCpp -match 'm_tdeShader'))
+Check 'tde inspector controls' (($appCpp -match 'Tidal Disruption Event') -and ($appCpp -match 'triggerTdeExplosion'))
+Check 'story journal has at2019qiz' (((Read-File 'src/StoryJournal.cpp') -match '"at2019qiz"') -and ((Read-File 'tests/test_story.cpp') -match '"at2019qiz"'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
