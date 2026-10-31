@@ -5,7 +5,7 @@
 Расхождение — баг CI.
 
 Поля: `id (kebab-case, unique)`, `type` из
-`black_hole|quasar|constellation|galaxy|nebula`,
+`black_hole|quasar|constellation|galaxy|nebula|solar_system|pulsar|star_cluster|kilonova`,
 `name`, `description`, `spawnDistanceRs > 1.05`.
 
 Для `black_hole` опционально `params {rs, shellRadius, step, maxSteps}`.

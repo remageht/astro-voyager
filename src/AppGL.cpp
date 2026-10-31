@@ -1473,6 +1473,7 @@ const char* AppGL::stationTypeRuShort(StationType t) {
     case StationType::SolarSystem: return "Система";
     case StationType::Pulsar: return "Пульс.";
     case StationType::StarCluster: return "Скопл.";
+    case StationType::Kilonova: return "Килонова";
   }
   return "?";
 }
@@ -1488,6 +1489,7 @@ unsigned int AppGL::stationTypeChip(StationType t) {
     case StationType::SolarSystem: return IM_COL32(130, 230, 140, 255);
     case StationType::Pulsar: return IM_COL32(120, 240, 255, 255);
     case StationType::StarCluster: return IM_COL32(255, 215, 140, 255);
+    case StationType::Kilonova: return IM_COL32(255, 175, 75, 255);
   }
   return IM_COL32(140, 140, 140, 255);
 }
@@ -3727,6 +3729,36 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
     sliderChanged |= ImGui::Checkbox("Disk", &settings.diskOn);
   }
 
+  if (curSt && curSt->type == StationType::Kilonova) {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.28f, 1.0f), "%s",
+                       uiRu("Событие Килонова (GW170817):", "Kilonova Event (GW170817):"));
+    float phase = m_sceneManager->getKilonovaPhase();
+    const char* phaseName = "Inspiral (0.00-0.25)";
+    if (phase >= 0.75f) phaseName = "r-Process Fireball (0.75-1.00)";
+    else if (phase >= 0.50f) phaseName = "Relativistic sGRB Jet (0.50-0.75)";
+    else if (phase >= 0.25f) phaseName = "Merger & GW Ripples (0.25-0.50)";
+
+    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "%s: %s",
+                       uiRu("Фаза", "Phase Stage"), phaseName);
+    if (ImGui::SliderFloat("Phase##kilonova", &phase, 0.0f, 1.0f, "%.3f")) {
+      m_sceneManager->setKilonovaPhase(phase);
+    }
+    bool autoPlay = m_sceneManager->isKilonovaAutoPlay();
+    if (ImGui::Checkbox(uiRu("Авто-эволюция события", "Auto-evolve event"), &autoPlay)) {
+      m_sceneManager->setKilonovaAutoPlay(autoPlay);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(uiRu("💥 Слияние / Взрыв", "💥 Trigger Merger"))) {
+      m_sceneManager->triggerKilonovaExplosion();
+    }
+
+    ImGui::BulletText("%s: NGC 4993 (130 Mly / 40 Mpc)", uiRu("Галактика", "Host"));
+    ImGui::BulletText("%s: 1.48 + 1.26 M☉ (M_chirp=1.188 M☉)", uiRu("Массы звёзд", "Components"));
+    ImGui::BulletText("%s: ~0.05 M☉ (Au, Pt, U)", uiRu("r-процесс нуклеосинтез", "r-process yield"));
+    ImGui::BulletText("%s: h ~ 10^-21 (LIGO/Virgo)", uiRu("Гравитационные волны", "GW strain"));
+  }
+
   if (sliderChanged) {
     m_userOverrodePreset = true;
     m_benchmarking = false;
@@ -4269,7 +4301,7 @@ void AppGL::updateShip(float deltaTime) {
     haveGrav = true;
   }
 
-  // Радиация пульсара: опасно ближе пяти его радиусов от центра.
+  // Радиация пульсара и килоновы: опасно ближе к эпицентру.
   bool inRadZone = false;
   if (st->type == StationType::Pulsar) {
     const double d =
@@ -4277,6 +4309,12 @@ void AppGL::updateShip(float deltaTime) {
                   m_camera.position.y * m_camera.position.y +
                   m_camera.position.z * m_camera.position.z);
     inRadZone = d < ship::kPulsarRadius * ship::kPulsarDamageRadii;
+  } else if (st->type == StationType::Kilonova) {
+    const double d =
+        std::sqrt(m_camera.position.x * m_camera.position.x +
+                  m_camera.position.y * m_camera.position.y +
+                  m_camera.position.z * m_camera.position.z);
+    inRadZone = d < 8.0;
   }
 
   // v3.6.0: сложность масштабирует баланс (Easy: быстрая заправка и мягкая
@@ -5383,7 +5421,8 @@ void AppGL::drawWorldLabels() {
   // (без cull по дистанции/ndc — тело не должно "исчезать" вдали;
   // дальний импостор держит минимальный размер в шейдере).
   if (curSt->type == StationType::BlackHole ||
-      curSt->type == StationType::Quasar) {
+      curSt->type == StationType::Quasar ||
+      curSt->type == StationType::Kilonova) {
     const float aspectM = displaySize.x / displaySize.y;
     const float fovM = m_sceneManager->getSettings().fovDegrees;
     const glm::mat4 projM =
@@ -6214,7 +6253,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   const std::vector<std::string> targetStations = {
       "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104",
       "oj287", "hyperdisk",
-      "psr-vela", "psr-crab", "sgr-1806", "psr-b1913", "mw", "m13"
+      "psr-vela", "psr-crab", "sgr-1806", "psr-b1913", "mw", "m13", "gw170817"
   };
 
   for (const auto& stId : targetStations) {
@@ -7590,6 +7629,7 @@ const char* AppGL::cineTypeRu(StationType t) {
     case StationType::SolarSystem: return "Планетная система";
     case StationType::Pulsar: return "Пульсар";
     case StationType::StarCluster: return "Скопление";
+    case StationType::Kilonova: return "Килонова";
   }
   return "?";
 }

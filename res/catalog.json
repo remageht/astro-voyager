@@ -148,6 +148,14 @@
       "description": "Globular cluster: 300000 ancient stars. Fly between them.",
       "spawnDistanceRs": 20.0,
       "mass": 0.0
+    },
+    {
+      "id": "gw170817",
+      "type": "kilonova",
+      "name": "Kilonova GW170817",
+      "description": "Binary neutron star merger: gravitational-wave ripples, relativistic sGRB jet, r-process kilonova fireball.",
+      "spawnDistanceRs": 28.0,
+      "mass": 2.74
     }
   ]
 }

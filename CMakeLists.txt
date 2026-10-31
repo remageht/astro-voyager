@@ -302,6 +302,9 @@ if(ASTROVOYAGER_ENABLE_GL)
       "${CMAKE_BINARY_DIR}/generated/app.win.rc"
       @ONLY)
     target_sources(astro-voyager PRIVATE "${CMAKE_BINARY_DIR}/generated/app.win.rc")
+    if(MSVC)
+      target_link_options(astro-voyager PRIVATE "/MANIFEST:NO")
+    endif()
   endif()
 endif()
 
@@ -315,9 +318,7 @@ endif()
 option(ASTROVOYAGER_WIN32_GUI "Build GL app as Windows GUI without console" ON)
 if(ASTROVOYAGER_ENABLE_GL AND WIN32 AND ASTROVOYAGER_WIN32_GUI)
   if(MSVC)
-    # /MANIFEST:NO — манифест уже вшит ресурсом RT_MANIFEST (app.win.rc), иначе
-    # link.exe синтезирует второй манифест и CVTRES падает с CVT1100 (duplicate).
-    target_link_options(astro-voyager PRIVATE "/SUBSYSTEM:WINDOWS" "/ENTRY:mainCRTStartup" "/MANIFEST:NO")
+    target_link_options(astro-voyager PRIVATE "/SUBSYSTEM:WINDOWS" "/ENTRY:mainCRTStartup")
   else()
     target_link_options(astro-voyager PRIVATE "-mwindows")
   endif()

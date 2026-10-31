@@ -127,6 +127,7 @@ SceneManager::SceneManager() {
   m_galaxyShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/galaxy.frag");
   m_nebulaShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/nebula.frag");
   m_pulsarShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/pulsar.frag");
+  m_kilonovaShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/kilonova.frag");
   m_planetShader = std::make_unique<Shader>("shaders/planet.vert", "shaders/planet.frag");
   m_cometShader = std::make_unique<Shader>("shaders/planet.vert", "shaders/comet.frag");
   m_ringShader = std::make_unique<Shader>("shaders/ring.vert", "shaders/ring.frag");
@@ -802,6 +803,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
        m_dockSites.push_back(DockSite{"dock-warp-drive-vis", "Warp Drive Visualisation", "sgra", Vec3(0.0, 6.0, 30.0), 5.0f});
     } else if (m_currentStation->id == "ori") {
       m_dockSites.push_back(DockSite{"dock-ori", "Rigel Orbital Dock", "ori", Vec3(3.0, 1.0, 15.0), 5.0f});
+    } else if (m_currentStation->id == "gw170817") {
+      m_dockSites.push_back(DockSite{"dock-gw170817", "LIGO-Virgo Observation Platform", "gw170817", Vec3(0.0, 3.5, 24.0), 5.0f});
     } else {
       m_dockSites.push_back(DockSite{"dock-station", "Orbital Station " + m_currentStation->name, m_currentStation->id, Vec3(0.0, 1.8, m_currentStation->spawnDistanceRs * 1.15), 5.0f});
     }
@@ -1152,6 +1155,30 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_pulsarShader->setUniform1f("u_ArcScale", psrArcs);
     m_screenQuad->draw();
     m_pulsarShader->unbind();
+  } else if (m_currentStation->type == StationType::Kilonova) {
+    // Kilonova GW170817 / AT 2017gfo: Binary neutron star merger,
+    // spacetime gravitational waves, relativistic jet, and r-process fireball.
+    float dt = tickSimTime(time);
+    if (m_kilonovaAutoPlay && !m_paused && dt > 0.0f) {
+      m_kilonovaPhase += (dt * m_timeScale) * 0.04f;
+      if (m_kilonovaPhase > 1.0f) {
+        m_kilonovaPhase -= 1.0f;
+      }
+    }
+    m_kilonovaShader->bind();
+    m_kilonovaShader->setUniform1f("u_Time", time);
+    m_kilonovaShader->setUniform1f("u_Aspect", aspect);
+    m_kilonovaShader->setUniform1f("u_Exposure", m_exposure);
+    m_kilonovaShader->setUniform1f("u_Phase", m_kilonovaPhase);
+    m_kilonovaShader->setUniform2f("u_ObjNdc", impNdcX, impNdcY);
+    m_kilonovaShader->setUniform3f("u_CamPar", impParX, impParY, impParZ);
+    double kd = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+    double ks = m_currentStation->spawnDistanceRs;
+    if (ks <= 0.0) ks = 28.0;
+    float kzoom = static_cast<float>(std::clamp(ks / std::max(kd, 1e-3), 0.5, 30.0));
+    m_kilonovaShader->setUniform1f("u_ObjZoom", kzoom);
+    m_screenQuad->draw();
+    m_kilonovaShader->unbind();
   } else if (m_currentStation->type == StationType::StarCluster) {
     // v3.1.0 Deep Field: globular cluster ball (m13). Points only over a
     // linear-space dark clear (same triple as the constellation branch);
@@ -1800,6 +1827,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               keyCol = glm::vec3(1.00f, 0.94f, 0.82f) * 1.45f; break;
             case StationType::Constellation:
               keyCol = glm::vec3(0.95f, 0.97f, 1.00f) * 0.50f; break;
+            case StationType::Kilonova:
+              keyCol = glm::vec3(1.15f, 0.90f, 0.60f) * 1.65f; break;
           }
           keyDir = glm::normalize(keyDir + glm::vec3(0.0f, 0.30f, 0.0f));
         }
