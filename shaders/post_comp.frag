@@ -52,6 +52,49 @@ uniform float u_ShieldK;  // 0..1 impact amount (cold blue edge glow)
 uniform float u_HorizonK;      // прилив + красное смещение 0..1
 uniform float u_HorizonFlash;  // плавная белая вспышка 0..1
 
+// === Cinematography Director & Filmic Grading === (v4.4.0)
+uniform int u_ColorGrade;       // 0=Neutral, 1=Interstellar Amber, 2=Cyberpunk Neon, 3=NASA Mono Tri-X, 4=Technicolor Vintage
+uniform float u_FilmicVignette; // 0.0..1.0 smooth lens vignette
+
+vec3 applyColorGrading(vec3 c, int grade) {
+  if (grade == 1) {
+    // Interstellar Amber: warm sci-fi golden highlights, deep amber contrast
+    vec3 amber = vec3(
+        c.r * 1.12 + 0.02,
+        c.g * 1.01 + 0.005,
+        c.b * 0.82
+    );
+    amber = clamp(amber, 0.0, 1.0);
+    amber = pow(amber, vec3(0.95, 1.0, 1.10));
+    return clamp(mix(c, amber, 0.85), 0.0, 1.0);
+  } else if (grade == 2) {
+    // Cyberpunk Neon: cool cyan shadows, electric magenta/amber highlights
+    vec3 shadows = vec3(0.0, 0.12, 0.18);
+    vec3 highlights = vec3(1.15, 0.85, 1.10);
+    float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec3 neon = mix(c + shadows * (1.0 - luma), c * highlights, luma);
+    neon = clamp(neon, 0.0, 1.0);
+    neon = neon * neon * (3.0 - 2.0 * neon);
+    return clamp(mix(c, neon, 0.75), 0.0, 1.0);
+  } else if (grade == 3) {
+    // NASA Monochromatic: Kodak Tri-X 400 panchromatic scientific film
+    float luma = dot(c, vec3(0.299, 0.587, 0.114));
+    float triX = smoothstep(0.02, 0.98, luma);
+    return vec3(clamp(triX, 0.0, 1.0));
+  } else if (grade == 4) {
+    // Technicolor Vintage: 3-strip color saturation and warmth
+    vec3 tech;
+    tech.r = c.r * 1.25 - c.g * 0.12 - c.b * 0.10;
+    tech.g = c.g * 1.20 - c.r * 0.08 - c.b * 0.08;
+    tech.b = c.b * 1.15 - c.r * 0.05 - c.g * 0.05;
+    tech = clamp(tech, 0.0, 1.0);
+    float luma = dot(tech, vec3(0.299, 0.587, 0.114));
+    tech = mix(vec3(luma), tech, 1.25);
+    return clamp(tech, 0.0, 1.0);
+  }
+  return c;
+}
+
 void main() {
   vec4 sceneT = texelFetch(u_Scene, ivec2(gl_FragCoord.xy), 0);
   vec3 bloom = texture(u_Bloom, v_TexCoord).rgb +
@@ -168,6 +211,20 @@ void main() {
   // Single tonemap for the whole frame (moved here from station shaders).
   col = acesNarkowicz(col);
   col = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
+
+  // Filmic color grading & LUT presets (v4.4.0)
+  if (u_ColorGrade > 0) {
+    col = applyColorGrading(col, u_ColorGrade);
+  }
+
+  // Smooth lens vignette (v4.4.0)
+  if (u_FilmicVignette > 0.001) {
+    vec2 vUv = v_TexCoord - 0.5;
+    float dist = length(vUv * vec2(1.0, 0.9));
+    float vig = smoothstep(0.35, 0.85, dist);
+    col *= 1.0 - vig * clamp(u_FilmicVignette, 0.0, 1.0) * 0.85;
+  }
+
   // Single post-tonemap grain (replaces the per-shader grains).
   col += (compHash(gl_FragCoord.xy + fract(u_Time) * 100.0) - 0.5) * 0.012;
   if (u_StaticK > 0.0001) {

@@ -322,6 +322,9 @@ void PostFX::endScene(int width, int height) {
   // === Horizon capture === (v3.6.0): приливная линза + вспышка (0 = выкл).
   m_compShader->setUniform1f("u_HorizonK", m_horizonK);
   m_compShader->setUniform1f("u_HorizonFlash", m_horizonFlash);
+  // === Cinematography Director & Filmic Grading === (v4.4.0)
+  m_compShader->setUniform1i("u_ColorGrade", m_colorGrade);
+  m_compShader->setUniform1f("u_FilmicVignette", m_filmicVignette);
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_sceneTex);

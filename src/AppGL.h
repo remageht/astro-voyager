@@ -495,6 +495,12 @@ class AppGL {
   float m_orbitAngle = 0.0f;  // rad, накапливается каждый кадр
   void updateOrbit(float deltaTime);  // вызывать в processInput до WASD
   void drawPhotoPopup();              // вызывать в drawImGui при m_photoMode
+  // === Cinematography Director & Scientific GW Instrument === (v4.4.0)
+  int m_photoGrid = 0;              // 0=Off, 1=Rule of Thirds, 2=Golden Ratio, 3=Crosshair
+  bool m_showGwDetector = false;     // Gravitational Wave Interferometer instrument HUD
+  float m_gwChirpPhase = 0.0f;       // Accumulated orbital/chirp phase
+  void drawPhotoDirectorOverlay();   // Composition grid + framing lines
+  void drawGwDetectorHud();          // Gravitational wave interferometer strain chart
   // === Beauty === end
 
   // === Ship survival === (v3.3.0) begin.

@@ -2,6 +2,6 @@
 #include <string>
 
 namespace astro {
-inline const char* kVersion = "4.3.0";
+inline const char* kVersion = "4.4.0";
 inline const char* kAppName = "astro-voyager";
 }  // namespace astro

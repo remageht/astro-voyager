@@ -35,6 +35,9 @@ struct RenderSettings {
   bool planetRelief = true;       // микрорельеф и нормальный бамп поверхности
   bool planetAtmosphere = true;   // физическое рэлеевское рассеяние атмосферы
   bool planetHiResMesh = true;    // 128x256 HiRes сфера для планет
+  // v4.4.0: Режим кинорежиссёра и цветокоррекция (Beta Stage)
+  int colorGrade = 0;             // 0: Neutral, 1: Interstellar Amber, 2: Cyberpunk Neon, 3: NASA Mono Tri-X, 4: Technicolor Vintage
+  float filmicVignette = 0.0f;    // 0.0..1.0 smooth lens vignette
 };
 
 // User-spawned object (flexible object editor, v3.2.0).

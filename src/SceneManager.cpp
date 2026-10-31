@@ -2958,6 +2958,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   m_postFx.setShipFx(m_shipChroma, m_shipStatic, m_shipFlash);
   // === Speed FX === (v3.3.0): стрики скорости в композите (0 = выкл).
   m_postFx.setSpeedFx(m_speedFx);
+  // === Cinematography Director & Filmic Grading === (v4.4.0)
+  m_postFx.setCinematography(m_settings.colorGrade, m_settings.filmicVignette);
   m_postFx.setTime(time);
   m_postFx.endScene(fbWidth, fbHeight);
 }

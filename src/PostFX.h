@@ -66,6 +66,12 @@ class PostFX {
   // FXAA 3.11 после композита (по умолчанию включён; выкл. для отладки).
   void setFxaa(bool on) { m_fxaaOn = on; }
 
+  // === Cinematography Director & Filmic Grading === (v4.4.0)
+  void setCinematography(int colorGrade, float vignette) {
+    m_colorGrade = colorGrade;
+    m_filmicVignette = vignette;
+  }
+
  private:
   void ensureTargets(int width, int height);
   void release();
@@ -122,6 +128,10 @@ class PostFX {
   float m_warpUv[2] = {0.5f, 0.5f};
   float m_warpDir[2] = {0.0f, 1.0f};
   float m_warpK = 0.0f;
+
+  // Cinematography director state (v4.4.0)
+  int m_colorGrade = 0;
+  float m_filmicVignette = 0.0f;
 
   std::unique_ptr<Shader> m_compShader;
   std::unique_ptr<Shader> m_downShader;    // post_down13.frag
