@@ -1,14 +1,24 @@
 # CHANGELOG
 
-## 4.2.0 - Unreleased
+## 4.2.0 - 2026-10-31
 
 ## What's new / Что нового
-- EN: Stage 3 Pass 4 - Pillars of Creation (M16 / Eagle Nebula): Towering molecular gas and dust elephant trunks sculpted by UV photoevaporation from massive young O/B stars in open cluster NGC 6611. Procedural Linear HDR shader (`shaders/pillars.frag`) featuring Evaporating Gaseous Globules (EGGs), active embedded protostellar Young Stellar Objects (YSOs) with diffraction spikes, photoevaporative gas streamers, and a continuous multi-spectral blend slider from Hubble Optical (`[S II]`, H-alpha, `[O III]`) to penetrating JWST Infrared (NIRCam/MIRI).
-- RU: Stage 3 Pass 4 - Столпы Творения (M16 / Туманность Орёл): Величественные башни из холодного молекулярного водорода и космической пыли, сформированные ультрафиолетовым фотоиспарением от массивных молодых звёзд скопления NGC 6611. Процедурный HDR-шейдер (`shaders/pillars.frag`), испаряющиеся глобулы (EGGs), протозвёзды (YSOs) с дифракционными лучами, газовые стримеры и плавный скруббер от оптической палитры Hubble (`[S II]`, H-alpha, `[O III]`) к проникающему инфракрасному виду JWST (NIRCam/MIRI).
-- EN: Stage 3 Pass 4 - Crab Nebula (M1) Pulsar Wind Nebula (PWN) upgrade: Upgraded M1 shader (`shaders/nebula.frag`) to full relativistic PWN physics powered by the 33 ms Crab Pulsar (PSR B0531+21). Features a relativistic termination shock ring ($R_{\text{ts}} \approx 0.1\text{ pc}$), tilted equatorial synchrotron torus with Doppler-boosted expanding wisps ($v \sim 0.5c$), magnetically collimated polar relativistic jets, thermal Rayleigh-Taylor filamentary cage, and multi-wavelength blend slider (Optical Filaments <-> Chandra X-Ray Synchrotron).
-- RU: Stage 3 Pass 4 - Апгрейд Крабовидной туманности (M1) до Pulsar Wind Nebula (PWN): Обновление шейдера M1 (`shaders/nebula.frag`) с физической моделью туманности пульсарного ветра от 33-мс пульсара PSR B0531+21. Включает кольцо релятивистского удара торможения ($R_{\text{ts}} \approx 0.1\text{ пк}$), наклонённый экваториальный синхротронный тор с доплеровскими релятивистскими виспами ($v \sim 0.5c$), полярные релятивистские джеты, филаментную оболочку Рэлея-Тейлора и скруббер оптического/рентгеновского диапазонов.
-- EN: StoryJournal 18th chapter - "Pillars of Creation" (M16): Narrative entry exploring starbirth in the cold molecular dust towers, the cosmic cycle of supernova ash forming new suns, and Mia & Egorka reflecting on the foundation of their New Home.
-- RU: 18-я глава судового журнала - «Столпы Творения» (M16): Сюжетная запись о рождении звёзд в холодной пыли, замыкании космического круга (пепел сверхновых образует новые солнца) и размышлениях Мии и Егорки о будущем Новом Доме.
+- EN: Transition to Alpha milestone: "The Immersion & Cockpit Overhaul" - Astro-Voyager evolves from a 3rd-person visualizer into a full-scale first-person space simulator.
+- RU: Переход в стадию Alpha: "The Immersion & Cockpit Overhaul" - Astro-Voyager переходит от наблюдения со стороны к полноценному космическому симулятору от первого лица.
+- EN: Interactive Diegetic 3D Cockpit (`ViewMode::Cockpit`, key `V`): Procedural aerodynamic carbon-titanium cockpit canopy struts with chamfered edge highlights, instrument cowling bezels, and multi-layered glass canopy (`shaders/cockpit.vert`, `shaders/cockpit.frag`). Features realistic Fresnel edge reflections, micro-scratches, dust motes that catch stellar light, and photochromic auto-tint darkening against direct stellar and accretion disk flux.
+- RU: Интерактивный 3D-кокпит пилота (`ViewMode::Cockpit`, клавиша `V`): Процедурные аэрокосмические стойки фонаря кабины из углепластика и титана с фасками, приборная консоль и остекление фонаря (`shaders/cockpit.vert`, `shaders/cockpit.frag`). Включает френелевские отражения, микроцарапины и пылинки на стекле, а также адаптивное фотохромное автозатемнение при взгляде на Солнце, квазары и горячие аккреционные диски.
+- EN: Collimated Holographic HUD projected at infinity: Sharp anti-aliased boresight crosshair, artificial horizon pitch ladder ($10^\circ$ rungs), roll arc, speed & throttle tapes, warp field drive badge, and target locking brackets with distance in light years.
+- RU: Коллиматорный голографический HUD с фокусировкой на бесконечности: Прицельная марка курса, шкала тангажа авиагоризонта (шаг $10^\circ$), горизонт крена, шкалы скорости и тяги, индикатор варп-поля и рамка захвата цели с расстоянием.
+- EN: Cockpit flight dynamics and pilot inertia (`src/CockpitController`): Spring-damper physics simulating pilot head displacement under linear and angular G-forces, head tilt banking into turns, and high-frequency canopy vibration under warp and boost.
+- RU: Физика и динамика кабины (`src/CockpitController`): Пружинно-демпферная модель смещения взгляда пилота под перегрузками, динамический наклон головы в виражах и микро-вибрация остекления при варп-прыжках.
+- EN: Modernized aerospace tabbed Settings menu: Redesigned avionics dashboard organized into Graphics/GR, Ship/Cockpit, Flight/Physics, and Controls/Audio tabs.
+- RU: Модернизированное меню настроек: Аэрокосмический дашборд с вкладками «Графика и ОТО», «Корабль и Кокпит», «Полет и Физика», «Управление и Звук».
+- EN: Added automated test suite `test_cockpit` (9/9 CTests passing).
+- RU: Добавлен набор автотестов `test_cockpit` (9 из 9 тестов CTest пройдены успешно).
+- EN: Stage 3 Pass 4 - Pillars of Creation (M16 / Eagle Nebula): Towering molecular gas and dust elephant trunks sculpted by UV photoevaporation from massive young O/B stars in open cluster NGC 6611.
+- RU: Stage 3 Pass 4 - Столпы Творения (M16 / Туманность Орёл): Величественные башни из холодного молекулярного водорода и космической пыли, сформированные ультрафиолетовым фотоиспарением от массивных молодых звёзд скопления NGC 6611.
+- EN: StoryJournal 18th chapter - "Pillars of Creation" (M16): Narrative entry exploring starbirth in the cold molecular dust towers.
+- RU: 18-я глава судового журнала - «Столпы Творения» (M16): Сюжетная запись о рождении звёзд в холодной пыли.
 
 ## 4.1.0 - 2026-10-30
 

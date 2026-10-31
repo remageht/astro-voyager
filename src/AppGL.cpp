@@ -390,6 +390,11 @@ int AppGL::run() {
     // Render active scene
     m_sceneManager->render(m_renderCam, fbWidth, fbHeight, currentTime);
 
+    // === Diegetic 3D Cockpit === (v4.2.0 Alpha): кабина пилота и HUD от 1-го лица
+    if (m_viewMode == view::ViewMode::Cockpit && !m_inMenu && !m_hideUI) {
+      drawCockpit(fbWidth, fbHeight, deltaTime, currentTime);
+    }
+
     // === WarpDrive === (снять тряску камеры после render()).
     finishWarpFrame();
 
@@ -4722,7 +4727,17 @@ void AppGL::applyViewCamera(Camera& out) {
   out = m_camera;
   m_renderCamValid = true;
   if (m_jumpCine || m_inMenu) return;
-  if (m_viewMode == view::ViewMode::Cockpit) return;
+  if (m_viewMode == view::ViewMode::Cockpit) {
+    // v4.2.0: микро-инерция головы пилота в кабине при перегрузках
+    const glm::vec3 headOff = m_cockpitController.getHeadOffset();
+    const Vec3 fwd = m_camera.forward();
+    const Vec3 rt = m_camera.right();
+    const Vec3 up = m_camera.up();
+    out.position.x += headOff.x * rt.x + headOff.y * up.x + headOff.z * fwd.x;
+    out.position.y += headOff.x * rt.y + headOff.y * up.y + headOff.z * fwd.y;
+    out.position.z += headOff.x * rt.z + headOff.y * up.z + headOff.z * fwd.z;
+    return;
+  }
   // v4.0: зум колёсиком — множитель сноса (ближе/дальше), без крышки значений.
   out.position = view::offsetCameraPos(
       m_camera.position, m_camera.forward(), m_viewMode, m_viewZoom);
@@ -4731,6 +4746,67 @@ void AppGL::applyViewCamera(Camera& out) {
     // Снос не должен затаскивать камеру кадра под горизонт.
     out.clampNearHorizon(m_sceneManager->getSettings().rs);
   }
+}
+
+void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float currentTime) {
+  const glm::vec3 camPos(static_cast<float>(m_camera.position.x),
+                         static_cast<float>(m_camera.position.y),
+                         static_cast<float>(m_camera.position.z));
+  const Vec3 fwd = m_camera.forward();
+  const Vec3 rt = m_camera.right();
+  const Vec3 up = m_camera.up();
+  const glm::vec3 camFwd(static_cast<float>(fwd.x), static_cast<float>(fwd.y), static_cast<float>(fwd.z));
+  const glm::vec3 camRight(static_cast<float>(rt.x), static_cast<float>(rt.y), static_cast<float>(rt.z));
+  const glm::vec3 camUp(static_cast<float>(up.x), static_cast<float>(up.y), static_cast<float>(up.z));
+
+  std::string targetName = "";
+  const glm::vec3 targetPos(0.0f);
+  if (m_sceneManager && m_sceneManager->getCurrentStation()) {
+    targetName = m_sceneManager->getCurrentStation()->name;
+  }
+
+  float sunVis = 0.0f;
+  if (m_sceneManager && m_sceneManager->getCurrentStation()) {
+    const auto stType = m_sceneManager->getCurrentStation()->type;
+    if (stType == StationType::SolarSystem ||
+        stType == StationType::BlackHole ||
+        stType == StationType::Quasar) {
+      const float dToOrigin = glm::length(camPos);
+      if (dToOrigin > 0.1f) {
+        const float dotLight = glm::dot(-camPos / dToOrigin, camFwd);
+        if (dotLight > 0.55f) {
+          sunVis = (dotLight - 0.55f) / 0.45f;
+        }
+      }
+    }
+  }
+
+  const float throttle = m_speedK + (warpdrive::fuelAccel() > 0.0f ? 0.35f : 0.0f);
+  const float warpCharge = m_warpOn ? 1.0f : 0.0f;
+
+  m_cockpitController.update(deltaTime,
+                             camPos,
+                             camFwd,
+                             camRight,
+                             camUp,
+                             m_camSpeed,
+                             throttle,
+                             m_warpOn,
+                             warpCharge,
+                             m_ship.hull / 100.0f,
+                             m_ship.shield / 100.0f,
+                             targetName,
+                             targetPos,
+                             sunVis);
+
+  m_cockpitRenderer.render(fbWidth,
+                           fbHeight,
+                           currentTime,
+                           m_cockpitController.getHUDData(),
+                           m_cockpitController.getHeadOffset(),
+                           m_cockpitController.getHeadAngularTilt(),
+                           m_cockpitController.getCanopyRumble(),
+                           m_shipStyle);
 }
 
 // Скорость: реальная (u/s, сглаженная) и варп-фактор дают boost beta для
@@ -5395,128 +5471,166 @@ void AppGL::drawMenu() {
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Version %s", kVersion);
     ImGui::SetWindowFontScale(1.0f);
   } else if (m_menuPage == 1) {
-    ImGui::Text("Settings");
-    // === Settings v3.6.0 ===: страница выросла - скролл-область фиксированной
-    // высоты, Back остаётся внизу панели. Харнесс снимает только страницу 0
-    // (menu.png), эталон не затронут.
-    ImGui::BeginChild("##settingsScroll", ImVec2(0.0f, 424.0f));
+    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "%s",
+                       uiRu("БОРТОВЫЕ НАСТРОЙКИ КОРАБЛЯ", "AVIONICS & RENDER SETTINGS"));
+    ImGui::TextColored(ImVec4(0.50f, 0.58f, 0.68f, 1.0f), "%s",
+                       uiRu("Конфигурация релятивистского движка, сенсоров и кокпита",
+                            "Configuration of relativistic core, sensors and cockpit"));
+    ImGui::Spacing();
+
+    ImGui::BeginChild("##settingsScroll", ImVec2(0.0f, 440.0f), false);
     RenderSettings& menuSettings = m_sceneManager->getSettings();
     bool menuChanged = false;
 
-    ImGui::SeparatorText("Ray tracing (black holes)");
-    const char* rayNames[] = {"Low", "Med", "Ultra", "Custom"};
-    int rayPreset = static_cast<int>(m_sceneManager->getPreset());
-    if (ImGui::Combo("Ray quality", &rayPreset, rayNames, 4)) {
-      m_userOverrodePreset = true;
-      m_benchmarking = false;
-      if (rayPreset >= 0 && rayPreset <= 2) {
-        m_sceneManager->applyPreset(static_cast<PerfPreset>(rayPreset));
-      } else {
-        m_sceneManager->setPreset(PerfPreset::Custom);
-      }
-    }
-    if (ImGui::SliderFloat("Shell radius", &menuSettings.shellRadius, 10.0f,
-                           60.0f, "%.0f")) {
-      menuChanged = true;
-    }
-    if (ImGui::SliderFloat("Step size", &menuSettings.stepSize, 0.01f, 0.12f,
-                           "%.3f")) {
-      menuChanged = true;
-    }
-    if (ImGui::SliderInt("Max steps", &menuSettings.maxSteps, 100, 2000)) {
-      menuChanged = true;
-    }
-    menuChanged |=
-        ImGui::Checkbox("Ship reflections", &menuSettings.shipReflections);
-    menuChanged |=
-        ImGui::Checkbox("Sky gravitational redshift", &menuSettings.gravRedshift);
-    menuChanged |=
-        ImGui::Checkbox("Sky RKF45 adaptive march", &menuSettings.rkf45Adaptive);
-
-    ImGui::SeparatorText("Anti-aliasing");
-    const char* aaNames[] = {"Off", "FXAA"};
-    if (ImGui::Combo("AA mode", &m_aaMode, aaNames, 2)) {
-      m_sceneManager->setFxaa(m_aaMode == 1);
-    }
-
-    ImGui::SeparatorText("Ship");
-    const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle", "Model (OBJ)"};
-    int hullSel = m_shipStyle;
-    if (ImGui::Combo("Hull", &hullSel, hullNames, 4)) {
-      setShipStyleNow(hullSel);
-    }
-    const char* engineNames[] = {"Red", "Ion", "Emerald", "Plasma"};
-    ImGui::Combo("Engine", &menuSettings.enginePalette, engineNames, 4);
-
-    ImGui::SeparatorText("Game");
-    const char* diffNames[] = {"Easy", "Normal", "Hard"};
-    ImGui::Combo("Difficulty", &m_difficulty, diffNames, 3);
-    const DifficultyTuning menuTune = difficultyTuning(m_difficulty);
-    ImGui::SetWindowFontScale(0.85f);
-    ImGui::TextColored(
-        ImVec4(0.6f, 0.62f, 0.68f, 1.0f),
-        "Jump cost x%.1f, star refuel x%.1f, radiation x%.1f, hints %s",
-        menuTune.jumpCostK, menuTune.starFuelK, menuTune.radiationK,
-        menuTune.hints ? "on" : "off");
-    ImGui::SetWindowFontScale(1.0f);
-
-    // v3.6.0: страница Controls — мышь и переназначение клавиш. Захват
-    // новой клавиши стартует кнопкой, ловится в начале drawImGui.
-    ImGui::SeparatorText("Controls");
-    ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.3f, 3.0f,
-                       "%.2f");
-    ImGui::Checkbox("Invert look Y", &m_invertY);
-    {
-      struct KeyRow {
-        const char* label;
-        int* key;
-      };
-      const KeyRow keyRows[5] = {{"Colony", &m_keyColony},
-                                 {"Camera view", &m_keyView},
-                                 {"Navigation", &m_keyMap},
-                                 {"Journal", &m_keyJournal},
-                                 {"Cine tour", &m_keyTour}};
-      for (int i = 0; i < 5; ++i) {
-        ImGui::TextUnformatted(keyRows[i].label);
-        ImGui::SameLine(150.0f);
-        const bool capturing = (m_captureKeyFor == i);
-        const std::string keyLabel =
-            keyNameForCode(*keyRows[i].key) +
-            (capturing ? " <press a key>" : "");
-        const std::string btnId =
-            keyLabel + "##keybind" + std::to_string(i);
-        if (ImGui::SmallButton(btnId.c_str())) {
-          m_captureKeyFor = capturing ? -1 : i;
+    if (ImGui::BeginTabBar("##SettingsTabs", ImGuiTabBarFlags_None)) {
+      if (ImGui::BeginTabItem(uiRu("Графика и ОТО", "Graphics & GR"))) {
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Трассировка лучей в ОТО (черные дыры)", "Ray tracing (black holes)"));
+        const char* rayNames[] = {"Low", "Med", "Ultra", "Custom"};
+        int rayPreset = static_cast<int>(m_sceneManager->getPreset());
+        if (ImGui::Combo("Ray quality", &rayPreset, rayNames, 4)) {
+          m_userOverrodePreset = true;
+          m_benchmarking = false;
+          if (rayPreset >= 0 && rayPreset <= 2) {
+            m_sceneManager->applyPreset(static_cast<PerfPreset>(rayPreset));
+          } else {
+            m_sceneManager->setPreset(PerfPreset::Custom);
+          }
         }
-      }
-    }
+        if (ImGui::SliderFloat("Shell radius", &menuSettings.shellRadius, 10.0f,
+                               60.0f, "%.0f")) {
+          menuChanged = true;
+        }
+        if (ImGui::SliderFloat("Step size", &menuSettings.stepSize, 0.01f, 0.12f,
+                               "%.3f")) {
+          menuChanged = true;
+        }
+        if (ImGui::SliderInt("Max steps", &menuSettings.maxSteps, 100, 2000)) {
+          menuChanged = true;
+        }
+        menuChanged |=
+            ImGui::Checkbox("Ship reflections", &menuSettings.shipReflections);
+        menuChanged |=
+            ImGui::Checkbox("Sky gravitational redshift", &menuSettings.gravRedshift);
+        menuChanged |=
+            ImGui::Checkbox("Sky RKF45 adaptive march", &menuSettings.rkf45Adaptive);
 
-    ImGui::SeparatorText("View and audio");
-    menuChanged |= ImGui::SliderFloat("FOV", &menuSettings.fovDegrees, 30.0f,
-                                      110.0f, "%.1f deg");
-    float menuExposure = m_sceneManager->getExposure();
-    if (ImGui::SliderFloat("Exposure", &menuExposure, 0.3f, 2.0f, "%.2f")) {
-      m_sceneManager->setExposure(menuExposure);
-      menuChanged = true;
-    }
-    menuChanged |= ImGui::Checkbox("Disk", &menuSettings.diskOn);
-    menuChanged |= ImGui::Checkbox("Labels", &m_showLabels);
-    bool menuOrbits = m_sceneManager->showOrbits();
-    if (ImGui::Checkbox("Orbits", &menuOrbits)) {
-      m_sceneManager->setShowOrbits(menuOrbits);
-      menuChanged = true;
-    }
-    bool menuBelt = m_sceneManager->showBelt();
-    if (ImGui::Checkbox("Belt", &menuBelt)) {
-      m_sceneManager->setShowBelt(menuBelt);
-      menuChanged = true;
-    }
-    if (ImGui::SliderInt("Volume", &m_audioVolume, 0, 100)) {
-      m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
-    }
-    bool menuMuted = m_audio.isMuted();
-    if (ImGui::Checkbox("Mute", &menuMuted)) {
-      m_audio.toggleMute();
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Сглаживание и экспозиция", "Anti-aliasing"));
+        const char* aaNames[] = {"Off", "FXAA"};
+        if (ImGui::Combo("AA mode", &m_aaMode, aaNames, 2)) {
+          m_sceneManager->setFxaa(m_aaMode == 1);
+        }
+        float menuExposure = m_sceneManager->getExposure();
+        if (ImGui::SliderFloat("Exposure", &menuExposure, 0.3f, 2.0f, "%.2f")) {
+          m_sceneManager->setExposure(menuExposure);
+          menuChanged = true;
+        }
+        ImGui::EndTabItem();
+      }
+
+      if (ImGui::BeginTabItem(uiRu("Корабль и Кокпит", "Ship & Cockpit"))) {
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Корпус и двигатели", "Ship"));
+        const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle", "Model (OBJ)"};
+        int hullSel = m_shipStyle;
+        if (ImGui::Combo("Hull", &hullSel, hullNames, 4)) {
+          setShipStyleNow(hullSel);
+        }
+        const char* engineNames[] = {"Red", "Ion", "Emerald", "Plasma"};
+        ImGui::Combo("Engine", &menuSettings.enginePalette, engineNames, 4);
+
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Интерьер 3D-кокпита (v4.2.0)", "3D Cockpit Interior (v4.2.0)"));
+        ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "%s",
+                           uiRu("Режим обзора: клавиша [V] переключает Кокпит / Корма / Обзор",
+                                "Camera view: [V] toggles Cockpit / Chase / Overview"));
+        ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.7f, 1.0f), "%s",
+                           uiRu("В кабине активны: инерция перегрузок, фотохромное автозатемнение и коллиматорный HUD.",
+                                "Active in cockpit: G-force inertia, photochromic auto-tint and collimated HUD."));
+
+        ImGui::EndTabItem();
+      }
+
+      if (ImGui::BeginTabItem(uiRu("Полет и Физика", "Flight & Physics"))) {
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Сложность экспедиции", "Game"));
+        const char* diffNames[] = {"Easy", "Normal", "Hard"};
+        ImGui::Combo("Difficulty", &m_difficulty, diffNames, 3);
+        const DifficultyTuning menuTune = difficultyTuning(m_difficulty);
+        ImGui::SetWindowFontScale(0.85f);
+        ImGui::TextColored(
+            ImVec4(0.6f, 0.62f, 0.68f, 1.0f),
+            "Jump cost x%.1f, star refuel x%.1f, radiation x%.1f, hints %s",
+            menuTune.jumpCostK, menuTune.starFuelK, menuTune.radiationK,
+            menuTune.hints ? "on" : "off");
+        ImGui::SetWindowFontScale(1.0f);
+
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Небесные элементы", "Celestial elements"));
+        menuChanged |= ImGui::Checkbox("Disk", &menuSettings.diskOn);
+        menuChanged |= ImGui::Checkbox("Labels", &m_showLabels);
+        bool menuOrbits = m_sceneManager->showOrbits();
+        if (ImGui::Checkbox("Orbits", &menuOrbits)) {
+          m_sceneManager->setShowOrbits(menuOrbits);
+          menuChanged = true;
+        }
+        bool menuBelt = m_sceneManager->showBelt();
+        if (ImGui::Checkbox("Belt", &menuBelt)) {
+          m_sceneManager->setShowBelt(menuBelt);
+          menuChanged = true;
+        }
+        ImGui::EndTabItem();
+      }
+
+      if (ImGui::BeginTabItem(uiRu("Управление и Звук", "Controls & Audio"))) {
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Управление", "Controls"));
+        ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.3f, 3.0f,
+                           "%.2f");
+        ImGui::Checkbox("Invert look Y", &m_invertY);
+        {
+          struct KeyRow {
+            const char* label;
+            int* key;
+          };
+          const KeyRow keyRows[5] = {{"Colony", &m_keyColony},
+                                     {"Camera view", &m_keyView},
+                                     {"Navigation", &m_keyMap},
+                                     {"Journal", &m_keyJournal},
+                                     {"Cine tour", &m_keyTour}};
+          for (int i = 0; i < 5; ++i) {
+            ImGui::TextUnformatted(keyRows[i].label);
+            ImGui::SameLine(150.0f);
+            const bool capturing = (m_captureKeyFor == i);
+            const std::string keyLabel =
+                keyNameForCode(*keyRows[i].key) +
+                (capturing ? " <press a key>" : "");
+            const std::string btnId =
+                keyLabel + "##keybind" + std::to_string(i);
+            if (ImGui::SmallButton(btnId.c_str())) {
+              m_captureKeyFor = capturing ? -1 : i;
+            }
+          }
+        }
+
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Аудиосистема", "View and audio"));
+        if (ImGui::SliderInt("Volume", &m_audioVolume, 0, 100)) {
+          m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+        }
+        bool menuMuted = m_audio.isMuted();
+        if (ImGui::Checkbox("Mute", &menuMuted)) {
+          m_audio.toggleMute();
+        }
+
+        ImGui::Spacing();
+        ImGui::SeparatorText(uiRu("Камера и FOV", "Camera"));
+        menuChanged |= ImGui::SliderFloat("FOV", &menuSettings.fovDegrees, 30.0f,
+                                          110.0f, "%.1f deg");
+        ImGui::EndTabItem();
+      }
+      ImGui::EndTabBar();
     }
     if (menuChanged) {
       m_userOverrodePreset = true;

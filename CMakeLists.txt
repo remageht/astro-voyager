@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 4.1.0 LANGUAGES CXX)
+project(astro-voyager VERSION 4.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,7 @@ add_executable(astro-voyager
   src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
   src/StoryJournal.cpp  # === StoryJournal === (v3.5.0): бортовой журнал, чистый C++17
   src/Expedition.cpp  # === Expedition === (v3.5.0): сюжетная арка, чистый C++17
+  src/CockpitController.cpp  # === CockpitController === (v4.2.0): динамика кабины и HUD
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -160,6 +161,23 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_warp_geodesic.cpp")
   endif()
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_cockpit.cpp")
+  add_executable(test_cockpit
+    tests/test_cockpit.cpp
+    src/CockpitController.cpp
+  )
+  target_include_directories(test_cockpit PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(EXISTS "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+    target_include_directories(test_cockpit PRIVATE "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+  endif()
+
+  if(MSVC)
+    target_compile_options(test_cockpit PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_cockpit PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
 if(ASTROVOYAGER_ENABLE_GL)
   message(STATUS "GL renderer enabled (expects Dependencies/ + src/vendor/ locally)")
   target_compile_definitions(astro-voyager PRIVATE ASTROVOYAGER_ENABLE_GL=1)
@@ -243,6 +261,7 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/AppGL.cpp
     src/StorySlides.cpp  # === Expedition === (v3.5.0): слайды + вектор-арт
     src/WarpJump.cpp  # === WarpJump === (агент J: чистая логика катсцены)
+    src/CockpitRenderer.cpp  # === CockpitRenderer === (v4.2.0): рендеринг 3D-кокпита и HUD
     src/vendor/imgui/imgui.cpp
     src/vendor/imgui/imgui_draw.cpp
     src/vendor/imgui/imgui_tables.cpp
@@ -351,6 +370,10 @@ endif()
 
 if(TARGET test_rkf45)
   add_test(NAME test_rkf45 COMMAND test_rkf45)
+endif()
+
+if(TARGET test_cockpit)
+  add_test(NAME test_cockpit COMMAND test_cockpit)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):
