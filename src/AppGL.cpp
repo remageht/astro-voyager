@@ -4714,6 +4714,10 @@ void AppGL::drawShipHud() {
                          uiRu("[C] Основать колонию:", "[C] Colonize:"),
                          m_colonyHint.c_str());
     }
+
+    // v4.2.0: Build watermark & stage indicator
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.40f, 0.60f, 0.80f, 0.70f), "AV-%s-ALPHA", kVersion);
   }
   ImGui::End();
 }
@@ -5293,6 +5297,24 @@ void AppGL::drawMenu() {
                          uiRu("ИССЛЕДОВАНИЕ ИСКРИВЛЁННОГО ПРОСТРАНСТВА-ВРЕМЕНИ",
                               "A JOURNEY THROUGH CURVED SPACETIME"));
       ImGui::Spacing();
+
+      // v4.2.0: Заметный бейдж релиза и стадии проекта
+      {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.22f, 0.35f, 0.75f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.14f, 0.34f, 0.52f, 0.90f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.88f, 1.00f, 1.0f));
+        if (ImGui::Button(uiRu(" [ v4.2.0 • ALPHA STAGE ]  Что нового / Patch Notes ",
+                               " [ v4.2.0 • ALPHA STAGE ]  What's New / Patch Notes "),
+                          ImVec2(-1.0f, 26.0f))) {
+          m_showPatchNotesModal = true;
+        }
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("%s", uiRu("Открыть примечания к выпуску v4.2.0 [Alpha Stage]",
+                                       "Open v4.2.0 [Alpha Stage] Patch Notes"));
+        }
+        ImGui::Spacing();
+      }
     }
 
     // Тонкий технический разделитель с акцентным штрихом
@@ -5468,7 +5490,7 @@ void AppGL::drawMenu() {
     ImGui::SetWindowFontScale(0.85f);
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "WASD fly | drag look | / search | dbl-click go");
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "P time | F1 help | H hide UI | ESC menu");
-    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Version %s", kVersion);
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "Version %s [ALPHA STAGE] • Build 2026.10", kVersion);
     ImGui::SetWindowFontScale(1.0f);
   } else if (m_menuPage == 1) {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "%s",
@@ -5652,6 +5674,89 @@ void AppGL::drawMenu() {
   ImGui::End();
   ImGui::PopStyleVar(4);
   ImGui::PopStyleColor(7);
+
+  drawPatchNotesModal();
+}
+
+void AppGL::drawPatchNotesModal() {
+  if (!m_showPatchNotesModal) return;
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowSize(ImVec2(720.0f, 520.0f), ImGuiCond_Appearing);
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
+                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  if (ImGui::Begin(uiRu("Примечания к выпуску v4.2.0 [Alpha Stage]###PatchNotes",
+                        "Release Notes v4.2.0 [Alpha Stage]###PatchNotes"),
+                   &m_showPatchNotesModal,
+                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f),
+                       "%s", uiRu("ASTRO-VOYAGER — ВЕРСИЯ 4.2.0 [ALPHA STAGE]",
+                                  "ASTRO-VOYAGER — VERSION 4.2.0 [ALPHA STAGE]"));
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+                       "%s", uiRu("Этап Alpha: кокпит, коллиматорный HUD, SpaceDrive варп-туннель и авионика",
+                                  "Alpha Stage: Cockpit, Collimated HUD, SpaceDrive Warp Tunnel & Avionics"));
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::BeginTabBar("##PatchNotesTabs")) {
+      if (ImGui::BeginTabItem(uiRu("Что нового", "What's New"))) {
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
+                           "%s", uiRu("1. Диегетический 3D-кокпит и коллиматорный ИЛС (HUD)",
+                                      "1. Diegetic 3D Cockpit & Collimated Holographic HUD"));
+        ImGui::BulletText("%s", uiRu("Вид от 1-го лица с процедурным фонарём, лонжеронами, МФД и светодиодами статуса.",
+                                     "1st-person view with procedural canopy frame, struts, MFDs and status LEDs."));
+        ImGui::BulletText("%s", uiRu("Инерция головы пилота (spring-damper) под перегрузками, крен при виражах, тряска фонаря.",
+                                     "Pilot head spring-damper inertia under G-forces, banking head tilt, canopy rumble."));
+        ImGui::BulletText("%s", uiRu("Коллиматорный авиационный прицел на бесконечности: шкала тангажа, авиагоризонт, ленты скорости.",
+                                     "Infinity-collimated HUD: boresight reticle, pitch ladder, roll arc, velocity tapes."));
+        ImGui::BulletText("%s", uiRu("Фотохромный автотинт фонаря кабины против яркого звёздного излучения.",
+                                     "Photochromic canopy auto-tint reacting to extreme stellar and accretion radiation."));
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
+                           "%s", uiRu("2. Анимированный 3D варп-туннель SpaceDrive (tamminen, CC BY 4.0)",
+                                      "2. Animated 3D SpaceDrive Warp Tunnel (tamminen, CC BY 4.0)"));
+        ImGui::BulletText("%s", uiRu("Восстановлена трёхслойная кинематика из Sketchfab: дифференциальное вращение слоёв.",
+                                     "Restored 3-layer kinematics from Sketchfab: differential rotation of outer & inner layers."));
+        ImGui::BulletText("%s", uiRu("Бесшовный пролёт сквозь гиперпространственный туннель в видах от 1-го и 3-го лица.",
+                                     "Seamless continuous streaming through hyperspace wormhole in 1st & 3rd person views."));
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
+                           "%s", uiRu("3. Модернизация настроек (Авионика и графика)",
+                                      "3. Modernized Avionics & Graphics Settings"));
+        ImGui::BulletText("%s", uiRu("Инженерные вкладки: [ Графика и ОТО ], [ Корабль и Кокпит ], [ Полет и Физика ], [ Управление ].",
+                                     "Engineering TabBar: [ Graphics & GR ], [ Ship & Cockpit ], [ Flight & Physics ], [ Controls ]."));
+        ImGui::EndTabItem();
+      }
+
+      if (ImGui::BeginTabItem(uiRu("План версий (Roadmap)", "Milestone Roadmap"))) {
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s",
+                           uiRu("Жизненный цикл релизов Astro Voyager:", "Astro Voyager Release Lifecycle:"));
+        ImGui::BulletText("v1.0.0 - v4.1.0: Pre-Alpha (%s)",
+                          uiRu("Физика, черные дыры, Солнечная система, сюжетная кампания",
+                               "Physics, black holes, Solar system, story campaign prototype"));
+        ImGui::BulletText("v4.2.0: Alpha Stage (%s)",
+                          uiRu("3D-кокпит, коллиматорный ИЛС, SpaceDrive туннель, авионика",
+                               "3D Cockpit, collimated HUD, SpaceDrive tunnel, avionics"));
+        ImGui::BulletText("v4.3.0: Beta Stage (%s)",
+                          uiRu("PBR-поверхности планет LOD, объемные туманности, баланс экономики",
+                               "PBR planetary surface LOD, volumetric nebulae, economy polish"));
+        ImGui::BulletText("v5.0.0: Release 1.0 (%s)",
+                          uiRu("Финальный коммерческий AAA-релиз", "Full commercial AAA release"));
+        ImGui::EndTabItem();
+      }
+      ImGui::EndTabBar();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    if (ImGui::Button(uiRu("Закрыть", "Close"), ImVec2(120.0f, 0.0f))) {
+      m_showPatchNotesModal = false;
+    }
+  }
+  ImGui::End();
 }
 
 void AppGL::drawWorldLabels() {
@@ -7091,6 +7196,7 @@ void AppGL::disengageWarp() {
   m_warpStatus = 0;
   m_warpJumpTarget.clear();
   warpRetarget(0.0f);
+  warpdrive::setWarpTravelActive(false);
   m_warpFlash = 0.35f;  // v3.6.0: мягкая вспышка выхода (комфорт для глаз)
 }
 
@@ -7305,6 +7411,9 @@ bool AppGL::updateWarp(float deltaTime) {
 
   // Состояние оверлея для SceneManager (дефолт 0 — харнесс чистый).
   warpdrive::setState(m_warpK, m_warpFlash);
+  if (!m_jumpCine) {
+    warpdrive::setWarpTravelActive(m_warpOn && (m_warpStatus == 3 || (m_warpStatus == 1 && m_warpFactor >= 7 && m_warpK > 0.5f)));
+  }
 
   return (m_warpOn && (m_warpStatus == 2 || m_warpStatus == 3));
 }
@@ -7337,6 +7446,7 @@ void AppGL::abortJumpCine() {
   m_warpStatus = 1;  // назад в Cruise
   warpRetarget(warpTargetK(m_warpFactor));
   warpdrive::setBurst(0.0f);
+  warpdrive::setWarpTravelActive(false);
   warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
   warpdrive::setAsteroids(0.0f, 0.0f);  // v3.6.0: прерванный прыжок — поле off
 }
@@ -7457,6 +7567,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
     case JumpPhase::Travel: {
       m_warpStatus = 3;
       if (entered) warpRetarget(1.0f);
+      warpdrive::setWarpTravelActive(true);
       m_warpK = 1.0f;
       m_warpKTo = 1.0f;
       m_jumpBurst = 1.0f * WarpJump::travelK(t01);  // ровная полка 1
@@ -7466,12 +7577,14 @@ bool AppGL::updateJumpCine(float deltaTime) {
     case JumpPhase::Arrival: {
       m_warpStatus = 3;
       if (entered) warpRetarget(cruiseK);  // rumble гаснет через ease+polling
+      warpdrive::setWarpTravelActive(true);
       m_jumpBurst = 1.0f - t01;
       shipVisible = true;
       break;
     }
     case JumpPhase::Pushin: {
       m_warpStatus = 4;
+      warpdrive::setWarpTravelActive(false);
       if (entered) {
         m_jumpPushinPos = m_jumpCamPos;
         m_jumpPushinYaw = m_camera.yaw;
@@ -7661,6 +7774,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
     m_jumpBurst = 0.0f;
     warpRetarget(cruiseK);
     warpdrive::setBurst(0.0f);
+    warpdrive::setWarpTravelActive(false);
     warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
     warpdrive::setAsteroids(0.0f, 0.0f);
     return false;

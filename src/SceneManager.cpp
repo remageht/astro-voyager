@@ -114,6 +114,9 @@ void setShipHull(float integrity) {
   g_shipHull = integrity;
 }
 float shipHull() { return g_shipHull; }
+bool g_warpTravelActive = false;
+void setWarpTravelActive(bool active) { g_warpTravelActive = active; }
+bool warpTravelActive() { return g_warpTravelActive || (g_warpK > 0.15f); }
 }  // namespace warpdrive
 
 SceneManager::SceneManager() {
@@ -1941,6 +1944,79 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         const glm::vec3 engineEmi = kEngineEmi[pal];
         const int style = warpdrive::shipStyle();
 
+        static ObjModel s_warpTunnelTubeModel;
+        static ObjModel s_warpTunnelScrapModel;
+        static ObjModel s_warpTunnelCloudModel;
+        static bool s_warpTunnelLayersTried = false;
+        if (!s_warpTunnelLayersTried) {
+          s_warpTunnelLayersTried = true;
+          s_warpTunnelTubeModel.load("res/models/warp_tunnel_tube.obj");
+          s_warpTunnelTubeModel.loadTextures("res/models/warp_tunnel_tube");
+
+          s_warpTunnelScrapModel.load("res/models/warp_tunnel_scrap.obj");
+          s_warpTunnelScrapModel.loadTextures("res/models/warp_tunnel_scrap");
+
+          s_warpTunnelCloudModel.load("res/models/warp_tunnel_cloud.obj");
+          s_warpTunnelCloudModel.loadTextures("res/models/warp_tunnel_cloud");
+        }
+
+        auto drawStationObjModel = [&](ObjModel* siteModel, const glm::mat4& stModel,
+                                       float customMetal, float customRough,
+                                       const glm::vec3& emOverride, float keyMult = 16.5f) {
+          if (!siteModel || !siteModel->ready() || !s_shipShader) return;
+          const glm::vec3 stKeyDir = glm::normalize(glm::vec3(0.55f, 0.45f, 0.70f));
+          s_shipShader->bind();
+          s_shipShader->setUniformMat4f("u_MVP", mvp);
+          s_shipShader->setUniformMat4f("u_Model", stModel);
+          s_shipShader->setUniformMat4f("u_ShipInv", glm::inverse(stModel));
+          s_shipShader->setUniform3f("u_CamPos", eye);
+          s_shipShader->setUniform3f("u_KeyDir", stKeyDir.x, stKeyDir.y, stKeyDir.z);
+          s_shipShader->setUniform3f("u_KeyColor", keyCol * keyMult);
+          s_shipShader->setUniform1i("u_Env", 0);
+          s_shipShader->setUniform1i("u_Albedo", 1);
+          s_shipShader->setUniform1i("u_NormalTex", 2);
+          s_shipShader->setUniform1i("u_RoughTex", 3);
+          s_shipShader->setUniform1i("u_MetalTex", 4);
+          s_shipShader->setUniform1i("u_EmissiveTex", 5);
+          s_shipShader->setUniform1i("u_SkinAlbedo", 6);
+          s_shipShader->setUniform1i("u_SkinRough", 7);
+          s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
+          s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
+          s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
+          s_shipShader->setUniform1i("u_FlatNormal", 0);
+          s_shipShader->setUniform1f("u_RingSpin", 0.0f);
+          s_shipShader->setUniform1i("u_SkinOn", 0);
+          s_shipShader->setUniform3f("u_BaseColor", glm::vec3(1.0f));
+          s_shipShader->setUniform3f("u_HullTint", glm::vec3(1.0f));
+          s_shipShader->setUniform3f("u_AccentTint", glm::vec3(1.0f));
+          s_shipShader->setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
+          s_shipShader->setUniform1f("u_StationPbr", 1.0f);
+          s_shipShader->setUniform1f("u_HullWear", -1.0f);
+          s_shipShader->setUniform1f("u_Metal", customMetal);
+          s_shipShader->setUniform1f("u_Rough", customRough);
+
+          glActiveTexture(GL_TEXTURE0);
+          if (m_skyboxLocal) m_skyboxLocal->bind(0);
+
+          const bool texOn = siteModel->textured();
+          s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
+          if (texOn) {
+            s_shipShader->setUniform1i("u_Albedo", 1);
+            s_shipShader->setUniform1i("u_NormalTex", 2);
+            s_shipShader->setUniform1i("u_RoughTex", 3);
+            s_shipShader->setUniform1i("u_MetalTex", 4);
+            siteModel->bindTextures(1);
+          }
+          const bool emOn = siteModel->emissive();
+          s_shipShader->setUniform1i("u_EmissiveOn", (emOn || glm::length(emOverride) > 0.01f) ? 1 : 0);
+          s_shipShader->setUniform1i("u_EmissiveTex", 5);
+          s_shipShader->setUniform3f("u_Emissive", emOverride);
+
+          siteModel->draw();
+          if (texOn) glActiveTexture(GL_TEXTURE0);
+          s_shipShader->unbind();
+        };
+
         // Pass 1: Solid ship exterior (visible only when shipVisible is true)
         if (warpdrive::shipVisible()) {
         glClear(GL_DEPTH_BUFFER_BIT);
@@ -2396,17 +2472,42 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customMetal = 0.60f;
               customRough = 0.20f;
               emOverride = glm::vec3(0.1f, 0.4f, 0.9f);
-            } else if (dock.id == "dock-warp-tunnel" && s_warpTunnelModel.ready()) {
-              siteModel = &s_warpTunnelModel;
+            } else if (dock.id == "dock-warp-tunnel") {
               stScale = 0.25f;
               dockRingScale = 0.20f;
-              // Warp Tunnel (tamminen, CC BY 4.0): animated spacetime tunnel
-              stModel = glm::translate(glm::mat4(1.0f), stPos) *
-                        glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
-              customMetal = 0.30f;
-              customRough = 0.50f;
-              emOverride = glm::vec3(0.05f, 0.3f, 0.8f);
+              // SpaceDrive Warp Tunnel (tamminen, CC BY 4.0): live differential 3D rotations
+              const glm::mat4 dockBase = glm::translate(glm::mat4(1.0f), stPos) *
+                                        glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 1.0f, 0.0f));
+              if (s_warpTunnelTubeModel.ready() && s_shipShader) {
+                const glm::mat4 mTube = dockBase *
+                                        glm::rotate(glm::mat4(1.0f), 0.30f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                drawStationObjModel(&s_warpTunnelTubeModel, mTube, 0.80f, 0.35f, glm::vec3(0.1f, 0.5f, 1.0f));
+                if (s_warpTunnelScrapModel.ready()) {
+                  const glm::mat4 mScrap = dockBase *
+                                          glm::rotate(glm::mat4(1.0f), -0.60f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                          glm::scale(glm::mat4(1.0f), glm::vec3(stScale * 0.96f));
+                  drawStationObjModel(&s_warpTunnelScrapModel, mScrap, 0.90f, 0.60f, glm::vec3(0.8f, 0.4f, 0.1f));
+                }
+                if (s_warpTunnelCloudModel.ready()) {
+                  glEnable(GL_BLEND);
+                  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+                  glDepthMask(GL_FALSE);
+                  const glm::mat4 mCloud = dockBase *
+                                          glm::rotate(glm::mat4(1.0f), 1.20f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                          glm::scale(glm::mat4(1.0f), glm::vec3(stScale * 0.92f));
+                  drawStationObjModel(&s_warpTunnelCloudModel, mCloud, 0.10f, 0.10f, glm::vec3(0.2f, 0.7f, 1.0f));
+                  glDisable(GL_BLEND);
+                  glDepthMask(GL_TRUE);
+                }
+                siteModel = nullptr;  // already rendered
+              } else if (s_warpTunnelModel.ready()) {
+                siteModel = &s_warpTunnelModel;
+                stModel = dockBase * glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                customMetal = 0.30f;
+                customRough = 0.50f;
+                emOverride = glm::vec3(0.05f, 0.3f, 0.8f);
+              }
             } else if (dock.id == "dock-warp-drive-vis" && s_warpDriveVisModel.ready()) {
               siteModel = &s_warpDriveVisModel;
               stScale = 0.30f;
@@ -2469,59 +2570,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
             }
 
-            if (siteModel->ready() && s_shipShader) {
-              glm::vec3 stKeyDir = glm::normalize(glm::vec3(0.55f, 0.45f, 0.70f));
-
-              s_shipShader->bind();
-              s_shipShader->setUniformMat4f("u_MVP", mvp);
-              s_shipShader->setUniformMat4f("u_Model", stModel);
-              s_shipShader->setUniformMat4f("u_ShipInv", glm::inverse(stModel));
-              s_shipShader->setUniform3f("u_CamPos", eye);
-              s_shipShader->setUniform3f("u_KeyDir", stKeyDir.x, stKeyDir.y, stKeyDir.z);
-              s_shipShader->setUniform3f("u_KeyColor", keyCol.x * 16.5f, keyCol.y * 16.5f, keyCol.z * 16.5f);
-              s_shipShader->setUniform1i("u_Env", 0);
-              s_shipShader->setUniform1i("u_Albedo", 1);
-              s_shipShader->setUniform1i("u_NormalTex", 2);
-              s_shipShader->setUniform1i("u_RoughTex", 3);
-              s_shipShader->setUniform1i("u_MetalTex", 4);
-              s_shipShader->setUniform1i("u_EmissiveTex", 5);
-              s_shipShader->setUniform1i("u_SkinAlbedo", 6);
-              s_shipShader->setUniform1i("u_SkinRough", 7);
-              s_shipShader->setUniform1f("u_EnvMaxLod", 9.0f);
-              s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
-              s_shipShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
-              s_shipShader->setUniform1i("u_FlatNormal", 0);
-              s_shipShader->setUniform1f("u_RingSpin", 0.0f);
-              s_shipShader->setUniform1i("u_SkinOn", 0);
-              s_shipShader->setUniform3f("u_BaseColor", glm::vec3(1.0f));
-              s_shipShader->setUniform3f("u_HullTint", glm::vec3(1.0f));
-              s_shipShader->setUniform3f("u_AccentTint", glm::vec3(1.0f));
-              s_shipShader->setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
-              s_shipShader->setUniform1f("u_StationPbr", 1.0f);
-              s_shipShader->setUniform1f("u_HullWear", -1.0f);
-              s_shipShader->setUniform1f("u_Metal", customMetal);
-              s_shipShader->setUniform1f("u_Rough", customRough);
-
-              glActiveTexture(GL_TEXTURE0);
-              if (m_skyboxLocal) m_skyboxLocal->bind(0);
-
-              const bool texOn = siteModel->textured();
-              s_shipShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
-              if (texOn) {
-                s_shipShader->setUniform1i("u_Albedo", 1);
-                s_shipShader->setUniform1i("u_NormalTex", 2);
-                s_shipShader->setUniform1i("u_RoughTex", 3);
-                s_shipShader->setUniform1i("u_MetalTex", 4);
-                siteModel->bindTextures(1);
-              }
-              const bool emOn = siteModel->emissive();
-              s_shipShader->setUniform1i("u_EmissiveOn", (emOn || glm::length(emOverride) > 0.01f) ? 1 : 0);
-              s_shipShader->setUniform1i("u_EmissiveTex", 5);
-              s_shipShader->setUniform3f("u_Emissive", emOverride);
-
-              siteModel->draw();
-              if (texOn) glActiveTexture(GL_TEXTURE0);
-              s_shipShader->unbind();
+            if (siteModel && siteModel->ready() && s_shipShader) {
+              drawStationObjModel(siteModel, stModel, customMetal, customRough, emOverride);
+            } else if (!siteModel) {
+              // Model was drawn directly by custom multi-pass block above
             } else {
               // Procedural fallback
               glm::mat4 coreModel = glm::translate(glm::mat4(1.0f), stPos) * glm::scale(glm::mat4(1.0f), glm::vec3(0.22f, 0.95f, 0.22f));
@@ -2772,6 +2824,66 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         glDisable(GL_BLEND);
         glDepthMask(GL_TRUE);
         }  // end if (warpdrive::shipVisible()) [pass 3]
+
+        // =========================================================================
+        // Pass 4: 3D SpaceDrive Animated Warp Tunnel (tamminen, CC BY 4.0)
+        // Authentic multi-layered wormhole traversal from Sketchfab with differential rotations:
+        //   - Outer cylindrical tunnel tube:  omega1 = +0.30 rad/s
+        //   - Inner structural scrap rings:   omega2 = -0.60 rad/s (counter-rotation)
+        //   - Swirling plasma cloud torus:    omega3 = +1.20 rad/s (energetic glow)
+        // Rendered both in chase/overview (shipVisible=true) and 1st-person cockpit view!
+        // =========================================================================
+        const float warpTunnelK = warpdrive::warpK();
+        const bool warpActive = warpdrive::warpTravelActive() || (warpTunnelK > 0.05f);
+        if (warpActive && s_warpTunnelTubeModel.ready() && s_shipShader) {
+          const float tAlpha = glm::clamp(warpTunnelK * 2.0f, 0.0f, 1.0f);
+          if (tAlpha > 0.01f) {
+            const float tunnelScale = 4.2f;
+            const float segLen = 16.0f * (tunnelScale / 4.0f);
+            const float streamSpeed = 52.0f * (0.5f + 0.5f * warpTunnelK);
+            const float zStream = std::fmod(time * streamSpeed, segLen) - segLen;
+
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_TRUE);
+            glDisable(GL_BLEND);
+
+            const glm::mat4 tunnelOrient =
+                glm::translate(glm::mat4(1.0f), shipPos) *
+                glm::rotate(glm::mat4(1.0f), warpdrive::shipYaw(), glm::vec3(0.0f, 1.0f, 0.0f));
+
+            for (int seg = -1; seg <= 1; ++seg) {
+              const float zPos = zStream + static_cast<float>(seg) * segLen;
+              const glm::mat4 segBase = tunnelOrient * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, zPos));
+
+              // Layer 1: Outer cylindrical tunnel wall (omega = +0.30 rad/s)
+              const glm::mat4 mTube = segBase *
+                                      glm::rotate(glm::mat4(1.0f), time * 0.30f, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScale));
+              drawStationObjModel(&s_warpTunnelTubeModel, mTube, 0.82f, 0.32f, glm::vec3(0.20f, 0.70f, 1.30f) * tAlpha);
+
+              // Layer 2: Inner structural scrap / debris rings (omega = -0.60 rad/s)
+              if (s_warpTunnelScrapModel.ready()) {
+                const glm::mat4 mScrap = segBase *
+                                        glm::rotate(glm::mat4(1.0f), -time * 0.60f, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                        glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScale * 0.96f));
+                drawStationObjModel(&s_warpTunnelScrapModel, mScrap, 0.88f, 0.55f, glm::vec3(0.95f, 0.50f, 0.18f) * tAlpha);
+              }
+
+              // Layer 3: Swirling plasma cloud torus (omega = +1.20 rad/s, additive alpha glow)
+              if (s_warpTunnelCloudModel.ready()) {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+                glDepthMask(GL_FALSE);
+                const glm::mat4 mCloud = segBase *
+                                        glm::rotate(glm::mat4(1.0f), time * 1.20f, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                        glm::scale(glm::mat4(1.0f), glm::vec3(tunnelScale * 0.92f));
+                drawStationObjModel(&s_warpTunnelCloudModel, mCloud, 0.10f, 0.10f, glm::vec3(0.35f, 0.85f, 1.60f) * tAlpha);
+                glDisable(GL_BLEND);
+                glDepthMask(GL_TRUE);
+              }
+            }
+          }
+        }
       } catch (...) {
         // Корабль и станции никогда не ломают кадр.
       }

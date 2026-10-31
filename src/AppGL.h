@@ -243,6 +243,8 @@ class AppGL {
   // Main menu / overlay state
   bool m_inMenu = true;
   int m_menuPage = 0;  // 0 main, 1 settings, 2 help
+  bool m_showPatchNotesModal = false;  // v4.2.0: модальное окно примечаний к выпуску
+  void drawPatchNotesModal();
   bool m_hideUI = false;
   bool m_helpOverlay = false;
   bool m_showLabels = true;
@@ -585,6 +587,9 @@ float shipHull();
 // (дефолт 0, харнесс чистый), lane -1..1 — сглаженный сдвиг полосы обломков
 // навстречу уклонению (D сдвигает поле влево; читается как манёвр корабля).
 void setAsteroids(float k, float lane);
+// v4.2.0: 3D-анимированный варп-туннель SpaceDrive (tamminen, CC BY 4.0)
+void setWarpTravelActive(bool active);
+bool warpTravelActive();
 }  // namespace warpdrive
 
 }  // namespace astro

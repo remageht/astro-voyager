@@ -12,6 +12,7 @@ src/vendor/
 AGENTS.md
 INTERNAL.md
 *.obj
+*.mtl
 *.pdb
 # Model hull assets regenerate from the FBX via tools/fbx_ship_export.mjs:
 # the decimated .obj (covered by *.obj) and its BMP texture set.
