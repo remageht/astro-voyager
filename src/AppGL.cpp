@@ -1474,6 +1474,7 @@ const char* AppGL::stationTypeRuShort(StationType t) {
     case StationType::Pulsar: return "Пульс.";
     case StationType::StarCluster: return "Скопл.";
     case StationType::Kilonova: return "Килонова";
+    case StationType::Supernova: return "Сверхн.";
   }
   return "?";
 }
@@ -1490,6 +1491,7 @@ unsigned int AppGL::stationTypeChip(StationType t) {
     case StationType::Pulsar: return IM_COL32(120, 240, 255, 255);
     case StationType::StarCluster: return IM_COL32(255, 215, 140, 255);
     case StationType::Kilonova: return IM_COL32(255, 175, 75, 255);
+    case StationType::Supernova: return IM_COL32(255, 120, 150, 255);
   }
   return IM_COL32(140, 140, 140, 255);
 }
@@ -3759,6 +3761,37 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
     ImGui::BulletText("%s: h ~ 10^-21 (LIGO/Virgo)", uiRu("Гравитационные волны", "GW strain"));
   }
 
+  if (curSt && curSt->type == StationType::Supernova) {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.65f, 1.0f), "%s",
+                       uiRu("Событие Сверхновая (SN 1987A):", "Supernova Event (SN 1987A):"));
+    float phase = m_sceneManager->getSupernovaPhase();
+    const char* phaseName = "1987: Core Collapse Flash (0.00-0.20)";
+    if (phase >= 0.80f) phaseName = "2024+: JWST Keyhole Ejecta (0.80-1.00)";
+    else if (phase >= 0.50f) phaseName = "2006-2017: Ring of Fire Pearls (0.50-0.80)";
+    else if (phase >= 0.20f) phaseName = "1995-2003: Shock Wave Impact (0.20-0.50)";
+
+    ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "%s: %s",
+                       uiRu("Эпоха / Фаза", "Epoch Stage"), phaseName);
+    if (ImGui::SliderFloat("Phase##supernova", &phase, 0.0f, 1.0f, "%.3f (1987..2026+)")) {
+      m_sceneManager->setSupernovaPhase(phase);
+    }
+    bool autoPlay = m_sceneManager->isSupernovaAutoPlay();
+    if (ImGui::Checkbox(uiRu("Авто-эволюция остатка", "Auto-evolve remnant"), &autoPlay)) {
+      m_sceneManager->setSupernovaAutoPlay(autoPlay);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(uiRu("🌟 Перезапустить вспышку", "🌟 Detonate Supernova"))) {
+      m_sceneManager->triggerSupernovaExplosion();
+    }
+
+    ImGui::BulletText("%s: Large Magellanic Cloud (168 kly / 51.4 kpc)", uiRu("Локация", "Location"));
+    ImGui::BulletText("%s: Sanduleak -69 202 (BSG, ~20 M☉)", uiRu("Прародитель", "Progenitor"));
+    ImGui::BulletText("%s: ~1.34 ly (~43° inclination)", uiRu("Диаметр экв. кольца", "Ring Diameter"));
+    ImGui::BulletText("%s: v_shock ~ 8,000 km/s (32 hot spots)", uiRu("Ударная волна", "Blast Wave"));
+    ImGui::BulletText("%s: Kamiokande-II / IMB (Feb 23, 1987)", uiRu("Нейтринный всплеск", "Neutrino Burst"));
+  }
+
   if (sliderChanged) {
     m_userOverrodePreset = true;
     m_benchmarking = false;
@@ -4315,6 +4348,12 @@ void AppGL::updateShip(float deltaTime) {
                   m_camera.position.y * m_camera.position.y +
                   m_camera.position.z * m_camera.position.z);
     inRadZone = d < 8.0;
+  } else if (st->type == StationType::Supernova) {
+    const double d =
+        std::sqrt(m_camera.position.x * m_camera.position.x +
+                  m_camera.position.y * m_camera.position.y +
+                  m_camera.position.z * m_camera.position.z);
+    inRadZone = d < 7.5;
   }
 
   // v3.6.0: сложность масштабирует баланс (Easy: быстрая заправка и мягкая
@@ -5422,7 +5461,8 @@ void AppGL::drawWorldLabels() {
   // дальний импостор держит минимальный размер в шейдере).
   if (curSt->type == StationType::BlackHole ||
       curSt->type == StationType::Quasar ||
-      curSt->type == StationType::Kilonova) {
+      curSt->type == StationType::Kilonova ||
+      curSt->type == StationType::Supernova) {
     const float aspectM = displaySize.x / displaySize.y;
     const float fovM = m_sceneManager->getSettings().fovDegrees;
     const glm::mat4 projM =
@@ -6253,7 +6293,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   const std::vector<std::string> targetStations = {
       "sgra", "qso-3c273", "ori", "uma", "m31", "m1", "sol", "m87", "m51", "m104",
       "oj287", "hyperdisk",
-      "psr-vela", "psr-crab", "sgr-1806", "psr-b1913", "mw", "m13", "gw170817"
+      "psr-vela", "psr-crab", "sgr-1806", "psr-b1913", "mw", "m13", "gw170817", "sn1987a"
   };
 
   for (const auto& stId : targetStations) {
@@ -7630,6 +7670,7 @@ const char* AppGL::cineTypeRu(StationType t) {
     case StationType::Pulsar: return "Пульсар";
     case StationType::StarCluster: return "Скопление";
     case StationType::Kilonova: return "Килонова";
+    case StationType::Supernova: return "Сверхновая";
   }
   return "?";
 }

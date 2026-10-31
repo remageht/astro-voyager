@@ -156,6 +156,14 @@
       "description": "Binary neutron star merger: gravitational-wave ripples, relativistic sGRB jet, r-process kilonova fireball.",
       "spawnDistanceRs": 28.0,
       "mass": 2.74
+    },
+    {
+      "id": "sn1987a",
+      "type": "supernova",
+      "name": "Supernova SN 1987A",
+      "description": "Core-collapse supernova remnant in the Large Magellanic Cloud: glowing triple ring system, hot spot pearls, expanding shock wave.",
+      "spawnDistanceRs": 26.0,
+      "mass": 1.4
     }
   ]
 }
