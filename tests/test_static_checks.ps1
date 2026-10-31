@@ -426,6 +426,12 @@ Check 'load aborts ghost jump' ((((Read-File 'src/AppGL.h') -match 'stopJumpCine
 Check 'exe icon + versioninfo resource' ((Test-Path (Join-Path $root 'packaging/app.ico')) -and (Test-Path (Join-Path $root 'packaging/app.win.rc.in')))
 Check 'rc wired into cmake' (($cmake -match 'app\.win\.rc\.in') -and ($cmake -match 'AV_ICON_PATH'))
 Check 'av readme in zip' ((Test-Path (Join-Path $root 'packaging/win-av-readme.txt')) -and ((Read-File '.github/workflows/build.yml') -match 'CHECKSUMS\.txt'))
+# v4.2.0: Cosmic Events Pass 1 - Kilonova GW170817
+Check 'kilonova frag exists' (Test-Path (Join-Path $root 'shaders/kilonova.frag'))
+Check 'catalog has gw170817' (($catalogCpp -match '"gw170817"') -and ($catalogJson -match '"gw170817"'))
+Check 'catalog type kilonova' (($catalogH -match 'Kilonova') -and ($catalogCpp -match 'kilonova'))
+Check 'kilonova render branch' (($sceneCpp -match 'StationType::Kilonova') -and ($sceneCpp -match 'm_kilonovaShader'))
+Check 'kilonova inspector controls' (($appCpp -match 'Kilonova Event') -and ($appCpp -match 'triggerKilonovaExplosion'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

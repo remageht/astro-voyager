@@ -182,6 +182,13 @@ class SceneManager {
   }
   float getTimeScale() const { return m_timeScale; }
 
+  // === Cosmic Events: Kilonova GW170817 ===
+  float getKilonovaPhase() const { return m_kilonovaPhase; }
+  void setKilonovaPhase(float phase) { m_kilonovaPhase = phase; }
+  bool isKilonovaAutoPlay() const { return m_kilonovaAutoPlay; }
+  void setKilonovaAutoPlay(bool a) { m_kilonovaAutoPlay = a; }
+  void triggerKilonovaExplosion() { m_kilonovaPhase = 0.0f; m_kilonovaAutoPlay = true; }
+
   // Object editor (custom bodies, sol station only).
   void spawnRockAt(const Vec3& p, const Vec3& v);
   // v3.2.0 editor: spawn from a full template (id/name auto-numbered by
@@ -249,6 +256,10 @@ class SceneManager {
   float m_timeScale = 1.0f;
   bool m_paused = false;
 
+  // Cosmic Event phase (GW170817)
+  float m_kilonovaPhase = 0.45f;
+  bool m_kilonovaAutoPlay = true;
+
   // === Relativity === скорость наблюдателя (дельта позиции камеры за кадр,
   // сглаженная). Харнесс передаёт константный time => dt == 0 => beta == 0
   // => шейдерные ветки выключены, PNG байт-в-байт.
@@ -311,6 +322,7 @@ class SceneManager {
   std::unique_ptr<Shader> m_galaxyShader;
   std::unique_ptr<Shader> m_nebulaShader;
   std::unique_ptr<Shader> m_pulsarShader;
+  std::unique_ptr<Shader> m_kilonovaShader;
   std::unique_ptr<Shader> m_planetShader;
   std::unique_ptr<Shader> m_ringShader;
   std::unique_ptr<Shader> m_cometShader;

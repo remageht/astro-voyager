@@ -59,6 +59,9 @@ const std::vector<Station>& builtinCatalog() {
       {"m13", StationType::StarCluster, "Hercules Cluster (M13)",
        "Globular cluster: 300000 ancient stars. Fly between them.", 20.0,
        {}, 0.5, 0.0, 22200.0},
+      {"gw170817", StationType::Kilonova, "Kilonova GW170817",
+       "Binary neutron star merger: gravitational-wave ripples, relativistic sGRB jet, r-process kilonova fireball.",
+       28.0, {}, 2.0, 2.74, 130.0e6},
   };
   return kStations;
 }
@@ -80,6 +83,7 @@ std::string typeToString(StationType t) {
     case StationType::SolarSystem: return "solar_system";
     case StationType::Pulsar: return "pulsar";
     case StationType::StarCluster: return "star_cluster";
+    case StationType::Kilonova: return "kilonova";
   }
   return "unknown";
 }
