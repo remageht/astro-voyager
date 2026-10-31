@@ -18,6 +18,8 @@
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"
+#include "CockpitController.h"
+#include "CockpitRenderer.h"
 // === Audio === begin (агент AU: процедурный звук, только GL-таргет).
 #include "audio/AudioEngine.h"
 // === Audio === end
@@ -527,6 +529,11 @@ class AppGL {
   void updateSpeedFx(float deltaTime);
   void applyViewCamera(Camera& out);
   // === Camera views + speed FX === end
+
+  // === Diegetic 3D Cockpit (v4.2.0 Alpha) ===
+  CockpitController m_cockpitController;
+  CockpitRenderer   m_cockpitRenderer;
+  void drawCockpit(int fbWidth, int fbHeight, float deltaTime, float currentTime);
 
   // === SaveGame === (v3.4.0) begin.
   // JSON-профиль: settings.json (глобально: пресет/звук/вид) +

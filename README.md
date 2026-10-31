@@ -21,10 +21,9 @@
 - **Новая игра · Adventure**: сюжетный слот с прологом Егорки (иллюстрированные слайды), отдельным профилем `save-adventure.json` и высадкой в Солнечной системе.
 - **Кампания из 7 глав**: Дом (Солнечная система) → Последний караул (Crew Dragon и «Союз-МС» на орбите Земли) → Сердце Галактики (Sgr A*) → Монстр с джетом (M87*) → Маяк ранней Вселенной (3C 273) → Новые кандидаты (M13) → Выбор. Итоги глав комментирует пилот Мия Сато.
 - **Две концовки**: после M13 Мия предлагает остаться и основать колонию у старых звёзд или потратить последнее топливо на прыжок к дальнему горизонту. Выбор хранится в `expedition.json` (`finaleChoice`), а HUD и карта глав показывают выбранный финал. После любой концовки идёт общий эпилог «Наследие». Старые завершённые сейвы получают предложение выбрать концовку один раз.
-- **Песочница**: свободный полёт и текущий прогресс в `save-sandbox.json`. Режимы сохраняются раздельно и не перезаписывают друг друга.
-- **Статус**: фундамент Adventure вышел в 4.0.0; кампания из 7 глав, интерлюдия «Последний караул» с Crew Dragon/«Союзом», развилка Мии, две концовки и эпилог «Наследие» — выпущены в 4.1.0 (см. [`CHANGELOG.md`](CHANGELOG.md)). Ветвления внутри глав, дополнительные диалоги и мета-игра обратного отсчёта — следующий этап.
+- **Статус**: кампания из 7 глав выпущена в 4.1.0; интерактивный 3D-кокпит пилота с коллиматорным HUD, физикой перегрузок и обновленным меню настроек выпущен в **v4.2.0 (Alpha)** (см. [`CHANGELOG.md`](CHANGELOG.md)). Впереди в **v4.3.0 (Beta)** — процедурный рельеф планет, атмосфера Рэлея-Ми и пространственный 3D-звук.
 
-*4.0.0 shipped the Adventure foundation: menu entry, prologue and a dedicated save slot. 4.1.0 adds the 7-chapter campaign, Mia Sato's final choice, two endings, the Dragon/Soyuz interlude "The Last Watch" and the shared "Legacy" epilogue. In-chapter branching, extra dialogue and the countdown meta-game are future work.*
+*4.1.0 added the 7-chapter campaign. 4.2.0 (Alpha) introduces the interactive 3D Cockpit with collimated HUD, G-force inertia dynamics, and modernized aerospace Settings. 4.3.0 (Beta) will bring procedural planetary terrain, Rayleigh-Mie atmospheric scattering, and 3D spatial audio.*
 
 ---
 
