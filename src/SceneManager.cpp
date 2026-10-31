@@ -799,6 +799,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_dockSites.push_back(DockSite{"dock-sgra", "Deep Core Outpost", "sgra", Vec3(0.0, 4.0, 18.0), 5.0f});
        m_dockSites.push_back(DockSite{"dock-warp-bubble", "Alcubierre Warp Bubble", "sgra", Vec3(0.0, 6.0, 22.0), 5.0f});
        m_dockSites.push_back(DockSite{"dock-warp-tunnel", "Warp Tunnel (tamminen)", "sgra", Vec3(0.0, 6.0, 26.0), 5.0f});
+       m_dockSites.push_back(DockSite{"dock-warp-drive-vis", "Warp Drive Visualisation", "sgra", Vec3(0.0, 6.0, 30.0), 5.0f});
     } else if (m_currentStation->id == "ori") {
       m_dockSites.push_back(DockSite{"dock-ori", "Rigel Orbital Dock", "ori", Vec3(3.0, 1.0, 15.0), 5.0f});
     } else {
@@ -2187,6 +2188,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_soyuzModel;
           static ObjModel s_warpBubbleModel;
           static ObjModel s_warpTunnelModel;
+          static ObjModel s_warpDriveVisModel;
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2213,6 +2215,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
 
             s_warpTunnelModel.load("res/models/warp_tunnel.obj");
             s_warpTunnelModel.loadTextures("res/models/warp_tunnel");
+
+            s_warpDriveVisModel.load("res/models/warp_drive_vis.obj");
+            s_warpDriveVisModel.loadTextures("res/models/warp_drive_vis");
           }
 
           glEnable(GL_DEPTH_TEST);
@@ -2284,6 +2289,17 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customMetal = 0.30f;
               customRough = 0.50f;
               emOverride = glm::vec3(0.05f, 0.3f, 0.8f);
+            } else if (dock.id == "dock-warp-drive-vis" && s_warpDriveVisModel.ready()) {
+              siteModel = &s_warpDriveVisModel;
+              stScale = 0.30f;
+              dockRingScale = 0.22f;
+              // Warp Drive Visualisation: spacetime grid distortion
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.03f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+              customMetal = 0.20f;
+              customRough = 0.60f;
+              emOverride = glm::vec3(0.05f, 0.2f, 0.6f);
             } else if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
               siteModel = &s_telescopeModel;
               // 2.2-unit model * 0.135 = 0.297 world units. The observatory
