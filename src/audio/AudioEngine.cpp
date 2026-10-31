@@ -1,4 +1,4 @@
-﻿// === Audio === (Р°РіРµРЅС‚ AU): СЂРµР°Р»РёР·Р°С†РёСЏ РїСЂРѕС†РµРґСѓСЂРЅРѕРіРѕ РґРІРёР¶РєР°.
+// === Audio === (Р°РіРµРЅС‚ AU): СЂРµР°Р»РёР·Р°С†РёСЏ РїСЂРѕС†РµРґСѓСЂРЅРѕРіРѕ РґРІРёР¶РєР°.
 // MINIAUDIO_IMPLEMENTATION СЂРѕРІРЅРѕ Р·РґРµСЃСЊ, РІ РѕРґРЅРѕРј .cpp. Р‘РѕР»СЊС€Рµ РЅРёРіРґРµ
 // miniaudio.h СЃ РёРјРїР»РµРјРµРЅС‚Р°С†РёРµР№ РЅРµ РїРѕРґРєР»СЋС‡Р°С‚СЊ.
 
@@ -16,6 +16,7 @@
 
 #include "audio/AudioEngine.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <string>  // playFile: path -> ma_decoder (GCC РЅРµ С‚СЏРЅРµС‚ <string> С‚СЂР°РЅР·РёС‚РёРІРЅРѕ)
@@ -160,6 +161,12 @@ void AudioEngine::update(float dt) {
   if (eng > 1.0f) eng = 1.0f;
   m_engineCurrent.store(eng);
 
+  // v4.3.0: Smooth tension level
+  float tc = m_tensionCurrent.load();
+  float tt = m_tensionTarget.load();
+  tc += (tt - tc) * std::clamp(dt * 3.0f, 0.0f, 1.0f);
+  m_tensionCurrent.store(tc);
+
   if (!m_live) {
     // Null-backend: РґРІРёРіР°РµРј РІРёСЂС‚СѓР°Р»СЊРЅРѕРµ РІСЂРµРјСЏ, С‡РёСЃС‚РёРј РіРѕР»РѕСЃР° РїРѕ РЅРµРјСѓ.
     uint64_t adv = static_cast<uint64_t>(static_cast<double>(dt) * kSampleRate);
@@ -216,27 +223,38 @@ void AudioEngine::setEngineLevel(float k) {
   m_engineTarget.store(k);
 }
 
+void AudioEngine::setDopplerShift(float factor) {
+  if (factor < 0.2f) factor = 0.2f;
+  if (factor > 3.0f) factor = 3.0f;
+  m_dopplerFactor.store(factor);
+}
+
+void AudioEngine::setTensionLevel(float k) {
+  if (k < 0.0f) k = 0.0f;
+  if (k > 1.0f) k = 1.0f;
+  m_tensionTarget.store(k);
+}
+
 void AudioEngine::playClick() {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Click, m_samples.load(), nullptr, 0.0f});
+  m_voices.push_back({VoiceType::Click, m_samples.load(), nullptr, 0.0f, 0.0f});
 }
 
-// v3.0.0: С‚РёРє РїСѓР»СЊСЃР°СЂР°. РљРѕСЂРѕС‚РєРёР№ РіРѕР»РѕСЃ (25 РјСЃ): РїР»Р°РЅРёСЂРѕРІС‰РёРє AppGL Р·РѕРІС‘С‚
-// РµРіРѕ РєР°Р¶РґС‹Рµ 59..945 РјСЃ, РїРµСЂРµРєСЂС‹С‚РёР№ РїРѕС‡С‚Рё РЅРµС‚, РєР°Рї РѕР±С‰РёР№ (32) РЅРµ Р¶РјС‘С‚.
-void AudioEngine::playTick() {
+// v3.0.0 / v4.3.0: тик пульсара с пространственной панорамой [-1..1].
+void AudioEngine::playTick(float pan) {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Tick, m_samples.load(), nullptr, 0.0f});
+  m_voices.push_back({VoiceType::Tick, m_samples.load(), nullptr, 0.0f, std::clamp(pan, -1.0f, 1.0f)});
 }
 
-void AudioEngine::playWhoosh() {
+void AudioEngine::playWhoosh(float pan) {
   if (!m_tried) return;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (m_voices.size() > 32) return;
-  m_voices.push_back({VoiceType::Whoosh, m_samples.load(), nullptr, 0.0f});
+  m_voices.push_back({VoiceType::Whoosh, m_samples.load(), nullptr, 0.0f, std::clamp(pan, -1.0f, 1.0f)});
 }
 
 void AudioEngine::playJump() {
@@ -457,12 +475,18 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
     const double tLoop = wrapLoop(tAbs);
     float music = renderMusic(tAbs, tLoop) * duck;
 
-    float sfx = 0.0f;
+    float sfxL = 0.0f;
+    float sfxR = 0.0f;
     for (size_t v = 0; v < nSnap; ++v) {
       const double age =
           static_cast<double>(base + i - snap[v].startSample) / rate;
       if (age < 0.0) continue;
-      sfx += renderVoice(snap[v], age, m_rng);
+      const float s = renderVoice(snap[v], age, m_rng);
+      const float pan01 = std::clamp((snap[v].pan + 1.0f) * 0.5f, 0.0f, 1.0f);
+      const float gL = static_cast<float>(std::cos(static_cast<double>(pan01) * kPi * 0.5));
+      const float gR = static_cast<float>(std::sin(static_cast<double>(pan01) * kPi * 0.5));
+      sfxL += s * gL;
+      sfxR += s * gR;
     }
 
     // WarpRumble: РєРѕСЂРёС‡РЅРµРІС‹Р№ С€СѓРј + СЃСѓР±-СЃРёРЅСѓСЃ, РіСЂРѕРјРєРѕСЃС‚СЊ РѕС‚ СѓСЂРѕРІРЅСЏ РІР°СЂРїР°.
@@ -480,20 +504,30 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
     }
 
     // Engine hum (v3.3.0): С‚РѕРЅ 52-82 Р“С† РїРѕ СЃРєРѕСЂРѕСЃС‚Рё + РѕР±РµСЂС‚РѕРЅ + РґС‹С…Р°РЅРёРµ С€СѓРјР°.
+    const float doppler = std::clamp(m_dopplerFactor.load(), 0.4f, 2.5f);
     float engine = 0.0f;
     if (engK > 0.001f) {
-      const float f = 52.0f + 30.0f * engK;
+      const float f = (52.0f + 30.0f * engK) * doppler;
       const float tone =
           static_cast<float>(std::sin(2.0 * kPi * f * tAbs)) +
           0.35f * static_cast<float>(std::sin(2.0 * kPi * 2.0 * f * tAbs + 0.7));
       engine = (tone * 0.16f + m_brown * 1.2f) * engK;
     }
 
-    float mix = (music + sfx + rumble + engine) * vol;
-    // РњСЏРіРєРёР№ Р»РёРјРёС‚РµСЂ tanh РЅР° РјР°СЃС‚РµСЂРµ.
-    mix = std::tanh(mix * 1.1f);
-    out[i * 2 + 0] = mix;
-    out[i * 2 + 1] = mix;
+    const float tension = m_tensionCurrent.load();
+    float drone = 0.0f;
+    if (tension > 0.001f) {
+      const float sub = static_cast<float>(std::sin(2.0 * kPi * 38.0 * tAbs)) +
+                        0.5f * static_cast<float>(std::sin(2.0 * kPi * 41.5 * tAbs + 0.4));
+      drone = sub * tension * 0.22f;
+    }
+
+    float mixL = (music + sfxL + rumble + engine + drone) * vol;
+    float mixR = (music + sfxR + rumble + engine + drone) * vol;
+    mixL = std::tanh(mixL * 1.1f);
+    mixR = std::tanh(mixR * 1.1f);
+    out[i * 2 + 0] = mixL;
+    out[i * 2 + 1] = mixR;
   }
   m_samples.fetch_add(frames);
 }

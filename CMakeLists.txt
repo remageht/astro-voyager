@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 4.2.0 LANGUAGES CXX)
+project(astro-voyager VERSION 4.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -175,6 +175,26 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_cockpit.cpp")
     target_compile_options(test_cockpit PRIVATE /W4 /permissive-)
   else()
     target_compile_options(test_cockpit PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_planet_lod.cpp")
+  add_executable(test_planet_lod
+    tests/test_planet_lod.cpp
+    src/audio/AudioEngine.cpp
+  )
+  target_include_directories(test_planet_lod PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(EXISTS "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+    target_include_directories(test_planet_lod PRIVATE "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+  endif()
+  if(UNIX)
+    target_link_libraries(test_planet_lod PRIVATE pthread dl m)
+  endif()
+
+  if(MSVC)
+    target_compile_options(test_planet_lod PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_planet_lod PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
 
@@ -374,6 +394,10 @@ endif()
 
 if(TARGET test_cockpit)
   add_test(NAME test_cockpit COMMAND test_cockpit)
+endif()
+
+if(TARGET test_planet_lod)
+  add_test(NAME test_planet_lod COMMAND test_planet_lod)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):

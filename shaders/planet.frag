@@ -35,6 +35,10 @@ uniform mat4 u_Model;
 // units), w = moon radius; u_MoonOccN = number of active entries.
 uniform vec4 u_MoonOcc[5];
 uniform int u_MoonOccN;
+// v4.3.0: Planet surface relief & Rayleigh-Mie atmospheric scattering
+uniform int u_PlanetRelief;
+uniform int u_PlanetAtmosphere;
+
 float hash11(float p) {
   return fract(sin(p) * 43758.5453);
 }
@@ -86,6 +90,36 @@ float fbm3(vec3 p) {
     a *= 0.5;
   }
   return v / max(s, 0.0001);
+}
+// v4.3.0: Procedural elevation field for normal bump mapping
+float planetElevation(vec3 sp, int body, int type, float seed) {
+  if (type == 0 || type == 1) return 0.0;
+  float h = 0.0;
+  if (body == 4) {
+    // Earth: continents, mountains & peaks
+    float cont = fbm4(sp * 2.8 + seed * 1.3);
+    float mountains = fbm4(sp * 14.0 + seed * 4.1);
+    float peaks = fbm3(sp * 38.0 + seed * 8.7);
+    float landMask = smoothstep(0.48, 0.54, cont);
+    h = landMask * (0.014 * mountains + 0.006 * peaks);
+  } else if (body == 6) {
+    // Mars: Tharsis volcanoes, crater rims & Valles Marineris canyon
+    float baseM = fbm4(sp * 3.2 + seed * 2.1);
+    float craters = abs(fbm4(sp * 12.0 + seed * 3.5) - 0.5) * 2.0;
+    float fine = fbm3(sp * 34.0 + seed * 9.2);
+    h = 0.018 * baseM + 0.014 * craters + 0.005 * fine;
+  } else if (body == 5 || body == 2) {
+    // Moon / Mercury: crater basins and highlands
+    float basin = fbm4(sp * 2.5 + seed * 1.7);
+    float craterRims = pow(abs(fbm4(sp * 13.0 + seed * 4.3) - 0.5) * 2.0, 1.4);
+    float micro = fbm3(sp * 40.0 + seed * 7.1);
+    h = 0.014 * basin + 0.016 * craterRims + 0.006 * micro;
+  } else if (type == 2 || type == 3) {
+    float r1 = fbm4(sp * 4.0 + seed * 2.3);
+    float r2 = fbm3(sp * 20.0 + seed * 5.6);
+    h = 0.015 * r1 + 0.007 * r2;
+  }
+  return h;
 }
 // Wrapped absolute angular distance in [-pi, pi].
 float angDist(float a, float b) {
@@ -152,6 +186,29 @@ void main() {
                -spinS * ln.x + spinC * ln.z);
   }
   vec3 sunDir = normalize(-v_WorldPos);
+  // v4.3.0: Procedural normal bump mapping (micro-relief on rocky bodies)
+  if (u_PlanetRelief == 1 && (u_Type == 2 || u_Type == 3)) {
+    float dCam = length(v_WorldPos - u_CamPos);
+    float nearK = 1.0 - smoothstep(u_Radius * 12.0, u_Radius * 36.0, dCam);
+    if (nearK > 0.001) {
+      vec3 t1 = abs(spN.y) < 0.98 ? normalize(cross(spN, vec3(0.0, 1.0, 0.0))) : normalize(cross(spN, vec3(1.0, 0.0, 0.0)));
+      vec3 t2 = cross(spN, t1);
+      float eps = 0.0035;
+      float h0 = planetElevation(spN, u_Body, u_Type, u_Seed);
+      float h1 = planetElevation(spN + t1 * eps, u_Body, u_Type, u_Seed);
+      float h2 = planetElevation(spN + t2 * eps, u_Body, u_Type, u_Seed);
+      vec3 dH_local = ((h1 - h0) * t1 + (h2 - h0) * t2) / eps;
+      vec3 dH_world = dH_local;
+      if (u_SpinAngle != 0.0) {
+        float spinC = cos(-u_SpinAngle);
+        float spinS = sin(-u_SpinAngle);
+        dH_world = vec3(spinC * dH_local.x + spinS * dH_local.z, dH_local.y,
+                        -spinS * dH_local.x + spinC * dH_local.z);
+      }
+      vec3 gradW = mat3(u_Model) * dH_world;
+      n = normalize(n - gradW * (0.85 * nearK));
+    }
+  }
   float diff = max(dot(n, sunDir), 0.0);
   float mu = clamp(dot(n, viewDir), 0.0, 1.0);
   vec3 nightAmb = vec3(0.10, 0.16, 0.30) * (0.015 * (1.0 - diff));
@@ -502,16 +559,31 @@ void main() {
       rimColor = vec3(0.22, 0.58, 1.15);
       rimGain = 1.45;
     }
-    float atmRim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
-    col += rimColor * atmRim * (0.25 + diff) * rimGain;
-    float fwdAmt = pow(max(dot(-viewDir, sunDir), 0.0), 16.0);
-    col += rimColor * fwdAmt * atmRim * 1.5 * rimGain;
-    float limbRed = pow(1.0 - max(dot(n, viewDir), 0.0), 2.0) * 0.35 * diff;
-    col = mix(col, col * vec3(1.05, 0.85, 0.7), limbRed);
-    if (u_Body == 6) {
-      // Mars: thin dusty rose rim.
-      float dustRim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
-      col += vec3(0.9, 0.55, 0.35) * dustRim * (0.15 + diff * 0.5);
+    // v4.3.0: Physical Rayleigh & Mie Atmospheric Scattering
+    if (u_PlanetAtmosphere == 1) {
+      float cosTheta = dot(-viewDir, sunDir);
+      float rayleighPhase = 0.75 * (1.0 + cosTheta * cosTheta);
+      float g = 0.76;
+      float miePhase = (1.0 - g * g) / pow(max(1.0 + g * g - 2.0 * g * cosTheta, 0.001), 1.5);
+      float opticalDepth = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
+      float termTwi = smoothstep(-0.15, 0.10, dot(n, sunDir)) * (1.0 - smoothstep(0.10, 0.35, dot(n, sunDir)));
+      vec3 sunsetColor = (u_Body == 6) ? vec3(0.35, 0.65, 0.95) : vec3(1.0, 0.45, 0.15); // Mars blue sunsets, Earth golden
+      vec3 rayleighScatt = rimColor * opticalDepth * rayleighPhase * (0.2 + diff);
+      vec3 mieScatt = vec3(1.0, 0.95, 0.85) * opticalDepth * miePhase * 0.15 * diff;
+      vec3 sunsetScatt = sunsetColor * opticalDepth * termTwi * 0.8;
+      col += (rayleighScatt + mieScatt + sunsetScatt) * rimGain;
+    } else {
+      float atmRim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
+      col += rimColor * atmRim * (0.25 + diff) * rimGain;
+      float fwdAmt = pow(max(dot(-viewDir, sunDir), 0.0), 16.0);
+      col += rimColor * fwdAmt * atmRim * 1.5 * rimGain;
+      float limbRed = pow(1.0 - max(dot(n, viewDir), 0.0), 2.0) * 0.35 * diff;
+      col = mix(col, col * vec3(1.05, 0.85, 0.7), limbRed);
+      if (u_Body == 6) {
+        // Mars: thin dusty rose rim.
+        float dustRim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
+        col += vec3(0.9, 0.55, 0.35) * dustRim * (0.15 + diff * 0.5);
+      }
     }
   }
   if (u_Type == 4) {

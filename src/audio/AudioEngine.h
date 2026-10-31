@@ -49,12 +49,17 @@ class AudioEngine {
 
   // --- SFX (все синтезом, без вавок) ---
   void playClick();    // UI-клики
-  void playTick();     // v3.0.0: тик пульсара (короткий пинг 25 мс)
-  void playWhoosh();   // телепорт: sweep шума 0.6с
+  void playTick(float pan = 0.0f);     // v3.0.0 / v4.3.0: тик пульсара с панорамой [-1..1]
+  void playWhoosh(float pan = 0.0f);   // телепорт: sweep шума 0.6с
   void setWarpLevel(float k);  // 0..1: коричневый шум + суб-синус,
                                // сам же дакает музыку (-8 дБ при K=1)
   void setEngineLevel(float k);  // v3.3.0: гул двигателя от скорости 0..1
                                  // (тон 52-82 Гц + обертон + шум-дыхание)
+  // v4.3.0: эффект Доплера и напряжение у гравитационных аномалий
+  void setDopplerShift(float factor);  // 0.5 .. 2.0 (pitch shift)
+  float dopplerShift() const { return m_dopplerFactor.load(); }
+  void setTensionLevel(float k);       // 0 .. 1 (near hazards)
+  float tensionLevel() const { return m_tensionCurrent.load(); }
   void playJump();     // варп-прыжок: sine-drop 200->30 Гц + шум
   void playChime();    // ачивка: 3 щипка
   void playBlip();     // ошибка/тур: короткий blip
@@ -78,6 +83,7 @@ class AudioEngine {
     // audio-поток читает без мьютекса (после push не меняется).
     std::shared_ptr<std::vector<float>> pcm;
     float gainDb = 0.0f;
+    float pan = 0.0f;  // v4.3.0: -1.0 left .. +1.0 right
   };
 
   // Рендер одного музыкального сэмпла (моно; стерео дублируется).
@@ -103,6 +109,9 @@ class AudioEngine {
   std::atomic<float> m_warpCurrent{0.0f};
   std::atomic<float> m_engineTarget{0.0f};
   std::atomic<float> m_engineCurrent{0.0f};
+  std::atomic<float> m_dopplerFactor{1.0f};
+  std::atomic<float> m_tensionTarget{0.0f};
+  std::atomic<float> m_tensionCurrent{0.0f};
   std::atomic<uint64_t> m_samples{0};  // счётчик сэмплов (live: колбэк)
 
   std::mutex m_mutex;

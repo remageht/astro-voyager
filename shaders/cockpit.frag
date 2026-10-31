@@ -271,6 +271,24 @@ void main() {
       hudGlow += (1.0 - smoothstep(0.001, 0.003, abs(badgeBox))) * (0.8 + 0.4 * sin(u_Time * 6.0));
     }
 
+    // G. Tactical Compass Heading Tape (v4.3.0)
+    vec2 compassP = hudP - vec2(0.0, 0.38);
+    if (abs(compassP.x) < 0.32 && abs(compassP.y) < 0.035) {
+      // Horizontal compass baseline
+      hudGlow += (1.0 - smoothstep(0.001, 0.0025, sdSegment(compassP, vec2(-0.30, 0.0), vec2(0.30, 0.0)))) * 0.7;
+      // Heading lubber line (center indicator triangle)
+      hudGlow += (1.0 - smoothstep(0.001, 0.003, sdSegment(compassP, vec2(0.0, 0.0), vec2(0.0, -0.018)))) * 1.2;
+      // Sliding heading ticks based on u_Yaw
+      float tickSpacing = 0.05;
+      for (int t = -6; t <= 6; ++t) {
+        float tickX = float(t) * tickSpacing - (fract(u_Yaw / 30.0) - 0.5) * tickSpacing;
+        if (abs(tickX) < 0.28) {
+          float tickH = (mod(float(t), 3.0) == 0.0) ? 0.014 : 0.007;
+          hudGlow += (1.0 - smoothstep(0.001, 0.002, sdSegment(compassP - vec2(tickX, 0.0), vec2(0.0, 0.0), vec2(0.0, tickH)))) * 0.6;
+        }
+      }
+    }
+
     // Additive HUD projection on the glass
     if (hudGlow > 0.001) {
       col.rgb += hudCol * hudGlow * 1.35;
