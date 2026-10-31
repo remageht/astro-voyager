@@ -156,3 +156,16 @@
 | В сцене | dock-warp-tunnel (Sgr A*), масштаб 0.25 |
 | Витрина | docs/screens/warp_tunnel_hero.png |
 
+
+## Warp Drive Visualisation (процедурная)
+
+| Поле | Значение |
+|---|---|
+| Модель | Warp Drive Visualisation (процедурная генерация) |
+| Автор | Astro Voyager (процедурная) |
+| Лицензия | MIT (код проекта) |
+| Источник | blender/scripts/generate_warp_drive_vis.py |
+| Игровые файлы | res/models/warp_drive_vis.obj + 5 BMP-атласов 1024x1024 |
+| В сцене | dock-warp-drive-vis (Sgr A*), масштаб 0.30 |
+| Витрина | docs/screens/warp_drive_vis_hero.png |
+
