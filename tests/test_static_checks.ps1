@@ -450,6 +450,14 @@ Check 'tde render branch' (($sceneCpp -match 'StationType::TidalDisruption') -an
 Check 'tde inspector controls' (($appCpp -match 'Tidal Disruption Event') -and ($appCpp -match 'triggerTdeExplosion'))
 Check 'story journal has at2019qiz' (((Read-File 'src/StoryJournal.cpp') -match '"at2019qiz"') -and ((Read-File 'tests/test_story.cpp') -match '"at2019qiz"'))
 
+# v4.2.0: Cosmic Events Pass 4 - Pillars of Creation (M16) & Crab Nebula PWN
+Check 'pillars frag exists' (Test-Path (Join-Path $root 'shaders/pillars.frag'))
+Check 'catalog has m16' (($catalogCpp -match '"m16"') -and ($catalogJson -match '"m16"'))
+Check 'pillars render branch' (($sceneCpp -match 'm_pillarsShader') -and ($sceneCpp -match 'u_InfraredBlend'))
+Check 'pillars inspector controls' (($appCpp -match 'Pillars of Creation') -and ($appCpp -match 'IR Blend'))
+Check 'crab pwn controls' (($appCpp -match 'Crab PWN') -and ($appCpp -match 'PWN Mode') -and ($sceneCpp -match 'u_PwnMode'))
+Check 'story journal has m16' (((Read-File 'src/StoryJournal.cpp') -match '"m16"') -and ((Read-File 'tests/test_story.cpp') -match '"m16"'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

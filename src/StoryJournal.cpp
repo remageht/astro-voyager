@@ -243,6 +243,25 @@ std::vector<StoryEntry> storyCatalog() {
       "Egorka gently takes her hand: \"Gravity can bend a ray of light, Mia, but never what binds us.\"";
   c.push_back(e);
 
+  e.id = "m16";
+  e.titleRu = "Столпы Творения";
+  e.titleEn = "Pillars of Creation";
+  e.textRu =
+      "Башни из холодного молекулярного водорода поднимаются на четыре световых года. "
+      "В инфракрасном визоре сквозь плотную пыль просвечивают тысячи новорождённых звёзд. "
+      "«Здесь рождается жизнь, Егорка, — тихо произносит Мия, глядя на испаряющиеся глобулы. — "
+      "Пепел старых сверхновых сгущается в новые солнца. Круг замыкается». "
+      "Егорка смотрит на звёздный кулон: «Значит, даже когда наше Солнце погаснет, "
+      "где-то в темноте зажгутся другие. И наш Новый Дом будет под их светом».";
+  e.textEn =
+      "Towers of cold molecular hydrogen rise four light-years into the void. "
+      "Through the infrared visor, thousands of newborn infant stars shimmer within the dense dust. "
+      "\"This is where life begins, Egorka,\" Mia murmurs, watching the evaporating gaseous globules. "
+      "\"The ashes of ancient supernovae condense into new suns. The circle closes.\" "
+      "Egorka glances at the star pendant: \"So even when our Sun goes dark, "
+      "others will ignite across the void. And our New Home will bask beneath their light.\"";
+  c.push_back(e);
+
   return c;
 }
 
@@ -291,6 +310,8 @@ void StoryJournal::refresh(const Progress& progress) {
       unlocked = (nVisited >= 5) && (progress.minBhDistance < 10.0 || progress.capturedHorizon);
     } else if (e.id == "at2019qiz") {
       unlocked = storyEntryHasVisited(progress.visited, "at2019qiz");
+    } else if (e.id == "m16") {
+      unlocked = storyEntryHasVisited(progress.visited, "m16");
     }
     e.unlocked = unlocked;
   }

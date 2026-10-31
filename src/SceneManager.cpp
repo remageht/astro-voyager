@@ -126,6 +126,7 @@ SceneManager::SceneManager() {
   m_m31StarShader = std::make_unique<Shader>("shaders/m31star.vert", "shaders/m31star.frag");
   m_galaxyShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/galaxy.frag");
   m_nebulaShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/nebula.frag");
+  m_pillarsShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/pillars.frag");
   m_pulsarShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/pulsar.frag");
   m_kilonovaShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/kilonova.frag");
   m_supernovaShader = std::make_unique<Shader>("shaders/quad.vert", "shaders/supernova.frag");
@@ -811,6 +812,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_dockSites.push_back(DockSite{"dock-sn1987a", "Hubble-JWST Astrophysical Observatory", "sn1987a", Vec3(0.0, 3.2, 22.0), 5.0f});
     } else if (m_currentStation->id == "at2019qiz") {
       m_dockSites.push_back(DockSite{"dock-at2019qiz", "VLT-Swift Deep TDE Sentinel", "at2019qiz", Vec3(0.0, 3.6, 24.0), 5.0f});
+    } else if (m_currentStation->id == "m16") {
+      m_dockSites.push_back(DockSite{"dock-m16", "Eagle Nebula Pillars Observatory", "m16", Vec3(0.0, 4.0, 30.0), 5.0f});
+    } else if (m_currentStation->id == "m1") {
+      m_dockSites.push_back(DockSite{"dock-m1", "Chandra PWN High-Energy Monitor", "m1", Vec3(0.0, 3.5, 52.0), 5.0f});
     } else {
       m_dockSites.push_back(DockSite{"dock-station", "Orbital Station " + m_currentStation->name, m_currentStation->id, Vec3(0.0, 1.8, m_currentStation->spawnDistanceRs * 1.15), 5.0f});
     }
@@ -1121,16 +1126,37 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       }
     }
   } else if (m_currentStation->type == StationType::Nebula) {
-    // M1 Crab Nebula impostor sprite
-    m_nebulaShader->bind();
-    m_nebulaShader->setUniform1f("u_Time", time);
-    m_nebulaShader->setUniform1f("u_Aspect", aspect);
-    m_nebulaShader->setUniform1f("u_Exposure", m_exposure);
-    m_nebulaShader->setUniform2f("u_ObjNdc", impNdcX, impNdcY);
-    m_nebulaShader->setUniform1f("u_ObjZoom", 1.0f);
-    m_nebulaShader->setUniform3f("u_CamPar", impParX, impParY, impParZ);
-    m_screenQuad->draw();
-    m_nebulaShader->unbind();
+    if (m_currentStation->id == "m16") {
+      // M16 Pillars of Creation in Eagle Nebula
+      m_pillarsShader->bind();
+      m_pillarsShader->setUniform1f("u_Time", time);
+      m_pillarsShader->setUniform1f("u_Aspect", aspect);
+      m_pillarsShader->setUniform1f("u_Exposure", m_exposure);
+      m_pillarsShader->setUniform2f("u_ObjNdc", impNdcX, impNdcY);
+      double kd = std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+      double ks = m_currentStation->spawnDistanceRs;
+      if (ks <= 0.0) ks = 35.0;
+      float kzoom = static_cast<float>(std::clamp(ks / std::max(kd, 1e-3), 0.5, 30.0));
+      m_pillarsShader->setUniform1f("u_ObjZoom", kzoom);
+      m_pillarsShader->setUniform3f("u_CamPar", impParX, impParY, impParZ);
+      m_pillarsShader->setUniform1f("u_InfraredBlend", m_pillarsInfrared);
+      m_pillarsShader->setUniform1f("u_PhotoEvapRate", m_pillarsPhotoEvap);
+      m_screenQuad->draw();
+      m_pillarsShader->unbind();
+    } else {
+      // M1 Crab Nebula Pulsar Wind Nebula (PWN)
+      m_nebulaShader->bind();
+      m_nebulaShader->setUniform1f("u_Time", time);
+      m_nebulaShader->setUniform1f("u_Aspect", aspect);
+      m_nebulaShader->setUniform1f("u_Exposure", m_exposure);
+      m_nebulaShader->setUniform2f("u_ObjNdc", impNdcX, impNdcY);
+      m_nebulaShader->setUniform1f("u_ObjZoom", 1.0f);
+      m_nebulaShader->setUniform3f("u_CamPar", impParX, impParY, impParZ);
+      m_nebulaShader->setUniform1f("u_PwnMode", m_crabPwnMode);
+      m_nebulaShader->setUniform1f("u_TerminationShock", m_crabTerminationShock);
+      m_screenQuad->draw();
+      m_nebulaShader->unbind();
+    }
   } else if (m_currentStation->type == StationType::Pulsar) {
     // Pulsar impostor sprite + per-pulsar preset. Defaults = Vela 1:1, so
     // psr-vela renders exactly as before (harness byte-identical).
@@ -1876,7 +1902,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             case StationType::StarCluster:
               keyCol = glm::vec3(1.00f, 0.94f, 0.84f) * 0.70f; break;
             case StationType::Nebula:
-              keyCol = glm::vec3(0.92f, 0.86f, 0.98f) * 0.60f; break;
+              if (st->id == "m16") {
+                keyCol = glm::vec3(1.10f, 0.82f, 0.70f) * 0.75f;
+              } else {
+                keyCol = glm::vec3(0.70f, 0.88f, 1.15f) * 0.70f;
+              }
+              break;
             case StationType::SolarSystem:
               keyCol = glm::vec3(1.00f, 0.94f, 0.82f) * 1.45f; break;
             case StationType::Constellation:

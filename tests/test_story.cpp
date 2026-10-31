@@ -224,6 +224,22 @@ int main() {
     }
   }
 
+  // Test 7h: M16 visit unlocks m16 entry (Pillars of Creation).
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"m16"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "m16") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7h failed: m16 visit should unlock m16\n";
+      return 1;
+    }
+  }
+
   // Test 8: unread counting and markAllRead; read marks survive refresh.
   {
     StoryJournal j;
@@ -262,7 +278,7 @@ int main() {
       std::cerr << "Test 9 failed: repeated refresh changed unlock state\n";
       return 1;
     }
-    if (j.entries().size() != 17) {
+    if (j.entries().size() != 18) {
       std::cerr << "Test 9 failed: catalog size drifted ("
                 << j.entries().size() << ")\n";
       return 1;

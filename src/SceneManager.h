@@ -203,6 +203,17 @@ class SceneManager {
   void setTdeAutoPlay(bool a) { m_tdeAutoPlay = a; }
   void triggerTdeExplosion() { m_tdePhase = 0.0f; m_tdeAutoPlay = true; }
 
+  // === Cosmic Events: Pillars of Creation (M16) & Crab PWN (M1) ===
+  float getPillarsInfrared() const { return m_pillarsInfrared; }
+  void setPillarsInfrared(float ir) { m_pillarsInfrared = ir; }
+  float getPillarsPhotoEvap() const { return m_pillarsPhotoEvap; }
+  void setPillarsPhotoEvap(float pe) { m_pillarsPhotoEvap = pe; }
+
+  float getCrabPwnMode() const { return m_crabPwnMode; }
+  void setCrabPwnMode(float mode) { m_crabPwnMode = mode; }
+  float getCrabTerminationShock() const { return m_crabTerminationShock; }
+  void setCrabTerminationShock(float r) { m_crabTerminationShock = r; }
+
   // Object editor (custom bodies, sol station only).
   void spawnRockAt(const Vec3& p, const Vec3& v);
   // v3.2.0 editor: spawn from a full template (id/name auto-numbered by
@@ -282,6 +293,14 @@ class SceneManager {
   float m_tdePhase = 0.55f;
   bool m_tdeAutoPlay = true;
 
+  // Cosmic Event: Pillars of Creation (M16)
+  float m_pillarsInfrared = 0.35f;
+  float m_pillarsPhotoEvap = 1.0f;
+
+  // Cosmic Event: Crab Nebula PWN (M1)
+  float m_crabPwnMode = 0.50f;
+  float m_crabTerminationShock = 0.12f;
+
   // === Relativity === скорость наблюдателя (дельта позиции камеры за кадр,
   // сглаженная). Харнесс передаёт константный time => dt == 0 => beta == 0
   // => шейдерные ветки выключены, PNG байт-в-байт.
@@ -343,6 +362,7 @@ class SceneManager {
   std::unique_ptr<Shader> m_m31StarShader;
   std::unique_ptr<Shader> m_galaxyShader;
   std::unique_ptr<Shader> m_nebulaShader;
+  std::unique_ptr<Shader> m_pillarsShader;
   std::unique_ptr<Shader> m_pulsarShader;
   std::unique_ptr<Shader> m_kilonovaShader;
   std::unique_ptr<Shader> m_supernovaShader;
