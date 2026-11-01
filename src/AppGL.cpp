@@ -2697,13 +2697,13 @@ void AppGL::openChapterSlide(int slideIdx) {
 }
 
 void AppGL::openEndingSlide(int choice) {
-  // v4.1: две концовки Adventure. Индексы 7/8 — ветки colony/horizon
-  // в storyChapterSlides(); служебный слайд 6 остаётся fallback для
-  // старых сейвов без выбора. После выбранной концовки идёт общий
-  // эпилог «Наследие» (слайд 9) — история не обрывается на финале.
+  // v4.4: 5 концовок Adventure: colony (7), horizon (8), solar rebirth (10),
+  // loop transcendence (11), ark citadel (12) в storyChapterSlides().
+  // Служебный слайд 6 остаётся fallback для старых сейвов.
+  // После выбранной концовки идёт общий эпилог «Наследие» (слайд 9).
   const auto& slides = storyChapterSlides();
-  const int idx = (choice == kFinaleHorizon) ? 8 : 7;
-  if (idx >= static_cast<int>(slides.size())) return;
+  const int idx = slideIndexForFinale(choice);
+  if (idx < 0 || idx >= static_cast<int>(slides.size())) return;
   m_slidesCurrent.assign(1, slides[idx]);
   if (slides.size() > 9) m_slidesCurrent.push_back(slides[9]);
   m_slidesHead = uiRu(finaleTitleRu(choice).c_str(),
@@ -2712,6 +2712,8 @@ void AppGL::openEndingSlide(int choice) {
   m_slidesIdx = 0;
   m_slidesOpen = true;
   m_slideAnimIdx = -1;
+  m_slideShownAt = glfwGetTime();
+  m_slideTextStart = glfwGetTime();
 }
 
 void AppGL::saveExpeditionFileNow() {
@@ -3362,26 +3364,24 @@ void AppGL::drawExpeditionHud() {
 }
 
 void AppGL::drawExpeditionMap() {
-  // === Expedition ===: карта глав — интерактивная миссионная ось со светящимися узлами станций.
+  // === Expedition ===: интерактивная карта и выбор глав экспедиции «Astro-Voyager».
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
                           ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f), ImGuiCond_Always);
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.018f, 0.028f, 0.048f, 0.95f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.78f, 0.30f, 0.65f));
+  ImGui::SetNextWindowSize(ImVec2(660.0f, 0.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.024f, 0.042f, 0.96f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.78f, 0.30f, 0.70f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
   ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
   if (ImGui::Begin("##expeditionMap", nullptr, fl)) {
     const auto& chapters = expeditionChapters();
-    float time = static_cast<float>(glfwGetTime());
-    ImDrawList* dl = ImGui::GetWindowDrawList();
 
     // Header banner with overall progress bar
     ImGui::TextColored(ImVec4(1.00f, 0.82f, 0.32f, 1.0f), "✦ %s",
-                       uiRu("МАРШРУТ ЭКСПЕДИЦИИ «ASTRO-VOYAGER»",
-                            "EXPEDITION ROUTE «ASTRO-VOYAGER»"));
+                       uiRu("ХРОНОЛОГИЯ И ВЫБОР ГЛАВ «ASTRO-VOYAGER»",
+                            "TIMELINE & CHAPTER SELECT «ASTRO-VOYAGER»"));
     int completedChapters = std::min(static_cast<int>(chapters.size()), m_expedition.chapterIndex);
     float progress = chapters.empty()
                          ? 0.0f
@@ -3390,22 +3390,14 @@ void AppGL::drawExpeditionMap() {
     ImGui::ProgressBar(progress, ImVec2(-1, 5.0f), "");
     ImGui::Spacing();
 
-    // Timeline node axis
-    ImVec2 basePos = ImGui::GetCursorScreenPos();
-    float axisX = basePos.x + 14.0f;
-    std::vector<ImVec2> nodePositions;
+    const int maxUnlocked = m_expedition.getMaxUnlocked();
 
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
+      ImGui::PushID(i);
       const ExpeditionChapter& c = chapters[i];
       const bool done = i < m_expedition.chapterIndex;
       const bool current = i == m_expedition.chapterIndex;
-
-      ImVec2 rowStart = ImGui::GetCursorScreenPos();
-      float nodeY = rowStart.y + 10.0f;
-      nodePositions.push_back(ImVec2(axisX, nodeY));
-
-      // Indent text so timeline markers fit nicely on the left
-      ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 34.0f);
+      const bool unlocked = i <= maxUnlocked;
 
       std::string rowRu = c.titleRu;
       std::string rowEn = c.titleEn;
@@ -3415,74 +3407,115 @@ void AppGL::drawExpeditionMap() {
         rowEn = finaleTitleEn(m_expedition.finaleChoice);
       }
 
+      // Title & Status badge
       if (current) {
-        // High contrast current chapter
-        ImGui::TextColored(ImVec4(1.0f, 0.88f, 0.38f, 1.0f), "%s",
+        ImGui::TextColored(ImVec4(1.0f, 0.88f, 0.38f, 1.0f), "▶ %s",
                            uiRu(rowRu.c_str(), rowEn.c_str()));
-        if (!m_expedition.finished()) {
-          ImGui::SetWindowFontScale(0.90f);
-          ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 34.0f);
-          ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "🎯 %s: %s",
-                             uiRu("Цель", "Objective"),
-                             uiRu(c.goalRu.c_str(), c.goalEn.c_str()));
-          ImGui::SetWindowFontScale(1.0f);
-        }
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), "[%s]",
+                           uiRu("ТЕКУЩАЯ ГЛАВА", "ACTIVE CHAPTER"));
       } else if (done) {
-        ImGui::TextColored(ImVec4(0.60f, 0.88f, 0.65f, 1.0f), "%s",
+        ImGui::TextColored(ImVec4(0.45f, 0.90f, 0.60f, 1.0f), "✔ %s",
                            uiRu(rowRu.c_str(), rowEn.c_str()));
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.40f, 0.80f, 0.50f, 1.0f), "[%s]",
+                           uiRu("ПРОЙДЕНО", "COMPLETED"));
+      } else if (unlocked) {
+        ImGui::TextColored(ImVec4(0.45f, 0.75f, 0.95f, 1.0f), "○ %s",
+                           uiRu(rowRu.c_str(), rowEn.c_str()));
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.35f, 0.70f, 0.90f, 1.0f), "[%s]",
+                           uiRu("ДОСТУПНО", "UNLOCKED"));
       } else {
-        ImGui::TextColored(ImVec4(0.48f, 0.52f, 0.60f, 0.85f), "%s",
+        ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.55f, 0.75f), "🔒 %s",
                            uiRu(rowRu.c_str(), rowEn.c_str()));
       }
+
+      // Description / Goal
+      ImGui::Indent(22.0f);
+      if (current && !m_expedition.finished()) {
+        ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "🎯 %s: %s",
+                           uiRu("Цель", "Objective"),
+                           uiRu(c.goalRu.c_str(), c.goalEn.c_str()));
+      } else if (unlocked) {
+        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.68f, 0.85f), "%s",
+                           uiRu(c.goalRu.c_str(), c.goalEn.c_str()));
+      }
+
+      // Interactive Action buttons for unlocked chapters
+      if (unlocked) {
+        ImGui::Spacing();
+        // Replay story slide button
+        if (c.slideIdx >= 0 || i == static_cast<int>(chapters.size()) - 1) {
+          if (ImGui::Button(uiRu("▶ Пересмотреть сюжет", "▶ Replay Story Slide"))) {
+            int slideToShow = c.slideIdx;
+            if (i == static_cast<int>(chapters.size()) - 1) {
+              if (m_expedition.finished() && m_expedition.finaleChoice != kFinaleUnset) {
+                slideToShow = slideIndexForFinale(m_expedition.finaleChoice);
+              } else {
+                slideToShow = 6;
+              }
+            }
+            if (slideToShow >= 0 && slideToShow < static_cast<int>(storyChapterSlides().size())) {
+              openChapterSlide(slideToShow);
+              m_expeditionMapOpen = false;
+            }
+          }
+          ImGui::SameLine();
+        }
+
+        // Warp to chapter station
+        std::string prim = c.station;
+        size_t sep = prim.find('|');
+        if (sep != std::string::npos) prim = prim.substr(0, sep);
+        if (!prim.empty()) {
+          if (ImGui::Button(uiRu("✦ Варп к станции", "✦ Warp to Station"))) {
+            teleportToStation(prim);
+            m_expeditionMapOpen = false;
+          }
+          ImGui::SameLine();
+        }
+
+        // Set active chapter
+        if (!current) {
+          if (ImGui::Button(uiRu("★ Сделать активной", "★ Set Active"))) {
+            m_expedition.setChapter(i);
+            saveExpeditionFileNow();
+          }
+        }
+      }
+      ImGui::Unindent(22.0f);
+
       ImGui::Spacing();
-    }
-
-    // Connect timeline nodes with vertical lines
-    for (size_t i = 0; i + 1 < nodePositions.size(); ++i) {
-      bool segDone = static_cast<int>(i + 1) <= m_expedition.chapterIndex;
-      ImU32 segCol = segDone ? IM_COL32(70, 195, 110, 210) : IM_COL32(50, 65, 90, 130);
-      dl->AddLine(nodePositions[i], nodePositions[i + 1], segCol, 2.0f);
-    }
-
-    // Render luminous nodes
-    for (int i = 0; i < static_cast<int>(nodePositions.size()); ++i) {
-      ImVec2 nPos = nodePositions[i];
-      const bool done = i < m_expedition.chapterIndex;
-      const bool current = i == m_expedition.chapterIndex;
-
-      if (done) {
-        dl->AddCircleFilled(nPos, 6.0f, IM_COL32(60, 200, 100, 240));
-        dl->AddCircle(nPos, 7.5f, IM_COL32(20, 60, 30, 220), 16, 1.5f);
-        dl->AddCircleFilled(nPos, 2.2f, IM_COL32(255, 255, 255, 255));
-      } else if (current) {
-        float pulse = 0.7f + 0.3f * std::sin(time * 4.0f);
-        float pulseR = 7.0f + 3.5f * (1.0f - pulse);
-        dl->AddCircle(nPos, pulseR,
-                      IM_COL32(255, 215, 70, static_cast<int>(180 * pulse)), 20, 1.5f);
-        dl->AddCircleFilled(nPos, 6.5f, IM_COL32(255, 205, 50, 255));
-        dl->AddCircleFilled(nPos, 2.8f, IM_COL32(255, 255, 255, 255));
-      } else {
-        dl->AddCircleFilled(nPos, 4.5f, IM_COL32(30, 42, 60, 200));
-        dl->AddCircle(nPos, 5.5f, IM_COL32(70, 90, 120, 160), 16, 1.2f);
-      }
+      ImGui::Separator();
+      ImGui::Spacing();
+      ImGui::PopID();
     }
 
     if (m_expedition.finished()) {
       const int fc = m_expedition.finaleChoice;
-      const char* doneRu = "Экспедиция завершена. Сюжет завершён.";
-      const char* doneEn = "Expedition complete. Story complete.";
-      if (fc == kFinaleHorizon) {
-        doneRu = "Экипаж ушёл к дальнему горизонту. Сюжет завершён.";
-        doneEn = "The crew flew for the far horizon. Story complete.";
-      } else if (fc == kFinaleColony) {
-        doneRu = "Колония основана. Сюжет завершён.";
-        doneEn = "Colony founded. Story complete.";
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "★ %s: %s",
+                         uiRu("ВЫБРАННЫЙ ФИНАЛ", "CHOSEN FINALE"),
+                         uiRu(finaleTitleRu(fc).c_str(), finaleTitleEn(fc).c_str()));
+      ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "   %s: %s",
+                         uiRu("Ключевой союзник", "Key Ally"),
+                         uiRu(finaleSpeakerRu(fc).c_str(), finaleSpeakerEn(fc).c_str()));
+      ImGui::Spacing();
+      if (ImGui::Button(uiRu("↺ Сменить финал (5 концовок)", "↺ Change Finale Choice (5 Endings)"),
+                        ImVec2(-1, 32.0f))) {
+        m_finaleChoiceOpen = true;
+      }
+      if (fc != kFinaleUnset) {
+        if (ImGui::Button(uiRu("▶ Смотреть финал и эпилог «Наследие»", "▶ Watch Finale & Epilogue «Legacy»"),
+                          ImVec2(-1, 28.0f))) {
+          openEndingSlide(fc);
+          m_expeditionMapOpen = false;
+        }
       }
       ImGui::Spacing();
-      ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
-                         uiRu(doneRu, doneEn));
     }
-    ImGui::Spacing();
+
     if (ImGui::Button(uiRu("✖ Закрыть (N / Esc)", "✖ Close (N / Esc)"), ImVec2(-1, 32.0f))) {
       m_expeditionMapOpen = false;
     }
@@ -3493,14 +3526,14 @@ void AppGL::drawExpeditionMap() {
 }
 
 void AppGL::drawFinaleChoice() {
-  // v4.1: финальная развилка Adventure. Модальная карточка Мии поверх игры;
-  // выбор пишется в expedition.json и открывает одну из двух концовок.
+  // v4.4: развилка Adventure из 5 концовок с голосами персонажей (Мия, Елена, Егорка, Марк).
+  // Выбор пишется в expedition.json и открывает слайд концовки и эпилог.
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
                           ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(620.0f, 0.0f), ImGuiCond_Always);
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.025f, 0.045f, 0.94f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.35f));
+  ImGui::SetNextWindowSize(ImVec2(680.0f, 0.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.038f, 0.96f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.78f, 0.30f, 0.60f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 18.0f));
   const ImGuiWindowFlags fl =
@@ -3508,54 +3541,120 @@ void AppGL::drawFinaleChoice() {
       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
       ImGuiWindowFlags_NoSavedSettings;
   if (ImGui::Begin("##finaleChoice", nullptr, fl)) {
-    ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
-                       uiRu("Мия Сато · Финал", "Mia Sato · Finale"));
+    ImGui::TextColored(ImVec4(1.00f, 0.82f, 0.32f, 1.0f), "✦ %s",
+                       uiRu("СУДЬБА ЭКСПЕДИЦИИ «ASTRO-VOYAGER»: ВЫБОР ФИНАЛА",
+                            "FATE OF EXPEDITION «ASTRO-VOYAGER»: FINAL CHOICE"));
+    ImGui::Separator();
     ImGui::Spacing();
     ImGui::TextWrapped(
         "%s",
-        uiRu("Мия смотрит на M13 в иллюминатор. «Мы нашли второй дом. Но "
-             "двигатель ещё держит курс — и в баках осталось топливо на один "
-             "последний прыжок».",
-             "Mia looks at M13 through the window. \"We found a second home. "
-             "But the drive still holds a course - and the tanks have fuel "
-             "for one last jump.\""));
+        uiRu("Корабль достиг древнего скопления M13. Навигационная консоль регистрирует "
+             "полную синхронизацию варп-метрики, а каналы связи переполнены предложениями экипажа. "
+             "Куда устремится воля человечества?",
+             "The ship has reached ancient cluster M13. The navigation console registers "
+             "complete metric synchronization, while comm channels buzz with crew proposals. "
+             "Where will humanity's destiny lead?"));
     ImGui::Spacing();
-    ImGui::TextColored(
-        ImVec4(0.62f, 0.65f, 0.72f, 1.0f), "%s",
-        uiRu("Остаться — основать колонию и закончить экспедицию. Уйти — "
-             "потратить остаток на прыжок к дальнему горизонту и не "
-             "вернуться.",
-             "Staying means founding the colony and ending the expedition. "
-             "Leaving means spending the rest on a jump to the far horizon - "
-             "and never coming back."));
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+
+    // 1. Colony ending (Mia Sato)
+    ImGui::PushID(1);
+    ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.00f, 1.0f), "1. %s: %s",
+                       uiRu("Мия Сато (Пилот)", "Mia Sato (Pilot)"),
+                       uiRu("Новый Дом у звёзд M13", "New Home at M13"));
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
+                       uiRu("«Остаться здесь, основать цветущую колонию и дать детям увидеть чистое небо».",
+                            "\"Stay here, found a thriving colony, and let our children see a true sky.\""));
     if (m_finaleChoiceOpen &&
-        ImGui::Button(uiRu("Остаться · основать колонию",
-                           "Stay · found the colony"),
-                      ImVec2(-1.0f, 0.0f))) {
+        ImGui::Button(uiRu("✔ Выбрать: Основать колонию на M13",
+                           "✔ Choose: Found Colony at M13"), ImVec2(-1.0f, 30.0f))) {
       m_expedition.finaleChoice = kFinaleColony;
       m_finaleChoiceOpen = false;
       saveExpeditionFileNow();
       openEndingSlide(kFinaleColony);
     }
+    ImGui::PopID();
+    ImGui::Spacing();
+
+    // 2. Far Horizon ending (Mia Sato)
+    ImGui::PushID(2);
+    ImGui::TextColored(ImVec4(0.95f, 0.55f, 0.85f, 1.0f), "2. %s: %s",
+                       uiRu("Мия Сато (Пилот)", "Mia Sato (Pilot)"),
+                       uiRu("Прыжок за дальний горизонт", "Jump to the Far Horizon"));
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
+                       uiRu("«Потратить всё топливо на рывок за край Галактики. Впереди — бесконечность».",
+                            "\"Spend all fuel on a jump beyond the Galaxy's rim. Ahead lies infinity.\""));
     if (m_finaleChoiceOpen &&
-        ImGui::Button(uiRu("Уйти · к дальнему горизонту",
-                           "Leave · for the far horizon"),
-                      ImVec2(-1.0f, 0.0f))) {
+        ImGui::Button(uiRu("✔ Выбрать: Уйти к дальнему горизонту",
+                           "✔ Choose: Leave for the Far Horizon"), ImVec2(-1.0f, 30.0f))) {
       m_expedition.finaleChoice = kFinaleHorizon;
       m_finaleChoiceOpen = false;
       saveExpeditionFileNow();
       openEndingSlide(kFinaleHorizon);
     }
-    if (m_finaleChoiceOpen) {
-      ImGui::Spacing();
-      ImGui::SetWindowFontScale(0.85f);
-      ImGui::TextColored(ImVec4(0.50f, 0.53f, 0.60f, 1.0f), "%s",
-                         uiRu("Выбор сохранится в expedition.json.",
-                              "The choice is stored in expedition.json."));
-      ImGui::SetWindowFontScale(1.0f);
+    ImGui::PopID();
+    ImGui::Spacing();
+
+    // 3. Solar Rebirth ending (Dr. Elena Rostova)
+    ImGui::PushID(3);
+    ImGui::TextColored(ImVec4(1.00f, 0.85f, 0.35f, 1.0f), "3. %s: %s",
+                       uiRu("Д-р Елена Ростова (Астрофизик)", "Dr. Elena Rostova (Astrophysicist)"),
+                       uiRu("Возрождение Солнца (Спасение Земли)", "Solar Rebirth (Save Earth)"));
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
+                       uiRu("«Вернуться к Земле с формулой Казимира, впрыснуть антиматерию и спасти 8 миллиардов людей».",
+                            "\"Return to Earth with the Casimir formula, inject antimatter and save 8 billion lives.\""));
+    if (m_finaleChoiceOpen &&
+        ImGui::Button(uiRu("✔ Выбрать: Возродить Солнце и спасти Землю",
+                           "✔ Choose: Reignite the Sun and Save Earth"), ImVec2(-1.0f, 30.0f))) {
+      m_expedition.finaleChoice = kFinaleSolarRebirth;
+      m_finaleChoiceOpen = false;
+      saveExpeditionFileNow();
+      openEndingSlide(kFinaleSolarRebirth);
+    }
+    ImGui::PopID();
+    ImGui::Spacing();
+
+    // 4. Temporal Loop ending (EgorKa)
+    ImGui::PushID(4);
+    ImGui::TextColored(ImVec4(0.35f, 1.00f, 0.65f, 1.0f), "4. %s: %s",
+                       uiRu("Егорка (Теоретик варпа)", "EgorKa (Warp Theorist)"),
+                       uiRu("Петля времени (Пятая Вселенная)", "Temporal Loop (Fifth Universe)"));
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
+                       uiRu("«Погрузиться в горизонт Sgr A*, открыть портал в Париж 2026 года и замкнуть петлю судьбы».",
+                            "\"Dive into Sgr A* event horizon, open the portal to Paris 2026 and close destiny's loop.\""));
+    if (m_finaleChoiceOpen &&
+        ImGui::Button(uiRu("✔ Выбрать: Шагнуть в сингулярность Sgr A*",
+                           "✔ Choose: Step into Sgr A* Singularity"), ImVec2(-1.0f, 30.0f))) {
+      m_expedition.finaleChoice = kFinaleLoopTranscendence;
+      m_finaleChoiceOpen = false;
+      saveExpeditionFileNow();
+      openEndingSlide(kFinaleLoopTranscendence);
+    }
+    ImGui::PopID();
+    ImGui::Spacing();
+
+    // 5. Ark Citadel ending (Cmdr. Mark Hale)
+    ImGui::PushID(5);
+    ImGui::TextColored(ImVec4(0.85f, 0.75f, 1.00f, 1.0f), "5. %s: %s",
+                       uiRu("Ком. Марк Хейл (Ветеран флота)", "Cmdr. Mark Hale (Fleet Veteran)"),
+                       uiRu("Ковчег человечества (Орбитальная Цитадель)", "Ark of Humanity (Orbital Citadel)"));
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
+                       uiRu("«Не доверять чужим планетам: объединить флот в автономный звёздный город-мегаполис».",
+                            "\"Reject alien planet traps: unite the fleet into an autonomous nomadic star metropolis.\""));
+    if (m_finaleChoiceOpen &&
+        ImGui::Button(uiRu("✔ Выбрать: Построить Ковчег человечества",
+                           "✔ Choose: Build the Ark Citadel"), ImVec2(-1.0f, 30.0f))) {
+      m_expedition.finaleChoice = kFinaleArkCitadel;
+      m_finaleChoiceOpen = false;
+      saveExpeditionFileNow();
+      openEndingSlide(kFinaleArkCitadel);
+    }
+    ImGui::PopID();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    if (ImGui::Button(uiRu("Отложить выбор / Закрыть", "Postpone Choice / Close"), ImVec2(-1.0f, 28.0f))) {
+      m_finaleChoiceOpen = false;
     }
   }
   ImGui::End();

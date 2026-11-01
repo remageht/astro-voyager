@@ -242,6 +242,67 @@ int main() {
     }
   }
 
+  // Test 9: 5 distinct endings, speaker attributions, and chapter selection.
+  {
+    const int endings[] = {
+        astro::kFinaleColony,
+        astro::kFinaleHorizon,
+        astro::kFinaleSolarRebirth,
+        astro::kFinaleLoopTranscendence,
+        astro::kFinaleArkCitadel,
+    };
+    for (int e : endings) {
+      if (astro::finaleTitleRu(e).empty() || astro::finaleTitleEn(e).empty()) {
+        std::cerr << "Test 9 failed: empty title for ending " << e << "\n";
+        return 1;
+      }
+      if (astro::finaleGoalRu(e).empty() || astro::finaleGoalEn(e).empty()) {
+        std::cerr << "Test 9 failed: empty goal for ending " << e << "\n";
+        return 1;
+      }
+      if (astro::finaleSpeakerRu(e).empty() || astro::finaleSpeakerEn(e).empty()) {
+        std::cerr << "Test 9 failed: empty speaker for ending " << e << "\n";
+        return 1;
+      }
+      ExpeditionState st;
+      st.finaleChoice = e;
+      st.chapterIndex = 6;
+      ExpeditionState out;
+      if (!deserializeExpedition(serializeExpedition(st), out) ||
+          out.finaleChoice != e) {
+        std::cerr << "Test 9 failed: roundtrip lost ending " << e << "\n";
+        return 1;
+      }
+    }
+
+    // Chapter jumping and max unlocked tracking:
+    ExpeditionState nav;
+    nav.markVisited("sol");          // chapter 0 -> 1
+    nav.markVisited("dock-dragon");  // chapter 1 -> 2
+    nav.markVisited("sgra");         // chapter 2 -> 3
+    if (nav.getMaxUnlocked() < 3) {
+      std::cerr << "Test 9 failed: maxUnlocked must be at least 3, got "
+                << nav.getMaxUnlocked() << "\n";
+      return 1;
+    }
+    nav.setChapter(1);  // Replay chapter 1
+    if (nav.chapterIndex != 1) {
+      std::cerr << "Test 9 failed: setChapter(1) failed to switch\n";
+      return 1;
+    }
+    // Trying to jump beyond unlocked should not advance
+    nav.setChapter(6);
+    if (nav.chapterIndex == 6) {
+      std::cerr << "Test 9 failed: setChapter allowed jumping beyond maxUnlocked\n";
+      return 1;
+    }
+    nav.setChapter(3);  // jump back to frontier
+    if (nav.chapterIndex != 3) {
+      std::cerr << "Test 9 failed: setChapter(3) failed to return to frontier\n";
+      return 1;
+    }
+  }
+
   std::cout << "test_expedition: ALL PASS\n";
   return 0;
 }

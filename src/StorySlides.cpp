@@ -1,4 +1,5 @@
 #include "StorySlides.h"
+#include "Expedition.h"
 
 #include <cmath>
 
@@ -383,50 +384,54 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "before the jump the crew bids farewell to the first fleet.",
         5});
     s.push_back(StorySlide{  // 1: fleet done - Dragon / Soyuz interlude
-        "Мия: «Мы уходим дальше, чем уходил любой экипаж. Но сначала — к тем, "
-        "кто открыл нам орбиту». Егорка касается шлюза «Союза»: «Мой дед строил "
-        "такие приборы. А теперь мы вдвоём летим к чёрным дырам». Две эпохи, один воздух. "
-        "Экипаж касается их шлюзов, как плеча старшего, и вносит имена в журнал.",
-        "Mia: \"We go farther than any crew before us. But first - to those "
-        "who opened orbit for us.\" Egorka touches the Soyuz hatch: \"My grandfather "
-        "built instruments like these. And now we are flying to black holes together.\" Two eras, one air. "
-        "The crew touches their hatches like an elder's shoulder and writes the names into the log.",
+        "Мия: «Мы уходим дальше, чем уходил любой экипаж». Командор Марк Хейл встречает "
+        "у шлюза: «Вы несёте надежду восьми миллиардов. Если планеты не примут вас — помните: "
+        "крепость людей строится на орбите». Доктор Елена Ростова по каналу верфи добавляет: "
+        "«Формула Казимира стабильна, Егорка. Если вернётесь с энергией — мы зажжём Солнце заново». "
+        "Две эпохи, одна великая цель.",
+        "Mia: \"We go farther than any crew before us.\" Cmdr. Mark Hale meets them at the "
+        "hatch: \"You carry the hope of eight billion. If alien planets reject you - remember: "
+        "humanity's fortress is built in orbit.\" Dr. Elena Rostova radios from the shipyard: "
+        "\"The Casimir metric is stable, Egorka. If you return with energy - we can reignite the Sun.\" "
+        "Two eras, one great purpose.",
         0, "res/story/06_last_watch.png"});
     s.push_back(StorySlide{  // 2: sgra done
         "Мия: «Свет огибает горизонт — и мы видим его кольцо». Егорка перехватывает "
         "штурвал, когда приливная гравитация тянет корабль: «Не бойся, Мия. "
-        "Я держу пузырь». Фотонное кольцо Sgr A* запечатлено, орбиты света измерены. "
-        "Следующая цель — M87*.",
+        "Я держу пузырь». Звёздный кулон резонирует на частоте метрики Керра. "
+        "Елена передаёт с Земли: «Гравитационное замедление на пределе — вы в миллисекундах от сингулярности!»",
         "Mia: \"Light bends around the horizon - and we see its ring.\" Egorka steeps "
         "the thrusters as tidal drag pulls toward the singularity: \"Don't be afraid, Mia. "
-        "I've got the bubble.\" The photon ring of Sgr A* is recorded, light orbits measured. "
-        "Next target - M87*.",
+        "I've got the bubble.\" The star pendant resonates at the Kerr metric frequency. "
+        "Elena radios: \"Gravitational dilation is extreme - you are milliseconds from the singularity!\"",
         6});
     s.push_back(StorySlide{  // 3: m87 done
         "Мия: «Доплер не врёт: одна сторона диска ярче другой». Джет M87* "
         "брошен на тысячи световых лет. Егорка смотрит на спектрограф: «Релятивистский "
-        "биминг ослепляет сенсоры. Держись за меня, мы разворачиваемся».",
+        "биминг ослепляет сенсоры. Держись за меня, мы разворачиваемся». Марк с орбиты "
+        "подбадривает: «Синхронизируйте щиты, держите строй!»",
         "Mia: \"Doppler does not lie: one side of the disk burns brighter.\" "
         "The M87* jet reaches thousands of light-years. Egorka glances at the spectrograph: "
-        "\"Relativistic beaming is blinding the sensors. Hold on to me, we're turning.\"",
+        "\"Relativistic beaming is blinding the sensors. Hold on to me, we're turning.\" Mark "
+        "radios from orbit: \"Sync shields, hold the line!\"",
         7});
     s.push_back(StorySlide{  // 4: qso done
         "Мия: «Этот свет шёл к нам ещё до первых динозавров». Егорка достаёт звёздный кулон: "
         "«Два с половиной миллиарда лет... В этой тьме время теряет смысл. Главное — "
-        "кто сидит в кресле рядом с тобой». Квазар 3C 273 позади.",
+        "кто сидит в кресле рядом с тобой». Квазар 3C 273 позади; метрика вакуума полностью откалибрована.",
         "Mia: \"This light traveled to us before the first dinosaurs.\" Egorka reaches for "
         "his star pendant: \"Two and a half billion years... In this void, time loses meaning. All that "
-        "matters is who sits in the seat beside you.\" Quasar 3C 273 behind them.",
+        "matters is who sits in the seat beside you.\" Quasar 3C 273 behind them; vacuum metric fully calibrated.",
         8});
     s.push_back(StorySlide{  // 5: m13 done - new candidates
-        "Мия: «Вот он — второй дом. Но у нас остался один выбор». Егорка смотрит "
-        "на древние звёзды: «Остаться и построить новый мир вместе? Или шагнуть дальше "
-        "в неизведанное? Я пойду за тобой в любую сторону, Мия». Скопление "
-        "M13: светила вдвое старше Солнца; вторая Земля найдена.",
-        "Mia: \"There it is - a second home. But we have one choice left.\" Egorka "
-        "gazes at the ancient stars: \"Stay and build a new world together? Or step further "
-        "into the unknown? I will follow you either way, Mia.\" Cluster "
-        "M13: stars twice as old as the Sun; a second Earth is found.",
+        "Мия: «Вот он — второй дом. Но у нас остался один выбор». На канале связи голоса "
+        "разделились. Елена: «Вернитесь к Земле, и мы возродим Солнце!» Марк: «Объединяйте флот "
+        "в мобильный Ковчег!» Мия смотрит на звёзды M13, а Егорка сжимает кулон. "
+        "Судьба экспедиции — в руках экипажа.",
+        "Mia: \"There it is - a second home. But we have one choice left.\" On the comm link, "
+        "voices diverge. Elena: \"Return to Earth and reignite the Sun!\" Mark: \"Unite the fleet "
+        "into a mobile Ark Citadel!\" Mia looks to M13's stars, while Egorka holds his pendant. "
+        "The fate of the mission rests in the crew's hands.",
         9});
     s.push_back(StorySlide{  // 6: neutral finale fallback (legacy saves)
         "Финал экспедиции: Новому Дому — быть. Мия и Егорка завершили сюжетную арку; "
@@ -457,7 +462,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "feeds the drive. AstroNavigator-1 leaves M13 for the edge of the Galaxy. "
         "The colony remains a dream; the crew becomes a legend.",
         5});
-    s.push_back(StorySlide{  // 9: epilogue - both endings continue here
+    s.push_back(StorySlide{  // 9: epilogue - shared legacy
         "Эпилог · Наследие. Спустя годы сигнал «Астронавигатора» достиг "
         "Земли. На орбите, где стоят Dragon и «Союз», вырос новый причал. "
         "На бортовой панели древней станции обнаружена простая гравировка: "
@@ -471,9 +476,56 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "The first ships no longer fly - but every pilot heading for "
         "the stars leaves a call sign on their hull. The story continues.",
         5});
+    s.push_back(StorySlide{  // 10: solar rebirth ending (branch C)
+        "Д-р Елена Ростова: «Квантовая фаза зафиксирована! Солнце принимает импульс!» "
+        "Astro-Voyager выходит на околосолнечную орбиту и производит инжекцию антиматерии "
+        "в солнечное ядро через резонатор Казимира. Угасающий багровый гигант вспыхивает "
+        "живительным тёплым золотым светом. Земля спасена! В иллюминаторах сияют огни Парижа "
+        "и океаны. Человечество остаётся дома — колыбель цивилизации спасена наукой.",
+        "Dr. Elena Rostova: \"Quantum phase locked! The Sun is absorbing the pulse!\" "
+        "Astro-Voyager enters near-solar orbit and injects antimatter directly into the core "
+        "through the Casimir cavity. The dying red giant reignites with warm, golden stellar light. "
+        "Earth is saved! Through the canopy, city lights of Paris and blue oceans glow once more. "
+        "Humanity stays home - the cradle of civilization is preserved.",
+        2});
+    s.push_back(StorySlide{  // 11: loop transcendence ending (branch D)
+        "Егорка: «Я всё понял... Это был не чужой пришелец. Это был я сам». "
+        "На предельной мощности резонатора Astro-Voyager погружается в горизонт событий "
+        "сверхмассивной чёрной дыры Sgr A*. Гравитационная сингулярность сжимается, "
+        "кулон раскрывает временной разлом. Вспышка синего портала над Сеной в Париже 2026 года: "
+        "странник в скафандре передаёт кулон юному Егорке. Временная петля замкнута — "
+        "знание передано сквозь поколения.",
+        "Egorka: \"I understand now... It wasn't an alien visitor. It was me all along.\" "
+        "At maximum warp harmonics, Astro-Voyager dives into the event horizon of Sgr A*. "
+        "The gravitational singularity warps space, opening a dimensional fissure. "
+        "A flash of a blue portal over the Seine in Paris 2026: a spacefarer passes the pendant "
+        "to young Egorka. The temporal loop of the Fifth Universe is closed - knowledge passed on.",
+        6});
+    s.push_back(StorySlide{  // 12: ark citadel ending (branch E)
+        "Командор Марк Хейл: «Шлюзы сцеплены! Монтаж Цитадели начат!» "
+        "Astro-Voyager стыкуется с Dragon, «Союзом» и орбитальными модулями верфей. "
+        "Вокруг резонатора вырастает колоссальный вращающийся город-мегаполис — «Астро-Ковчег», "
+        "не зависящий от капризов умирающих планет. Мия и Егорка встают у руля автономного "
+        "флагмана великого космического кочевья. Человечество теперь живёт среди звёзд.",
+        "Cmdr. Mark Hale: \"Docking clamps engaged! Citadel construction underway!\" "
+        "Astro-Voyager docks with Dragon, Soyuz, and orbital drydocks. Around the Casimir "
+        "core grows a colossal rotating metropolis - the \"Astro-Ark\", independent from "
+        "the perils of dying worlds. Mia and Egorka take the helm of humanity's grand nomadic fleet.",
+        10});
     return s;
   }();
   return slides;
+}
+
+int slideIndexForFinale(int choice) {
+  switch (choice) {
+    case kFinaleColony: return 7;
+    case kFinaleHorizon: return 8;
+    case kFinaleSolarRebirth: return 10;
+    case kFinaleLoopTranscendence: return 11;
+    case kFinaleArkCitadel: return 12;
+    default: return 6;
+  }
 }
 
 // v4.0 prologue of the "New Game / Adventure" slot: Egorka's own path.

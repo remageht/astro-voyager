@@ -76,12 +76,18 @@ const std::vector<ExpeditionChapter>& expeditionChapters() {
 std::string finaleTitleRu(int choice) {
   if (choice == kFinaleHorizon) return "Финал · Дальний горизонт";
   if (choice == kFinaleColony) return "Финал · Новый Дом";
+  if (choice == kFinaleSolarRebirth) return "Финал · Возрождение Солнца";
+  if (choice == kFinaleLoopTranscendence) return "Финал · Петля Времени";
+  if (choice == kFinaleArkCitadel) return "Финал · Ковчег Человечества";
   return "Глава 6 · Выбор";
 }
 
 std::string finaleTitleEn(int choice) {
   if (choice == kFinaleHorizon) return "Finale · Far Horizon";
   if (choice == kFinaleColony) return "Finale · New Home";
+  if (choice == kFinaleSolarRebirth) return "Finale · Solar Rebirth";
+  if (choice == kFinaleLoopTranscendence) return "Finale · Temporal Loop";
+  if (choice == kFinaleArkCitadel) return "Finale · Ark Citadel";
   return "Chapter 6 · The Choice";
 }
 
@@ -90,6 +96,12 @@ std::string finaleGoalRu(int choice) {
     return "Экипаж ушёл к дальнему горизонту. История завершена.";
   if (choice == kFinaleColony)
     return "Колония основана у старых звёзд M13. История завершена.";
+  if (choice == kFinaleSolarRebirth)
+    return "Солнце перезапущено через квантовый резонатор. Земля спасена!";
+  if (choice == kFinaleLoopTranscendence)
+    return "Егорка шагнул в сингулярность Sgr A*. Петля Парижа замкнута.";
+  if (choice == kFinaleArkCitadel)
+    return "Построена мобильная Цитадель человечества в глубоком космосе.";
   return "Решить судьбу экспедиции: колония или дальний горизонт.";
 }
 
@@ -98,10 +110,41 @@ std::string finaleGoalEn(int choice) {
     return "The crew flew for the far horizon. Story complete.";
   if (choice == kFinaleColony)
     return "Colony founded by the old stars of M13. Story complete.";
+  if (choice == kFinaleSolarRebirth)
+    return "The Sun is reignited via quantum resonance. Earth is saved!";
+  if (choice == kFinaleLoopTranscendence)
+    return "Egorka entered the Sgr A* singularity. Paris loop is closed.";
+  if (choice == kFinaleArkCitadel)
+    return "Mobile Humanity Citadel constructed in deep space.";
   return "Decide the fate of the expedition: colony or the far horizon.";
 }
 
+std::string finaleSpeakerRu(int choice) {
+  if (choice == kFinaleColony || choice == kFinaleHorizon)
+    return "Мия Сато (Главный пилот)";
+  if (choice == kFinaleSolarRebirth)
+    return "Д-р Елена Ростова (Главный астрофизик)";
+  if (choice == kFinaleLoopTranscendence)
+    return "Егорка (Теоретик варп-метрики)";
+  if (choice == kFinaleArkCitadel)
+    return "Ком. Марк Хейл (Ветеран флота)";
+  return "";
+}
+
+std::string finaleSpeakerEn(int choice) {
+  if (choice == kFinaleColony || choice == kFinaleHorizon)
+    return "Mia Sato (Lead Pilot)";
+  if (choice == kFinaleSolarRebirth)
+    return "Dr. Elena Rostova (Lead Astrophysicist)";
+  if (choice == kFinaleLoopTranscendence)
+    return "EgorKa (Warp Metric Theorist)";
+  if (choice == kFinaleArkCitadel)
+    return "Cmdr. Mark Hale (Fleet Veteran)";
+  return "";
+}
+
 void ExpeditionState::markVisited(const std::string& stationId) {
+  maxUnlockedChapter = std::max(maxUnlockedChapter, chapterIndex);
   const auto& chapters = expeditionChapters();
   if (chapterIndex >= static_cast<int>(chapters.size())) return;
   // v4.1: a chapter may list several valid targets separated by '|'
@@ -125,6 +168,19 @@ void ExpeditionState::markVisited(const std::string& stationId) {
   // Финальная глава (N) - без цели: визиты её не двигают; достигнув её,
   // сюжет завершён (finished чует индекс последней главы).
   ++chapterIndex;
+  maxUnlockedChapter = std::max(maxUnlockedChapter, chapterIndex);
+}
+
+void ExpeditionState::setChapter(int index) {
+  const int maxUnl = getMaxUnlocked();
+  if (index >= 0 && index <= maxUnl &&
+      index < static_cast<int>(expeditionChapters().size())) {
+    chapterIndex = index;
+  }
+}
+
+int ExpeditionState::getMaxUnlocked() const {
+  return std::max(maxUnlockedChapter, chapterIndex);
 }
 
 bool ExpeditionState::finished() const {
@@ -158,9 +214,10 @@ std::string ExpeditionState::statusEn() const {
 
 std::string serializeExpedition(const ExpeditionState& st) {
   std::ostringstream os;
-  os << "# expedition state (v4.1.0)\n";
+  os << "# expedition state (version=2)\n";
   os << "version=2\n";
   os << "chapterIndex=" << st.chapterIndex << "\n";
+  os << "maxUnlockedChapter=" << std::max(st.maxUnlockedChapter, st.chapterIndex) << "\n";
   os << "introSeen=" << (st.introSeen ? 1 : 0) << "\n";
   os << "finaleChoice=" << st.finaleChoice << "\n";
   return os.str();
@@ -169,6 +226,7 @@ std::string serializeExpedition(const ExpeditionState& st) {
 bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
   ExpeditionState probe;
   probe.chapterIndex = 0;
+  probe.maxUnlockedChapter = 0;
   probe.introSeen = false;
   int fileVersion = 0;
   std::istringstream is(text);
@@ -189,13 +247,20 @@ bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
         probe.chapterIndex = 0;
       }
       any = true;
+    } else if (key == "maxUnlockedChapter") {
+      probe.maxUnlockedChapter = std::atoi(val.c_str());
+      if (probe.maxUnlockedChapter < 0 ||
+          probe.maxUnlockedChapter > static_cast<int>(expeditionChapters().size())) {
+        probe.maxUnlockedChapter = 0;
+      }
+      any = true;
     } else if (key == "introSeen") {
       probe.introSeen = (std::atoi(val.c_str()) != 0);
       any = true;
     } else if (key == "finaleChoice") {
       probe.finaleChoice = std::atoi(val.c_str());
       if (probe.finaleChoice < kFinaleUnset ||
-          probe.finaleChoice > kFinaleHorizon) {
+          probe.finaleChoice > kFinaleArkCitadel) {
         probe.finaleChoice = kFinaleUnset;
       }
       any = true;
@@ -209,6 +274,7 @@ bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
     const int last = static_cast<int>(expeditionChapters().size()) - 1;
     probe.chapterIndex = std::min(probe.chapterIndex + 1, last);
   }
+  probe.maxUnlockedChapter = std::max(probe.maxUnlockedChapter, probe.chapterIndex);
   out = probe;
   return true;
 }

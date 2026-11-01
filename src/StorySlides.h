@@ -46,4 +46,7 @@ const std::vector<StorySlide>& storyPrologueSlides();
 // Procedural vector art for slide id (dark glass drawing list style).
 void drawStoryArt(ImDrawList* dl, int art, const ImVec2& pos, float size);
 
+// Returns slide index in storyChapterSlides() corresponding to the given finale choice.
+int slideIndexForFinale(int choice);
+
 }  // namespace astro
