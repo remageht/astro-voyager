@@ -25,18 +25,9 @@ add_executable(astro-voyager
   src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
   src/StoryJournal.cpp  # === StoryJournal === (v3.5.0): бортовой журнал, чистый C++17
   src/Expedition.cpp  # === Expedition === (v3.5.0): сюжетная арка, чистый C++17
-  src/CockpitController.cpp  # === CockpitController === (v4.2.0): динамика кабины и HUD
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
-if(EXISTS "${CMAKE_SOURCE_DIR}/src/vendor/glm")
-  target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src/vendor/glm")
-else()
-  find_package(glm QUIET)
-  if(TARGET glm::glm)
-    target_link_libraries(astro-voyager PRIVATE glm::glm)
-  endif()
-endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(astro-voyager PRIVATE Threads::Threads)
@@ -169,7 +160,17 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_warp_geodesic.cpp")
   endif()
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_cockpit.cpp")
+set(GLM_AVAILABLE FALSE)
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+  set(GLM_AVAILABLE TRUE)
+else()
+  find_package(glm QUIET)
+  if(glm_FOUND OR TARGET glm::glm)
+    set(GLM_AVAILABLE TRUE)
+  endif()
+endif()
+
+if(GLM_AVAILABLE AND EXISTS "${CMAKE_SOURCE_DIR}/tests/test_cockpit.cpp")
   add_executable(test_cockpit
     tests/test_cockpit.cpp
     src/CockpitController.cpp
@@ -177,6 +178,8 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_cockpit.cpp")
   target_include_directories(test_cockpit PRIVATE "${CMAKE_SOURCE_DIR}/src")
   if(EXISTS "${CMAKE_SOURCE_DIR}/src/vendor/glm")
     target_include_directories(test_cockpit PRIVATE "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+  elseif(TARGET glm::glm)
+    target_link_libraries(test_cockpit PRIVATE glm::glm)
   endif()
 
   if(MSVC)
@@ -186,7 +189,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_cockpit.cpp")
   endif()
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_planet_lod.cpp")
+if(GLM_AVAILABLE AND EXISTS "${CMAKE_SOURCE_DIR}/tests/test_planet_lod.cpp")
   add_executable(test_planet_lod
     tests/test_planet_lod.cpp
     src/audio/AudioEngine.cpp
@@ -194,6 +197,8 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_planet_lod.cpp")
   target_include_directories(test_planet_lod PRIVATE "${CMAKE_SOURCE_DIR}/src")
   if(EXISTS "${CMAKE_SOURCE_DIR}/src/vendor/glm")
     target_include_directories(test_planet_lod PRIVATE "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+  elseif(TARGET glm::glm)
+    target_link_libraries(test_planet_lod PRIVATE glm::glm)
   endif()
   if(UNIX)
     target_link_libraries(test_planet_lod PRIVATE pthread dl m)
@@ -301,6 +306,7 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/AppGL.cpp
     src/StorySlides.cpp  # === Expedition === (v3.5.0): слайды + вектор-арт
     src/WarpJump.cpp  # === WarpJump === (агент J: чистая логика катсцены)
+    src/CockpitController.cpp  # === CockpitController === (v4.2.0): динамика кабины и HUD
     src/CockpitRenderer.cpp  # === CockpitRenderer === (v4.2.0): рендеринг 3D-кокпита и HUD
     src/vendor/imgui/imgui.cpp
     src/vendor/imgui/imgui_draw.cpp
