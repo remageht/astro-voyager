@@ -6039,6 +6039,9 @@ void AppGL::drawWorldLabels() {
   ImFont* font = ImGui::GetFont();
   if (!font) return;
 
+  // During hyperspace warp transition, hide 3D world labels so they don't clip through tunnel walls:
+  if (warpdrive::warpTravelActive()) return;
+
   // === Physics === begin: маркер центра ЧД/квазара рисуем ВСЕГДА
   // (без cull по дистанции/ndc — тело не должно "исчезать" вдали;
   // дальний импостор держит минимальный размер в шейдере).
@@ -7676,7 +7679,7 @@ bool AppGL::updateWarp(float deltaTime) {
   // Состояние оверлея для SceneManager (дефолт 0 — харнесс чистый).
   warpdrive::setState(m_warpK, m_warpFlash);
   if (!m_jumpCine) {
-    warpdrive::setWarpTravelActive(m_warpOn && (m_warpStatus == 3 || (m_warpStatus == 1 && m_warpFactor >= 7 && m_warpK > 0.5f)));
+    warpdrive::setWarpTravelActive(false);
   }
 
   return (m_warpOn && (m_warpStatus == 2 || m_warpStatus == 3));
