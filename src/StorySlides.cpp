@@ -493,7 +493,7 @@ const std::vector<StorySlide>& storyPrologueSlides() {
     s.push_back(StorySlide{  // 1: The Secret of Antimatter
         "«Ваш варп-проект застрял, потому что ищут отрицательную массу. "
         "Нужен асимметричный резонатор Казимира: аннигиляция антиматерии создаёт "
-        "сдвиг вакуума, локально опуская плотность энергии ниже нуля. "
+        "когерентный сдвиг вакуума, локально опуская плотность энергии ниже нуля. "
         "Не антигравитация, Егорка. Инженерия метрики».",
         "\"Your warp project stalled hunting for negative mass. You need an "
         "asymmetric Casimir cavity: antimatter annihilation creates a coherent "
@@ -503,29 +503,62 @@ const std::vector<StorySlide>& storyPrologueSlides() {
     s.push_back(StorySlide{  // 2: Decoding the Metric in the Attic
         "«Портал нестабилен — у меня две минуты. Не жди, пока станешь великим. "
         "Начни, пока ты всё ещё троечник с несданной домашкой. Именно такие "
-        "люди уводят корабли за горизонт... И да: выключи автопилот, он ужасно зануден».",
+        "люди уводят корабли за горизонт... И да: выключи автопилот, он ужасно зануден». "
+        "Ночи на чердаке под шум дождя превратили фантастику в уравнения.",
         "\"The portal is unstable — I have two minutes. Don't wait until you "
         "are great. Start while you are still a C-student with overdue homework. "
         "Those are the ones who steer ships beyond horizons... And turn off "
-        "the autopilot, it is dreadfully boring\".",
+        "the autopilot, it is dreadfully boring\". Nights in the attic under rain turned fantasy into equations.",
         0, "res/story/03_attic_equation.jpg"});
-    s.push_back(StorySlide{  // 3: Astro-Voyager in Orbit
-        "На орбитальной верфи ожил колосс — корабль Astro-Voyager. "
-        "Двойные тороидальные кольца варп-двигателя вспыхнули фиолетовой "
-        "плазмой антивещества, деформируя ткань Вселенной.",
-        "At the orbital shipyard, the colossus awoke — the Astro-Voyager. "
-        "The dual toroidal warp rings flared with violet antimatter plasma, "
-        "bending the very fabric of spacetime.",
-        0, "res/story/04_ship_orbit.jpg"});
-    s.push_back(StorySlide{  // 4: EgorKa at the Helm - The First Jump
+    s.push_back(StorySlide{  // 3: The Crisis & The Global Scientific Council
+        "Годы спустя. Солнце тускнело, покрывая планету багровой тенью холода. "
+        "Совет учёных объявил варп невозможным: без отрицательной массы человечество обречено замерзнуть. "
+        "Егорка вышел к трибуне и зажёг проекцию: «Масса положительна. Но плотность вакуума поддаётся кривизне».",
+        "Years later. The Sun dimmed, casting a crimson chill over the continents. "
+        "The Science Council declared interstellar flight impossible: without negative mass, humanity was doomed to freeze. "
+        "Egorka stepped to the podium and lit the projection: \"The mass is positive. But vacuum density yields to curvature\".",
+        0, "res/story/04_council_crisis.jpg"});
+    s.push_back(StorySlide{  // 4: Meeting Mia Sato in the Hangar
+        "В пустом ангаре космодрома его ждала Мия Сато — лучший пилот-испытатель корпуса. "
+        "Она смотрела на звёздную голограмму в его руке: «Все называют тебя сумасшедшим. "
+        "Но если твой резонатор удержит геометрию пузыря — я выведу нас в открытый космос. Мы сделаем это вместе».",
+        "In the empty hangar, Mia Sato awaited him — the fleet's finest test pilot. "
+        "She gazed at the stellar hologram in his hand: \"Everyone calls you mad. "
+        "But if your cavity holds the bubble geometry — I will fly us through the horizon. We do this together\".",
+        0, "res/story/05_mia_hangar.jpg"});
+    s.push_back(StorySlide{  // 5: Orbital Shipyard Assembly
+        "На околоземной верфи в невесомости ожили титановые стапели. Снопы плазменных искр "
+        "озаряли ночную сторону Земли: инженеры монтировали сдвоенные кольца резонатора "
+        "вокруг корпуса Astro-Voyager, заряжая магнитные ловушки антивеществом.",
+        "In the zero-gravity orbital shipyard, titanium gantries roared to life. Cascades of plasma sparks "
+        "lit Earth's night side: engineers mounted the dual resonator rings "
+        "around Astro-Voyager's hull, charging magnetic traps with antimatter.",
+        0, "res/story/06_shipyard_assembly.jpg"});
+    s.push_back(StorySlide{  // 6: Astro-Voyager Awakens in Orbit
+        "Колосс пробудился. Двойные тороидальные кольца варп-двигателя вспыхнули "
+        "фиолетовой плазмой антиматерии. Отрицательная плотность энергии зафиксирована. "
+        "Впервые в истории корабль стал готов согнуть пространство перед собой.",
+        "The colossus awoke. The dual toroidal warp rings flared with "
+        "violet antimatter plasma. Negative energy density secured. "
+        "For the first time in history, a ship was ready to bend spacetime ahead of its bow.",
+        0, "res/story/07_ship_orbit.jpg"});
+    s.push_back(StorySlide{  // 7: Command Bridge Departure
+        "Панорамный мостик. В огромном фонаре кабины тихо сияет полумесяц Земли. "
+        "Мия переводит маневровые в боевой режим: «Сингулярный резонатор на 99.8% мощности. Курс за пределы системы». "
+        "Егорка касается кулона на груди: «Мы не стали ждать, пока станем великими. Пора».",
+        "The panoramic bridge. In the canopy, Earth's crescent glows in quiet silence. "
+        "Mia switches the drives to standby: \"Singularity cavity locked at 99.8%. Trajectory set beyond the system\". "
+        "Egorka touches the pendant on his chest: \"We didn't wait until we were great. It's time\".",
+        0, "res/story/08_bridge_departure.jpg"});
+    s.push_back(StorySlide{  // 8: Warp Factor 9 - Spacetime Jump (Ship Flies Away)
         "Варп-фактор 9. Корабль не летит — он договаривается с пространством, "
-        "чтобы расстояние перестало быть наглым. Внутри тишина, снаружи звёзды "
-        "тянутся синими нитями. Первый межзвёздный прыжок начат.",
+        "чтобы расстояние перестало быть наглым. Вспышка сине-фиолетовой плазмы, метрика сминается в гармошку, "
+        "и звёзды вытягиваются в синие нити. «Астронавигатор-1» уходит в неизведанную Вселенную!",
         "Warp factor 9. The ship doesn't fly — it negotiates with spacetime "
-        "so distance stops being insolent. Silence inside, blue starthreads "
-        "outside. The first interstellar jump begins.",
-        0, "res/story/05_egorka_cockpit.png"});
-    s.push_back(StorySlide{  // 5: Cinematic Warp Flight
+        "so distance stops being insolent. A blinding Cherenkov flare, space folds like origami, "
+        "and stars stretch into brilliant azure threads. AstroNavigator-1 hurtles into the unknown!",
+        0, "res/story/09_warp_jump_cinema.jpg"});
+    s.push_back(StorySlide{  // 9: Cinematic Warp Flight Animation
         "Разрывая пустоту, Astro-Voyager устремляется сквозь искривлённое "
         "пространство. Гравитационные кольца ревут на пике мощности: "
         "горизонт событий позади, впереди — неизведанные глубины космоса.",

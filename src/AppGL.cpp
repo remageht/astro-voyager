@@ -6984,7 +6984,12 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   // egor_intro): таймер слайда зажимаем в кадр 60 (vTime = 5.0 c) прямо
   // перед отрисовкой, чтобы PNG был детерминирован и ловил деградацию
   // декода/рисунка кадра байт-в-байт.
-  app.m_slidesIdx = 1;
+  for (size_t i = 0; i < app.m_slidesCurrent.size(); ++i) {
+    if (!app.m_slidesCurrent[i].videoDir.empty()) {
+      app.m_slidesIdx = static_cast<int>(i);
+      break;
+    }
+  }
   app.m_videoFrames = 0;  // пересчитать кадры, как в живом запуске
   for (int frame = 0; frame < 3; ++frame) {
     app.m_slideVStart = ImGui::GetTime() - 60.0 / 12.0;
