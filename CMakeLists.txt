@@ -29,6 +29,14 @@ add_executable(astro-voyager
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+  target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+else()
+  find_package(glm QUIET)
+  if(TARGET glm::glm)
+    target_link_libraries(astro-voyager PRIVATE glm::glm)
+  endif()
+endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(astro-voyager PRIVATE Threads::Threads)
