@@ -3,6 +3,12 @@ $outDir = 'blender/out/mir_src'
 $texDir = Join-Path $outDir 'textures'
 New-Item -ItemType Directory -Path $texDir -Force | Out-Null
 
+# TODO: pin SHA256 hashes after first verified download.
+# Expected format: @{ 'scene.gltf' = '<sha256>'; 'scene.bin' = '<sha256>'; ... }
+$expectedHashes = @{}
+# Populate after first successful download:
+#   Get-FileHash blender/out/mir_src/scene.gltf -Algorithm SHA256 | Select-Object -ExpandProperty Hash
+
 Write-Host 'Downloading scene.gltf...'
 Invoke-WebRequest -Uri "$baseUri/scene.gltf" -OutFile (Join-Path $outDir 'scene.gltf')
 
@@ -30,3 +36,22 @@ foreach ($t in $textures) {
   Invoke-WebRequest -Uri "$baseUri/textures/$t" -OutFile (Join-Path $texDir $t)
 }
 Write-Host 'Done downloading Mir & Soyuz!'
+
+# SHA256 provenance check (enable once hashes are pinned above).
+# Uncomment after populating $expectedHashes:
+# $allFiles = @(
+#   Join-Path $outDir 'scene.gltf',
+#   Join-Path $outDir 'scene.bin'
+# ) + ($textures | ForEach-Object { Join-Path $texDir $_ })
+# $mismatch = $false
+# foreach ($f in $allFiles) {
+#   $name = Split-Path $f -Leaf
+#   if ($expectedHashes.ContainsKey($name)) {
+#     $actual = Get-FileHash $f -Algorithm SHA256 | Select-Object -ExpandProperty Hash
+#     if ($actual -ne $expectedHashes[$name]) {
+#       Write-Warning "SHA256 mismatch for $name: expected $($expectedHashes[$name]), got $actual"
+#       $mismatch = $true
+#     }
+#   }
+# }
+# if ($mismatch) { throw 'SHA256 provenance check failed - aborting.' }

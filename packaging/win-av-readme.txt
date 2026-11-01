@@ -62,3 +62,19 @@ How the project is fixing this permanently
     (ideally EV, for immediate SmartScreen trust) is available.
 
 False-positive submissions are tracked in docs/RELEASE.md (section 4.3).
+
+---
+## Spacecraft asset credits
+
+Astro Voyager ships the following third-party spacecraft assets (models are
+downloaded locally at build time, not bundled in git):
+
+| Asset | Author | License | Source |
+|-------|--------|---------|--------|
+| SpaceX Dragon 2 exterior | Jon Ross (zlsa) | CC BY 4.0 | https://sketchfab.com/3d-models/spacex-dragon-2-exterior-2575398db20c406cab2cf72b89a9be8b |
+| Mir Station with Soyuz and Progress docked | tashtego | CC BY-NC 4.0 | https://sketchfab.com/3d-models/mir-station-with-soyuz-and-progress-docked-bd6ac084ae5645848a67597b17665579 |
+
+Attribution: see `docs/SPACECRAFT_ASSETS.md` for full credits, scale notes and
+licence rationale. The Soyuz/Mir asset is CC BY-NC 4.0 (non-commercial use
+only); the project code is MIT. Commercial redistributions must replace or
+re-license the Soyuz/Mir model separately.
