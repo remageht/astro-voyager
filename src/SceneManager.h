@@ -354,6 +354,7 @@ class SceneManager {
   };
   std::vector<DockSite> m_dockSites;
   const std::vector<DockSite>& dockSites() const { return m_dockSites; }
+  void updateDockSites();
 
   // === Horizon capture === (v3.6.0): приливная линза + вспышка post-composite.
   void setHorizonFx(float k, float flash) { m_postFx.setHorizonFx(k, flash); }
