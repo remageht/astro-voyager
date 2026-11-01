@@ -159,6 +159,17 @@ AppGL::~AppGL() {
   if (m_window && m_window->getNativeWindow()) {
     glfwSetScrollCallback(m_window->getNativeWindow(), s_prevGlfwScrollCallback);
   }
+  for (auto& pair : m_uiTex) {
+    if (pair.second.id != 0) {
+      glDeleteTextures(1, &pair.second.id);
+      pair.second.id = 0;
+    }
+  }
+  m_uiTex.clear();
+  if (m_videoTex != 0) {
+    glDeleteTextures(1, &m_videoTex);
+    m_videoTex = 0;
+  }
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
@@ -178,6 +189,8 @@ int AppGL::run() {
     float currentTime = static_cast<float>(glfwGetTime());
     float deltaTime = currentTime - lastTime;
     lastTime = currentTime;
+    if (deltaTime > 0.1f) deltaTime = 0.1f;
+    if (deltaTime < 0.0f) deltaTime = 0.0f;
 
     // === Audio === begin (агент AU: ленивый старт при первом вводе,
     // update музыки/SFX + polling-триггеры; варп/тур/поиск не трогаем.

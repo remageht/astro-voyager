@@ -2052,7 +2052,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         const glm::vec3 nozzleCol(0.16f, 0.17f, 0.20f);  // тёмный металл сопла
         const glm::vec3 navRed(1.80f, 0.16f, 0.12f);
         const glm::vec3 navGreen(0.16f, 1.60f, 0.55f);
-        std::vector<ShipPart> parts;
+        static thread_local std::vector<ShipPart> s_shipParts;
+        s_shipParts.clear();
+        if (s_shipParts.capacity() < 32) s_shipParts.reserve(32);
+        auto& parts = s_shipParts;
         // v4.0.0: износ OBJ-корпуса. -1 = состояние не применяется
         // (Dart/Ring Ship/Shuttle сохраняют эталонный вид байт-в-байт).
         const float hullWear = (style == 3) ? (1.0f - warpdrive::shipHull()) : -1.0f;

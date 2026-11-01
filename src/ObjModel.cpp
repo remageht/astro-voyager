@@ -125,6 +125,10 @@ bool loadBmp(const char* path, std::vector<unsigned char>& rgb, int& w, int& h) 
   }
   const bool topDown = bhRaw < 0;
   const int bh = topDown ? -bhRaw : bhRaw;
+  if (bw > 8192 || bh > 8192) {
+    std::fclose(f);
+    return false;
+  }
   const size_t srcStride = ((static_cast<size_t>(bw) * (bpp / 8)) + 3u) & ~size_t(3);
   std::vector<unsigned char> row(srcStride);
   rgb.resize(static_cast<size_t>(bw) * static_cast<size_t>(bh) * 3);
@@ -203,10 +207,10 @@ bool ObjModel::load(const std::string& path) {
   std::vector<float> rawUV;
   std::vector<float> rawNrm;
   std::vector<FaceIdx> corners;
-  rawPos.reserve(600000 * 3);
-  rawUV.reserve(300000 * 2);
-  rawNrm.reserve(300000 * 3);
-  corners.reserve(900000 * 3);
+  rawPos.reserve(16384 * 3);
+  rawUV.reserve(16384 * 2);
+  rawNrm.reserve(16384 * 3);
+  corners.reserve(32768 * 3);
 
   char buf[4096];
   char tok[64];
