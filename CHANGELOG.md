@@ -1,5 +1,51 @@
 # CHANGELOG
 
+## 4.5.0 - 2026-11-01
+
+## What's new / Что нового
+
+- EN: Story chapter selection with 5 diverse endings and new character dialogue branches - players can now jump to any completed chapter and see how Mia Sato and EgorKa react to different choices. StoryJournal gains new entries for each ending path.
+- RU: Выбор глав сюжета с 5 различными концовками и новыми репликами персонажей - игроки могут перепрыгивать к любой завершённой главе и смотреть, как Мия Сато и ЕгорКа реагируют на разные выборы. В StoryJournal появились новые записи для каждого пути finales.
+- EN: EgorKa canonical face across prologue slides - consistent character portrait in all cinematic acts; warp flight animation resolution upgraded with 9:16 stills for mobile/social sharing.
+- RU: Каноническое лицо Егорки на слайдах пролога - единый портрет персонажа во всех актах пролога; разрешение анимации варп-плёта повышено с добавлением 9:16 кадров для мобилок и соцсетей.
+- EN: Warp tunnel restricted to jump cinematics (JumpPhase::Travel/Arrival) - tunnel no longer appears during regular cruise warp; authentic PBR visuals restored with obsidian gloss, electric-blue neon frame, and plasma fog from Image_0. HUD celestial/station markers hidden during warp transition.
+- RU: Варп-туннель ограничен киноматчическими прыжками (JumpPhase::Travel/Arrival) - туннель больше не появляется при обычном круизном варпе; восстановлены аутентичные PBR-визуалы: обсидиановый глянец, электрик-блу неоновый каркас и плазменный туман из Image_0. Маркеры небесных тел и станций на HUD скрываются во время варп-перехода.
+- EN: Engine stability pass - deltaTime clamped to prevent spiral of death, GPU textures freed on scene change, render allocations and memory reserves optimized. Fixes #40.
+- RU: Пас стабильности движка - deltaTime ограничён против spiral of death, GPU текстуры освобождаются при смене сцены, рендер-альлокации и резервы памяти оптимизированы. Исправляет #40.
+- EN: Spacecraft asset credits in release readme - CC BY 4.0 (Dragon) and CC BY-NC 4.0 (Soyuz/Mir) attribution in packaging/win-av-readme.txt; SHA256 provenance stub for Mir/Soyuz downloader. Closes #7.
+- RU: Кредиты ассетов космических кораблей в readme релиза - атрибуция CC BY 4.0 (Dragon) и CC BY-NC 4.0 (Soyuz/Mir) в packaging/win-av-readme.txt; заглушка проверки SHA256 для скачивателя Mir/Soyuz. Закрывает #7.
+- Gates / Гейты: GL Release/Debug build OK, static checks all pass (291+), ctest 11/11 PASS (test_story, test_achievements, test_save, test_expedition, test_interaction, test_journey, test_warp_geodesic, test_rkf45, test_cockpit, test_cinematography).
+
+## 4.4.0 - 2026-10-31
+
+## What's new / Что нового
+
+- EN: Photo Mode v2 / Cinematography Director Console (F8) - dynamic framing overlays (Rule of Thirds, Golden Ratio, Center Crosshair), interactive FOV slider (15-120 deg), smooth cinematic auto-orbit, single-click high-resolution PNG snapshot capture.
+- RU: Photo Mode v2 / Консоль режима кинорежиссера (F8) - динамические накладки кадра (правило третей, золотое сечение, перекрестие центра), интерактивный слайдер FOV (15-120 градусов), плавный автоматический орбитальный полет камеры, один клик для захвата высокого разрешения PNG.
+- EN: Filmic Color Grading / LUT Engine - 5 calibrated profiles (Raw Neutral, Interstellar Amber, Cyberpunk Neon, NASA Kodak Tri-X 400, Technicolor Vintage 3-strip), smooth anamorphic lens vignette shading.
+- RU: Фильмическая цветокоррекция / движок LUT - 5 калиброванных профилей (Raw Neutral, Interstellar Amber, Cyberpunk Neon, NASA Kodak Tri-X 400, Technicolor Vintage 3-strip), плавное анаморфотное затемнение линзы виньетки.
+- EN: Scientific Gravitational Wave Interferometer Instrument - dual-polarization metric strain oscilloscope (+(t) and ×(t)) modeling synthetic LIGO/LISA arrays, live signal tracking for BNS coalescence chirps, black hole ringdowns, supernova shock bursts, and pulsar continuous waves.
+- RU: Научный прибор интерферометра гравитационных волн - осциллоскоп напряжения метрики с двумя поляризациями (+(t) и ×(t)) для синтетических массивов LIGO/LISA, отслеживание сигналов в реальном времени для слияния нейтронных звёзд, кольдауна чёрных дыр, взрывов шока сверхновой и連続ных волн пульсаров.
+- Gates / Гейты: GL Release/Debug build OK, static checks 291/291 PASS, ctest 11/11 PASS.
+
+## 4.3.0 - 2026-10-31
+
+## What's new / Что нового
+
+- EN: SpaceDrive warp tunnel axis realignment & occlusion fix - rotated model around X so bore aligns with ship flight axis, eliminating camera clipping and dark polygon occlusion in chase and cockpit views.
+- RU: Исправление оси туннеля SpaceDrive и оклюзии - модель повернута вокруг X так, чтобы ствол совпадал с осью полета корабля, устраняя обрезание камеры и затемнение полигонов в видах chase и cockpit.
+- EN: Procedural topographical relief & normal bump mapping - FBM elevation gradient in shaders/planet.frag for terrestrial planets, real-time finite-difference normal perturbation for crater/canyon/volcano/mountain shadow relief.
+- RU: Процедурный топографический рельеф и нормальный бамп-маппинг - градиент высот FBM в shaders/planet.frag для земных планет, конечно-разностное возмущение нормалей в реальном времени для теневого рельефа кратеров/каньонов/вулканов/гор.
+- EN: Physical Rayleigh-Mie atmospheric scattering - wavelength-dependent Rayleigh scattering for azure skies and golden-amber sunset terminators on Earth; specialized atmospheric profiles for Mars and Venus.
+- RU: Физическое рассеяние Рэлея-Мье в атмосфере - зависимое от длины волны рассеяние Рэлея для'azur неба и золотого-янтарного заката на Земле; специализированные профили атмосферы для Марса и Венеры.
+- EN: High-detail planetary sphere LOD mesh (128x256) - 33,153 vertices and 65,536 triangles eliminating polygonal faceting. Graphics quick presets: Cinematic Ultra, High, Balanced, Fast.
+- RU: Высокодетализированная сферическая сетка планеты LOD (128x256) - 33,153 вершины и 65,536 треугольников, устраняющие полигональную гранулярность. Быстрые предустановки графики: Cinematic Ultra, High, Balanced, Fast.
+- EN: 3D Spatial Audio & Relativistic Doppler Shift - stereo azimuth panning for pulsar radio ticks, relativistic Doppler frequency shift on engine hum and tension drone near black hole event horizons.
+- RU: 3D пространственное аудио и релятивистское доплер-смещение - стерео панорамирование азимута для тиков радио пульсаров, релятивистское доплер-смещение частоты на гуле двигателя и дроне напряжения около горизонтов событий чёрных дыр.
+- EN: Tactical Compass Heading Tape - collimated holographic HUD with dynamic sliding yaw ticks and lubber line.
+- RU: Тактическая компасная лента курса - коллимированный голографический HUD с динамическими скользящими отметками рыскания и линией румба.
+- Gates / Гейты: GL Release/Debug build OK, static checks all pass (291+), ctest 10/10 PASS.
+
 ## 4.2.0 - 2026-10-31
 
 ## What's new / Что нового
