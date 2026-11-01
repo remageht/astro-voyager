@@ -730,6 +730,47 @@ void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
   }
 }
 
+void SceneManager::updateDockSites() {
+  m_dockSites.clear();
+  if (!m_currentStation) return;
+  if (m_currentStation->type == StationType::SolarSystem) {
+    m_sol.update(m_simTime);
+    m_lastBodies = m_sol.bodies();
+  }
+  if (m_currentStation->id == "sol") {
+    Vec3 earthPos(0.0, 0.0, 10.0);
+    for (const auto& b : m_lastBodies) {
+      if (b.def && b.def->id == "earth") { earthPos = b.pos; break; }
+    }
+    m_dockSites.push_back(DockSite{"dock-sol", "Gateway Orbital Shipyard", "sol", Vec3(earthPos.x + 0.35, earthPos.y + 0.25, earthPos.z + 0.65), 4.5f});
+    m_dockSites.push_back(DockSite{"dock-dragon", "SpaceX Crew Dragon (Endeavour)", "sol", Vec3(earthPos.x + 0.85, earthPos.y - 0.45, earthPos.z + 1.25), 3.0f});
+    m_dockSites.push_back(DockSite{"dock-soyuz", "Soyuz MS-25 (Roscosmos)", "sol", Vec3(earthPos.x - 0.85, earthPos.y - 0.35, earthPos.z + 1.35), 3.0f});
+    m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
+    m_dockSites.push_back(DockSite{"dock-probe", "Helios Deep Space Relay", "sol", Vec3(earthPos.x - 1.85, earthPos.y + 0.65, earthPos.z - 2.45), 3.0f});
+  } else if (m_currentStation->id == "m13") {
+    m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
+  } else if (m_currentStation->id == "sgra") {
+    m_dockSites.push_back(DockSite{"dock-sgra", "Deep Core Outpost", "sgra", Vec3(0.0, 4.0, 18.0), 5.0f});
+    m_dockSites.push_back(DockSite{"dock-warp-bubble", "Alcubierre Warp Bubble", "sgra", Vec3(0.0, 6.0, 22.0), 5.0f});
+    m_dockSites.push_back(DockSite{"dock-warp-tunnel", "Warp Tunnel (tamminen)", "sgra", Vec3(0.0, 6.0, 26.0), 5.0f});
+    m_dockSites.push_back(DockSite{"dock-warp-drive-vis", "Warp Drive Visualisation", "sgra", Vec3(0.0, 6.0, 30.0), 5.0f});
+  } else if (m_currentStation->id == "ori") {
+    m_dockSites.push_back(DockSite{"dock-ori", "Rigel Orbital Dock", "ori", Vec3(3.0, 1.0, 15.0), 5.0f});
+  } else if (m_currentStation->id == "gw170817") {
+    m_dockSites.push_back(DockSite{"dock-gw170817", "LIGO-Virgo Observation Platform", "gw170817", Vec3(0.0, 3.5, 24.0), 5.0f});
+  } else if (m_currentStation->id == "sn1987a") {
+    m_dockSites.push_back(DockSite{"dock-sn1987a", "Hubble-JWST Astrophysical Observatory", "sn1987a", Vec3(0.0, 3.2, 22.0), 5.0f});
+  } else if (m_currentStation->id == "at2019qiz") {
+    m_dockSites.push_back(DockSite{"dock-at2019qiz", "VLT-Swift Deep TDE Sentinel", "at2019qiz", Vec3(0.0, 3.6, 24.0), 5.0f});
+  } else if (m_currentStation->id == "m16") {
+    m_dockSites.push_back(DockSite{"dock-m16", "Eagle Nebula Pillars Observatory", "m16", Vec3(0.0, 4.0, 30.0), 5.0f});
+  } else if (m_currentStation->id == "m1") {
+    m_dockSites.push_back(DockSite{"dock-m1", "Chandra PWN High-Energy Monitor", "m1", Vec3(0.0, 3.5, 52.0), 5.0f});
+  } else {
+    m_dockSites.push_back(DockSite{"dock-station", "Orbital Station " + m_currentStation->name, m_currentStation->id, Vec3(0.0, 1.8, m_currentStation->spawnDistanceRs * 1.15), 5.0f});
+  }
+}
+
 void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float time) {
   if (!m_currentStation) return;
 
@@ -785,45 +826,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   // каждый кадр, чтобы не просачиваться между станциями.
   m_colonySites.clear();
   m_clusterBright.clear();
-  m_dockSites.clear();
-  if (m_currentStation) {
-    if (m_currentStation->type == StationType::SolarSystem) {
-      m_sol.update(m_simTime);
-      m_lastBodies = m_sol.bodies();
-    }
-    if (m_currentStation->id == "sol") {
-      Vec3 earthPos(0.0, 0.0, 10.0);
-      for (const auto& b : m_lastBodies) {
-        if (b.def && b.def->id == "earth") { earthPos = b.pos; break; }
-      }
-      m_dockSites.push_back(DockSite{"dock-sol", "Gateway Orbital Shipyard", "sol", Vec3(earthPos.x + 0.35, earthPos.y + 0.25, earthPos.z + 0.65), 4.5f});
-      m_dockSites.push_back(DockSite{"dock-dragon", "SpaceX Crew Dragon (Endeavour)", "sol", Vec3(earthPos.x + 0.85, earthPos.y - 0.45, earthPos.z + 1.25), 3.0f});
-      m_dockSites.push_back(DockSite{"dock-soyuz", "Soyuz MS-25 (Roscosmos)", "sol", Vec3(earthPos.x - 0.85, earthPos.y - 0.35, earthPos.z + 1.35), 3.0f});
-      m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
-      m_dockSites.push_back(DockSite{"dock-probe", "Helios Deep Space Relay", "sol", Vec3(earthPos.x - 1.85, earthPos.y + 0.65, earthPos.z - 2.45), 3.0f});
-    } else if (m_currentStation->id == "m13") {
-      m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
-    } else if (m_currentStation->id == "sgra") {
-      m_dockSites.push_back(DockSite{"dock-sgra", "Deep Core Outpost", "sgra", Vec3(0.0, 4.0, 18.0), 5.0f});
-       m_dockSites.push_back(DockSite{"dock-warp-bubble", "Alcubierre Warp Bubble", "sgra", Vec3(0.0, 6.0, 22.0), 5.0f});
-       m_dockSites.push_back(DockSite{"dock-warp-tunnel", "Warp Tunnel (tamminen)", "sgra", Vec3(0.0, 6.0, 26.0), 5.0f});
-       m_dockSites.push_back(DockSite{"dock-warp-drive-vis", "Warp Drive Visualisation", "sgra", Vec3(0.0, 6.0, 30.0), 5.0f});
-    } else if (m_currentStation->id == "ori") {
-      m_dockSites.push_back(DockSite{"dock-ori", "Rigel Orbital Dock", "ori", Vec3(3.0, 1.0, 15.0), 5.0f});
-    } else if (m_currentStation->id == "gw170817") {
-      m_dockSites.push_back(DockSite{"dock-gw170817", "LIGO-Virgo Observation Platform", "gw170817", Vec3(0.0, 3.5, 24.0), 5.0f});
-    } else if (m_currentStation->id == "sn1987a") {
-      m_dockSites.push_back(DockSite{"dock-sn1987a", "Hubble-JWST Astrophysical Observatory", "sn1987a", Vec3(0.0, 3.2, 22.0), 5.0f});
-    } else if (m_currentStation->id == "at2019qiz") {
-      m_dockSites.push_back(DockSite{"dock-at2019qiz", "VLT-Swift Deep TDE Sentinel", "at2019qiz", Vec3(0.0, 3.6, 24.0), 5.0f});
-    } else if (m_currentStation->id == "m16") {
-      m_dockSites.push_back(DockSite{"dock-m16", "Eagle Nebula Pillars Observatory", "m16", Vec3(0.0, 4.0, 30.0), 5.0f});
-    } else if (m_currentStation->id == "m1") {
-      m_dockSites.push_back(DockSite{"dock-m1", "Chandra PWN High-Energy Monitor", "m1", Vec3(0.0, 3.5, 52.0), 5.0f});
-    } else {
-      m_dockSites.push_back(DockSite{"dock-station", "Orbital Station " + m_currentStation->name, m_currentStation->id, Vec3(0.0, 1.8, m_currentStation->spawnDistanceRs * 1.15), 5.0f});
-    }
-  }
+  updateDockSites();
 
   // === Speed FX === (v3.3.0): игровой разгон/варп — камера в варпе почти не
   // движется, поэтому доплер/абберацию масштабируем внешним boost'ом.

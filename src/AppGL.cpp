@@ -3339,9 +3339,9 @@ void AppGL::drawExpeditionHud() {
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, 56.0f), ImGuiCond_Always,
                           ImVec2(0.5f, 0.0f));
-  ImGui::SetNextWindowSize(ImVec2(470.0f, 0.0f), ImGuiCond_Always);
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.58f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.18f));
+  ImGui::SetNextWindowSize(ImVec2(560.0f, 0.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.70f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.35f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
   ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -3365,10 +3365,34 @@ void AppGL::drawExpeditionHud() {
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.75f, 0.30f, 1.00f));
       ImGui::TextUnformatted(uiRu(titleRu.c_str(), titleEn.c_str()));
       ImGui::PopStyleColor();
+
+      // Wrap text so long descriptions are never clipped at window edges
       ImGui::SetWindowFontScale(0.88f);
+      ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 530.0f);
       ImGui::TextColored(ImVec4(0.62f, 0.65f, 0.72f, 1.0f), "%s",
                          uiRu(goalRu.c_str(), goalEn.c_str()));
+      ImGui::PopTextWrapPos();
       ImGui::SetWindowFontScale(1.0f);
+
+      // Chapter 2 Fleet auto-dock buttons to easily reach Dragon or Soyuz in Earth orbit
+      if (!m_expedition.finished() && ch->id == "fleet") {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "%s",
+                           uiRu("Автостыковка для завершения задания:",
+                                "Auto-docking to complete quest:"));
+        ImGui::Spacing();
+        if (ImGui::Button(uiRu("⚓ Стыковка: Crew Dragon", "⚓ Dock: Crew Dragon"),
+                          ImVec2(260.0f, 26.0f))) {
+          dockToHistoricShip("dock-dragon");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(uiRu("⚓ Стыковка: «Союз-МС»", "⚓ Dock: Soyuz-MS"),
+                          ImVec2(260.0f, 26.0f))) {
+          dockToHistoricShip("dock-soyuz");
+        }
+      }
     }
   }
   if (ch) ImGui::End();
@@ -3477,16 +3501,30 @@ void AppGL::drawExpeditionMap() {
           ImGui::SameLine();
         }
 
-        // Warp to chapter station
-        std::string prim = c.station;
-        size_t sep = prim.find('|');
-        if (sep != std::string::npos) prim = prim.substr(0, sep);
-        if (!prim.empty()) {
-          if (ImGui::Button(uiRu("✦ Варп к станции", "✦ Warp to Station"))) {
-            teleportToStation(prim);
+        // For fleet interlude, offer direct auto-dock buttons to Dragon and Soyuz:
+        if (c.id == "fleet") {
+          if (ImGui::Button(uiRu("⚓ Стыковка: Crew Dragon", "⚓ Dock: Crew Dragon"))) {
+            dockToHistoricShip("dock-dragon");
             m_expeditionMapOpen = false;
           }
           ImGui::SameLine();
+          if (ImGui::Button(uiRu("⚓ Стыковка: «Союз-МС»", "⚓ Dock: Soyuz-MS"))) {
+            dockToHistoricShip("dock-soyuz");
+            m_expeditionMapOpen = false;
+          }
+          ImGui::SameLine();
+        } else {
+          // Warp to chapter station
+          std::string prim = c.station;
+          size_t sep = prim.find('|');
+          if (sep != std::string::npos) prim = prim.substr(0, sep);
+          if (!prim.empty()) {
+            if (ImGui::Button(uiRu("✦ Варп к станции", "✦ Warp to Station"))) {
+              teleportToStation(prim);
+              m_expeditionMapOpen = false;
+            }
+            ImGui::SameLine();
+          }
         }
 
         // Set active chapter
@@ -4542,6 +4580,10 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
 }
 
 void AppGL::teleportToStation(const std::string& id, bool stopJumpCine) {
+  if (id == "dock-dragon" || id == "dock-soyuz") {
+    dockToHistoricShip(id);
+    return;
+  }
   // === Cinematic === begin (агент C): ручной телепорт останавливает тур.
   if (m_tour.active()) stopCineTour();
   // === Cinematic === end
@@ -9146,6 +9188,60 @@ void AppGL::startUndockSequence() {
                       "Undocking sequence: clamps released, drifting...");
   m_shipNoticeT = 1.2f;
   m_audio.playClick();
+}
+
+void AppGL::dockToHistoricShip(const std::string& dockId) {
+  if (m_dockAnimState != DockAnimState::None) return;
+  if (m_ship.isDocked) startUndockSequence();
+
+  // If currently at another station, warp to Sol:
+  const Station* curSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+  if (!curSt || curSt->id != "sol") {
+    m_sceneManager->teleportTo("sol", m_camera);
+    m_flying = false;
+    m_shipVel = Vec3();
+  }
+
+  if (m_sceneManager) {
+    m_sceneManager->updateDockSites();
+  }
+
+  Vec3 targetPos(0.0, 0.0, 10.0);
+  std::string targetName;
+  bool found = false;
+
+  if (m_sceneManager) {
+    for (const auto& dock : m_sceneManager->dockSites()) {
+      if (dock.id == dockId) {
+        targetPos = dock.pos;
+        targetName = dock.name;
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (!found && m_sceneManager) {
+    for (const auto& dock : m_sceneManager->dockSites()) {
+      if (dock.stationId == "sol") {
+        targetPos = dock.pos;
+        targetName = dock.name;
+        found = true;
+        break;
+      }
+    }
+  }
+
+  // Position camera facing the spacecraft in hero approach view within docking radius:
+  m_camera.position = Vec3(targetPos.x + 0.65, targetPos.y + 0.35, targetPos.z + 1.25);
+  computeLookYawPitch(m_camera.position, targetPos, m_camera.yaw, m_camera.pitch);
+
+  m_dockHint = targetName;
+  m_dockHintId = dockId;
+  m_shipVel = Vec3();
+  m_ship.gravVel = Vec3();
+
+  startDockSequence(dockId);
 }
 
 void AppGL::setShipStyleAnimated(int style) {
