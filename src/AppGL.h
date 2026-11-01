@@ -387,6 +387,7 @@ class AppGL {
   float m_dockInitialHull = 100.0f;
   void startDockSequence(const std::string& dockId);
   void startUndockSequence();
+  void dockToHistoricShip(const std::string& dockId);
 
   // Ship switch animation (~1.0s transition in shipyard)
   float m_shipSwitchTimer = 0.0f;
