@@ -84,6 +84,11 @@ void main() {
     float spec = pow(NoH, specPower) * (0.35 * (1.0 - rough * 0.7));
 
     vec3 col = baseAlb * (sunLight + earthBounce + ambientGI) + spec * vec3(1.0, 0.96, 0.90);
+    if (u_EmissiveOn == 1) {
+      vec3 emMap = pow(textureLod(u_EmissiveTex, v_UV, 0.0).rgb, vec3(2.2)) * u_EmissiveTint;
+      col += emMap;
+    }
+    col += u_Emissive * u_EmissiveTint;
     FragColor = vec4(col, 1.0);
     return;
   }
