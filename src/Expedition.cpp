@@ -79,6 +79,7 @@ std::string finaleTitleRu(int choice) {
   if (choice == kFinaleSolarRebirth) return "Финал · Возрождение Солнца";
   if (choice == kFinaleLoopTranscendence) return "Финал · Петля Времени";
   if (choice == kFinaleArkCitadel) return "Финал · Ковчег Человечества";
+  if (choice == kFinaleHyperBreakthrough) return "Финал · Гиперпрорыв Шестой Вселенной";
   return "Глава 6 · Выбор";
 }
 
@@ -88,6 +89,7 @@ std::string finaleTitleEn(int choice) {
   if (choice == kFinaleSolarRebirth) return "Finale · Solar Rebirth";
   if (choice == kFinaleLoopTranscendence) return "Finale · Temporal Loop";
   if (choice == kFinaleArkCitadel) return "Finale · Ark Citadel";
+  if (choice == kFinaleHyperBreakthrough) return "Finale · Sixth Universe Hyper-Breakthrough";
   return "Chapter 6 · The Choice";
 }
 
@@ -102,6 +104,8 @@ std::string finaleGoalRu(int choice) {
     return "Егорка шагнул в сингулярность Sgr A*. Петля Парижа замкнута.";
   if (choice == kFinaleArkCitadel)
     return "Построена мобильная Цитадель человечества в глубоком космосе.";
+  if (choice == kFinaleHyperBreakthrough)
+    return "Варп разогнан до 135%. Петля времени разорвана, открыт путь в Мультивселенную!";
   return "Решить судьбу экспедиции: колония или дальний горизонт.";
 }
 
@@ -116,6 +120,8 @@ std::string finaleGoalEn(int choice) {
     return "Egorka entered the Sgr A* singularity. Paris loop is closed.";
   if (choice == kFinaleArkCitadel)
     return "Mobile Humanity Citadel constructed in deep space.";
+  if (choice == kFinaleHyperBreakthrough)
+    return "Warp overclocked to 135%. The temporal loop is shattered into the Multiverse!";
   return "Decide the fate of the expedition: colony or the far horizon.";
 }
 
@@ -128,6 +134,8 @@ std::string finaleSpeakerRu(int choice) {
     return "Егорка (Теоретик варп-метрики)";
   if (choice == kFinaleArkCitadel)
     return "Ком. Марк Хейл (Ветеран флота)";
+  if (choice == kFinaleHyperBreakthrough)
+    return "Егорка-6 (Оверклокер варпа)";
   return "";
 }
 
@@ -140,6 +148,8 @@ std::string finaleSpeakerEn(int choice) {
     return "EgorKa (Warp Metric Theorist)";
   if (choice == kFinaleArkCitadel)
     return "Cmdr. Mark Hale (Fleet Veteran)";
+  if (choice == kFinaleHyperBreakthrough)
+    return "EgorKa-6 (Warp Overclocker)";
   return "";
 }
 
@@ -260,7 +270,7 @@ bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
     } else if (key == "finaleChoice") {
       probe.finaleChoice = std::atoi(val.c_str());
       if (probe.finaleChoice < kFinaleUnset ||
-          probe.finaleChoice > kFinaleArkCitadel) {
+          probe.finaleChoice > kFinaleHyperBreakthrough) {
         probe.finaleChoice = kFinaleUnset;
       }
       any = true;

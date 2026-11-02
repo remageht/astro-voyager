@@ -242,7 +242,7 @@ int main() {
     }
   }
 
-  // Test 9: 5 distinct endings, speaker attributions, and chapter selection.
+  // Test 9: 6 distinct endings, speaker attributions, and chapter selection.
   {
     const int endings[] = {
         astro::kFinaleColony,
@@ -250,6 +250,7 @@ int main() {
         astro::kFinaleSolarRebirth,
         astro::kFinaleLoopTranscendence,
         astro::kFinaleArkCitadel,
+        astro::kFinaleHyperBreakthrough,
     };
     for (int e : endings) {
       if (astro::finaleTitleRu(e).empty() || astro::finaleTitleEn(e).empty()) {

@@ -262,6 +262,36 @@ std::vector<StoryEntry> storyCatalog() {
       "others will ignite across the void. And our New Home will bask beneath their light.\"";
   c.push_back(e);
 
+  e.id = "egorka6-encounter";
+  e.titleRu = "Сигнал из Шестой Вселенной";
+  e.titleEn = "Signal from the Sixth Universe";
+  e.textRu =
+      "Всплеск гравитационных волн от орбитального тарана OJ 287 вскрывает тахионный канал. "
+      "Сквозь помехи прорывается наглый голос: «Здорово, Пятый! Наблюдаешь за космическим ДТП? "
+      "Я — Егорка из Шестой Вселенной. Забудь осторожность своей академии: пространство не просит вежливости, "
+      "оно уважает наглость. Когда доберёшься до горизонта событий — не замыкай кольцо. Разгони варп до предела!»";
+  e.textEn =
+      "A burst of gravitational ripples from OJ 287's orbital crash rips through the tachyon band. "
+      "Static yields to a brash voice: \"Hey there, Fifth! Watching the cosmic collision? "
+      "I'm Egorka from the Sixth Universe. Ditch your academy's timid rules: spacetime doesn't ask for polite manners, "
+      "it respects audacity. When you hit the event horizon — don't close the loop. Overclock the warp drive to the bleeding edge!\"";
+  c.push_back(e);
+
+  e.id = "phase-shard-overclock";
+  e.titleRu = "Оверклокинг Шестого";
+  e.titleEn = "The Sixth's Overclock";
+  e.textRu =
+      "У колоссального диска Hyperdisk тахионный луч Шестого передал чертежи квантового фазового осколка. "
+      "«Смотри сюда, Пятый: обойди лимитеры Казимира и пусти плазму антиматерии на 135%. "
+      "В сингулярности геометрия пространства не схлопнется в петлю, а лопнет наружу — прямиком в Мультивселенную! "
+      "Мия, держи штурвал двумя руками — мы покажем звёздам, что люди не ходят по кругу!»";
+  e.textEn =
+      "Beside the colossal expanse of Hyperdisk, the Sixth beams schematics for a quantum phase shard. "
+      "\"Look here, Fifth: bypass the Casimir governors and push antimatter plasma to 135%. "
+      "In the singularity, spacetime geometry won't collapse into a loop — it tears outward straight into the Multiverse! "
+      "Mia, keep both hands on the flight stick — we're about to show the stars that humanity doesn't walk in circles!\"";
+  c.push_back(e);
+
   return c;
 }
 
@@ -312,6 +342,10 @@ void StoryJournal::refresh(const Progress& progress) {
       unlocked = storyEntryHasVisited(progress.visited, "at2019qiz");
     } else if (e.id == "m16") {
       unlocked = storyEntryHasVisited(progress.visited, "m16");
+    } else if (e.id == "egorka6-encounter") {
+      unlocked = storyEntryHasVisited(progress.visited, "oj287");
+    } else if (e.id == "phase-shard-overclock") {
+      unlocked = storyEntryHasVisited(progress.visited, "hyperdisk");
     }
     e.unlocked = unlocked;
   }
