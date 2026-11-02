@@ -24,6 +24,18 @@ struct CockpitHUDData {
   float targetAngleDeg = 0.0f;
   bool  targetLocked = false;
   float autoTint = 0.0f;      // 0.0 = clear, 1.0 = full dark tint
+
+  // v4.6.0 Realism Overhaul: Flight vectors, avionics & atmospheric physics
+  glm::vec2 progradeScreenPos{0.0f};  // 2D collimated screen coords (-1..1)
+  bool  progradeVisible = false;
+  glm::vec2 retrogradeScreenPos{0.0f};
+  bool  retrogradeVisible = false;
+  float blackoutK = 0.0f;     // 0.0 .. 1.0 tunnel vision under high positive G
+  float redoutK = 0.0f;       // 0.0 .. 1.0 crimson wash under negative vertical G
+  float radarAltitudeKm = -1.0f; // AGL in km (< 0 when in deep space)
+  float verticalSpeedMs = 0.0f;  // vertical ascent/descent rate (m/s)
+  bool  terrainAlert = false; // flashing warning when descent rate exceeds terrain safety
+  float entryPlasma = 0.0f;   // 0.0 .. 1.0 hypersonic atmospheric compression ionization
 };
 
 class CockpitController {
@@ -48,7 +60,11 @@ class CockpitController {
               float shield,
               const std::string& targetName,
               const glm::vec3& targetPos,
-              float sunVisibility);
+              float sunVisibility,
+              const glm::vec3& worldVel = glm::vec3(0.0f),
+              const glm::vec3& nearestBodyPos = glm::vec3(0.0f),
+              float nearestBodyRadius = 0.0f,
+              bool hasAtmosphere = false);
 
   // Inertial offset of pilot's head relative to canopy center (meters)
   glm::vec3 getHeadOffset() const { return m_headOffset; }

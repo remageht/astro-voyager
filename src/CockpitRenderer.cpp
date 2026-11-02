@@ -61,6 +61,19 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform1f("u_TargetLocked", hud.targetLocked ? 1.0f : 0.0f);
   m_shader->setUniform1i("u_ShipStyle", shipStyle);
 
+  // v4.6.0 Realism Overhaul uniforms
+  m_shader->setUniform2f("u_Prograde", hud.progradeScreenPos.x, hud.progradeScreenPos.y);
+  m_shader->setUniform1f("u_ProgradeOn", hud.progradeVisible ? 1.0f : 0.0f);
+  m_shader->setUniform2f("u_Retrograde", hud.retrogradeScreenPos.x, hud.retrogradeScreenPos.y);
+  m_shader->setUniform1f("u_RetrogradeOn", hud.retrogradeVisible ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_GForce", hud.gForce);
+  m_shader->setUniform1f("u_Blackout", hud.blackoutK);
+  m_shader->setUniform1f("u_Redout", hud.redoutK);
+  m_shader->setUniform1f("u_RadarAlt", hud.radarAltitudeKm);
+  m_shader->setUniform1f("u_VerticalSpeed", hud.verticalSpeedMs);
+  m_shader->setUniform1f("u_TerrainAlert", hud.terrainAlert ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_EntryPlasma", hud.entryPlasma);
+
   m_quad->draw();
 
   m_shader->unbind();
