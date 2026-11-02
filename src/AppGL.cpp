@@ -2737,8 +2737,8 @@ void AppGL::openChapterSlide(int slideIdx) {
 }
 
 void AppGL::openEndingSlide(int choice) {
-  // v4.4: 5 концовок Adventure: colony (7), horizon (8), solar rebirth (10),
-  // loop transcendence (11), ark citadel (12) в storyChapterSlides().
+  // v4.4+: 6 концовок Adventure: colony (7), horizon (8), solar rebirth (10),
+  // loop transcendence (11), ark citadel (12), hyper-breakthrough (13) в storyChapterSlides().
   // Служебный слайд 6 остаётся fallback для старых сейвов.
   // После выбранной концовки идёт общий эпилог «Наследие» (слайд 9).
   const auto& slides = storyChapterSlides();
@@ -3580,7 +3580,7 @@ void AppGL::drawExpeditionMap() {
                          uiRu("Ключевой союзник", "Key Ally"),
                          uiRu(finaleSpeakerRu(fc).c_str(), finaleSpeakerEn(fc).c_str()));
       ImGui::Spacing();
-      if (ImGui::Button(uiRu("↺ Сменить финал (5 концовок)", "↺ Change Finale Choice (5 Endings)"),
+      if (ImGui::Button(uiRu("↺ Сменить финал (6 концовок)", "↺ Change Finale Choice (6 Endings)"),
                         ImVec2(-1, 32.0f))) {
         m_finaleChoiceOpen = true;
       }
@@ -3604,7 +3604,7 @@ void AppGL::drawExpeditionMap() {
 }
 
 void AppGL::drawFinaleChoice() {
-  // v4.4: развилка Adventure из 5 концовок с голосами персонажей (Мия, Елена, Егорка, Марк).
+  // v4.4+: развилка Adventure из 6 концовок с голосами персонажей (Мия, Елена, Егорка, Марк, Егорка-6).
   // Выбор пишется в expedition.json и открывает слайд концовки и эпилог.
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
@@ -3725,6 +3725,25 @@ void AppGL::drawFinaleChoice() {
       m_finaleChoiceOpen = false;
       saveExpeditionFileNow();
       openEndingSlide(kFinaleArkCitadel);
+    }
+    ImGui::PopID();
+    ImGui::Spacing();
+
+    // 6. Hyper-Breakthrough ending (EgorKa-6)
+    ImGui::PushID(6);
+    ImGui::TextColored(ImVec4(1.00f, 0.70f, 0.25f, 1.0f), "6. %s: %s",
+                       uiRu("Егорка-6 (Оверклокер варпа)", "EgorKa-6 (Warp Overclocker)"),
+                       uiRu("Гиперпрорыв Шестой Вселенной (Разорванная петля)", "Sixth Universe Hyper-Breakthrough (Shattered Loop)"));
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
+                       uiRu("«Разогнать варп-ядро до 135%, пробить сингулярность Sgr A* фазовым кристаллом и выйти в Мультивселенную».",
+                            "\"Overclock the warp core to 135%, shatter Sgr A* with the phase shard and punch into the Multiverse.\""));
+    if (m_finaleChoiceOpen &&
+        ImGui::Button(uiRu("✔ Выбрать: Совершить гиперпрорыв в Мультивселенную",
+                           "✔ Choose: Execute Multiverse Hyper-Breakthrough"), ImVec2(-1.0f, 30.0f))) {
+      m_expedition.finaleChoice = kFinaleHyperBreakthrough;
+      m_finaleChoiceOpen = false;
+      saveExpeditionFileNow();
+      openEndingSlide(kFinaleHyperBreakthrough);
     }
     ImGui::PopID();
 

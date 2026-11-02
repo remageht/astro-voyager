@@ -512,6 +512,18 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "core grows a colossal rotating metropolis - the \"Astro-Ark\", independent from "
         "the perils of dying worlds. Mia and Egorka take the helm of humanity's grand nomadic fleet.",
         10});
+    s.push_back(StorySlide{  // 13: hyper-breakthrough ending (branch F - Egorka-6)
+        "Егорка-6 («Шестой»): «Петли времени — это клетка для тех, кто боится шагнуть за край! "
+        "Включай перегрузку на 135%, я синхронизирую фазовый кристалл!» "
+        "Варп-катушки взвыли на запредельной частоте. Ослепительное янтарно-бирюзовое сияние раскололо горизонт: "
+        "Astro-Voyager не падает в сингулярность, а пробивает мембрану Мультивселенной! "
+        "Кольцо времени разбито. Впереди — бесчисленные миры и чистый горизонт свободы.",
+        "Egorka-6 (\"The Sixth\"): \"Time loops are a cage for those afraid to step beyond the edge! "
+        "Push the core to 135%, I'll align the phase crystal!\" "
+        "Warp coils scream at extreme frequencies. Blinding amber-cyan radiance shatters the horizon: "
+        "Astro-Voyager does not fall into the singularity, but punches straight through the multiverse membrane! "
+        "The temporal loop is shattered. Ahead lie infinite realities and boundless freedom.",
+        6, "res/story/egorka_six_portrait.jpg"});
     return s;
   }();
   return slides;
@@ -524,6 +536,7 @@ int slideIndexForFinale(int choice) {
     case kFinaleSolarRebirth: return 10;
     case kFinaleLoopTranscendence: return 11;
     case kFinaleArkCitadel: return 12;
+    case kFinaleHyperBreakthrough: return 13;
     default: return 6;
   }
 }

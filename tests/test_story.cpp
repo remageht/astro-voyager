@@ -240,6 +240,38 @@ int main() {
     }
   }
 
+  // Test 7i: binary black hole oj287 visit unlocks egorka6-encounter entry.
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"oj287"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "egorka6-encounter") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7i failed: oj287 visit should unlock egorka6-encounter\n";
+      return 1;
+    }
+  }
+
+  // Test 7j: hyperdisk visit unlocks phase-shard-overclock entry.
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"hyperdisk"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "phase-shard-overclock") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7j failed: hyperdisk visit should unlock phase-shard-overclock\n";
+      return 1;
+    }
+  }
+
   // Test 8: unread counting and markAllRead; read marks survive refresh.
   {
     StoryJournal j;
@@ -278,7 +310,7 @@ int main() {
       std::cerr << "Test 9 failed: repeated refresh changed unlock state\n";
       return 1;
     }
-    if (j.entries().size() != 18) {
+    if (j.entries().size() != 20) {
       std::cerr << "Test 9 failed: catalog size drifted ("
                 << j.entries().size() << ")\n";
       return 1;
