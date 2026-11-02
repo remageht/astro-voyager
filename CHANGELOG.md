@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 4.6.0 - 2026-11-02
+
+## What's new / Что нового
+
+- EN: Astrophysical Science Spectrometer (Hotkey `C`) - physical spectroscopy simulation for all 22 catalog astronomical stations with interactive rainbow dispersion gradient canvas (380 nm - 750 nm), Fraunhofer dark absorption notches (Na-D, Balmer series), glowing nebular/kilonova emission lines (O-III, Au-I, Pt-I), chemical abundance breakdowns, and biosphere organic markers (CH4, H2O, O2). Features real-time relativistic Doppler shift factor $D = \sqrt{\frac{1+\beta}{1-\beta}}$ reflecting sublight velocities.
+- RU: Астрофизический научный спектрометр (клавиша `C`) - физическое моделирование спектроскопии для всех 22 астрономических станций каталога с интерактивной радужной дисперсионной полосой (380-750 нм), тёмными фраунгоферовыми линиями поглощения (Na-D, серия Бальмера), светящимися эмиссионными пиками туманностей и килоновых (O-III, Au-I, Pt-I), химическим составом и биомаркерами жизни (CH4, H2O, O2). Включает расчёт релятивистского доплеровского фактора $D = \sqrt{\frac{1+\beta}{1-\beta}}$ на околосветовых скоростях.
+- EN: Ship Codex of Cosmic Discoveries (Hotkey `K`) - categorized scientific encyclopedia tracking discoveries across 12 cosmological classes (Black Holes, Cataclysms, Nebulae, Pulsars, Galaxies, etc.). Research Points (RP) progression (+100 RP per scanned celestial object), scientific lore, and persistent savegame synchronization.
+- RU: Кодекс космических открытий (клавиша `K`) - структурированная научная энциклопедия с отслеживанием открытий по 12 космологическим категориям (чёрные дыры, катаклизмы, туманности, пульсары, галактики и др.). Прогрессия очков исследований (+100 RP за каждый отсканированный объект), научные описания и полная синхронизация с профилем сохранения.
+- EN: Live Bridge Radio Chatter - immersive HUD radio transmission notifications with sender callsigns and avatars (Egorka-6, Mia Sato, Elena Rostova, Earth Command), priority queuing, auto-dismiss progress countdown, and contextual lore events triggered on reaching OJ 287, Hyperdisk, Sgr A*, Kilonova GW170817, M16, Earth return, and high-G maneuvers.
+- RU: Живые радиопереговоры мостика - всплывающие радиосообщения на ИЛС с позывными членов экипажа (Егорка-6, Миа Сато, Елена Ростова, ЦУП Земля), приоритетной очередью, полосой обратного отсчёта и сюжетными репликами при прибытии к OJ 287, Гипердиску, Sgr A*, килоновой GW170817, Столпам Творения, возвращении на Землю и манёврах с перегрузкой > 3.5g.
+- Gates / Гейты: GL Release build OK, static checks 296/296 PASS, ctest 12/12 PASS (including new `test_science`). Closes #53.
+
 ## 4.5.0 - 2026-11-02
 
 ## What's new / Что нового

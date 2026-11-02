@@ -15,6 +15,7 @@
 #include "Tour.h"
 #include "Types.h"
 #include "Window.h"
+#include "ScienceSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"
@@ -68,6 +69,11 @@ class AppGL {
   void drawWorldLabels();
   void drawStoryPanel();
   void drawConstellationAlignment();
+  // === Science & Radio Chatter === (v4.6.0)
+  void drawSpectrometer();
+  void drawCodex();
+  void drawBridgeCommsToast();
+  void checkBridgeCommsTriggers(const std::string& stationId);
   // v3.8.0: stopJumpCine=false — только для телепорта Бурста в jump-катсцене
   // (внутренний вызов не должен убивать собственный прыжок).
   void teleportToStation(const std::string& id, bool stopJumpCine = true);
@@ -284,6 +290,11 @@ class AppGL {
   bool m_prevCPressed = false;
   std::string m_colonyHint;    // имя сайта в радиусе посадки ("" = нет)
   std::string m_colonyHintId;  // id сайта для hotkey
+  // === Science & Radio Chatter === (v4.6.0)
+  ScienceCodex m_codex;
+  BridgeComms m_bridgeComms;
+  bool m_spectrometerOpen = false;
+  bool m_codexOpen = false;
   // v3.7.0: жизненный счётчик успешных уклонений от обломков (ачивка + GUI).
   int m_asteroidDodges = 0;
   // Интро-карточка ручного телепорта (3с, гаснет сама).

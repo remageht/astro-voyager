@@ -968,6 +968,381 @@ void AppGL::drawGwDetectorHud() {
   ImGui::End();
 }
 
+void AppGL::drawSpectrometer() {
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  std::string stId = curSt ? curSt->id : "sol";
+
+  // Compute beta from speedK
+  const double beta = static_cast<double>(m_speedK) * 0.40;
+  SpectralAnalysis sp = analyzeSpectrum(stId, beta);
+
+  ImGui::SetNextWindowSize(ImVec2(520.0f, 480.0f), ImGuiCond_FirstUseEver);
+  const bool pushed = modernPushFont();
+  if (ImGui::Begin(uiRu("Астрофизический спектрометр (C)###Spectrometer",
+                        "Astrophysical Spectrometer (C)###Spectrometer"),
+                   &m_spectrometerOpen)) {
+    // Header
+    ImGui::TextColored(ImVec4(0.25f, 0.85f, 1.0f, 1.0f), "%s: %s",
+                       uiRu("ОБЪЕКТ СКАНИРОВАНИЯ", "SCAN TARGET"), sp.targetName.c_str());
+    ImGui::TextColored(ImVec4(0.95f, 0.80f, 0.30f, 1.0f), "%s: %s",
+                       uiRu("Спектральный класс", "Spectral Class"), sp.spectralClass.c_str());
+
+    ImGui::Text("T_eff: %.0f K  |  B: %.2e T  |  %s: %s",
+                sp.surfaceTempK, sp.magneticFieldTesla,
+                uiRu("Радиация", "Radiation"), sp.radiationLevel.c_str());
+
+    if (sp.hasBiosignature) {
+      ImGui::TextColored(ImVec4(0.2f, 0.95f, 0.4f, 1.0f), "☘ %s",
+                         uiRu("БИОСИГНАТУРА ОБНАРУЖЕНА (CH4, H2O, O2)",
+                              "BIOSPHERE SIGNATURE CONFIRMED (CH4, H2O, O2)"));
+    } else {
+      ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.7f, 1.0f), "— %s",
+                         uiRu("Органических биосигнатур не обнаружено",
+                              "No organic biosignatures detected"));
+    }
+
+    ImGui::Separator();
+
+    // Doppler information
+    const double dopplerFactor = std::sqrt((1.0 + beta) / (1.0 - beta));
+    if (std::abs(beta) > 0.01) {
+      ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f),
+                         "β = %.2f c | D_Doppler = %.3f (%s)",
+                         beta, dopplerFactor,
+                         beta > 0 ? uiRu("Синее смещение", "Blue-shift")
+                                  : uiRu("Красное смещение", "Red-shift"));
+    } else {
+      ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.7f, 1.0f),
+                         "β ≈ 0.00 c | D_Doppler = 1.000 (%s)",
+                         uiRu("Лабораторная система отсчёта", "Rest Frame"));
+    }
+
+    // Rainbow spectrum dispersion canvas
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSz = ImVec2(ImGui::GetContentRegionAvail().x, 60.0f);
+    if (canvasSz.x < 100.0f) canvasSz.x = 100.0f;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    // Background
+    dl->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSz.x, canvasPos.y + canvasSz.y),
+                      IM_COL32(10, 10, 15, 255), 4.0f);
+
+    // Draw rainbow dispersion segments from 380nm to 750nm
+    const float minNm = 380.0f;
+    const float maxNm = 750.0f;
+    const int segments = 60;
+    const float segW = canvasSz.x / static_cast<float>(segments);
+
+    for (int s = 0; s < segments; ++s) {
+      float t = static_cast<float>(s) / static_cast<float>(segments);
+      float nm = minNm + t * (maxNm - minNm);
+      float r = 0.0f, g = 0.0f, b = 0.0f;
+      if (nm >= 380.0f && nm < 440.0f) {
+        r = -(nm - 440.0f) / (440.0f - 380.0f);
+        b = 1.0f;
+      } else if (nm >= 440.0f && nm < 490.0f) {
+        g = (nm - 440.0f) / (490.0f - 440.0f);
+        b = 1.0f;
+      } else if (nm >= 490.0f && nm < 510.0f) {
+        g = 1.0f;
+        b = -(nm - 510.0f) / (510.0f - 490.0f);
+      } else if (nm >= 510.0f && nm < 580.0f) {
+        r = (nm - 510.0f) / (580.0f - 510.0f);
+        g = 1.0f;
+      } else if (nm >= 580.0f && nm < 645.0f) {
+        r = 1.0f;
+        g = -(nm - 645.0f) / (645.0f - 580.0f);
+      } else if (nm >= 645.0f && nm <= 750.0f) {
+        r = 1.0f;
+      }
+      ImU32 col = IM_COL32(static_cast<int>(r * 220), static_cast<int>(g * 220),
+                           static_cast<int>(b * 220), 220);
+      dl->AddRectFilled(ImVec2(canvasPos.x + s * segW, canvasPos.y),
+                        ImVec2(canvasPos.x + (s + 1) * segW + 1.0f, canvasPos.y + canvasSz.y),
+                        col);
+    }
+
+    // Overlay spectral lines
+    for (const auto& line : sp.lines) {
+      if (line.wavelengthNm >= minNm && line.wavelengthNm <= maxNm) {
+        float xNorm = (line.wavelengthNm - minNm) / (maxNm - minNm);
+        float lineX = canvasPos.x + xNorm * canvasSz.x;
+        if (line.isEmission) {
+          dl->AddLine(ImVec2(lineX, canvasPos.y), ImVec2(lineX, canvasPos.y + canvasSz.y),
+                      IM_COL32(255, 255, 255, 255), 2.5f);
+          dl->AddLine(ImVec2(lineX, canvasPos.y), ImVec2(lineX, canvasPos.y + canvasSz.y),
+                      IM_COL32(120, 240, 255, 180), 4.5f);
+        } else {
+          dl->AddLine(ImVec2(lineX, canvasPos.y), ImVec2(lineX, canvasPos.y + canvasSz.y),
+                      IM_COL32(12, 12, 18, 245), 2.2f);
+        }
+      }
+    }
+
+    // Border
+    dl->AddRect(canvasPos, ImVec2(canvasPos.x + canvasSz.x, canvasPos.y + canvasSz.y),
+                IM_COL32(80, 140, 200, 200), 4.0f, 0, 1.5f);
+    ImGui::Dummy(canvasSz);
+
+    // Spectrum labels
+    ImGui::TextColored(ImVec4(0.5f, 0.6f, 0.7f, 1.0f), "380 nm [UV/Violet]");
+    ImGui::SameLine(canvasSz.x * 0.45f);
+    ImGui::TextColored(ImVec4(0.5f, 0.9f, 0.5f, 1.0f), "550 nm [Green]");
+    ImGui::SameLine(canvasSz.x - 110.0f);
+    ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.5f, 1.0f), "750 nm [NIR/Red]");
+
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.9f, 1.0f), "%s:",
+                       uiRu("Химический состав и спектральные линии", "Chemical Abundance & Spectral Lines"));
+    for (const auto& [elem, pct] : sp.chemicalAbundance) {
+      char buf[64];
+      std::snprintf(buf, sizeof(buf), "%.2f%%", pct);
+      ImGui::ProgressBar(pct / 100.0f, ImVec2(-1, 14.0f), buf);
+      ImGui::SameLine(10.0f);
+      ImGui::Text("%s", elem.c_str());
+    }
+
+    ImGui::Spacing();
+    ImGui::TextWrapped("%s", uiRu(sp.summaryRu.c_str(), sp.summaryEn.c_str()));
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    // Log to Codex button
+    bool scanned = m_codex.isScanned(stId);
+    if (scanned) {
+      ImGui::BeginDisabled();
+      ImGui::Button(uiRu("✓ Уже занесено в Кодекс открытий (+100 RP)",
+                         "✓ Already Logged in Ship Codex (+100 RP)"), ImVec2(-1, 28.0f));
+      ImGui::EndDisabled();
+    } else {
+      if (ImGui::Button(uiRu("✦ Занести в Кодекс открытий (+100 RP)",
+                            "✦ Log to Ship Codex (+100 RP)"), ImVec2(-1, 28.0f))) {
+        double now = glfwGetTime();
+        if (m_codex.scanObject(stId, now)) {
+          m_audio.playChime();
+          RadioMessage rm;
+          rm.id = "scan_" + stId;
+          rm.callsignRu = "Елена Ростова [Астрофизик]";
+          rm.callsignEn = "Elena Rostova [Astrophysicist]";
+          rm.textRu = "Спектральный анализ " + sp.targetName + " зарегистрирован в бортовой Кодекс! Получено +100 очков исследований (RP).";
+          rm.textEn = "Spectral breakdown of " + sp.targetName + " logged into the Ship Codex! +100 Research Points (RP) acquired.";
+          rm.durationSec = 6.0;
+          rm.priority = 1.5f;
+          m_bridgeComms.queueMessage(rm, now);
+          saveProfileNow(false);
+        }
+      }
+    }
+  }
+  ImGui::End();
+  if (pushed) ImGui::PopFont();
+}
+
+void AppGL::drawCodex() {
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_FirstUseEver,
+                          ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(620.0f, 520.0f), ImGuiCond_FirstUseEver);
+  const bool pushed = modernPushFont();
+
+  if (ImGui::Begin(uiRu("Кодекс космических открытий (K)###Codex",
+                        "Ship Codex of Cosmic Discoveries (K)###Codex"),
+                   &m_codexOpen)) {
+    int scannedCount = m_codex.getScannedCount();
+    int totalCount = m_codex.getTotalCount();
+    int points = m_codex.getTotalResearchPoints();
+
+    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f),
+                       "✦ %s: %d RP  |  %s: %d / %d",
+                       uiRu("ОЧКИ ИССЛЕДОВАНИЙ", "RESEARCH POINTS"), points,
+                       uiRu("ОТКРЫТО ОБЪЕКТОВ", "DISCOVERIES"), scannedCount, totalCount);
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    std::vector<std::string> categoriesRu = {
+        "Планетная система", "Чёрная дыра", "Квазар", "Туманность",
+        "Килоновая", "Сверхновая", "Приливной разрыв", "Пульсар",
+        "Магнетар", "Скопление", "Галактика", "Созвездие"
+    };
+
+    const auto& entries = m_codex.getEntries();
+    for (const auto& cat : categoriesRu) {
+      bool hasCat = false;
+      for (const auto& e : entries) {
+        if (e.categoryRu == cat) { hasCat = true; break; }
+      }
+      if (!hasCat) continue;
+
+      if (ImGui::CollapsingHeader(cat.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (const auto& e : entries) {
+          if (e.categoryRu != cat) continue;
+
+          ImGui::PushID(e.stationId.c_str());
+          ImGui::Indent(12.0f);
+
+          if (e.scanned) {
+            ImGui::TextColored(ImVec4(0.2f, 0.95f, 0.4f, 1.0f), "✓ %s",
+                               uiRu(e.nameRu.c_str(), e.nameEn.c_str()));
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.3f, 1.0f), "[+100 RP]");
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.88f, 0.92f, 1.0f));
+            ImGui::TextWrapped("%s", uiRu(e.descriptionRu.c_str(), e.descriptionEn.c_str()));
+            ImGui::PopStyleColor();
+          } else {
+            ImGui::TextColored(ImVec4(0.55f, 0.6f, 0.68f, 1.0f), "? %s — %s",
+                               uiRu(e.nameRu.c_str(), e.nameEn.c_str()),
+                               uiRu("Не исследовано", "Uncharted"));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.55f, 0.6f, 1.0f));
+            ImGui::TextWrapped("%s",
+                               uiRu("Требуется: совершить прыжок в систему и провести спектральный анализ [C].",
+                                    "Requirement: jump to system and perform spectral analysis [C]."));
+            ImGui::PopStyleColor();
+          }
+
+          const Station* curSt = m_sceneManager->getCurrentStation();
+          if (!curSt || curSt->id != e.stationId) {
+            std::string btnText = std::string(">> ") + uiRu("Лететь к объекту", "Warp to System");
+            if (ImGui::SmallButton(btnText.c_str())) {
+              teleportToStation(e.stationId);
+            }
+          }
+          ImGui::Unindent(12.0f);
+          ImGui::Spacing();
+          ImGui::PopID();
+        }
+      }
+    }
+  }
+  ImGui::End();
+  if (pushed) ImGui::PopFont();
+}
+
+void AppGL::drawBridgeCommsToast() {
+  double now = glfwGetTime();
+  m_bridgeComms.update(now);
+
+  if (!m_bridgeComms.hasActiveMessage()) return;
+  const RadioMessage* msg = m_bridgeComms.getActiveMessage();
+  if (!msg) return;
+
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  const float w = std::min(460.0f, disp.x - 40.0f);
+  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, 40.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+  ImGui::SetNextWindowSize(ImVec2(w, 0.0f), ImGuiCond_Always);
+
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
+                           ImGuiWindowFlags_AlwaysAutoResize |
+                           ImGuiWindowFlags_NoSavedSettings |
+                           ImGuiWindowFlags_NoFocusOnAppearing |
+                           ImGuiWindowFlags_NoNav;
+
+  const bool pushed = modernPushFont();
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.09f, 0.14f, 0.92f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.85f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
+
+  if (ImGui::Begin("##BridgeCommsToast", nullptr, flags)) {
+    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "⟡ %s",
+                       uiRu("РАДИОПЕРЕГОВОРЫ МОСТИКА", "BRIDGE COMMS CHANNEL"));
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 16.0f);
+    if (ImGui::SmallButton("x")) {
+      m_bridgeComms.dismiss();
+    }
+
+    ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.35f, 1.0f), "▲ %s",
+                       uiRu(msg->callsignRu.c_str(), msg->callsignEn.c_str()));
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.92f, 0.95f, 0.98f, 1.0f));
+    ImGui::TextWrapped("%s", uiRu(msg->textRu.c_str(), msg->textEn.c_str()));
+    ImGui::PopStyleColor();
+
+    float prog = m_bridgeComms.getMessageProgress(now);
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    float availW = ImGui::GetContentRegionAvail().x;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float lineY = p0.y + 4.0f;
+    dl->AddLine(ImVec2(p0.x, lineY), ImVec2(p0.x + availW, lineY),
+                IM_COL32(50, 70, 95, 120), 2.0f);
+    float activeW = availW * (1.0f - prog);
+    dl->AddLine(ImVec2(p0.x, lineY), ImVec2(p0.x + activeW, lineY),
+                IM_COL32(56, 189, 248, 240), 2.5f);
+
+    ImGui::Dummy(ImVec2(availW, 6.0f));
+  }
+  ImGui::End();
+
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(2);
+  if (pushed) ImGui::PopFont();
+}
+
+void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
+  double now = glfwGetTime();
+
+  if (stationId == "oj287" && !m_bridgeComms.hasTriggered("comms_oj287")) {
+    RadioMessage msg;
+    msg.id = "comms_oj287";
+    msg.callsignRu = "Егорка-6 [OJ 287]";
+    msg.callsignEn = "Egorka-6 [OJ 287]";
+    msg.textRu = "Глянь на эту бинарную пару! Метрика дрожит. Мы разорвём эту петлю времени раз и навсегда!";
+    msg.textEn = "Look at this binary pair! The metric is trembling. We will shatter this time loop once and for all!";
+    msg.priority = 2.0f;
+    msg.durationSec = 8.0;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "hyperdisk" && !m_bridgeComms.hasTriggered("comms_hyperdisk")) {
+    RadioMessage msg;
+    msg.id = "comms_hyperdisk";
+    msg.callsignRu = "Егорка-6 [Гипердиск]";
+    msg.callsignEn = "Egorka-6 [Hyperdisk]";
+    msg.textRu = "Тонкий аккреционный диск в 26 радиусов Шварцшильда! Идеальный кеплеровский градиент. Варп-ускорители на полную мощность!";
+    msg.textEn = "Thin accretion disc spanning 26 Schwarzschild radii! Pristine Keplerian gradient. Warp boosters at maximum overclock!";
+    msg.priority = 2.0f;
+    msg.durationSec = 8.0;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "sgra" && !m_bridgeComms.hasTriggered("comms_sgra")) {
+    RadioMessage msg;
+    msg.id = "comms_sgra";
+    msg.callsignRu = "Елена Ростова [Астрофизик]";
+    msg.callsignEn = "Elena Rostova [Astrophysicist]";
+    msg.textRu = "Фиксирую эргосферу Стрельца A*. Синхротронное излучение на пике. Включаю спектрометр.";
+    msg.textEn = "Tracking the ergosphere of Sagittarius A*. Synchrotron flux peaking. Activating the spectrometer.";
+    msg.priority = 1.8f;
+    msg.durationSec = 7.5;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "gw170817" && !m_bridgeComms.hasTriggered("comms_gw170817")) {
+    RadioMessage msg;
+    msg.id = "comms_gw170817";
+    msg.callsignRu = "Егорка-5 [Теоретик]";
+    msg.callsignEn = "Egorka-5 [Theorist]";
+    msg.textRu = "Линии золота и платины в ультрафиолете! Мы воочию наблюдаем r-процесс нуклеосинтеза. Гравитационные волны сошлись с квантовыми расчётами.";
+    msg.textEn = "Gold and platinum emission lines in the UV! We are directly witnessing r-process nucleosynthesis. Spacetime waves align with quantum metrics.";
+    msg.priority = 1.8f;
+    msg.durationSec = 8.0;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "m16" && !m_bridgeComms.hasTriggered("comms_m16")) {
+    RadioMessage msg;
+    msg.id = "comms_m16";
+    msg.callsignRu = "Миа Сато [Пилот]";
+    msg.callsignEn = "Mia Sato [Pilot]";
+    msg.textRu = "Столпы Творения прямо по курсу... Четыре световых года молекулярного водорода. Здесь рождаются новые звёздные миры.";
+    msg.textEn = "Pillars of Creation dead ahead... Four light-years of molecular hydrogen. New stellar worlds being born before our eyes.";
+    msg.priority = 1.8f;
+    msg.durationSec = 7.5;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "sol" && m_visited.size() > 1 && !m_bridgeComms.hasTriggered("comms_sol_return")) {
+    RadioMessage msg;
+    msg.id = "comms_sol_return";
+    msg.callsignRu = "ЦУП Земля [Командование]";
+    msg.callsignEn = "Earth Mission Control";
+    msg.textRu = "Астро-Вояджер, с возвращением в колыбель человечества! Данные научного спектрометра и Кодекса синхронизированы.";
+    msg.textEn = "Astro-Voyager, welcome back to the cradle of humanity! Spectrometry and Codex telemetry successfully synchronized.";
+    msg.priority = 1.5f;
+    msg.durationSec = 7.5;
+    m_bridgeComms.queueMessage(msg, now);
+  }
+}
+
 void AppGL::drawPhotoPopup() {
   drawPhotoDirectorOverlay();
 
@@ -3950,6 +4325,16 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (m_showGwDetector && !m_inMenu) {
     drawGwDetectorHud();
   }
+  // === Science Spectrometer, Codex & Radio Chatter === (v4.6.0)
+  if (m_spectrometerOpen && !m_inMenu) {
+    drawSpectrometer();
+  }
+  if (m_codexOpen && !m_inMenu) {
+    drawCodex();
+  }
+  if (!m_inMenu) {
+    drawBridgeCommsToast();
+  }
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
@@ -3965,6 +4350,14 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "%s",
                      curSt ? curSt->name.c_str() : "None");
   ImGui::TextWrapped("%s", curSt ? curSt->description.c_str() : "");
+
+  if (ImGui::Button(uiRu("⟡ Спектрометр (C)", "⟡ Spectrometer (C)"), ImVec2(150.0f, 0))) {
+    m_spectrometerOpen = !m_spectrometerOpen;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button(uiRu("✦ Кодекс (K)", "✦ Codex (K)"), ImVec2(150.0f, 0))) {
+    m_codexOpen = !m_codexOpen;
+  }
 
   // Station search box with hotkey '/' focus
   if (m_searchFocusRequest) {
@@ -4663,6 +5056,9 @@ void AppGL::teleportToStation(const std::string& id, bool stopJumpCine) {
   // сюжет; в прологе свои слайды — главы озвучиваем только после него.
   // v4.1: the same helper runs for dock-based objectives (fleet interlude).
   advanceExpedition(id);
+
+  // === Science & Radio Chatter === (v4.6.0): сюжетные радиопереговоры на мостике
+  checkBridgeCommsTriggers(id);
 }
 
 void AppGL::advanceExpedition(const std::string& objectiveId) {
@@ -4956,21 +5352,24 @@ void AppGL::updateShip(float deltaTime) {
   const bool cDown =
       (glfwGetKey(m_window->getNativeWindow(), m_keyColony) == GLFW_PRESS);
   ImGuiIO& colonyIo = ImGui::GetIO();
-  if (cDown && !m_prevCPressed && !colonyIo.WantCaptureKeyboard &&
-      !m_colonyHintId.empty()) {
-    m_colonies.push_back(m_colonyHintId);
-    m_sceneManager->setColonies(m_colonies);
-    Toast ct;
-    ct.title = uiRu("Колония основана", "Colony established");
-    ct.desc = m_colonyHint + uiRu(" — под вашим флагом.", " — under your flag.");
-    ct.time = static_cast<float>(glfwGetTime());
-    m_toasts.push_back(ct);
-    m_shipNotice = uiRu("Колония основана: ", "Colony established: ") + m_colonyHint;
-    m_shipNoticeT = 4.0f;
-    checkAchievements();  // v3.7.0: colonist / architect
-    saveProfileNow(false);
-    m_colonyHint.clear();
-    m_colonyHintId.clear();
+  if (cDown && !m_prevCPressed && !colonyIo.WantCaptureKeyboard) {
+    if (!m_colonyHintId.empty()) {
+      m_colonies.push_back(m_colonyHintId);
+      m_sceneManager->setColonies(m_colonies);
+      Toast ct;
+      ct.title = uiRu("Колония основана", "Colony established");
+      ct.desc = m_colonyHint + uiRu(" — под вашим флагом.", " — under your flag.");
+      ct.time = static_cast<float>(glfwGetTime());
+      m_toasts.push_back(ct);
+      m_shipNotice = uiRu("Колония основана: ", "Colony established: ") + m_colonyHint;
+      m_shipNoticeT = 4.0f;
+      checkAchievements();  // v3.7.0: colonist / architect
+      saveProfileNow(false);
+      m_colonyHint.clear();
+      m_colonyHintId.clear();
+    } else if (!m_inMenu) {
+      m_spectrometerOpen = !m_spectrometerOpen;
+    }
   }
   m_prevCPressed = cDown;
 
@@ -5000,8 +5399,8 @@ void AppGL::updateShip(float deltaTime) {
       startUndockSequence();
     } else if (!m_dockHintId.empty()) {
       startDockSequence(m_dockHintId);
-    } else {
-      toggleShipyard();
+    } else if (!m_inMenu) {
+      m_codexOpen = !m_codexOpen;
     }
   }
   m_prevKPressed = kDown;
@@ -5283,6 +5682,18 @@ void AppGL::updateSpeedFx(float deltaTime) {
   // v4.1: обычный форсаж (Shift + ход, топливо) — визуальный факел двигателя.
   // Варп-аура от этого НЕ включается: её гейт по warpVis в SceneManager.
   warpdrive::setFuelAccel(m_ship.boostActive ? 1.0f : 0.0f);
+  // v4.6.0: радио-предупреждение при экстремальных перегрузках
+  if (speedK > 0.85f && !m_bridgeComms.hasTriggered("high_g_warn")) {
+    RadioMessage msg;
+    msg.id = "high_g_warn";
+    msg.callsignRu = "Миа Сато [Бортинженер]";
+    msg.callsignEn = "Mia Sato [Flight Engineer]";
+    msg.textRu = "Перегрузка растёт! Держи вектор по кеплеровской дуге, не рви корпус!";
+    msg.textEn = "High-G warning! Hold vector along the Keplerian arc, don't strain the hull!";
+    msg.priority = 2.2f;
+    msg.durationSec = 6.0;
+    m_bridgeComms.queueMessage(msg, glfwGetTime());
+  }
   // Микро-FOV: +3° на полном эффекте поверх варп-кривой (+10° * m_warpK).
   auto& st = m_sceneManager->getSettings();
   if (m_warpBaseFov <= 1.0f) m_warpBaseFov = st.fovDegrees;  // ленивая база
@@ -5449,7 +5860,11 @@ void AppGL::applySaveGame(const SaveGame& g) {
   m_asteroidDodges = g.progress.asteroidDodges;
   m_discoveredConstellations.clear();
   for (const auto& d : g.progress.discoveries) {
-    m_discoveredConstellations.insert(d);
+    if (d.rfind("codex:", 0) == 0) {
+      m_codex.scanObject(d.substr(6));
+    } else {
+      m_discoveredConstellations.insert(d);
+    }
   }
   if (!m_discoveredConstellations.empty()) {
     m_constellationAligned = true;
@@ -5528,6 +5943,11 @@ void AppGL::saveProfileNow(bool quiet) {
   g.progress.colonies = m_colonies;
   g.progress.asteroidDodges = m_asteroidDodges;  // v3.7.0
   g.progress.discoveries.assign(m_discoveredConstellations.begin(), m_discoveredConstellations.end());
+  for (const auto& ce : m_codex.getEntries()) {
+    if (ce.scanned) {
+      g.progress.discoveries.push_back("codex:" + ce.stationId);
+    }
+  }
   g.progress.minBhDistance = m_minBhDistance;
   g.progress.exported = m_journeyExported;
   g.progress.imported = m_journeyImported;

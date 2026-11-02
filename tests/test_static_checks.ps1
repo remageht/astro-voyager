@@ -458,6 +458,13 @@ Check 'pillars inspector controls' (($appCpp -match 'Pillars of Creation') -and 
 Check 'crab pwn controls' (($appCpp -match 'Crab PWN') -and ($appCpp -match 'PWN Mode') -and ($sceneCpp -match 'u_PwnMode'))
 Check 'story journal has m16' (((Read-File 'src/StoryJournal.cpp') -match '"m16"') -and ((Read-File 'tests/test_story.cpp') -match '"m16"'))
 
+# v4.6.0: Science Spectrometer, Ship Codex, and Live Radio Chatter
+Check 'science header exists' (Test-Path (Join-Path $root 'src/ScienceSystem.h'))
+Check 'science source exists' (Test-Path (Join-Path $root 'src/ScienceSystem.cpp'))
+Check 'science test source exists' (Test-Path (Join-Path $root 'tests/test_science.cpp'))
+Check 'cmake lists ScienceSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/ScienceSystem\.cpp')
+Check 'cmake lists test_science' ((Read-File 'CMakeLists.txt') -match 'test_science')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
