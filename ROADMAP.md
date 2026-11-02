@@ -17,8 +17,9 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 | Стадия / Stage | Версии / Versions | Фокус / Primary Focus | Статус / Status |
 |---|---|---|---|
 | **Pre-Alpha** | `v1.0.0` – `v4.1.0` | Физика ОТО, релятивистские чёрные дыры, Солнечная система, сюжетная кампания 7 глав | Завершено (Shipped) |
-| **Alpha Stage** | `v4.2.0` | Диегетический 3D-кокпит, коллиматорный ИЛС, динамика перегрузок, SpaceDrive 3D варп-туннель, авионика | **Текущий релиз (Current)** |
-| **Beta Stage** | `v4.3.0` – `v4.5.0` | Процедурные PBR-поверхности планет (LOD), Рэлей-Ми атмосфера, объёмные туманности, баланс экономики | В разработке (Planned) |
+| **Alpha Stage** | `v4.2.0` | Диегетический 3D-кокпит, коллиматорный ИЛС, динамика перегрузок, SpaceDrive 3D варп-туннель, авионика | Завершено (Shipped) |
+| **Beta Stage** | `v4.3.0` – `v4.5.0` | Процедурные PBR-поверхности планет (LOD), Рэлей-Ми атмосфера, Photo Mode v2, LUT, авионика, провенанс ассетов, Егорка-6 | Завершено (Shipped v4.5.0) |
+| **Release Candidate** | `v4.6.0` – `v4.8.0` | Научный спектрометр, радиоэфир экипажа, посадка на планеты, экономика хабов | **Текущий этап (In Progress)** |
 | **Release 1.0** | `v5.0.0` | Полноценный AAA-релиз, Steam Deck верификация, Mod-API мастерская, 5+ языков | Финал карты (Target) |
 
 ## Stage 1 — Foundation / Фундамент (v3.4–v3.6)
@@ -61,7 +62,7 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 - RU: Выпущено: пункт «Новая игра · Adventure», иллюстрированный пролог Егорки, раздельные профили сохранений, кампания из 7 глав с репликами Мии Сато, интерлюдия «Последний караул», развилка двух концовок и эпилог «Наследие». Впереди: ветвления внутри глав и обратный отсчёт срока.
 - Gates: раздельные профили сохранений, тесты экспедиции и развилок (test_expedition), скриптованный smoke-прогон.
 
-## Stage 3 — Production values / Продакшн-ценности (v4.1–v4.5)
+## Stage 3 — Production values & Flight Realism / Продакшн-ценности и реализм полёта (v4.1–v4.5)
 
 ### v4.1 — Cosmic events
 - Supernova, tidal disruption flares, gravitational-wave ripples (visual + gameplay hooks).
@@ -71,18 +72,34 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 - EN: Shipped: diegetic 3D cockpit with canopy struts and photochromic tinting, collimated holographic HUD at infinity (pitch ladder, boresight, horizon, velocity tapes), pilot head spring-damper G-force inertia, animated multi-layer 3D SpaceDrive warp tunnel (tamminen, CC BY 4.0) with differential rotation during warp cruise and jump flight, modernized multi-tab Settings menu.
 - RU: Выпущено: диегетический 3D-кокпит с лонжеронами и фотохромным автотинтом, коллиматорный голографический ИЛС (авиагоризонт, шкала тангажа, ленты скорости), пружинно-демпферная инерция головы пилота при перегрузках, анимированный трёхслойный 3D варп-туннель SpaceDrive (tamminen, CC BY 4.0) с дифференциальным вращением в прыжках и крейсерском варпе, модернизированное многовкладочное меню настроек авионики.
 
-### v4.3 — Audio pass
-- Layered dynamic music on events, positional station audio, engine Doppler pitch by speed.
+### v4.3 — Audio pass & Planetary Relief PBR / Звуковой проход и PBR-рельеф планет
+- Layered dynamic music on events, positional station audio, engine Doppler pitch by speed, procedural FBM crater and mountain normal relief, Rayleigh-Mie atmospheric scattering.
 
-### v4.4 — Cinematography
-- Director camera, photo mode v2 (LUT/filters, pose the ship), clip recorder.
+### v4.4 — Cinematography & Gravitational Wave Science / Кинематография и гравитационные волны
+- Director camera (F8), photo mode v2 (rule of thirds, golden ratio, custom FOV), filmic LUT color grading, scientific dual-polarization metric strain oscilloscope.
 
-### v4.5 — Image quality
-- SMAA/TAA, HDR output, filmic LUT grading, lens effects polish.
+### v4.5 — Flight Avionics, Spacecraft Provenance & The Sixth Universe / Авионика полёта, провенанс ассетов и Шестая Вселенная
+- Status / Статус: **shipped in 4.5.0 (Beta Milestone)** / **выпущено в 4.5.0 (Beta Milestone)**.
+- EN: Shipped: dynamic collimated Prograde ($\hat{v}$) and Retrograde ($-\hat{v}$) HUD flight path vectors, continuous G-force avionics with pilot physiological strain shaders (blackout/redout), radar altimeter (ALT AGL) with TERRAIN / PULL UP alert, hypersonic atmospheric entry drag and canopy plasma glow, CC BY / CC BY-NC spacecraft asset audit with SHA-256 pinning, Egorka-6 character lore, canonical portrait, and 6th Multiverse ending (`kFinaleHyperBreakthrough = 6`).
+- RU: Выпущено: динамические коллиматорные маркеры Prograde ($\hat{v}$) и Retrograde ($-\hat{v}$) на ИЛС, непрерывный расчёт перегрузок $G$ с шейдерами блэкаута/редаута, радиовысотомер (ALT AGL) с алертом опасного сближения с рельефом, гиперзвуковой вход в атмосферу с аэродинамическим торможением и плазмой на остеклении фонаря, аудит лицензий космических кораблей с SHA-256 контрольными суммами, образ Егорки-6, каноничный портрет и 6-й финал Мультивселенной (`kFinaleHyperBreakthrough = 6`).
 
-## Stage 4 — Ecosystem / Экосистема (v5.0+)
-- EN: Mod API (data-driven stations/ships/shaders) + workshop, Steam achievements/cloud saves, Windows installer + auto-update, Steam Deck verification, 5+ language localization, demo/trailer/press kit.
-- RU: Мод-API (станции/корабли/шейдеры как данные) + мастерская, достижения/облачные сейвы платформы, инсталлятор для Windows + автообновление, верификация Steam Deck, локализация на 5+ языков, демо/трейлер/пресс-кит.
+## Stage 4 — Release Candidates & Systems Depth / Кандидаты в релиз и глубина систем (v4.6–v4.8)
+
+### v4.6 — Science Spectrometer, Ship Codex & Live Radio Chatter / Научный спектрометр, Кодекс и радиоэфир
+- EN: Astrophysical spectrometer with real-time Fraunhofer dark absorption and Balmer emission lines ($H_\alpha, H_\beta, O_{III}, CH_4, H_2O, SO_2$), Ship Codex encyclopedia database of celestial bodies with discovery progression, diegetic comms display on cockpit dashboard with incoming video/radio transmissions (Egorka-6, Mia Sato, Dr. Elena Rostova).
+- RU: Астрофизический спектрометр с расчётом линий поглощения Фраунгофера и эмиссии Бальмера в реальном времени ($H_\alpha, H_\beta, O_{III}, CH_4, H_2O, SO_2$), бортовая энциклопедия-Кодекс с базой данных небесных тел и прогрессом открытий, диегетический монитор связи в кабине с видео/радиопереговорами экипажа (Егорка-6, Мия Сато, д-р Елена Ростова).
+
+### v4.7 — Planetary Landing & Surface Operations / Посадка на планеты и операции на поверхности
+- EN: Deployable landing gear (key G) with hydraulic suspension compression, surface touchdown physics with vertical speed tolerances, landing dust kickup and surface expedition telemetry reports.
+- RU: Выдвижные посадочные опоры/шасси (клавиша G) с гидравлической амортизацией, физика касания поверхности с допуском по вертикальной скорости, пылевой шлейф при посадке и отчёты об экспедиции на грунт.
+
+### v4.8 — Station Hubs & Modular Upgrades / Станции-хабы и модульные апгрейды
+- EN: Interior docking vista, credits & research economy, ship subsystem tuning (warp coil capacitors, sensor arrays, thruster gimbal).
+- RU: Вид станции изнутри при стыковке, экономика кредитов и исследований, тюнинг подсистем корабля (конденсаторы варп-катушек, сенсорные решётки, подвес маневровых).
+
+## Stage 5 — Ecosystem & Release 1.0 / Экосистема и Release 1.0 (v5.0+)
+- EN: Mod API (data-driven stations/ships/shaders) + workshop, Steam achievements/cloud saves, Windows installer + auto-update, Steam Deck verification (1280x800, full gamepad UX), 5+ language localization, demo/trailer/press kit.
+- RU: Мод-API (станции/корабли/шейдеры как данные) + мастерская, достижения/облачные сейвы платформы, инсталлятор для Windows + автообновление, верификация Steam Deck (1280x800, навигация геймпадом), локализация на 5+ языков, демо/трейлер/пресс-кит.
 
 ## Process rules / Правила процесса
 - Цикл: один фича-пасс → гейты → один коммит → релиз каждые 2–3 пасса (текущий ритм).
