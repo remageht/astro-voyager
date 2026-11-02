@@ -731,6 +731,33 @@ void AppGL::processInput(float deltaTime) {
       0.01) {
     m_shipVel = Vec3();
   }
+
+  // v4.6.0 Realism: Atmospheric aerodynamic drag in planetary atmospheres
+  if (m_sceneManager && m_sceneManager->getCurrentStation() &&
+      m_sceneManager->getCurrentStation()->type == StationType::SolarSystem) {
+    const std::vector<BodyState>& bodies = m_sceneManager->getBodies();
+    for (const auto& b : bodies) {
+      if (!b.def || b.def->radius <= 0.01f) continue;
+      const bool hasAtm = (b.def->detail == 4 || b.def->detail == 3 ||
+                           b.def->detail == 6 || b.def->type == 1);
+      if (!hasAtm) continue;
+      const double dx = m_camera.position.x - b.pos.x;
+      const double dy = m_camera.position.y - b.pos.y;
+      const double dz = m_camera.position.z - b.pos.z;
+      const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+      const double alt = dist - static_cast<double>(b.def->radius);
+      const double atmThick = static_cast<double>(b.def->radius) * 0.22;
+      if (alt >= 0.0 && alt < atmThick) {
+        const double rho = std::exp(-(alt / atmThick) * 3.5);
+        const double dragK = 1.0 - std::exp(-static_cast<double>(deltaTime) * 0.75 * rho);
+        m_shipVel.x *= (1.0 - dragK);
+        m_shipVel.y *= (1.0 - dragK);
+        m_shipVel.z *= (1.0 - dragK);
+        break;
+      }
+    }
+  }
+
   m_camera.position = Vec3(m_camera.position.x + m_shipVel.x * deltaTime,
                            m_camera.position.y + m_shipVel.y * deltaTime,
                            m_camera.position.z + m_shipVel.z * deltaTime);
@@ -5130,6 +5157,40 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
   const float throttle = m_speedK + (warpdrive::fuelAccel() > 0.0f ? 0.35f : 0.0f);
   const float warpCharge = m_warpOn ? 1.0f : 0.0f;
 
+  // v4.6.0 Realism: Nearest celestial body telemetry (altimeter & atmospheric entry)
+  glm::vec3 nearestBodyPos(0.0f);
+  float nearestBodyRadius = 0.0f;
+  bool nearestHasAtmosphere = false;
+  float minBodyDist = 1e9f;
+
+  if (m_sceneManager) {
+    const std::vector<BodyState>& bodies = m_sceneManager->getBodies();
+    for (const auto& b : bodies) {
+      if (!b.def || b.def->radius <= 0.01f) continue;
+      glm::vec3 bPos(static_cast<float>(b.pos.x), static_cast<float>(b.pos.y), static_cast<float>(b.pos.z));
+      float d = glm::length(camPos - bPos);
+      if (d < minBodyDist) {
+        minBodyDist = d;
+        nearestBodyPos = bPos;
+        nearestBodyRadius = b.def->radius;
+        nearestHasAtmosphere = (b.def->detail == 4 || b.def->detail == 3 ||
+                                b.def->detail == 6 || b.def->type == 1);
+      }
+    }
+    if (nearestBodyRadius <= 0.001f && m_sceneManager->getCurrentStation()) {
+      const Station* curSt = m_sceneManager->getCurrentStation();
+      nearestBodyPos = glm::vec3(0.0f);
+      nearestBodyRadius = (curSt->type == StationType::BlackHole)
+                              ? m_sceneManager->getSettings().rs * 2.0f
+                              : 1.0f;
+      nearestHasAtmosphere = false;
+    }
+  }
+
+  const glm::vec3 worldVel(static_cast<float>(m_shipVel.x + m_ship.gravVel.x),
+                           static_cast<float>(m_shipVel.y + m_ship.gravVel.y),
+                           static_cast<float>(m_shipVel.z + m_ship.gravVel.z));
+
   m_cockpitController.update(deltaTime,
                              camPos,
                              camFwd,
@@ -5143,7 +5204,11 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
                              m_ship.shield / 100.0f,
                              targetName,
                              targetPos,
-                             sunVis);
+                             sunVis,
+                             worldVel,
+                             nearestBodyPos,
+                             nearestBodyRadius,
+                             nearestHasAtmosphere);
 
   m_cockpitRenderer.render(fbWidth,
                            fbHeight,

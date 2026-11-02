@@ -32,7 +32,11 @@ void CockpitController::update(float deltaTime,
                                float shield,
                                const std::string& targetName,
                                const glm::vec3& targetPos,
-                               float sunVisibility) {
+                               float sunVisibility,
+                               const glm::vec3& worldVel,
+                               const glm::vec3& nearestBodyPos,
+                               float nearestBodyRadius,
+                               bool hasAtmosphere) {
   if (deltaTime <= 0.0f || deltaTime > 0.25f) {
     deltaTime = 0.016f;
   }
@@ -44,10 +48,11 @@ void CockpitController::update(float deltaTime,
   }
 
   // Linear velocity and acceleration
-  glm::vec3 worldVel = (camPos - m_prevPos) / deltaTime;
-  glm::vec3 relVel(glm::dot(worldVel, camRight),
-                   glm::dot(worldVel, camUp),
-                   glm::dot(worldVel, camFwd));
+  glm::vec3 effectiveVel = (glm::length(worldVel) > 0.001f)
+                               ? worldVel
+                               : ((camPos - m_prevPos) / deltaTime);
+  float spd = glm::length(effectiveVel);
+  if (spd < 1e-4f) spd = currentSpeed;
 
   // Angular rate (turn rate)
   glm::vec3 deltaFwd = camFwd - m_prevFwd;
@@ -114,9 +119,120 @@ void CockpitController::update(float deltaTime,
   m_hud.shieldIntegrity = std::clamp(shield, 0.0f, 1.0f);
   m_hud.autoTint = m_autoTint;
 
-  // Simulated pilot G-force
-  float gAccel = glm::length(offsetForce) * 0.15f + (throttleInput > 1.0f ? 1.8f : 0.0f);
-  m_hud.gForce = 1.0f + gAccel;
+  // v4.6.0 Realism: Prograde and Retrograde velocity vector projection
+  if (spd > 0.4f) {
+    float fwdDot = glm::dot(effectiveVel, camFwd);
+    float rightDot = glm::dot(effectiveVel, camRight);
+    float upDot = glm::dot(effectiveVel, camUp);
+
+    // Prograde projection onto collimated HUD plane
+    if (fwdDot > 0.05f * spd) {
+      float projX = (rightDot / fwdDot) * 1.15f;
+      float projY = (upDot / fwdDot) * 1.15f;
+      float dScreen = std::sqrt(projX * projX + projY * projY);
+      if (dScreen < 1.05f) {
+        m_hud.progradeVisible = true;
+        m_hud.progradeScreenPos = glm::vec2(projX, projY);
+      } else {
+        m_hud.progradeVisible = false;
+      }
+    } else {
+      m_hud.progradeVisible = false;
+    }
+
+    // Retrograde projection (opposite direction)
+    if (-fwdDot > 0.05f * spd) {
+      float projX = (-rightDot / -fwdDot) * 1.15f;
+      float projY = (-upDot / -fwdDot) * 1.15f;
+      float dScreen = std::sqrt(projX * projX + projY * projY);
+      if (dScreen < 1.05f) {
+        m_hud.retrogradeVisible = true;
+        m_hud.retrogradeScreenPos = glm::vec2(projX, projY);
+      } else {
+        m_hud.retrogradeVisible = false;
+      }
+    } else {
+      m_hud.retrogradeVisible = false;
+    }
+  } else {
+    m_hud.progradeVisible = false;
+    m_hud.retrogradeVisible = false;
+  }
+
+  // v4.6.0 Realism: G-force physics and physiological blackout/redout
+  float turnMag = std::abs(turnYaw) + std::abs(turnPitch);
+  float linAcc = glm::length(offsetForce) * 0.18f;
+  float feltG = 1.0f + linAcc + turnMag * 0.45f + (throttleInput > 1.0f ? 1.6f : 0.0f);
+  m_hud.gForce += (feltG - m_hud.gForce) * (1.0f - std::exp(-deltaTime * 5.0f));
+
+  // High positive G (> 3.5 G) produces tunnel-vision blackout
+  float targetBlackout = 0.0f;
+  if (m_hud.gForce > 3.5f) {
+    targetBlackout = std::clamp((m_hud.gForce - 3.5f) / 4.5f, 0.0f, 0.85f);
+  }
+  m_hud.blackoutK += (targetBlackout - m_hud.blackoutK) * (1.0f - std::exp(-deltaTime * 4.0f));
+
+  // Negative pitch rate / negative vertical G causes redout
+  float targetRedout = 0.0f;
+  if (turnPitch < -0.55f) {
+    targetRedout = std::clamp((-turnPitch - 0.55f) * 0.6f, 0.0f, 0.75f);
+  }
+  m_hud.redoutK += (targetRedout - m_hud.redoutK) * (1.0f - std::exp(-deltaTime * 4.0f));
+
+  // v4.6.0 Realism: Radar Altimeter AGL & Terrain Clearance Alert
+  if (nearestBodyRadius > 0.01f) {
+    glm::vec3 relBody = camPos - nearestBodyPos;
+    float distToCenter = glm::length(relBody);
+    float altitude = distToCenter - nearestBodyRadius;
+
+    // Activate within 1.5 radii above surface
+    if (altitude >= 0.0f && altitude < nearestBodyRadius * 1.5f) {
+      m_hud.radarAltitudeKm = altitude * 100.0f; // scaled to km
+
+      // Vertical speed (rate of climb / descent along planetary radius)
+      if (distToCenter > 1e-4f) {
+        glm::vec3 upRadius = relBody / distToCenter;
+        float vRad = glm::dot(effectiveVel, upRadius); // negative when descending
+        m_hud.verticalSpeedMs = vRad * 50.0f;
+
+        // Terrain proximity alert envelope: low altitude and fast descent
+        if (altitude < nearestBodyRadius * 0.18f && vRad < -0.15f) {
+          m_hud.terrainAlert = true;
+        } else {
+          m_hud.terrainAlert = false;
+        }
+      } else {
+        m_hud.verticalSpeedMs = 0.0f;
+        m_hud.terrainAlert = false;
+      }
+    } else {
+      m_hud.radarAltitudeKm = -1.0f;
+      m_hud.verticalSpeedMs = 0.0f;
+      m_hud.terrainAlert = false;
+    }
+  } else {
+    m_hud.radarAltitudeKm = -1.0f;
+    m_hud.verticalSpeedMs = 0.0f;
+    m_hud.terrainAlert = false;
+  }
+
+  // v4.6.0 Realism: Atmospheric hypersonic re-entry plasma ionization
+  if (hasAtmosphere && nearestBodyRadius > 0.01f && m_hud.radarAltitudeKm >= 0.0f) {
+    float atmThickness = nearestBodyRadius * 0.22f;
+    glm::vec3 relBody = camPos - nearestBodyPos;
+    float alt = glm::length(relBody) - nearestBodyRadius;
+    if (alt >= 0.0f && alt < atmThickness) {
+      float altNorm = alt / atmThickness;
+      float atmDensity = std::exp(-altNorm * 3.8f);
+      float speedFactor = std::clamp((spd - 12.0f) / 25.0f, 0.0f, 1.0f);
+      float targetPlasma = atmDensity * speedFactor;
+      m_hud.entryPlasma += (targetPlasma - m_hud.entryPlasma) * (1.0f - std::exp(-deltaTime * 6.0f));
+    } else {
+      m_hud.entryPlasma *= std::exp(-deltaTime * 4.0f);
+    }
+  } else {
+    m_hud.entryPlasma *= std::exp(-deltaTime * 4.0f);
+  }
 
   // Target relative direction and distance
   m_hud.targetName = targetName;

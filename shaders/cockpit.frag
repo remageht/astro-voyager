@@ -25,6 +25,19 @@ uniform float u_TargetAngle;
 uniform float u_TargetLocked;
 uniform int   u_ShipStyle;
 
+// v4.6.0 Realism Overhaul uniforms
+uniform vec2  u_Prograde;
+uniform float u_ProgradeOn;
+uniform vec2  u_Retrograde;
+uniform float u_RetrogradeOn;
+uniform float u_GForce;
+uniform float u_Blackout;
+uniform float u_Redout;
+uniform float u_RadarAlt;
+uniform float u_VerticalSpeed;
+uniform float u_TerrainAlert;
+uniform float u_EntryPlasma;
+
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
   p = fract(p * vec2(234.34, 435.345));
@@ -186,6 +199,19 @@ void main() {
     float glassAlpha = clamp(glassFresnel + scratch + u_AutoTint * 0.40, 0.0, 0.85);
 
     vec3 glassRgb = vec3(0.05, 0.12, 0.20) * glassFresnel + vec3(scratch) + tintColor;
+
+    // Atmospheric hypersonic entry plasma ionization glow (v4.6.0)
+    if (u_EntryPlasma > 0.005) {
+      vec2 flowP = headP * vec2(1.5, 3.5) + vec2(0.0, u_Time * 14.0);
+      float plasmaNoise = noise2D(flowP) * 0.6 + noise2D(flowP * 2.2 + vec2(u_Time * 8.0, 0.0)) * 0.4;
+      float streak = pow(plasmaNoise, 3.0) * 1.8;
+      float shockMask = smoothstep(-0.6, 0.4, headP.y);
+      vec3 plasmaCol = mix(vec3(1.0, 0.38, 0.06), vec3(1.0, 0.88, 0.55), streak);
+      float plasmaAlpha = clamp((streak * 0.7 + shockMask * 0.3) * u_EntryPlasma, 0.0, 0.85);
+      glassRgb += plasmaCol * plasmaAlpha * 2.2;
+      glassAlpha = max(glassAlpha, plasmaAlpha * 0.8);
+    }
+
     col = vec4(glassRgb, glassAlpha);
 
     // -------------------------------------------------------------
@@ -289,11 +315,86 @@ void main() {
       }
     }
 
+    // H. Flight Path Vector: Prograde Marker (v4.6.0)
+    if (u_ProgradeOn > 0.5) {
+      vec2 progP = hudP - u_Prograde;
+      float dCirc = abs(length(progP) - 0.026);
+      hudGlow += (1.0 - smoothstep(0.001, 0.0028, dCirc)) * 1.25;
+      // 3 Wings at 12, 9, 3 o'clock
+      float topWing = sdSegment(progP, vec2(0.0, 0.026), vec2(0.0, 0.044));
+      float leftWing = sdSegment(progP, vec2(-0.044, 0.0), vec2(-0.026, 0.0));
+      float rightWing = sdSegment(progP, vec2(0.026, 0.0), vec2(0.044, 0.0));
+      hudGlow += (1.0 - smoothstep(0.001, 0.0025, min(topWing, min(leftWing, rightWing)))) * 1.1;
+    }
+
+    // I. Flight Path Vector: Retrograde Marker (v4.6.0)
+    if (u_RetrogradeOn > 0.5) {
+      vec2 retroP = hudP - u_Retrograde;
+      float dCirc = abs(length(retroP) - 0.026);
+      hudGlow += (1.0 - smoothstep(0.001, 0.0028, dCirc)) * 1.1;
+      // Internal X cross
+      float dCross1 = sdSegment(retroP, vec2(-0.015, -0.015), vec2(0.015, 0.015));
+      float dCross2 = sdSegment(retroP, vec2(-0.015, 0.015), vec2(0.015, -0.015));
+      hudGlow += (1.0 - smoothstep(0.001, 0.0025, min(dCross1, dCross2))) * 1.0;
+    }
+
+    // J. Digital G-Meter & High-G warning (v4.6.0)
+    vec2 gP = hudP - vec2(0.48, -0.12);
+    if (abs(gP.x) < 0.025 && abs(gP.y) < 0.12) {
+      float gOutline = sdBox(gP, vec2(0.012, 0.10));
+      hudGlow += (1.0 - smoothstep(0.001, 0.0025, abs(gOutline))) * 0.6;
+      float gNorm = clamp((u_GForce - 1.0) / 6.0, 0.0, 1.0);
+      float gFill = -0.10 + 0.20 * gNorm;
+      if (gP.y < gFill) {
+        hudGlow += (u_GForce > 4.0) ? 0.95 : 0.55;
+      }
+    }
+
+    // K. Radar Altimeter Tape (ALT AGL) & Vertical Speed (v4.6.0)
+    if (u_RadarAlt >= 0.0) {
+      vec2 altP = hudP - vec2(-0.48, -0.12);
+      if (abs(altP.x) < 0.025 && abs(altP.y) < 0.12) {
+        float altOutline = sdBox(altP, vec2(0.012, 0.10));
+        hudGlow += (1.0 - smoothstep(0.001, 0.0025, abs(altOutline))) * 0.7;
+        float altNorm = clamp(u_RadarAlt / 50.0, 0.0, 1.0);
+        float altFill = -0.10 + 0.20 * altNorm;
+        if (altP.y < altFill) {
+          hudGlow += 0.55;
+        }
+      }
+    }
+
+    // L. Terrain Proximity Warning Banner (v4.6.0)
+    if (u_TerrainAlert > 0.5) {
+      float blink = step(0.0, sin(u_Time * 14.0));
+      vec2 alertP = hudP - vec2(0.0, -0.22);
+      if (blink > 0.5 && abs(alertP.x) < 0.22 && abs(alertP.y) < 0.045) {
+        float boxD = abs(sdBox(alertP, vec2(0.20, 0.038)));
+        float warnGlow = (1.0 - smoothstep(0.001, 0.003, boxD)) * 1.5;
+        float stripes = sin((alertP.x + alertP.y) * 120.0);
+        warnGlow += step(0.2, stripes) * 0.45;
+        col.rgb += vec3(1.0, 0.25, 0.08) * warnGlow * 1.8;
+        col.a = max(col.a, 0.9);
+      }
+    }
+
     // Additive HUD projection on the glass
     if (hudGlow > 0.001) {
       col.rgb += hudCol * hudGlow * 1.35;
       col.a = max(col.a, clamp(hudGlow, 0.0, 0.95));
     }
+  }
+
+  // 4. PILOT PHYSIOLOGICAL RESPONSE (v4.6.0)
+  // Blackout (tunnel vision under high-G)
+  if (u_Blackout > 0.001) {
+    float distCenter = length(p * vec2(0.75, 1.0));
+    float vignette = smoothstep(0.55 - u_Blackout * 0.35, 1.25 - u_Blackout * 0.45, distCenter);
+    col.rgb *= (1.0 - vignette * u_Blackout * 0.95);
+  }
+  // Redout (negative G crimson wash)
+  if (u_Redout > 0.001) {
+    col.rgb = mix(col.rgb, vec3(col.r * 1.35 + 0.22, col.g * 0.25, col.b * 0.20), u_Redout * 0.65);
   }
 
   FragColor = col;
