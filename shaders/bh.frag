@@ -391,6 +391,7 @@ void main() {
   float minC = 1e30;
   float aC = 0.0;
   vec3 cPos = vec3(0.0);
+  bool compCaptured = false;
   if (u_CompK > 0.5) {
     aC = u_CompPhase0 + (u_Time - 1.0) * u_CompOmega;
     cPos = u_CompR * vec3(cos(aC), sin(aC) * sin(u_CompInc),
@@ -441,6 +442,10 @@ void main() {
       vec3 xC = x - cPos;
       float bC = length(xC);
       if (bC < minC) minC = bC;
+      if (bC <= u_CompRs * 1.001) {
+        compCaptured = true;
+        break;
+      }
       if (bC < 6.0 * u_CompRs && bC > 1e-4) {
         float rnC = dot(xC, v) / bC;
         float trC = dot(v, v) - rnC * rnC;
@@ -563,13 +568,16 @@ void main() {
           // companion's footprint. NOT gated by (1 - closeK) - flares are
           // the station's signature and must show at spawn distance.
           if (u_CompK > 0.5) {
-            float crossK = exp(-pow(cPos.y / (0.5 * u_CompRs), 2.0));
             vec2 dComp = vec2(xDisk.x - cPos.x, xDisk.z - cPos.z);
-            float dRad = dot(dComp, vec2(cos(aC), sin(aC)));
-            float dAz = dot(dComp, vec2(-sin(aC), cos(aC)));
-            float arc = exp(-(dRad * dRad) / (0.20 * u_CompRs * u_CompRs)
-                            - (dAz * dAz) / (1.3 * u_CompRs * u_CompRs));
-            emis += crossK * arc * 3.2;
+            float distCDisk = length(dComp);
+            if (distCDisk > u_CompRs * 1.05) {
+              float crossK = exp(-pow(cPos.y / (0.5 * u_CompRs), 2.0));
+              float dRad = dot(dComp, vec2(cos(aC), sin(aC)));
+              float dAz = dot(dComp, vec2(-sin(aC), cos(aC)));
+              float arc = exp(-(dRad * dRad) / (0.25 * u_CompRs * u_CompRs)
+                              - (dAz * dAz) / (1.4 * u_CompRs * u_CompRs));
+              emis += crossK * arc * 0.7;
+            }
           }
           // Uniform exposure; beaming geometry untouched.
           vec3 diskRgb = emis * g4 * 1.9;
@@ -684,7 +692,7 @@ void main() {
     }
   }
 
-  if (r <= u_Rs * 1.001) {
+  if (compCaptured || r <= u_Rs * 1.001) {
     // Captured rays carry foreground emission (disk/jet accumulated before horizon crossing);
     // where nothing was accumulated (accumColor == 0), the horizon remains pure black shadow.
     if (u_DiskOn == 1) {

@@ -91,9 +91,14 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 - RU: Выпущено: физическая спектроскопия 22 небесных тел с радужной полосой дисперсии, фраунгоферовыми линиями поглощения и светящимися пиками эмиссии, релятивистским доплеровским смещением длин волн, Кодекс открытий с 12 категориями и прогрессией +100 RP, живые радиопереговоры на мостике с репликами Егорки-6, Мии Сато и д-ра Елены Ростовой.
 
 ### v4.6.1 — Planetary Landing & Surface Operations / Посадка на планеты и операции на поверхности
-- Status / Статус: **in progress (v4.6.1)** / **в разработке (v4.6.1)**.
+- Status / Статус: **shipped in 4.6.1** / **выпущено в 4.6.1**.
 - EN: Deployable landing gear (key G) with hydraulic suspension compression, surface touchdown physics with vertical speed tolerances, landing dust kickup and surface expedition telemetry reports (+150 RP in Codex).
 - RU: Выдвижные посадочные опоры/шасси (клавиша G) с гидравлической амортизацией, физика касания поверхности с допуском по вертикальной скорости, пылевой шлейф при посадке и отчёты об экспедиции на грунт (+150 RP в Кодексе).
+
+### v4.6.2 — OJ 287 Binary Orbit & Horizon Capture, UI Polish & Cutscene Pause / Вращение OJ 287, полировка UI и пауза
+- Status / Статус: **shipped in 4.6.2** / **выпущено в 4.6.2**.
+- EN: Companion black hole event horizon capture & ray termination in `bh.frag` (no blowout white blob), 12.5s orbital revolution, vertical offset for Bridge Chatter toast below Expedition card, ship physics & gravity pause during story cutscenes.
+- RU: Захват лучей горизонтом событий второй чёрной дыры в `bh.frag` (устранено белое пятно), вращение пары за 12.5с, вертикальное разделение плашек радиопереговоров и экспедиции, пауза корабля и физики при показе сюжета.
 
 ### v4.7 — Station Hubs & Modular Upgrades / Станции-хабы и модульные апгрейды
 - Status / Статус: **planned (RC2)** / **запланировано (RC2)**.
