@@ -26,6 +26,12 @@ struct ShipState {
   bool boostActive = false;      // conventional boost engaged
   bool isDocked = false;         // v3.11.0: docked at orbital station / shipyard
   std::string dockedStationId;   // id of current dock site
+  // v4.6.1: Planetary Landing & Surface Operations
+  bool gearDeployed = false;
+  float gearProgress = 0.0f;
+  bool isLanded = false;
+  std::string landedBodyId;
+  float suspensionCompression = 0.0f;
 };
 
 // === Ship Customization & Shipyard === (v3.11.0)

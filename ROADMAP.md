@@ -86,14 +86,17 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 ## Stage 4 — Release Candidates & Systems Depth / Кандидаты в релиз и глубина систем (v4.6–v4.8)
 
 ### v4.6 — Science Spectrometer, Ship Codex & Live Radio Chatter / Научный спектрометр, Кодекс и радиоэфир
-- EN: Astrophysical spectrometer with real-time Fraunhofer dark absorption and Balmer emission lines ($H_\alpha, H_\beta, O_{III}, CH_4, H_2O, SO_2$), Ship Codex encyclopedia database of celestial bodies with discovery progression, diegetic comms display on cockpit dashboard with incoming video/radio transmissions (Egorka-6, Mia Sato, Dr. Elena Rostova).
-- RU: Астрофизический спектрометр с расчётом линий поглощения Фраунгофера и эмиссии Бальмера в реальном времени ($H_\alpha, H_\beta, O_{III}, CH_4, H_2O, SO_2$), бортовая энциклопедия-Кодекс с базой данных небесных тел и прогрессом открытий, диегетический монитор связи в кабине с видео/радиопереговорами экипажа (Егорка-6, Мия Сато, д-р Елена Ростова).
+- Status / Статус: **shipped in 4.6.0 (RC1)** / **выпущено в 4.6.0 (RC1)**.
+- EN: Shipped: physical spectroscopy for 22 celestial stations with rainbow dispersion canvas, Fraunhofer dark absorption notches and glowing emission spikes, relativistic Doppler wavelength scaling, Ship Codex encyclopedia with 12 cosmological categories and +100 RP progression, live bridge radio chatter cards with dialogues for Egorka-6, Mia Sato, Dr. Elena Rostova.
+- RU: Выпущено: физическая спектроскопия 22 небесных тел с радужной полосой дисперсии, фраунгоферовыми линиями поглощения и светящимися пиками эмиссии, релятивистским доплеровским смещением длин волн, Кодекс открытий с 12 категориями и прогрессией +100 RP, живые радиопереговоры на мостике с репликами Егорки-6, Мии Сато и д-ра Елены Ростовой.
 
-### v4.7 — Planetary Landing & Surface Operations / Посадка на планеты и операции на поверхности
-- EN: Deployable landing gear (key G) with hydraulic suspension compression, surface touchdown physics with vertical speed tolerances, landing dust kickup and surface expedition telemetry reports.
-- RU: Выдвижные посадочные опоры/шасси (клавиша G) с гидравлической амортизацией, физика касания поверхности с допуском по вертикальной скорости, пылевой шлейф при посадке и отчёты об экспедиции на грунт.
+### v4.6.1 — Planetary Landing & Surface Operations / Посадка на планеты и операции на поверхности
+- Status / Статус: **in progress (v4.6.1)** / **в разработке (v4.6.1)**.
+- EN: Deployable landing gear (key G) with hydraulic suspension compression, surface touchdown physics with vertical speed tolerances, landing dust kickup and surface expedition telemetry reports (+150 RP in Codex).
+- RU: Выдвижные посадочные опоры/шасси (клавиша G) с гидравлической амортизацией, физика касания поверхности с допуском по вертикальной скорости, пылевой шлейф при посадке и отчёты об экспедиции на грунт (+150 RP в Кодексе).
 
-### v4.8 — Station Hubs & Modular Upgrades / Станции-хабы и модульные апгрейды
+### v4.7 — Station Hubs & Modular Upgrades / Станции-хабы и модульные апгрейды
+- Status / Статус: **planned (RC2)** / **запланировано (RC2)**.
 - EN: Interior docking vista, credits & research economy, ship subsystem tuning (warp coil capacitors, sensor arrays, thruster gimbal).
 - RU: Вид станции изнутри при стыковке, экономика кредитов и исследований, тюнинг подсистем корабля (конденсаторы варп-катушек, сенсорные решётки, подвес маневровых).
 

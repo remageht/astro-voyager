@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 4.6.1 - 2026-11-03
+
+## What's new / Что нового
+
+- EN: Deployable Hydraulic Landing Gear (Hotkey `G`) - retractable landing gear subsystem with realistic 1.5-second extension/retraction transit animations, ground interlock (gear cannot be retracted when landed), and diegetic 3-point tricycle annunciator on holographic HUD (green down-and-locked, flashing amber transit, and flashing red low-altitude terrain warning).
+- RU: Выдвижные гидравлические посадочные опоры / шасси (клавиша `G`) - подсистема шасси с реалистичной 1.5-секундной анимацией выпуска и уборки, блокировкой уборки на грунте и 3-точечным индикатором на ИЛС (зелёные зафиксированные стойки, мигающий янтарный транзит и красный алерт сближения с рельефом без шасси).
+- EN: Physical Touchdown & Suspension Dampening - ground contact physics evaluating vertical velocity envelope ($|v_v| \le 2.0\text{ m/s}$ safe touchdown with nominal hydraulic absorption; $2.0 < |v_v| \le 5.0\text{ m/s}$ hard touchdown with strut strain and moderate structural damage; $> 5.0\text{ m/s}$ or retracted belly flop causing heavy crash damage). Takeoff transition back to airborne upon throttle $> 0.55$ and vertical speed $> 0.4\text{ m/s}$.
+- RU: Физика посадки и гидравлическая амортизация - физика контакта с поверхностью с допуском по вертикальной скорости ($|v_v| \le 2.0$ м/с мягкая посадка с плавной амортизацией; $2.0 < |v_v| \le 5.0$ м/с жёсткая посадка со сжатием стоек и умеренным уроном; $> 5.0$ м/с или посадка на брюхо без шасси приводят к аварийным повреждениям). Взлёт и отрыв от грунта при тяге $> 0.55$ и вертикальной скорости $> 0.4$ м/с.
+- EN: Planetary Surface Regolith Dust Kickup - procedural billowing dust vortex veil in cockpit shader triggered near terrain ($alt < 120\text{ m}$) under engine thruster exhaust.
+- RU: Пылевой вихревой шлейф реголита - процедурные клубы пыли на остеклении кабины в шейдере при приближении к грунту ($alt < 120$ м) под действием реактивной тяги двигателей.
+- EN: Surface Science Expedition Reports & Sample Collection - interactive expedition modal upon landing with comprehensive barometric pressure, surface gravity, surface temperature, regolith geology, and exosphere telemetry for Solar System and catalog bodies. Collecting sealed surface samples awards +150 Research Points (RP) to the Ship Codex with live bridge radio chatter from Mia Sato and Egorka-6.
+- RU: Отчёты об экспедициях на поверхность и сбор образцов - интерактивный интерфейс экспедиции при посадке с данными барометрического давления, поверхностной гравитации, температуры, геологии реголита и газового состава для планет Солнечной системы и каталога. Сбор образцов грунта приносит +150 очков исследований (RP) в Кодекс корабля с живыми радиопереговорами Мии Сато и Егорки-6.
+- Gates / Гейты: GL Release build OK, static checks 301/301 PASS, ctest 13/13 PASS (including new `test_landing`). Closes #55.
+
 ## 4.6.0 - 2026-11-02
 
 ## What's new / Что нового

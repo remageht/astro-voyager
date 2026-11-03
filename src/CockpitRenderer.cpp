@@ -74,6 +74,12 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform1f("u_TerrainAlert", hud.terrainAlert ? 1.0f : 0.0f);
   m_shader->setUniform1f("u_EntryPlasma", hud.entryPlasma);
 
+  // v4.6.1 Planetary Landing uniforms
+  m_shader->setUniform1f("u_GearState", static_cast<float>(hud.gearState));
+  m_shader->setUniform1f("u_GearProgress", hud.gearProgress);
+  m_shader->setUniform1f("u_IsLanded", hud.isLanded ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_SurfaceDustK", hud.surfaceDustK);
+
   m_quad->draw();
 
   m_shader->unbind();
