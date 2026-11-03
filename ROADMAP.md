@@ -97,8 +97,8 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 
 ### v4.6.2 — OJ 287 Binary Orbit & Horizon Capture, UI Polish & Cutscene Pause / Вращение OJ 287, полировка UI и пауза
 - Status / Статус: **shipped in 4.6.2** / **выпущено в 4.6.2**.
-- EN: Companion black hole event horizon capture & ray termination in `bh.frag` (no blowout white blob), 12.5s orbital revolution, vertical offset for Bridge Chatter toast below Expedition card, ship physics & gravity pause during story cutscenes.
-- RU: Захват лучей горизонтом событий второй чёрной дыры в `bh.frag` (устранено белое пятно), вращение пары за 12.5с, вертикальное разделение плашек радиопереговоров и экспедиции, пауза корабля и физики при показе сюжета.
+- EN: Companion black hole event horizon capture & ray termination in `bh.frag` (no blowout white blob), 12.5s orbital revolution, vertical offset for Bridge Chatter toast below Expedition card, ship physics & gravity pause during story cutscenes, custom 16:9 cinematic illustrations for all 6 narrative endings.
+- RU: Захват лучей горизонтом событий второй чёрной дыры в `bh.frag` (устранено белое пятно), вращение пары за 12.5с, вертикальное разделение плашек радиопереговоров и экспедиции, пауза корабля и физики при показе сюжета, кинематографичные 16:9 иллюстрации для всех 6 концовок сюжета.
 
 ### v4.7 — Station Hubs & Modular Upgrades / Станции-хабы и модульные апгрейды
 - Status / Статус: **planned (RC2)** / **запланировано (RC2)**.
