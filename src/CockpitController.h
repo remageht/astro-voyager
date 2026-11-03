@@ -36,6 +36,13 @@ struct CockpitHUDData {
   float verticalSpeedMs = 0.0f;  // vertical ascent/descent rate (m/s)
   bool  terrainAlert = false; // flashing warning when descent rate exceeds terrain safety
   float entryPlasma = 0.0f;   // 0.0 .. 1.0 hypersonic atmospheric compression ionization
+
+  // v4.6.1 Planetary Landing & Surface Operations
+  int   gearState = 0;        // 0 Retracted, 1 Deploying, 2 Deployed, 3 Retracting
+  float gearProgress = 0.0f;  // 0.0 .. 1.0
+  bool  isLanded = false;
+  float surfaceDustK = 0.0f;  // 0.0 .. 1.0
+  float suspensionCompression = 0.0f; // 0.0 .. 1.0
 };
 
 class CockpitController {
@@ -77,6 +84,9 @@ class CockpitController {
 
   // High-frequency vibration scalar for canopy rumble [0..1]
   float getCanopyRumble() const { return m_rumble; }
+
+  // v4.6.1 Planetary Landing & Surface Operations telemetry
+  void setLandingTelemetry(int gearState, float gearProgress, bool isLanded, float surfaceDustK, float suspension);
 
  private:
   glm::vec3 m_prevPos{0.0f};

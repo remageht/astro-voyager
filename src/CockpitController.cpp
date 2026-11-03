@@ -256,4 +256,12 @@ void CockpitController::update(float deltaTime,
   }
 }
 
+void CockpitController::setLandingTelemetry(int gearState, float gearProgress, bool isLanded, float surfaceDustK, float suspension) {
+  m_hud.gearState = gearState;
+  m_hud.gearProgress = gearProgress;
+  m_hud.isLanded = isLanded;
+  m_hud.surfaceDustK = surfaceDustK;
+  m_hud.suspensionCompression = suspension;
+}
+
 }  // namespace astro

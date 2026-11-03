@@ -38,6 +38,12 @@ uniform float u_VerticalSpeed;
 uniform float u_TerrainAlert;
 uniform float u_EntryPlasma;
 
+// v4.6.1 Planetary Landing uniforms
+uniform float u_GearState;
+uniform float u_GearProgress;
+uniform float u_IsLanded;
+uniform float u_SurfaceDustK;
+
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
   p = fract(p * vec2(234.34, 435.345));
@@ -378,6 +384,50 @@ void main() {
       }
     }
 
+    // M. Planetary Landing Gear Annunciator (v4.6.1)
+    // 3-point tricycle landing gear status indicators (Nose, Left, Right)
+    vec2 gearBoxP = hudP - vec2(0.48, 0.08);
+    if (abs(gearBoxP.x) < 0.045 && abs(gearBoxP.y) < 0.045) {
+      float frameD = abs(sdBox(gearBoxP, vec2(0.040, 0.038)));
+      hudGlow += (1.0 - smoothstep(0.001, 0.0025, frameD)) * 0.65;
+
+      // 3 Gear Pods: Nose at top center, Main Left, Main Right
+      vec2 noseP = gearBoxP - vec2(0.0, 0.016);
+      vec2 leftP = gearBoxP - vec2(-0.022, -0.016);
+      vec2 rightP = gearBoxP - vec2(0.022, -0.016);
+      float podD = min(length(noseP), min(length(leftP), length(rightP))) - 0.0065;
+
+      if (u_GearState > 1.5 && u_GearState < 2.5) {
+        // Gear Deployed & Locked (Green solid)
+        if (podD < 0.0) {
+          col.rgb += vec3(0.2, 1.0, 0.3) * 1.5;
+          col.a = max(col.a, 0.95);
+        }
+      } else if (u_GearState > 0.5 && u_GearState < 3.5) {
+        // Gear in transit (Amber flashing)
+        float amberBlink = step(0.0, sin(u_Time * 12.0));
+        if (podD < 0.0 && amberBlink > 0.5) {
+          col.rgb += vec3(1.0, 0.75, 0.1) * 1.6;
+          col.a = max(col.a, 0.95);
+        }
+      } else {
+        // Gear retracted: faint pod outline
+        hudGlow += (1.0 - smoothstep(0.001, 0.002, abs(podD))) * 0.35;
+      }
+    }
+
+    // N. Low Altitude Gear Warning (v4.6.1)
+    if (u_RadarAlt >= 0.0 && u_RadarAlt < 0.8 && u_GearState < 1.5) {
+      float gWarnBlink = step(0.0, sin(u_Time * 16.0));
+      vec2 gAlertP = hudP - vec2(0.0, -0.16);
+      if (gWarnBlink > 0.5 && abs(gAlertP.x) < 0.18 && abs(gAlertP.y) < 0.030) {
+        float boxD = abs(sdBox(gAlertP, vec2(0.16, 0.024)));
+        float warnG = (1.0 - smoothstep(0.001, 0.0025, boxD)) * 1.4;
+        col.rgb += vec3(1.0, 0.15, 0.05) * warnG * 1.7;
+        col.a = max(col.a, 0.9);
+      }
+    }
+
     // Additive HUD projection on the glass
     if (hudGlow > 0.001) {
       col.rgb += hudCol * hudGlow * 1.35;
@@ -395,6 +445,20 @@ void main() {
   // Redout (negative G crimson wash)
   if (u_Redout > 0.001) {
     col.rgb = mix(col.rgb, vec3(col.r * 1.35 + 0.22, col.g * 0.25, col.b * 0.20), u_Redout * 0.65);
+  }
+
+  // 5. PLANETARY SURFACE DUST KICKUP (v4.6.1)
+  // Billowing particle vortices near ground when engines fire
+  if (u_SurfaceDustK > 0.001) {
+    vec2 dustUV = p * 1.8 + vec2(u_Time * 0.45, -u_Time * 0.75);
+    float dNoise1 = noise2D(dustUV * 4.0);
+    float dNoise2 = noise2D(dustUV * 9.0 + vec2(1.7, 3.2));
+    float dustPattern = dNoise1 * 0.65 + dNoise2 * 0.35;
+    float lowerGradient = smoothstep(0.4, -0.85, p.y);
+    float dustAlpha = clamp(dustPattern * lowerGradient * u_SurfaceDustK * 0.85, 0.0, 0.80);
+    vec3 dustTint = vec3(0.78, 0.64, 0.48); // warm regolith dust
+    col.rgb = mix(col.rgb, dustTint, dustAlpha);
+    col.a = max(col.a, dustAlpha);
   }
 
   FragColor = col;

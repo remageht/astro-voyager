@@ -465,6 +465,13 @@ Check 'science test source exists' (Test-Path (Join-Path $root 'tests/test_scien
 Check 'cmake lists ScienceSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/ScienceSystem\.cpp')
 Check 'cmake lists test_science' ((Read-File 'CMakeLists.txt') -match 'test_science')
 
+# v4.6.1: Planetary Landing, Deployable Gear & Surface Operations
+Check 'landing header exists' (Test-Path (Join-Path $root 'src/LandingSystem.h'))
+Check 'landing source exists' (Test-Path (Join-Path $root 'src/LandingSystem.cpp'))
+Check 'landing test source exists' (Test-Path (Join-Path $root 'tests/test_landing.cpp'))
+Check 'cmake lists LandingSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/LandingSystem\.cpp')
+Check 'cmake lists test_landing' ((Read-File 'CMakeLists.txt') -match 'test_landing')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

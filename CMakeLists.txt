@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 4.6.0 LANGUAGES CXX)
+project(astro-voyager VERSION 4.6.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,6 +26,7 @@ add_executable(astro-voyager
   src/StoryJournal.cpp  # === StoryJournal === (v3.5.0): бортовой журнал, чистый C++17
   src/Expedition.cpp  # === Expedition === (v3.5.0): сюжетная арка, чистый C++17
   src/ScienceSystem.cpp  # === ScienceSystem === (v4.6.0): спектрометрия, кодекс и радиопереговоры
+  src/LandingSystem.cpp  # === LandingSystem === (v4.7.0): посадка на планеты, шасси и отчёты
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -234,6 +235,19 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_science.cpp")
     target_compile_options(test_science PRIVATE /W4 /permissive- /utf-8)
   else()
     target_compile_options(test_science PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_landing.cpp")
+  add_executable(test_landing
+    tests/test_landing.cpp
+    src/LandingSystem.cpp
+  )
+  target_include_directories(test_landing PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_landing PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_landing PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
 
@@ -446,6 +460,10 @@ endif()
 
 if(TARGET test_science)
   add_test(NAME test_science COMMAND test_science)
+endif()
+
+if(TARGET test_landing)
+  add_test(NAME test_landing COMMAND test_landing)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):

@@ -355,6 +355,8 @@ int AppGL::run() {
     // === Ship survival === (v3.3.0): топливо/щиты/гравитация; до render(),
     // чтобы пост-эффекты низкого щита попали в этот же кадр.
     updateShip(deltaTime);
+    // === Planetary Landing & Surface Operations === (v4.6.1)
+    updateLandingOperations(deltaTime);
     // v4.0.0: износ корпуса -> шейдер OBJ-корпуса (побитый/восстановленный).
     warpdrive::setShipHull(m_ship.hull / 100.0f);
 
@@ -4335,6 +4337,10 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (!m_inMenu) {
     drawBridgeCommsToast();
   }
+  // === Planetary Landing & Surface Operations === (v4.6.1)
+  if (m_surfaceReportOpen && !m_inMenu) {
+    drawSurfaceReportModal();
+  }
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
@@ -5404,6 +5410,17 @@ void AppGL::updateShip(float deltaTime) {
     }
   }
   m_prevKPressed = kDown;
+
+  // === v4.6.1: Planetary Landing Gear (G) ===
+  const bool gDown = (glfwGetKey(m_window->getNativeWindow(), GLFW_KEY_G) == GLFW_PRESS);
+  if (gDown && !m_prevGPressed && !colonyIo.WantCaptureKeyboard) {
+    if (!m_inMenu && !m_slidesOpen && !m_jumpCine) {
+      updateLandingGear(m_landingTelem, 0.0f, true);
+      m_ship.gearDeployed = (m_landingTelem.gearState == GearState::Deployed);
+      m_ship.gearProgress = m_landingTelem.gearProgress;
+    }
+  }
+  m_prevGPressed = gDown;
 }
 
 // Нижний левый HUD: полосы топлива (оранжевая) и щитов (синяя) + нотисы.
@@ -5500,6 +5517,24 @@ void AppGL::drawShipHud() {
       ImGui::TextColored(ImVec4(0.45f, 0.85f, 1.0f, 1.0f), "%s %s",
                          uiRu("[C] Основать колонию:", "[C] Colonize:"),
                          m_colonyHint.c_str());
+    }
+
+    // v4.6.1: Статус посадочных опор (шасси)
+    const char* gearStrRu = (m_landingTelem.gearState == GearState::Deployed) ? "ВЫПУЩЕНЫ" :
+                           (m_landingTelem.gearState == GearState::Retracted) ? "УБРАНЫ" : "В ДВИЖЕНИИ...";
+    const char* gearStrEn = (m_landingTelem.gearState == GearState::Deployed) ? "DOWN" :
+                           (m_landingTelem.gearState == GearState::Retracted) ? "UP" : "TRANSIT...";
+    ImVec4 gearCol = (m_landingTelem.gearState == GearState::Deployed) ? ImVec4(0.2f, 1.0f, 0.4f, 1.0f) :
+                     (m_landingTelem.gearState == GearState::Retracted) ? ImVec4(0.6f, 0.7f, 0.8f, 1.0f) :
+                     ImVec4(1.0f, 0.75f, 0.2f, 1.0f);
+    ImGui::TextColored(gearCol, "%s: %s", uiRu("[G] Шасси", "[G] Gear"), uiRu(gearStrRu, gearStrEn));
+
+    if (m_landingTelem.isLanded) {
+      ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "%s",
+                         uiRu("[ ПОСАДКА НА ГРУНТ ]", "[ SURFACE TOUCHDOWN ]"));
+      if (ImGui::SmallButton(uiRu("⬡ Отчёт об экспедиции", "⬡ Surface Expedition"))) {
+        m_surfaceReportOpen = !m_surfaceReportOpen;
+      }
     }
 
     // v4.3.0: Build watermark & stage indicator
@@ -5627,6 +5662,14 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
                              nearestBodyPos,
                              nearestBodyRadius,
                              nearestHasAtmosphere);
+
+  // v4.6.1: Pass planetary landing telemetry to cockpit HUD
+  m_cockpitController.setLandingTelemetry(
+      static_cast<int>(m_landingTelem.gearState),
+      m_landingTelem.gearProgress,
+      m_landingTelem.isLanded,
+      m_landingTelem.surfaceDustK,
+      m_landingTelem.suspensionCompression);
 
   m_cockpitRenderer.render(fbWidth,
                            fbHeight,
@@ -10138,6 +10181,193 @@ void AppGL::drawShipyard() {
   ImGui::End();
 
   m_shipyardOpen = open;
+}
+
+// === Planetary Landing & Surface Operations === (v4.6.1)
+void AppGL::updateLandingOperations(float deltaTime) {
+  if (deltaTime <= 0.0f || deltaTime > 0.25f) deltaTime = 0.016f;
+
+  // 1. Advance landing gear animation transit
+  updateLandingGear(m_landingTelem, deltaTime, false);
+  m_ship.gearDeployed = (m_landingTelem.gearState == GearState::Deployed);
+  m_ship.gearProgress = m_landingTelem.gearProgress;
+
+  // 2. Identify nearest celestial body
+  glm::vec3 camPos(static_cast<float>(m_camera.position.x),
+                   static_cast<float>(m_camera.position.y),
+                   static_cast<float>(m_camera.position.z));
+  glm::vec3 nearestBodyPos(0.0f);
+  float nearestBodyRadius = 0.0f;
+  std::string nearestBodyId = "earth";
+  std::string nearestBodyName = "Земля";
+  float minBodyDist = 1e9f;
+
+  if (m_sceneManager) {
+    const std::vector<BodyState>& bodies = m_sceneManager->getBodies();
+    for (const auto& b : bodies) {
+      if (!b.def || b.def->radius <= 0.01f) continue;
+      glm::vec3 bPos(static_cast<float>(b.pos.x),
+                     static_cast<float>(b.pos.y),
+                     static_cast<float>(b.pos.z));
+      float d = glm::length(camPos - bPos);
+      if (d < minBodyDist) {
+        minBodyDist = d;
+        nearestBodyPos = bPos;
+        nearestBodyRadius = b.def->radius;
+        std::string lowerName = b.def->name;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        nearestBodyId = lowerName;
+        nearestBodyName = b.def->name;
+      }
+    }
+  }
+
+  if (nearestBodyRadius > 0.01f) {
+    m_landingTelem.targetBodyId = nearestBodyId;
+    m_landingTelem.targetBodyName = nearestBodyName;
+
+    float altUnits = minBodyDist - nearestBodyRadius;
+    float altM = std::max(0.0f, altUnits * 1000.0f);
+
+    glm::vec3 worldVel(static_cast<float>(m_shipVel.x + m_ship.gravVel.x),
+                       static_cast<float>(m_shipVel.y + m_ship.gravVel.y),
+                       static_cast<float>(m_shipVel.z + m_ship.gravVel.z));
+    glm::vec3 upRad = (minBodyDist > 1e-4f) ? ((camPos - nearestBodyPos) / minBodyDist) : glm::vec3(0.0f, 1.0f, 0.0f);
+    float vRad = glm::dot(worldVel, upRad) * 50.0f;
+
+    float thrust = m_speedK + (warpdrive::fuelAccel() > 0.0f ? 0.35f : 0.0f);
+    float hullDmg = 0.0f, shieldDmg = 0.0f;
+
+    bool wasLanded = m_landingTelem.isLanded;
+    updateTouchdownPhysics(m_landingTelem, deltaTime, altM, vRad, thrust, hullDmg, shieldDmg);
+
+    if (hullDmg > 0.0f) {
+      m_ship.hull = std::max(0.0f, m_ship.hull - hullDmg);
+    }
+    if (shieldDmg > 0.0f) {
+      m_ship.shield = std::max(0.0f, m_ship.shield - shieldDmg);
+      m_shieldFlashK = 1.0f;
+    }
+
+    m_ship.isLanded = m_landingTelem.isLanded;
+    m_ship.suspensionCompression = m_landingTelem.suspensionCompression;
+
+    // Check touchdown transition
+    if (m_landingTelem.isLanded && !wasLanded) {
+      m_ship.landedBodyId = nearestBodyId;
+      m_currentSurfaceReport = generateSurfaceReport(nearestBodyId);
+      m_surfaceReportOpen = true;
+
+      Toast lt;
+      lt.title = uiRu("Посадка выполнена", "Touchdown Confirmed");
+      lt.desc = (m_landingTelem.touchdown == TouchdownRating::Safe)
+                    ? uiRu("Мягкая посадка: гидравлика заблокирована.", "Safe touchdown: hydraulics locked.")
+                    : uiRu("Жёсткая посадка: стойки перегружены!", "Hard landing: struts overloaded!");
+      lt.time = static_cast<float>(glfwGetTime());
+      m_toasts.push_back(lt);
+
+      RadioMessage comm;
+      comm.id = "landing_" + nearestBodyId;
+      comm.callsignRu = (m_landingTelem.touchdown == TouchdownRating::Safe) ? "Миа Сато [Пилот]" : "Егорка-6 [Бортинженер]";
+      comm.callsignEn = (m_landingTelem.touchdown == TouchdownRating::Safe) ? "Mia Sato [Pilot]" : "Egorka-6 [Flight Engineer]";
+      comm.textRu = (m_landingTelem.touchdown == TouchdownRating::Safe)
+          ? "Касание грунта подтверждено! Гидравлические стойки заблокированы. Приступаем к научной экспедиции."
+          : "Удар о поверхность за пределами нормы! Но опора выдержала. Проверьте состояние корпуса!";
+      comm.textEn = (m_landingTelem.touchdown == TouchdownRating::Safe)
+          ? "Surface touchdown confirmed! Hydraulic landing struts locked. Ready for surface science expedition."
+          : "Touchdown velocity exceeded nominal envelope! But struts held. Inspect hull integrity!";
+      comm.priority = 2.0f;
+      comm.durationSec = 8.0;
+      m_bridgeComms.queueMessage(comm, glfwGetTime());
+    }
+  } else {
+    m_landingTelem.radarAltM = -1.0f;
+    m_landingTelem.surfaceDustK = 0.0f;
+    m_landingTelem.isLanded = false;
+    m_ship.isLanded = false;
+  }
+}
+
+void AppGL::drawSurfaceReportModal() {
+  if (!m_surfaceReportOpen) return;
+
+  ImGui::SetNextWindowSize(ImVec2(520.0f, 440.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 260.0f,
+                                 ImGui::GetIO().DisplaySize.y * 0.5f - 220.0f),
+                          ImGuiCond_FirstUseEver);
+
+  std::string title = std::string(uiRu("⬡ Отчёт об экспедиции на поверхность: ", "⬡ Planetary Surface Expedition Report: ")) +
+                      uiRu(m_currentSurfaceReport.nameRu.c_str(), m_currentSurfaceReport.nameEn.c_str()) + "###SurfaceRep";
+  if (ImGui::Begin(title.c_str(), &m_surfaceReportOpen, ImGuiWindowFlags_NoCollapse)) {
+    ImGui::TextColored(ImVec4(0.2f, 0.85f, 1.0f, 1.0f), "%s: %s",
+                       uiRu("Биом / Рельеф", "Biome / Terrain"),
+                       uiRu(m_currentSurfaceReport.biomeRu.c_str(), m_currentSurfaceReport.biomeEn.c_str()));
+    ImGui::Separator();
+
+    ImGui::Columns(3, "telemCols", false);
+    ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.85f, 1.0f), "%s", uiRu("Гравитация", "Gravity"));
+    ImGui::Text("%.2f m/s²", m_currentSurfaceReport.gravityMps2);
+    ImGui::NextColumn();
+
+    ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.85f, 1.0f), "%s", uiRu("Атм. давление", "Atm. Pressure"));
+    if (m_currentSurfaceReport.pressureBar > 0.0001f) {
+      ImGui::Text("%.4f bar", m_currentSurfaceReport.pressureBar);
+    } else {
+      ImGui::Text("%s", uiRu("Вакуум (< 10⁻⁸ bar)", "Vacuum (< 10⁻⁸ bar)"));
+    }
+    ImGui::NextColumn();
+
+    ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.85f, 1.0f), "%s", uiRu("Температура", "Temperature"));
+    ImGui::Text("%.1f K (%.1f °C)", m_currentSurfaceReport.tempK, m_currentSurfaceReport.tempK - 273.15f);
+    ImGui::Columns(1);
+    ImGui::Separator();
+
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), "%s:", uiRu("Геология и реголит", "Geology & Regolith"));
+    ImGui::TextWrapped("%s", uiRu(m_currentSurfaceReport.geologyRu.c_str(), m_currentSurfaceReport.geologyEn.c_str()));
+    ImGui::Spacing();
+
+    ImGui::TextColored(ImVec4(0.35f, 0.95f, 0.65f, 1.0f), "%s:", uiRu("Газовый состав / Экзосфера", "Atmosphere & Exosphere"));
+    ImGui::TextWrapped("%s", uiRu(m_currentSurfaceReport.atmosphereRu.c_str(), m_currentSurfaceReport.atmosphereEn.c_str()));
+    ImGui::Separator();
+
+    if (m_currentSurfaceReport.samplesCollected) {
+      ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "%s",
+                         uiRu("✓ Образцы грунта доставлены в научный блок (+150 RP)",
+                              "✓ Surface samples collected & analyzed (+150 RP)"));
+    } else {
+      if (ImGui::Button(uiRu("✦ Собрать образцы грунта (+150 RP)", "✦ Collect Surface Samples (+150 RP)"),
+                        ImVec2(-1, 36.0f))) {
+        m_currentSurfaceReport.samplesCollected = true;
+        m_codex.scanObject(m_currentSurfaceReport.bodyId, glfwGetTime());
+
+        RadioMessage comm;
+        comm.id = "sample_" + m_currentSurfaceReport.bodyId;
+        comm.callsignRu = "Егорка-6 [Бортинженер]";
+        comm.callsignEn = "Egorka-6 [Flight Engineer]";
+        comm.textRu = "Герметичные контейнеры запечатаны. Образцы " + m_currentSurfaceReport.nameRu +
+                      " интегрированы в Кодекс (+150 RP)! Отличная работа на поверхности.";
+        comm.textEn = "Sealed sample containers secured. " + m_currentSurfaceReport.nameEn +
+                      " regolith data integrated into Ship Codex (+150 RP)! Outstanding surface work.";
+        comm.priority = 2.0f;
+        comm.durationSec = 8.0;
+        m_bridgeComms.queueMessage(comm, glfwGetTime());
+
+        Toast st;
+        st.title = uiRu("Научные данные получены", "Science Telemetry Acquired");
+        st.desc = std::string(uiRu("+150 RP за образцы поверхности ", "+150 RP for surface samples from ")) +
+                  uiRu(m_currentSurfaceReport.nameRu.c_str(), m_currentSurfaceReport.nameEn.c_str());
+        st.time = static_cast<float>(glfwGetTime());
+        m_toasts.push_back(st);
+      }
+    }
+
+    ImGui::Spacing();
+    if (ImGui::Button(uiRu("Закрыть отчёт", "Close Report"), ImVec2(-1, 28.0f))) {
+      m_surfaceReportOpen = false;
+    }
+  }
+  ImGui::End();
 }
 
 }  // namespace astro
