@@ -449,7 +449,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "wandering warp bubble has finally docked.\" The crew of AstroNavigator-1 "
         "founds the New Home by the old stars of M13. The expedition is over - the story is just "
         "beginning.",
-        10});
+        0, "res/story/finale_colony.jpg"});
     s.push_back(StorySlide{  // 8: far horizon ending (branch B)
         "Мия: «Мы не ставим точку. Один прыжок — и за горизонтом будет новый "
         "свет». Егорка с улыбкой переводит варп-привод в овердрайв: «Только ты, я "
@@ -461,7 +461,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "overdrive: \"Just you, me, and infinity. Lead on, navigator.\" The last fuel "
         "feeds the drive. AstroNavigator-1 leaves M13 for the edge of the Galaxy. "
         "The colony remains a dream; the crew becomes a legend.",
-        5});
+        0, "res/story/finale_horizon.jpg"});
     s.push_back(StorySlide{  // 9: epilogue - shared legacy
         "Эпилог · Наследие. Спустя годы сигнал «Астронавигатора» достиг "
         "Земли. На орбите, где стоят Dragon и «Союз», вырос новый причал. "
@@ -487,7 +487,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "through the Casimir cavity. The dying red giant reignites with warm, golden stellar light. "
         "Earth is saved! Through the canopy, city lights of Paris and blue oceans glow once more. "
         "Humanity stays home - the cradle of civilization is preserved.",
-        2});
+        0, "res/story/finale_solar_rebirth.jpg"});
     s.push_back(StorySlide{  // 11: loop transcendence ending (branch D)
         "Егорка: «Я всё понял... Это был не чужой пришелец. Это был я сам». "
         "На предельной мощности резонатора Astro-Voyager погружается в горизонт событий "
@@ -500,7 +500,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "The gravitational singularity warps space, opening a dimensional fissure. "
         "A flash of a blue portal over the Seine in Paris 2026: a spacefarer passes the pendant "
         "to young Egorka. The temporal loop of the Fifth Universe is closed - knowledge passed on.",
-        6});
+        0, "res/story/finale_loop_transcendence.jpg"});
     s.push_back(StorySlide{  // 12: ark citadel ending (branch E)
         "Командор Марк Хейл: «Шлюзы сцеплены! Монтаж Цитадели начат!» "
         "Astro-Voyager стыкуется с Dragon, «Союзом» и орбитальными модулями верфей. "
@@ -511,7 +511,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "Astro-Voyager docks with Dragon, Soyuz, and orbital drydocks. Around the Casimir "
         "core grows a colossal rotating metropolis - the \"Astro-Ark\", independent from "
         "the perils of dying worlds. Mia and Egorka take the helm of humanity's grand nomadic fleet.",
-        10});
+        0, "res/story/finale_ark_citadel.jpg"});
     s.push_back(StorySlide{  // 13: hyper-breakthrough ending (branch F - Egorka-6)
         "Егорка-6 («Шестой»): «Петли времени — это клетка для тех, кто боится шагнуть за край! "
         "Включай перегрузку на 135%, я синхронизирую фазовый кристалл!» "
@@ -523,7 +523,7 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "Warp coils scream at extreme frequencies. Blinding amber-cyan radiance shatters the horizon: "
         "Astro-Voyager does not fall into the singularity, but punches straight through the multiverse membrane! "
         "The temporal loop is shattered. Ahead lie infinite realities and boundless freedom.",
-        6, "res/story/egorka_six_portrait.jpg"});
+        0, "res/story/finale_hyper_breakthrough.jpg"});
     return s;
   }();
   return slides;
