@@ -281,14 +281,20 @@ int AppGL::run() {
 
     m_window->pollEvents();
 
+    const bool storyActive = m_slidesOpen || m_finaleChoiceOpen;
+    if (storyActive) {
+      m_shipVel = Vec3(0.0, 0.0, 0.0);
+      m_ship.gravVel = Vec3(0.0, 0.0, 0.0);
+    }
+
     // === Physics === begin: столкновения и захват горизонтом.
     Vec3 prevCamPos = m_camera.position;
-    if (!m_captureAnim) {
+    if (!m_captureAnim && !storyActive) {
       processInput(deltaTime);
       processMouse();
     }
     const Station* physSt = m_sceneManager->getCurrentStation();
-    if (!m_captureAnim && physSt &&
+    if (!m_captureAnim && !storyActive && physSt &&
         physSt->type == StationType::BlackHole) {
       const double rsNow =
           static_cast<double>(m_sceneManager->getSettings().rs);
@@ -299,7 +305,7 @@ int AppGL::run() {
                                   m_camera.position.z * m_camera.position.z);
       if (d0 <= capR) startHorizonCapture();
     }
-    if (!m_captureAnim && physSt &&
+    if (!m_captureAnim && !storyActive && physSt &&
         physSt->type == StationType::Quasar) {
       // v3.6.0: ядро квазара — не «стена» (slide), а катсцена захвата и
       // выброса: подлёт к ядру запускает ту же последовательность, что и
@@ -349,14 +355,15 @@ int AppGL::run() {
             body.pos.z, minDist);
       }
     }
-    updateHorizonCapture(deltaTime);  // === Physics ===
+    const float simDt = storyActive ? 0.0f : deltaTime;
+    updateHorizonCapture(simDt);  // === Physics ===
     checkAchievements();
 
     // === Ship survival === (v3.3.0): топливо/щиты/гравитация; до render(),
     // чтобы пост-эффекты низкого щита попали в этот же кадр.
-    updateShip(deltaTime);
+    updateShip(simDt);
     // === Planetary Landing & Surface Operations === (v4.6.1)
-    updateLandingOperations(deltaTime);
+    updateLandingOperations(simDt);
     // v4.0.0: износ корпуса -> шейдер OBJ-корпуса (побитый/восстановленный).
     warpdrive::setShipHull(m_ship.hull / 100.0f);
 
@@ -1229,7 +1236,8 @@ void AppGL::drawBridgeCommsToast() {
 
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   const float w = std::min(460.0f, disp.x - 40.0f);
-  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, 40.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+  const float toastY = (m_expedition.current() != nullptr) ? 140.0f : 56.0f;
+  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, toastY), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
   ImGui::SetNextWindowSize(ImVec2(w, 0.0f), ImGuiCond_Always);
 
   ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |

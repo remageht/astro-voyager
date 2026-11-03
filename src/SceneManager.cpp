@@ -908,7 +908,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_CompR", isOj ? 4.8f : 0.0f);
     m_bhShader->setUniform1f("u_CompInc", isOj ? 0.22f : 0.0f);
     m_bhShader->setUniform1f("u_CompOmega",
-                             isOj ? (6.2831853f / 60.0f) : 0.0f);
+                             isOj ? (6.2831853f / 12.5f) : 0.0f);
     m_bhShader->setUniform1f("u_CompPhase0", isOj ? 0.7f : 0.0f);
     const bool isHyper = (m_currentStation->id == "hyperdisk");
     m_bhShader->setUniform1f("u_DiskInK", isHyper ? 3.0f : 0.0f);

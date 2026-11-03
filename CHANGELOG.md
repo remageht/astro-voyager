@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 4.6.2 - 2026-11-03
+
+## What's new / Что нового
+
+- EN: OJ 287 Binary Black Hole Orbital Revolution & Horizon Capture - proper ray termination and event horizon capture for the companion black hole in `shaders/bh.frag`, eliminating interior disk flare penetration and preventing wild ray deflections. Scaled down accretion shock flare multiplier and guarded emission strictly outside the companion horizon, removing the massive blown-out white blob and restoring a distinct orbiting companion with sharp shadow and photon ring. Accelerated orbital period to 12.5 seconds for visible real-time mutual revolution.
+- RU: Вращение бинарной пары OJ 287 и захват горизонтом - корректный обрыв лучей и захват горизонтом событий для вторичной чёрной дыры в `shaders/bh.frag`, исключающий пробитие лучей сквозь горизонт в аккреционный диск. Ограничено свечение ударной волны строго вне горизонта и снижен коэффициент переэкспозиции, устранив гигантское белое пятно и восстановив чёткую вторую чёрную дыру с собственной тенью и фотонным кольцом. Период обращения сокращён до 12.5 секунд для наглядного вращения пары в реальном времени.
+- EN: UI Notification Banner Collision Offset - dynamically offsets Bridge Radio Chatter toast below Expedition HUD card (`Y = 140.0f` vs `Y = 56.0f`) when an expedition chapter is active, completely resolving overlapping text boxes at top center.
+- RU: Разделение плашек уведомлений интерфейса - динамическое смещение тоста радиопереговоров мостика под плашку экспедиции (`Y = 140.0f` вместо `Y = 56.0f`) при активной главе, полностью устранив наложение текста и рамок по центру экрана.
+- EN: Story Cutscene Simulation & Ship Pause - during story slide overlays (`m_slidesOpen`) and finale choice dialogues (`m_finaleChoiceOpen`), ship velocities and gravity drift are frozen (`m_shipVel = 0`, `m_ship.gravVel = 0`), controls are blocked, and horizon capture triggers are suspended, preventing the player from drifting into black hole singularities and dying while reading the narrative.
+- RU: Пауза симуляции и корабля во время сюжета - при показе сюжетных слайдов (`m_slidesOpen`) и диалогов финала (`m_finaleChoiceOpen`) скорость корабля и гравитационный дрейф обнуляются, управление блокируется, а триггеры захвата горизонтом отключаются, предотвращая гибель корабля в сингулярности во время чтения сюжета.
+- Gates / Гейты: GL Release build OK, static checks 301/301 PASS, ctest 13/13 PASS. Closes #58.
+
 ## 4.6.1 - 2026-11-03
 
 ## What's new / Что нового
