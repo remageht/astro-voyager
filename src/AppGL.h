@@ -394,12 +394,17 @@ class AppGL {
   // === Batch A1: Action Feedback Animations ===
   enum class DockAnimState {
     None,
-    DockPhase1_Clamps,   // ~0.9s: speed damping and soft pull
-    DockPhase2_Service,  // ~0.9s: refueling & shield recharge
-    Undock_Release       // ~1.0s: undocking drift
+    DockPhase1_Approach,  // ~1.8s: docking corridor approach & attitude alignment
+    DockPhase2_Contact,   // ~0.8s: collar latching & magnetic capture lock
+    DockPhase3_Service,   // ~1.0s: refueling, repairs & pressurization
+    Undock_Release        // ~1.4s: undocking separation drift
   };
   DockAnimState m_dockAnimState = DockAnimState::None;
   float m_dockAnimTimer = 0.0f;
+  float m_dockApproachDuration = 1.8f;
+  Vec3 m_dockStartPos;
+  double m_dockStartYaw = 0.0;
+  double m_dockStartPitch = 0.0;
   std::string m_dockTargetId;
   Vec3 m_dockTargetPos;
   float m_dockInitialFuel = 0.0f;
@@ -408,6 +413,9 @@ class AppGL {
   void startDockSequence(const std::string& dockId);
   void startUndockSequence();
   void dockToHistoricShip(const std::string& dockId);
+  bool getDockPortTransform(const std::string& dockId, float time,
+                            Vec3& outPortPos, Vec3& outPortNormal,
+                            double& outTargetYaw, double& outTargetPitch) const;
 
   // Ship switch animation (~1.0s transition in shipyard)
   float m_shipSwitchTimer = 0.0f;

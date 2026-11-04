@@ -642,8 +642,9 @@ void AppGL::processInput(float deltaTime) {
     }
   }
 
-  if (m_inputCooldown > 0.0f || m_dockAnimState == DockAnimState::DockPhase1_Clamps ||
-      m_dockAnimState == DockAnimState::DockPhase2_Service ||
+  if (m_inputCooldown > 0.0f || m_dockAnimState == DockAnimState::DockPhase1_Approach ||
+      m_dockAnimState == DockAnimState::DockPhase2_Contact ||
+      m_dockAnimState == DockAnimState::DockPhase3_Service ||
       !interaction::shouldProcessKeyboardMovement(io.WantCaptureKeyboard)) return;
 
   // M31 approach: distance-scaled WASD speed so the 80 -> 2 flight takes
@@ -5101,47 +5102,138 @@ void AppGL::advanceExpedition(const std::string& objectiveId) {
 void AppGL::updateShip(float deltaTime) {
   if (deltaTime <= 0.0f || m_sceneManager->isPaused()) return;
 
-  // === Batch A1: Docking & Undocking 2-phase sequence ===
-  if (m_dockAnimState == DockAnimState::DockPhase1_Clamps) {
-    m_dockAnimTimer -= deltaTime;
-    double damp = 1.0 - std::min(1.0, static_cast<double>(deltaTime) * 3.5);
-    m_shipVel.x *= damp; m_shipVel.y *= damp; m_shipVel.z *= damp;
-    m_ship.gravVel.x *= damp; m_ship.gravVel.y *= damp; m_ship.gravVel.z *= damp;
-    double tdx = m_dockTargetPos.x - m_camera.position.x;
-    double tdy = m_dockTargetPos.y - m_camera.position.y;
-    double tdz = m_dockTargetPos.z - m_camera.position.z;
-    double dist = std::sqrt(tdx * tdx + tdy * tdy + tdz * tdz);
-    if (dist > 1.0) {
-      double pullSpeed = std::min(dist, 1.8);
-      m_camera.position.x += (tdx / dist) * pullSpeed * deltaTime;
-      m_camera.position.y += (tdy / dist) * pullSpeed * deltaTime;
-      m_camera.position.z += (tdz / dist) * pullSpeed * deltaTime;
+  // === Orbital Station Relative Co-Movement while Docked ===
+  if (m_ship.isDocked && m_dockAnimState == DockAnimState::None) {
+    m_shipVel = Vec3();
+    m_ship.gravVel = Vec3();
+    if (m_sceneManager) {
+      m_sceneManager->updateDockSites();
     }
+    Vec3 portPos, portNorm;
+    double portYaw = 0.0, portPitch = 0.0;
+    if (getDockPortTransform(m_ship.dockedStationId, static_cast<float>(glfwGetTime()), portPos, portNorm, portYaw, portPitch)) {
+      m_camera.position = Vec3(portPos.x + portNorm.x * 0.22,
+                               portPos.y + portNorm.y * 0.22,
+                               portPos.z + portNorm.z * 0.22);
+    }
+  }
+
+  // === Batch A1: Docking & Undocking Multi-Phase Realism ===
+  if (m_dockAnimState == DockAnimState::DockPhase1_Approach) {
+    m_dockAnimTimer -= deltaTime;
+    if (m_sceneManager) {
+      m_sceneManager->updateDockSites();
+    }
+    Vec3 portPos, portNorm;
+    double targetYaw = 0.0, targetPitch = 0.0;
+    const float curTime = static_cast<float>(glfwGetTime());
+    if (getDockPortTransform(m_dockTargetId, curTime, portPos, portNorm, targetYaw, targetPitch)) {
+      const float dur = std::max(0.1f, m_dockApproachDuration);
+      const float u = std::clamp(1.0f - (m_dockAnimTimer / dur), 0.0f, 1.0f);
+      const float s = u * u * (3.0f - 2.0f * u); // smoothstep
+
+      const Vec3 p0 = m_dockStartPos;
+      const Vec3 p1(portPos.x + portNorm.x * 1.6,
+                    portPos.y + portNorm.y * 1.6,
+                    portPos.z + portNorm.z * 1.6);
+      const Vec3 p2(portPos.x + portNorm.x * 0.22,
+                    portPos.y + portNorm.y * 0.22,
+                    portPos.z + portNorm.z * 0.22);
+
+      // Quadratic Bezier interpolation along corridor
+      const double oneMinus = 1.0 - static_cast<double>(s);
+      const double b0 = oneMinus * oneMinus;
+      const double b1 = 2.0 * oneMinus * static_cast<double>(s);
+      const double b2 = static_cast<double>(s) * static_cast<double>(s);
+
+      m_camera.position.x = b0 * p0.x + b1 * p1.x + b2 * p2.x;
+      m_camera.position.y = b0 * p0.y + b1 * p1.y + b2 * p2.y;
+      m_camera.position.z = b0 * p0.z + b1 * p1.z + b2 * p2.z;
+
+      // Shortest-arc attitude alignment
+      double diffYaw = targetYaw - m_dockStartYaw;
+      while (diffYaw > 3.14159265358979323846) diffYaw -= 2.0 * 3.14159265358979323846;
+      while (diffYaw < -3.14159265358979323846) diffYaw += 2.0 * 3.14159265358979323846;
+      m_camera.yaw = m_dockStartYaw + diffYaw * static_cast<double>(s);
+      m_camera.pitch = m_dockStartPitch + (targetPitch - m_dockStartPitch) * static_cast<double>(s);
+    }
+    m_shipVel = Vec3();
+    m_ship.gravVel = Vec3();
+
     if (m_dockAnimTimer <= 0.0f) {
-      m_dockAnimState = DockAnimState::DockPhase2_Service;
-      m_dockAnimTimer = 0.9f;
-      m_shipVel = Vec3();
-      m_ship.gravVel = Vec3();
-      m_audio.playChime();
+      m_dockAnimState = DockAnimState::DockPhase2_Contact;
+      m_dockAnimTimer = 0.8f;
+      m_audio.playClick();
+      m_shipNotice = uiRu("Контакт! Захват стыковочного узла, фиксация замков...",
+                          "Contact! Docking collar capture, engaging latches...");
+      m_shipNoticeT = 1.0f;
     }
-  } else if (m_dockAnimState == DockAnimState::DockPhase2_Service) {
+  } else if (m_dockAnimState == DockAnimState::DockPhase2_Contact) {
     m_dockAnimTimer -= deltaTime;
-    float p = std::clamp(1.0f - (m_dockAnimTimer / 0.9f), 0.0f, 1.0f);
+    if (m_sceneManager) {
+      m_sceneManager->updateDockSites();
+    }
+    Vec3 portPos, portNorm;
+    double targetYaw = 0.0, targetPitch = 0.0;
+    const float curTime = static_cast<float>(glfwGetTime());
+    if (getDockPortTransform(m_dockTargetId, curTime, portPos, portNorm, targetYaw, targetPitch)) {
+      const float latchK = std::sin(m_dockAnimTimer * 24.0f) * (m_dockAnimTimer / 0.8f) * 0.005f;
+      m_camera.position.x = portPos.x + portNorm.x * 0.22;
+      m_camera.position.y = portPos.y + portNorm.y * 0.22 + latchK;
+      m_camera.position.z = portPos.z + portNorm.z * 0.22;
+      m_camera.yaw = targetYaw;
+      m_camera.pitch = targetPitch;
+    }
+    m_shipVel = Vec3();
+    m_ship.gravVel = Vec3();
+
+    if (m_dockAnimTimer <= 0.0f) {
+      m_dockAnimState = DockAnimState::DockPhase3_Service;
+      m_dockAnimTimer = 1.0f;
+      m_audio.playChime();
+      m_shipNotice = uiRu("Шлюз герметичен. Сервисное обслуживание и заправка...",
+                          "Airlock sealed. Vessel servicing and refuel...");
+      m_shipNoticeT = 1.2f;
+    }
+  } else if (m_dockAnimState == DockAnimState::DockPhase3_Service) {
+    m_dockAnimTimer -= deltaTime;
+    if (m_sceneManager) {
+      m_sceneManager->updateDockSites();
+    }
+    Vec3 portPos, portNorm;
+    double targetYaw = 0.0, targetPitch = 0.0;
+    const float curTime = static_cast<float>(glfwGetTime());
+    if (getDockPortTransform(m_dockTargetId, curTime, portPos, portNorm, targetYaw, targetPitch)) {
+      m_camera.position.x = portPos.x + portNorm.x * 0.22;
+      m_camera.position.y = portPos.y + portNorm.y * 0.22;
+      m_camera.position.z = portPos.z + portNorm.z * 0.22;
+      m_camera.yaw = targetYaw;
+      m_camera.pitch = targetPitch;
+    }
+    m_shipVel = Vec3();
+    m_ship.gravVel = Vec3();
+
+    const float p = std::clamp(1.0f - (m_dockAnimTimer / 1.0f), 0.0f, 1.0f);
     m_ship.fuel = m_dockInitialFuel + (100.0f - m_dockInitialFuel) * p;
     m_ship.shield = m_dockInitialShield + (100.0f - m_dockInitialShield) * p;
     m_ship.hull = m_dockInitialHull + (100.0f - m_dockInitialHull) * p;
+
     if (m_dockAnimTimer <= 0.0f) {
       m_dockAnimState = DockAnimState::None;
       dockAtStation(m_dockTargetId);
     }
   } else if (m_dockAnimState == DockAnimState::Undock_Release) {
     m_dockAnimTimer -= deltaTime;
+    m_camera.position.x += m_shipVel.x * deltaTime;
+    m_camera.position.y += m_shipVel.y * deltaTime;
+    m_camera.position.z += m_shipVel.z * deltaTime;
+
     if (m_dockAnimTimer <= 0.0f) {
       m_dockAnimState = DockAnimState::None;
       Toast ut;
       ut.title = uiRu("Отстыковка завершена", "Undocking complete");
-      ut.desc = uiRu("Шлюзы закрыты. Системы корабля в норме.",
-                     "Clamps released. Ship systems nominal.");
+      ut.desc = uiRu("Шлюзы закрыты. Системы корабля в норме. Свободный полёт.",
+                     "Clamps released. Ship systems nominal. Free flight.");
       ut.time = static_cast<float>(glfwGetTime());
       m_toasts.push_back(ut);
       m_shipNotice = uiRu("Свободный полёт. Двигатели готовы.", "Free flight. Engines ready.");
@@ -5492,14 +5584,18 @@ void AppGL::drawShipHud() {
     if (m_dockAnimState != DockAnimState::None) {
       float prog = 0.0f;
       const char* label = "";
-      if (m_dockAnimState == DockAnimState::DockPhase1_Clamps) {
-        prog = std::clamp((0.9f - m_dockAnimTimer) / 0.9f * 0.5f, 0.0f, 0.5f);
-        label = uiRu("Стыковочные манипуляторы...", "Docking clamps engaging...");
-      } else if (m_dockAnimState == DockAnimState::DockPhase2_Service) {
-        prog = std::clamp(0.5f + (0.9f - m_dockAnimTimer) / 0.9f * 0.5f, 0.5f, 1.0f);
-        label = uiRu("Заправка и ремонт...", "Refueling & repairs...");
+      if (m_dockAnimState == DockAnimState::DockPhase1_Approach) {
+        float dur = std::max(0.1f, m_dockApproachDuration);
+        prog = std::clamp((dur - m_dockAnimTimer) / dur * 0.45f, 0.0f, 0.45f);
+        label = uiRu("Заход по коридору...", "Corridor approach...");
+      } else if (m_dockAnimState == DockAnimState::DockPhase2_Contact) {
+        prog = std::clamp(0.45f + (0.8f - m_dockAnimTimer) / 0.8f * 0.25f, 0.45f, 0.70f);
+        label = uiRu("Захват замков шлюза...", "Docking collar latch...");
+      } else if (m_dockAnimState == DockAnimState::DockPhase3_Service) {
+        prog = std::clamp(0.70f + (1.0f - m_dockAnimTimer) / 1.0f * 0.30f, 0.70f, 1.0f);
+        label = uiRu("Заправка и герметизация...", "Refueling & sealing...");
       } else if (m_dockAnimState == DockAnimState::Undock_Release) {
-        prog = std::clamp(1.0f - m_dockAnimTimer / 1.0f, 0.0f, 1.0f);
+        prog = std::clamp(1.0f - m_dockAnimTimer / 1.4f, 0.0f, 1.0f);
         label = uiRu("Отшвартовка...", "Undocking sequence...");
       }
       char pbuf[64];
@@ -9703,9 +9799,89 @@ void AppGL::toggleShipyard() {
   m_shipyardOpen = !m_shipyardOpen;
 }
 
+bool AppGL::getDockPortTransform(const std::string& dockId, float time,
+                                 Vec3& outPortPos, Vec3& outPortNormal,
+                                 double& outTargetYaw, double& outTargetPitch) const {
+  if (!m_sceneManager) return false;
+  const Station* stNow = m_sceneManager->getCurrentStation();
+  if (!stNow) return false;
+
+  const SceneManager::DockSite* targetDock = nullptr;
+  for (const auto& dock : m_sceneManager->dockSites()) {
+    if (dock.id == dockId || (dock.stationId == stNow->id && dockId.empty())) {
+      targetDock = &dock;
+      break;
+    }
+  }
+  if (!targetDock) return false;
+
+  const Vec3 stPos = targetDock->pos;
+  glm::mat4 rotM(1.0f);
+  float portDistance = 0.40f;
+
+  if (targetDock->id == "dock-dragon") {
+    portDistance = 0.16f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.03f * time + 0.45f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+           glm::rotate(glm::mat4(1.0f), -0.15f, glm::vec3(1.0f, 0.0f, 0.0f));
+  } else if (targetDock->id == "dock-soyuz") {
+    portDistance = 0.16f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.04f * time - 0.55f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+           glm::rotate(glm::mat4(1.0f), 0.18f, glm::vec3(1.0f, 0.0f, 0.0f));
+  } else if (targetDock->id == "dock-warp-bubble") {
+    portDistance = 0.32f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f));
+  } else if (targetDock->id == "dock-warp-tunnel") {
+    portDistance = 0.30f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 1.0f, 0.0f));
+  } else if (targetDock->id == "dock-webb") {
+    portDistance = 0.28f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.02f * time + 0.785f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+           glm::rotate(glm::mat4(1.0f), 0.25f, glm::vec3(1.0f, 0.0f, 0.0f));
+  } else if (targetDock->id == "dock-probe") {
+    portDistance = 0.18f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+           glm::rotate(glm::mat4(1.0f), -0.30f, glm::vec3(1.0f, 0.0f, 0.0f));
+  } else if (targetDock->id == "dock-sgra" || targetDock->id == "dock-m13") {
+    portDistance = 0.42f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.12f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+           glm::rotate(glm::mat4(1.0f), 0.35f, glm::vec3(0.0f, 0.0f, 1.0f));
+  } else {
+    // Standard ISS Gateway / station
+    portDistance = 0.40f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f));
+  }
+
+  glm::vec3 normal = glm::vec3(rotM * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f));
+  glm::vec3 offset = normal * portDistance;
+
+  outPortPos = Vec3(stPos.x + offset.x, stPos.y + offset.y, stPos.z + offset.z);
+  outPortNormal = Vec3(normal.x, normal.y, normal.z);
+
+  // Ship faces into the port: from outPortPos + normal towards stPos
+  Vec3 camLookTarget(stPos.x, stPos.y, stPos.z);
+  Vec3 camAtPort(outPortPos.x + outPortNormal.x * 0.22,
+                 outPortPos.y + outPortNormal.y * 0.22,
+                 outPortPos.z + outPortNormal.z * 0.22);
+  const_cast<AppGL*>(this)->computeLookYawPitch(camAtPort, camLookTarget, outTargetYaw, outTargetPitch);
+
+  return true;
+}
+
 void AppGL::startDockSequence(const std::string& dockId) {
   if (m_dockAnimState != DockAnimState::None || m_ship.isDocked) return;
   m_dockTargetId = dockId;
+  m_dockStartPos = m_camera.position;
+  m_dockStartYaw = m_camera.yaw;
+  m_dockStartPitch = m_camera.pitch;
+  m_dockApproachDuration = 1.8f;
+  m_dockAnimTimer = m_dockApproachDuration;
+  m_dockAnimState = DockAnimState::DockPhase1_Approach;
+  m_dockInitialFuel = m_ship.fuel;
+  m_dockInitialShield = m_ship.shield;
+  m_dockInitialHull = m_ship.hull;
+  m_shipVel = Vec3();
+  m_ship.gravVel = Vec3();
+
   m_dockTargetPos = m_camera.position;
   if (m_sceneManager) {
     const Station* stNow = m_sceneManager->getCurrentStation();
@@ -9719,14 +9895,10 @@ void AppGL::startDockSequence(const std::string& dockId) {
       }
     }
   }
-  m_dockAnimState = DockAnimState::DockPhase1_Clamps;
-  m_dockAnimTimer = 0.9f;
-  m_dockInitialFuel = m_ship.fuel;
-  m_dockInitialShield = m_ship.shield;
-  m_dockInitialHull = m_ship.hull;
-  m_shipNotice = uiRu("Стыковочные манипуляторы захватывают корпус...",
-                      "Docking clamps engaging hull...");
-  m_shipNoticeT = 1.0f;
+
+  m_shipNotice = uiRu("Стыковочный автопилот: захват коридора и выравнивание осей...",
+                      "Docking autopilot: corridor alignment & attitude lock...");
+  m_shipNoticeT = 2.0f;
   m_audio.playClick();
 }
 
@@ -9734,14 +9906,22 @@ void AppGL::startUndockSequence() {
   if (m_dockAnimState != DockAnimState::None || !m_ship.isDocked) return;
   m_shipyardOpen = false;
   m_ship.isDocked = false;
-  m_ship.dockedStationId.clear();
   m_dockAnimState = DockAnimState::Undock_Release;
-  m_dockAnimTimer = 1.0f;
-  const Vec3 fwd = m_camera.forward();
-  m_shipVel = Vec3(fwd.x * 0.8, fwd.y * 0.8, fwd.z * 0.8);
-  m_shipNotice = uiRu("Отшвартовка: шлюзы освобождены, переход в дрейф...",
-                      "Undocking sequence: clamps released, drifting...");
-  m_shipNoticeT = 1.2f;
+  m_dockAnimTimer = 1.4f;
+
+  Vec3 portPos, portNorm;
+  double portYaw = 0.0, portPitch = 0.0;
+  if (getDockPortTransform(m_ship.dockedStationId, static_cast<float>(glfwGetTime()), portPos, portNorm, portYaw, portPitch)) {
+    // Separation push along the outward normal of the port:
+    m_shipVel = Vec3(portNorm.x * 0.9, portNorm.y * 0.9, portNorm.z * 0.9);
+  } else {
+    const Vec3 fwd = m_camera.forward();
+    m_shipVel = Vec3(-fwd.x * 0.9, -fwd.y * 0.9, -fwd.z * 0.9);
+  }
+  m_ship.dockedStationId.clear();
+  m_shipNotice = uiRu("Отшвартовка: замки шлюза открыты, импульс отхода...",
+                      "Undocking sequence: clamps released, separation impulse...");
+  m_shipNoticeT = 2.0f;
   m_audio.playClick();
 }
 
@@ -9787,8 +9967,16 @@ void AppGL::dockToHistoricShip(const std::string& dockId) {
     }
   }
 
-  // Position camera facing the spacecraft in hero approach view within docking radius:
-  m_camera.position = Vec3(targetPos.x + 0.65, targetPos.y + 0.35, targetPos.z + 1.25);
+  // Position camera facing the spacecraft at the entrance of docking corridor:
+  Vec3 portPos, portNorm;
+  double targetYaw = 0.0, targetPitch = 0.0;
+  if (getDockPortTransform(dockId, static_cast<float>(glfwGetTime()), portPos, portNorm, targetYaw, targetPitch)) {
+    m_camera.position = Vec3(portPos.x + portNorm.x * 2.2,
+                             portPos.y + portNorm.y * 2.2,
+                             portPos.z + portNorm.z * 2.2);
+  } else {
+    m_camera.position = Vec3(targetPos.x + 0.65, targetPos.y + 0.35, targetPos.z + 1.25);
+  }
   computeLookYawPitch(m_camera.position, targetPos, m_camera.yaw, m_camera.pitch);
 
   m_dockHint = targetName;
