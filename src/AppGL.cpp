@@ -409,6 +409,32 @@ int AppGL::run() {
     m_window->getFramebufferSize(fbWidth, fbHeight);
     glViewport(0, 0, fbWidth, fbHeight);
 
+    // === Batch A2 & Issue #65: Update 3D Docking Visual State ===
+    {
+      float projDist = 999.0f;
+      float shipDist = 999.0f;
+      Vec3 portPos, portNorm;
+      double targetYaw = 0.0, targetPitch = 0.0;
+      std::string activeDock = "";
+      if (m_ship.isDocked) {
+        activeDock = m_ship.dockedStationId;
+      } else if (m_dockAnimState != DockAnimState::None) {
+        activeDock = m_dockTargetId;
+      } else if (!m_dockHintId.empty()) {
+        activeDock = m_dockHintId;
+      }
+      if (!activeDock.empty() && getDockPortTransform(activeDock, currentTime, portPos, portNorm, targetYaw, targetPitch)) {
+        const double dx = m_camera.position.x - portPos.x;
+        const double dy = m_camera.position.y - portPos.y;
+        const double dz = m_camera.position.z - portPos.z;
+        shipDist = static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz));
+        projDist = static_cast<float>(dx * portNorm.x + dy * portNorm.y + dz * portNorm.z);
+      }
+      const bool dockVisActive = (m_ship.isDocked || m_dockAnimState != DockAnimState::None || shipDist < 6.0f);
+      warpdrive::setDockingVisuals(dockVisActive, m_ship.isDocked, static_cast<int>(m_dockAnimState),
+                                   shipDist, projDist, m_rcsTimer, m_rcsMask, activeDock);
+    }
+
     // Render active scene
     m_sceneManager->render(m_renderCam, fbWidth, fbHeight, currentTime);
 
@@ -435,6 +461,7 @@ int AppGL::run() {
       drawHelpOverlay();
     }
     drawWorldLabels();
+    drawDockingHud(fbWidth, fbHeight);
     // === Cinematic === begin (агент C): тур/карточки/HUD только в игре.
     // Харнесс (captureAllScreenshots) сюда не заходит: PNG чистые.
     drawCinematic();
@@ -5121,6 +5148,15 @@ void AppGL::advanceExpedition(const std::string& objectiveId) {
 void AppGL::updateShip(float deltaTime) {
   if (deltaTime <= 0.0f || m_sceneManager->isPaused()) return;
 
+  // RCS cold-gas thruster timer countdown
+  if (m_rcsTimer > 0.0f) {
+    m_rcsTimer -= deltaTime;
+    if (m_rcsTimer <= 0.0f) {
+      m_rcsTimer = 0.0f;
+      m_rcsMask = 0;
+    }
+  }
+
   // === Orbital Station Relative Co-Movement while Docked ===
   if (m_ship.isDocked && m_dockAnimState == DockAnimState::None) {
     m_shipVel = Vec3();
@@ -5175,6 +5211,14 @@ void AppGL::updateShip(float deltaTime) {
       while (diffYaw < -3.14159265358979323846) diffYaw += 2.0 * 3.14159265358979323846;
       m_camera.yaw = m_dockStartYaw + diffYaw * static_cast<double>(s);
       m_camera.pitch = m_dockStartPitch + (targetPitch - m_dockStartPitch) * static_cast<double>(s);
+
+      // Periodic micro-bursts of attitude RCS thrusters along corridor
+      m_lastDockRcsPulse += deltaTime;
+      if (m_lastDockRcsPulse >= 0.35f) {
+        m_lastDockRcsPulse = 0.0f;
+        m_rcsTimer = 0.16f;
+        m_rcsMask = (std::fmod(m_dockAnimTimer, 0.7f) < 0.35f) ? (1 | 8) : (2 | 4);
+      }
     }
     m_shipVel = Vec3();
     m_ship.gravVel = Vec3();
@@ -5246,6 +5290,10 @@ void AppGL::updateShip(float deltaTime) {
     m_camera.position.x += m_shipVel.x * deltaTime;
     m_camera.position.y += m_shipVel.y * deltaTime;
     m_camera.position.z += m_shipVel.z * deltaTime;
+
+    // Continuous retro RCS thruster firing for separation push
+    m_rcsTimer = 0.20f;
+    m_rcsMask = 16;
 
     if (m_dockAnimTimer <= 0.0f) {
       m_dockAnimState = DockAnimState::None;
@@ -9886,6 +9934,224 @@ bool AppGL::getDockPortTransform(const std::string& dockId, float time,
   return true;
 }
 
+void AppGL::drawDockingHud(int fbWidth, int fbHeight) {
+  (void)fbWidth;
+  (void)fbHeight;
+  if (m_inMenu || m_hideUI || m_slidesOpen || m_finaleChoiceOpen) return;
+  if (warpdrive::warpTravelActive()) return;
+
+  const Station* curSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+  if (!curSt) return;
+
+  std::string targetDockId = "";
+  if (m_ship.isDocked) {
+    targetDockId = m_ship.dockedStationId;
+  } else if (m_dockAnimState != DockAnimState::None) {
+    targetDockId = m_dockTargetId;
+  } else if (!m_dockHintId.empty()) {
+    targetDockId = m_dockHintId;
+  } else {
+    double closestDist = 999.0;
+    for (const auto& dock : m_sceneManager->dockSites()) {
+      if (dock.stationId == curSt->id) {
+        const double dx = m_camera.position.x - dock.pos.x;
+        const double dy = m_camera.position.y - dock.pos.y;
+        const double dz = m_camera.position.z - dock.pos.z;
+        const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < closestDist) {
+          closestDist = d;
+          targetDockId = dock.id;
+        }
+      }
+    }
+  }
+
+  if (targetDockId.empty()) return;
+
+  Vec3 portPos, portNorm;
+  double targetYaw = 0.0, targetPitch = 0.0;
+  const float curTime = static_cast<float>(glfwGetTime());
+  if (!getDockPortTransform(targetDockId, curTime, portPos, portNorm, targetYaw, targetPitch)) {
+    return;
+  }
+
+  const double dx = m_camera.position.x - portPos.x;
+  const double dy = m_camera.position.y - portPos.y;
+  const double dz = m_camera.position.z - portPos.z;
+  const double distWorld = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+  if (!m_ship.isDocked && m_dockAnimState == DockAnimState::None && distWorld > 5.5) {
+    return;
+  }
+
+  std::string targetName = "Orbital Port";
+  for (const auto& dock : m_sceneManager->dockSites()) {
+    if (dock.id == targetDockId) {
+      targetName = dock.name;
+      break;
+    }
+  }
+
+  const docking::DockTelemetry telem = docking::computeTelemetry(
+      m_camera.position, m_shipVel, m_camera.yaw, m_camera.pitch,
+      portPos, portNorm, targetYaw, targetPitch);
+
+  ImDrawList* drawList = ImGui::GetForegroundDrawList();
+  if (!drawList) return;
+
+  const ImVec2 dispSize = ImGui::GetIO().DisplaySize;
+  if (dispSize.x <= 0.0f || dispSize.y <= 0.0f) return;
+
+  const float aspect = dispSize.x / dispSize.y;
+  const float fov = m_sceneManager->getSettings().fovDegrees;
+  const glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.05f, 1e6f);
+  const Camera& cam = (!m_inMenu && m_renderCamValid) ? m_renderCam : m_camera;
+  const Vec3 cp = cam.position;
+  const Vec3 cf = cam.forward();
+  const Vec3 cu = cam.up();
+  const glm::vec3 eye(static_cast<float>(cp.x), static_cast<float>(cp.y), static_cast<float>(cp.z));
+  const glm::vec3 fwd(static_cast<float>(cf.x), static_cast<float>(cf.y), static_cast<float>(cf.z));
+  const glm::vec3 up(static_cast<float>(cu.x), static_cast<float>(cu.y), static_cast<float>(cu.z));
+  const glm::mat4 mvp = proj * glm::lookAt(eye, eye + fwd, up);
+
+  // Screen projections
+  const glm::vec4 clipPort = mvp * glm::vec4(static_cast<float>(portPos.x),
+                                             static_cast<float>(portPos.y),
+                                             static_cast<float>(portPos.z), 1.0f);
+  const glm::vec3 aimPos(static_cast<float>(portPos.x + portNorm.x * 1.2),
+                         static_cast<float>(portPos.y + portNorm.y * 1.2),
+                         static_cast<float>(portPos.z + portNorm.z * 1.2));
+  const glm::vec4 clipAim = mvp * glm::vec4(aimPos, 1.0f);
+
+  const bool portInFront = (clipPort.w > 0.05f);
+  const bool aimInFront = (clipAim.w > 0.05f);
+
+  float portSx = dispSize.x * 0.5f;
+  float portSy = dispSize.y * 0.5f;
+  if (portInFront) {
+    portSx = (clipPort.x / clipPort.w * 0.5f + 0.5f) * dispSize.x;
+    portSy = ((1.0f - clipPort.y / clipPort.w) * 0.5f) * dispSize.y;
+  }
+
+  float aimSx = portSx;
+  float aimSy = portSy;
+  if (aimInFront) {
+    aimSx = (clipAim.x / clipAim.w * 0.5f + 0.5f) * dispSize.x;
+    aimSy = ((1.0f - clipAim.y / clipAim.w) * 0.5f) * dispSize.y;
+  }
+
+  ImU32 reticleCol = IM_COL32(56, 189, 248, 220);
+  ImU32 badgeCol = IM_COL32(56, 189, 248, 255);
+  const char* statusText = "[ ALIGNING CORRIDOR ]";
+
+  if (m_ship.isDocked) {
+    reticleCol = IM_COL32(34, 197, 94, 240);
+    badgeCol = IM_COL32(34, 197, 94, 255);
+    statusText = "[ HARD CAPTURE LATCHED ]";
+  } else if (telem.axisAligned) {
+    reticleCol = IM_COL32(74, 222, 128, 240);
+    badgeCol = IM_COL32(74, 222, 128, 255);
+    statusText = telem.captureReady ? "[ CAPTURE READY · LATCH ENGAGED ]" : "[ AXIS ALIGNED · LATCH READY ]";
+  } else if (!telem.inCorridor) {
+    reticleCol = IM_COL32(251, 191, 36, 220);
+    badgeCol = IM_COL32(251, 191, 36, 255);
+    statusText = "[ OUTSIDE CORRIDOR ]";
+  }
+
+  if (portInFront) {
+    const float bracketDist = std::clamp(static_cast<float>(75.0 / (distWorld + 0.2)), 22.0f, 120.0f);
+    const float arm = bracketDist * 0.35f;
+
+    // Corner brackets [ + ]
+    drawList->AddLine(ImVec2(portSx - bracketDist, portSy - bracketDist),
+                      ImVec2(portSx - bracketDist + arm, portSy - bracketDist), reticleCol, 2.0f);
+    drawList->AddLine(ImVec2(portSx - bracketDist, portSy - bracketDist),
+                      ImVec2(portSx - bracketDist, portSy - bracketDist + arm), reticleCol, 2.0f);
+
+    drawList->AddLine(ImVec2(portSx + bracketDist, portSy - bracketDist),
+                      ImVec2(portSx + bracketDist - arm, portSy - bracketDist), reticleCol, 2.0f);
+    drawList->AddLine(ImVec2(portSx + bracketDist, portSy - bracketDist),
+                      ImVec2(portSx + bracketDist, portSy - bracketDist + arm), reticleCol, 2.0f);
+
+    drawList->AddLine(ImVec2(portSx - bracketDist, portSy + bracketDist),
+                      ImVec2(portSx - bracketDist + arm, portSy + bracketDist), reticleCol, 2.0f);
+    drawList->AddLine(ImVec2(portSx - bracketDist, portSy + bracketDist),
+                      ImVec2(portSx - bracketDist, portSy + bracketDist - arm), reticleCol, 2.0f);
+
+    drawList->AddLine(ImVec2(portSx + bracketDist, portSy + bracketDist),
+                      ImVec2(portSx + bracketDist - arm, portSy + bracketDist), reticleCol, 2.0f);
+    drawList->AddLine(ImVec2(portSx + bracketDist, portSy + bracketDist),
+                      ImVec2(portSx + bracketDist, portSy + bracketDist - arm), reticleCol, 2.0f);
+
+    // Crosshair
+    const float crossArm = 18.0f;
+    const float crossGap = 5.0f;
+    drawList->AddLine(ImVec2(portSx - crossArm, portSy), ImVec2(portSx - crossGap, portSy), reticleCol, 1.5f);
+    drawList->AddLine(ImVec2(portSx + crossGap, portSy), ImVec2(portSx + crossArm, portSy), reticleCol, 1.5f);
+    drawList->AddLine(ImVec2(portSx, portSy - crossArm), ImVec2(portSx, portSy - crossGap), reticleCol, 1.5f);
+    drawList->AddLine(ImVec2(portSx, portSy + crossGap), ImVec2(portSx, portSy + crossArm), reticleCol, 1.5f);
+
+    // COAS Alignment Diamond
+    if (aimInFront) {
+      const float dSize = 9.0f;
+      const ImVec2 diamondPts[5] = {
+        ImVec2(aimSx, aimSy - dSize),
+        ImVec2(aimSx + dSize, aimSy),
+        ImVec2(aimSx, aimSy + dSize),
+        ImVec2(aimSx - dSize, aimSy),
+        ImVec2(aimSx, aimSy - dSize)
+      };
+      drawList->AddPolyline(diamondPts, 5, reticleCol, ImDrawFlags_None, 1.8f);
+
+      const float dErr = std::sqrt((aimSx - portSx) * (aimSx - portSx) + (aimSy - portSy) * (aimSy - portSy));
+      if (dErr > 4.0f) {
+        drawList->AddLine(ImVec2(portSx, portSy), ImVec2(aimSx, aimSy),
+                          IM_COL32(56, 189, 248, 120), 1.0f);
+      }
+    }
+  }
+
+  // Monospace Glass HUD Telemetry Card
+  const float panelW = 280.0f;
+  const float panelH = 158.0f;
+  float panelX = dispSize.x - panelW - 20.0f;
+  float panelY = dispSize.y - panelH - 120.0f;
+
+  const ImVec2 pMin(panelX, panelY);
+  const ImVec2 pMax(panelX + panelW, panelY + panelH);
+
+  drawList->AddRectFilled(pMin, pMax, IM_COL32(8, 15, 26, 215), 6.0f);
+  drawList->AddRect(pMin, pMax, reticleCol, 6.0f, 0, 1.2f);
+  drawList->AddRectFilled(pMin, ImVec2(pMax.x, pMin.y + 24.0f), IM_COL32(14, 28, 48, 230), 6.0f, ImDrawFlags_RoundCornersTop);
+  drawList->AddText(ImVec2(pMin.x + 10.0f, pMin.y + 5.0f), reticleCol, "SPACEX / COAS DOCKING HUD");
+
+  char lineBuf[96];
+  float curY = pMin.y + 30.0f;
+
+  std::snprintf(lineBuf, sizeof(lineBuf), "TARGET: %.24s", targetName.c_str());
+  drawList->AddText(ImVec2(pMin.x + 12.0f, curY), IM_COL32(220, 235, 250, 240), lineBuf);
+  curY += 18.0f;
+
+  std::snprintf(lineBuf, sizeof(lineBuf), "RANGE : %05.1f m", telem.rangeMeters);
+  drawList->AddText(ImVec2(pMin.x + 12.0f, curY), IM_COL32(240, 245, 255, 250), lineBuf);
+  curY += 18.0f;
+
+  std::snprintf(lineBuf, sizeof(lineBuf), "RATE  : %+05.2f m/s", telem.closingRateMps);
+  const ImU32 rateCol = (telem.closingRateMps < -0.8f) ? IM_COL32(251, 146, 60, 240) : IM_COL32(200, 230, 255, 240);
+  drawList->AddText(ImVec2(pMin.x + 12.0f, curY), rateCol, lineBuf);
+  curY += 18.0f;
+
+  std::snprintf(lineBuf, sizeof(lineBuf), "YAW   : %+04.1f deg  PITCH: %+04.1f deg", telem.yawErrorDeg, telem.pitchErrorDeg);
+  drawList->AddText(ImVec2(pMin.x + 12.0f, curY), IM_COL32(180, 215, 245, 230), lineBuf);
+  curY += 18.0f;
+
+  std::snprintf(lineBuf, sizeof(lineBuf), "LAT DEV: %04.2f m", telem.lateralErrorMeters);
+  drawList->AddText(ImVec2(pMin.x + 12.0f, curY), IM_COL32(180, 215, 245, 230), lineBuf);
+  curY += 22.0f;
+
+  drawList->AddText(ImVec2(pMin.x + 12.0f, curY), badgeCol, statusText);
+}
+
 void AppGL::startDockSequence(const std::string& dockId) {
   if (m_dockAnimState != DockAnimState::None || m_ship.isDocked) return;
   m_dockTargetId = dockId;
@@ -9900,6 +10166,9 @@ void AppGL::startDockSequence(const std::string& dockId) {
   m_dockInitialHull = m_ship.hull;
   m_shipVel = Vec3();
   m_ship.gravVel = Vec3();
+  m_rcsTimer = 0.25f;
+  m_rcsMask = 1 | 2;
+  m_lastDockRcsPulse = 0.0f;
 
   m_dockTargetPos = m_camera.position;
   if (m_sceneManager) {
@@ -9927,6 +10196,8 @@ void AppGL::startUndockSequence() {
   m_ship.isDocked = false;
   m_dockAnimState = DockAnimState::Undock_Release;
   m_dockAnimTimer = 1.4f;
+  m_rcsTimer = 0.8f;
+  m_rcsMask = 16;
 
   Vec3 portPos, portNorm;
   double portYaw = 0.0, portPitch = 0.0;

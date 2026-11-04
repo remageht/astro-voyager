@@ -495,6 +495,66 @@ int main() {
     AssertNear(static_cast<float>(deltaShip.z), static_cast<float>(deltaStation.z), 0.0001f, "ship delta Z tracks station");
   }
 
+  // Test 21 (v4.6.3 / Issue #65): Complete Docking Realism Package (Telemetry, Corridor Gates & RCS)
+  {
+    const astro::Vec3 portPos(10.0, 5.0, 20.0);
+    const astro::Vec3 portNormal(0.0, 0.0, 1.0);
+    const double targetYaw = 0.0;
+    const double targetPitch = 0.0;
+
+    // Ship aligned along corridor at distance 2.0 units (50 meters) closing at 0.5 units/s (12.5 m/s)
+    const astro::Vec3 shipPos(10.0, 5.0, 22.0);
+    const astro::Vec3 shipVel(0.0, 0.0, -0.5);
+    const double shipYaw = 0.01; // ~0.57 degrees misalignment
+    const double shipPitch = -0.01;
+
+    astro::docking::DockTelemetry telem = astro::docking::computeTelemetry(
+        shipPos, shipVel, shipYaw, shipPitch, portPos, portNormal, targetYaw, targetPitch);
+
+    AssertNear(telem.rangeMeters, 50.0f, 0.01f, "telemetry range 50m");
+    AssertNear(telem.closingRateMps, -12.5f, 0.01f, "telemetry closing rate -12.5 m/s");
+    AssertNear(telem.lateralErrorMeters, 0.0f, 0.001f, "lateral error 0 on axis");
+    if (!telem.inCorridor) {
+      std::cerr << "Test 21 failed: ship at 2.0 units must be recognized in corridor\n";
+      return 1;
+    }
+    if (!telem.axisAligned) {
+      std::cerr << "Test 21 failed: 0.57 deg error must qualify as axisAligned\n";
+      return 1;
+    }
+    if (telem.captureReady) {
+      std::cerr << "Test 21 failed: ship at 2.0 units is not in capture range\n";
+      return 1;
+    }
+
+    // Now ship close at 0.3 units (7.5m): capture ready
+    const astro::Vec3 closeShipPos(10.0, 5.0, 20.3);
+    astro::docking::DockTelemetry closeTelem = astro::docking::computeTelemetry(
+        closeShipPos, astro::Vec3(0, 0, -0.05), 0.0, 0.0, portPos, portNormal, targetYaw, targetPitch);
+    if (!closeTelem.captureReady) {
+      std::cerr << "Test 21 failed: aligned ship at 0.3 units must be captureReady\n";
+      return 1;
+    }
+
+    // Gate pass evaluation: gates at 0.45, 0.95, 1.55, 2.25
+    AssertNear(astro::docking::kCorridorGateDistances[0], 0.45f, 0.001f, "gate 0 dist");
+    AssertNear(astro::docking::kCorridorGateDistances[3], 2.25f, 0.001f, "gate 3 dist");
+
+    // Ship at projDist = 1.0 has passed gates 3 (2.25) and 2 (1.55), but not yet gate 0 (0.45)
+    if (!astro::docking::isGatePassed(1.0f, astro::docking::kCorridorGateDistances[3])) {
+      std::cerr << "Test 21 failed: gate 3 must be passed at projDist=1.0\n";
+      return 1;
+    }
+    if (!astro::docking::isGatePassed(1.0f, astro::docking::kCorridorGateDistances[2])) {
+      std::cerr << "Test 21 failed: gate 2 must be passed at projDist=1.0\n";
+      return 1;
+    }
+    if (astro::docking::isGatePassed(1.0f, astro::docking::kCorridorGateDistances[0])) {
+      std::cerr << "Test 21 failed: gate 0 must NOT be passed at projDist=1.0\n";
+      return 1;
+    }
+  }
+
   std::cout << "All BlackHoleInteraction tests passed!\n";
   return 0;
 }
