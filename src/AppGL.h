@@ -416,6 +416,11 @@ class AppGL {
   bool getDockPortTransform(const std::string& dockId, float time,
                             Vec3& outPortPos, Vec3& outPortNormal,
                             double& outTargetYaw, double& outTargetPitch) const;
+  // SpaceX / COAS Collimated Docking HUD & RCS Thrusters (Issue #65)
+  float m_rcsTimer = 0.0f;
+  int m_rcsMask = 0;
+  float m_lastDockRcsPulse = 0.0f;
+  void drawDockingHud(int fbWidth, int fbHeight);
 
   // Ship switch animation (~1.0s transition in shipyard)
   float m_shipSwitchTimer = 0.0f;
@@ -625,6 +630,19 @@ void setAsteroids(float k, float lane);
 // v4.2.0: 3D-анимированный варп-туннель SpaceDrive (tamminen, CC BY 4.0)
 void setWarpTravelActive(bool active);
 bool warpTravelActive();
+// v4.6.3: Docking 3D corridor, IDA latching and RCS visualization (Issue #65)
+void setDockingVisuals(bool active, bool isDocked, int animPhase,
+                       float shipDist, float projDist,
+                       float rcsTimer, int rcsMask,
+                       const std::string& activeDockId);
+bool dockingVisualActive();
+bool isDockedVisual();
+int dockAnimPhaseVisual();
+float dockShipDistVisual();
+float dockProjDistVisual();
+float rcsVisualTimer();
+int rcsVisualMask();
+const std::string& activeDockIdVisual();
 }  // namespace warpdrive
 
 }  // namespace astro

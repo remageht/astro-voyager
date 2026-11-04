@@ -332,4 +332,77 @@ inline float speedFx(float speed, float ref) {
 }
 }  // namespace view
 
+// === Docking Realism: Telemetry, 3D Corridor & RCS (Issue #65) ===
+namespace docking {
+
+struct DockTelemetry {
+  float rangeMeters = 0.0f;        // Physical distance in meters (1 world unit = 25m)
+  float closingRateMps = 0.0f;     // Closing speed in m/s (<0 = closing, >0 = opening)
+  float yawErrorDeg = 0.0f;        // Shortest-arc yaw deviation in degrees
+  float pitchErrorDeg = 0.0f;      // Shortest-arc pitch deviation in degrees
+  float lateralErrorMeters = 0.0f; // Deviation from docking corridor axis
+  bool inCorridor = false;         // Within approach funnel (< 3.0 units, < 1.5 units off-axis)
+  bool axisAligned = false;        // Angular error <= 2.5 deg & lateral <= 0.45m
+  bool captureReady = false;       // Near latch range (< 0.55 units) & aligned
+};
+
+// Computes telemetry between ship and target docking port
+inline DockTelemetry computeTelemetry(const Vec3& shipPos, const Vec3& shipVel,
+                                      double shipYaw, double shipPitch,
+                                      const Vec3& portPos, const Vec3& portNormal,
+                                      double targetYaw, double targetPitch) {
+  DockTelemetry t;
+  const double dx = shipPos.x - portPos.x;
+  const double dy = shipPos.y - portPos.y;
+  const double dz = shipPos.z - portPos.z;
+  const double distWorld = std::sqrt(dx * dx + dy * dy + dz * dz);
+  t.rangeMeters = static_cast<float>(distWorld * 25.0);
+
+  // Closing rate along line-of-sight: negative means closing in
+  if (distWorld > 1e-4) {
+    const double dirX = -dx / distWorld;
+    const double dirY = -dy / distWorld;
+    const double dirZ = -dz / distWorld;
+    const double relVelProj = shipVel.x * dirX + shipVel.y * dirY + shipVel.z * dirZ;
+    t.closingRateMps = static_cast<float>(-relVelProj * 25.0);
+  }
+
+  // Shortest-arc angular deviations
+  double dYaw = targetYaw - shipYaw;
+  while (dYaw > 3.14159265358979323846) dYaw -= 2.0 * 3.14159265358979323846;
+  while (dYaw < -3.14159265358979323846) dYaw += 2.0 * 3.14159265358979323846;
+  t.yawErrorDeg = static_cast<float>(dYaw * 180.0 / 3.14159265358979323846);
+
+  double dPitch = targetPitch - shipPitch;
+  while (dPitch > 3.14159265358979323846) dPitch -= 2.0 * 3.14159265358979323846;
+  while (dPitch < -3.14159265358979323846) dPitch += 2.0 * 3.14159265358979323846;
+  t.pitchErrorDeg = static_cast<float>(dPitch * 180.0 / 3.14159265358979323846);
+
+  // Longitudinal & lateral positions along corridor axis
+  const double projDist = dx * portNormal.x + dy * portNormal.y + dz * portNormal.z;
+  const double perpX = dx - projDist * portNormal.x;
+  const double perpY = dy - projDist * portNormal.y;
+  const double perpZ = dz - projDist * portNormal.z;
+  const double latDist = std::sqrt(perpX * perpX + perpY * perpY + perpZ * perpZ);
+  t.lateralErrorMeters = static_cast<float>(latDist * 25.0);
+
+  t.inCorridor = (projDist > -0.25 && projDist < 3.5 && latDist < 1.6);
+  t.axisAligned = (std::abs(t.yawErrorDeg) <= 2.5f &&
+                   std::abs(t.pitchErrorDeg) <= 2.5f &&
+                   t.lateralErrorMeters <= 0.45f);
+  t.captureReady = (distWorld <= 0.55 && t.axisAligned);
+
+  return t;
+}
+
+// 4 concentric corridor gate distances along docking axis
+constexpr float kCorridorGateDistances[4] = {0.45f, 0.95f, 1.55f, 2.25f};
+
+// Evaluates whether a corridor gate has been entered / passed
+inline bool isGatePassed(float projDist, float gateDist) {
+  return projDist <= (gateDist + 0.15f);
+}
+
+}  // namespace docking
+
 }  // namespace astro

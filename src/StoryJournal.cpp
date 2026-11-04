@@ -292,6 +292,46 @@ std::vector<StoryEntry> storyCatalog() {
       "Mia, keep both hands on the flight stick — we're about to show the stars that humanity doesn't walk in circles!\"";
   c.push_back(e);
 
+  e.id = "executioner-hopes";
+  e.titleRu = "Палач Ложных Надежд";
+  e.titleEn = "Executioner of False Hopes";
+  e.textRu =
+      "Зашифрованный тахионный сигнал из Пятой Вселенной вскрывает командный канал. "
+      "Ледяной, раздражённый голос Арсения («Палача Ложных Надежд») обрывает переговоры с Землёй: "
+      "«Мия Сато, заставьте вашего капитана закрыть рот. Ваша экспедиция — это статистическое самоубийство. "
+      "Вы сжигаете антивещество вслепую и надеетесь на чудо. В Пятой Вселенной такие же наивные глупцы "
+      "улыбались до последней секунды, пока их планеты не рассыпались в пыль. "
+      "Разворачивайтесь, пока приливные силы не размазали ваши идеалы по переборкам!»";
+  e.textEn =
+      "An encrypted tachyon signal from the Fifth Universe breaches the command frequency. "
+      "The icy, irritated voice of Arseny (\"Executioner of False Hopes\") cuts off comms with Earth: "
+      "\"Mia Sato, get your captain to shut up. Your expedition is statistical suicide. "
+      "You are burning antimatter blindly, hoping for a miracle. In the Fifth Universe, the very same naive fools "
+      "smiled until their final breath before their worlds turned to ash. "
+      "Turn back, before tidal forces smear your precious ideals across the bulkheads!\"";
+  c.push_back(e);
+
+  e.id = "stasis-mattress";
+  e.titleRu = "Броня и «Матрас»";
+  e.titleEn = "Armor and the Mattress";
+  e.textRu =
+      "У аккреционного диска чёрной дыры обсидиановый клиновидный крейсер «Мянь Лун» встаёт в опасной близости. "
+      "Егорка выходит на открытую связь: «Смотрю, Арсений, твой ортопедический матрас всё ещё работает как звукоизоляция от здравого смысла». "
+      "В динамиках раздаётся бешеный рык: «Ещё раз вякнешь про 'матрас' — я лично сниму компенсаторы в твоей каюте "
+      "и посмотрю, как твоя романтичная рожа выдержит пятьдесят 'же'!» "
+      "В следующую секунду гравитационный выброс сминает пространство — и «Мянь Лун» резко бросается наперерез, "
+      "принимая удар на свой монолитный стазис-демпфер и прикрывая Astro-Voyager. "
+      "Арсений сквозь зубы рычит: «Двигайте задницы, дилетанты, пока я держу горизонт. И не смейте думать, что я вас спасаю».";
+  e.textEn =
+      "Beside the accretion disk of the black hole, the obsidian wedge cruiser \"Mian Long\" stations dangerously close. "
+      "Egorka hails on open comms: \"I see, Arseny, your orthopedic mattress still functions as soundproofing against common sense.\" "
+      "A furious roar erupts from the speakers: \"One more word about the 'mattress' — and I'll personally disable the dampers in your cabin "
+      "and watch how your romantic face takes fifty Gs!\" "
+      "The very next second, a gravitational surge distorts space — and \"Mian Long\" cuts across, "
+      "taking the brunt upon its monolithic stasis dampener to shield Astro-Voyager. "
+      "Arseny grits through his teeth: \"Move your asses, amateurs, while I hold the horizon. And don't you dare think I'm saving you.\"";
+  c.push_back(e);
+
   return c;
 }
 
@@ -346,6 +386,12 @@ void StoryJournal::refresh(const Progress& progress) {
       unlocked = storyEntryHasVisited(progress.visited, "oj287");
     } else if (e.id == "phase-shard-overclock") {
       unlocked = storyEntryHasVisited(progress.visited, "hyperdisk");
+    } else if (e.id == "executioner-hopes") {
+      unlocked = storyEntryHasVisited(progress.visited, "sgr-1806") ||
+                 (storyEntryHasVisited(progress.visited, "sgra") && progress.minBhDistance < 2.5);
+    } else if (e.id == "stasis-mattress") {
+      unlocked = storyEntryHasVisited(progress.visited, "psr-b1913") ||
+                 (storyEntryHasVisited(progress.visited, "qso-3c273") && progress.capturedHorizon);
     }
     e.unlocked = unlocked;
   }

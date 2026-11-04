@@ -4132,6 +4132,25 @@ void AppGL::drawFinaleChoice() {
       openEndingSlide(kFinaleHyperBreakthrough);
     }
     ImGui::PopID();
+    ImGui::Spacing();
+
+    // 7. Fifth Universe Alliance ending (Arseny)
+    ImGui::PushID(7);
+    ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.40f, 1.0f), "7. %s: %s",
+                       uiRu("Арсений «Палач Ложных Надежд» («Матрас из 5»)", "Arseny «Executioner of False Hopes» («The Mattress»)"),
+                       uiRu("Пакт Пятой Вселенной (Синтез стазиса и варпа)", "Fifth Universe Pact (Stasis & Warp Synthesis)"));
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
+                       uiRu("«Объединить квантовый стазис-щит 'Мянь Луна' с варп-ядром. Спасти цивилизации холодной математикой».",
+                            "\"Merge 'Mian Long' zero-kinetic stasis shield with the warp core. Save civilizations with cold mathematics.\""));
+    if (m_finaleChoiceOpen &&
+        ImGui::Button(uiRu("✔ Выбрать: Заключить Пакт Палача Ложных Надежд",
+                           "✔ Choose: Forge the Pact of the Executioner of False Hopes"), ImVec2(-1.0f, 30.0f))) {
+      m_expedition.finaleChoice = kFinaleFifthAlliance;
+      m_finaleChoiceOpen = false;
+      saveExpeditionFileNow();
+      openEndingSlide(kFinaleFifthAlliance);
+    }
+    ImGui::PopID();
 
     ImGui::Spacing();
     ImGui::Separator();

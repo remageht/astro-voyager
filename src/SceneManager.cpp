@@ -117,6 +117,38 @@ float shipHull() { return g_shipHull; }
 bool g_warpTravelActive = false;
 void setWarpTravelActive(bool active) { g_warpTravelActive = active; }
 bool warpTravelActive() { return g_warpTravelActive; }
+
+// v4.6.3: Docking 3D corridor, IDA latching and RCS visualization (Issue #65)
+static bool g_dockVisualActive = false;
+static bool g_dockIsDocked = false;
+static int g_dockAnimPhase = 0;
+static float g_dockShipDist = 999.0f;
+static float g_dockProjDist = 999.0f;
+static float g_rcsTimer = 0.0f;
+static int g_rcsMask = 0;
+static std::string g_activeDockId = "";
+
+void setDockingVisuals(bool active, bool isDocked, int animPhase,
+                       float shipDist, float projDist,
+                       float rcsTimer, int rcsMask,
+                       const std::string& activeDockId) {
+  g_dockVisualActive = active;
+  g_dockIsDocked = isDocked;
+  g_dockAnimPhase = animPhase;
+  g_dockShipDist = shipDist;
+  g_dockProjDist = projDist;
+  g_rcsTimer = rcsTimer;
+  g_rcsMask = rcsMask;
+  g_activeDockId = activeDockId;
+}
+bool dockingVisualActive() { return g_dockVisualActive; }
+bool isDockedVisual() { return g_dockIsDocked; }
+int dockAnimPhaseVisual() { return g_dockAnimPhase; }
+float dockShipDistVisual() { return g_dockShipDist; }
+float dockProjDistVisual() { return g_dockProjDist; }
+float rcsVisualTimer() { return g_rcsTimer; }
+int rcsVisualMask() { return g_rcsMask; }
+const std::string& activeDockIdVisual() { return g_activeDockId; }
 }  // namespace warpdrive
 
 SceneManager::SceneManager() {
@@ -2614,22 +2646,165 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               m_planetShader->unbind();
             }
 
-            // Approach strobe beacons & docking ring
+            // === Batch A2 & Issue #65: 3D Holographic Corridor Gates, IDA-2 Collar & Strobes ===
+            glm::mat4 rotM(1.0f);
+            float portDistance = 0.40f;
+            if (dock.id == "dock-dragon") {
+              portDistance = 0.16f;
+              rotM = glm::rotate(glm::mat4(1.0f), 0.03f * time + 0.45f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                     glm::rotate(glm::mat4(1.0f), -0.15f, glm::vec3(1.0f, 0.0f, 0.0f));
+            } else if (dock.id == "dock-soyuz") {
+              portDistance = 0.16f;
+              rotM = glm::rotate(glm::mat4(1.0f), 0.04f * time - 0.55f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                     glm::rotate(glm::mat4(1.0f), 0.18f, glm::vec3(1.0f, 0.0f, 0.0f));
+            } else if (dock.id == "dock-warp-bubble") {
+              portDistance = 0.32f;
+              rotM = glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f));
+            } else if (dock.id == "dock-warp-tunnel") {
+              portDistance = 0.30f;
+              rotM = glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 1.0f, 0.0f));
+            } else if (dock.id == "dock-webb") {
+              portDistance = 0.28f;
+              rotM = glm::rotate(glm::mat4(1.0f), 0.02f * time + 0.785f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                     glm::rotate(glm::mat4(1.0f), 0.25f, glm::vec3(1.0f, 0.0f, 0.0f));
+            } else if (dock.id == "dock-probe") {
+              portDistance = 0.18f;
+              rotM = glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                     glm::rotate(glm::mat4(1.0f), -0.30f, glm::vec3(1.0f, 0.0f, 0.0f));
+            } else if (dock.id == "dock-sgra" || dock.id == "dock-m13") {
+              portDistance = 0.42f;
+              rotM = glm::rotate(glm::mat4(1.0f), 0.12f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                     glm::rotate(glm::mat4(1.0f), 0.35f, glm::vec3(0.0f, 0.0f, 1.0f));
+            } else {
+              portDistance = 0.40f;
+              rotM = glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f));
+            }
+
+            const glm::vec3 portNorm = glm::vec3(rotM * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f));
+            const glm::vec3 portPos = stPos + portNorm * portDistance;
+
+            const bool isActiveDock = (dock.id == warpdrive::activeDockIdVisual() ||
+                                       (warpdrive::activeDockIdVisual().empty() && warpdrive::dockShipDistVisual() < 4.5f));
+            const bool isDocked = (isActiveDock && warpdrive::isDockedVisual());
+            const int animPhase = isActiveDock ? warpdrive::dockAnimPhaseVisual() : 0;
+
+            // Align RingMesh normal (+Y) to port normal (+Z in rotM)
+            const glm::mat4 ringAlign = rotM * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
             m_ringShader->bind();
             m_ringShader->setUniformMat4f("u_MVP", mvp);
-            glm::mat4 dockRingModel = glm::translate(glm::mat4(1.0f), stPos) *
-                                      glm::rotate(glm::mat4(1.0f), -0.15f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                      glm::scale(glm::mat4(1.0f), glm::vec3(dockRingScale));
-            m_ringShader->setUniformMat4f("u_Model", dockRingModel);
             m_ringShader->setUniform1f("u_Seed", 42.0f);
             m_ringShader->setUniform1f("u_Time", time);
-            m_ringShader->setUniform3f("u_Center", stPos.x, stPos.y, stPos.z);
-            m_ringShader->setUniform3f("u_ColA", 0.20f, 0.85f, 1.0f);
             m_ringShader->setUniform1f("u_PlanetR", 0.0f);
+
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            // 1. 3D Holographic Corridor Gates along approach corridor
+            if (isActiveDock && warpdrive::dockingVisualActive() && warpdrive::dockShipDistVisual() < 6.0f) {
+              for (int k = 0; k < 4; ++k) {
+                const float gateD = docking::kCorridorGateDistances[k];
+                const glm::vec3 gatePos = portPos + portNorm * gateD;
+                const float gateScale = dockRingScale * (1.15f + 0.32f * static_cast<float>(k + 1));
+                const bool passed = docking::isGatePassed(warpdrive::dockProjDistVisual(), gateD);
+
+                glm::vec3 gateCol;
+                if (passed) {
+                  // Confirmed gate passage: emerald green feedback
+                  gateCol = glm::vec3(0.25f, 1.0f, 0.45f) * (isDocked ? 0.35f : 0.95f);
+                } else {
+                  // Forward gate: pulsing cyan guidance
+                  const float pulse = 0.80f + 0.20f * std::sin(time * 5.0f - static_cast<float>(k) * 1.4f);
+                  gateCol = glm::vec3(0.18f, 0.78f, 1.0f) * pulse * (isDocked ? 0.25f : 0.85f);
+                }
+
+                glm::mat4 gateModel = glm::translate(glm::mat4(1.0f), gatePos) *
+                                      ringAlign *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(gateScale));
+                m_ringShader->setUniformMat4f("u_Model", gateModel);
+                m_ringShader->setUniform3f("u_Center", gatePos.x, gatePos.y, gatePos.z);
+                m_ringShader->setUniform3f("u_ColA", gateCol.x, gateCol.y, gateCol.z);
+                m_saturnRing.draw();
+              }
+            }
+
+            // 2. Main Port Collar Ring
+            glm::vec3 collarCol = (isDocked || animPhase == 2 || animPhase == 3)
+                                      ? glm::vec3(0.25f, 1.0f, 0.45f)
+                                      : glm::vec3(0.20f, 0.85f, 1.0f);
+            glm::mat4 dockRingModel = glm::translate(glm::mat4(1.0f), portPos) *
+                                      ringAlign *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(dockRingScale));
+            m_ringShader->setUniformMat4f("u_Model", dockRingModel);
+            m_ringShader->setUniform3f("u_Center", portPos.x, portPos.y, portPos.z);
+            m_ringShader->setUniform3f("u_ColA", collarCol.x, collarCol.y, collarCol.z);
             m_saturnRing.draw();
+
+            m_ringShader->unbind();
             glDisable(GL_BLEND);
+
+            // 3. 3D Mechanical Latching: IDA-2 / NDS Guide Petals & Alignment Strobes
+            if (isActiveDock && (warpdrive::dockingVisualActive() || isDocked)) {
+              float petalAngleDeg = 18.0f; // Splayed outward during approach
+              if (animPhase == 2) {
+                // Soft capture latching: smoothly swings inward to 0 deg
+                petalAngleDeg = 18.0f * std::clamp(warpdrive::rcsVisualTimer() / 0.8f, 0.0f, 1.0f);
+              } else if (animPhase == 3 || isDocked) {
+                petalAngleDeg = 0.0f; // Fully latched & locked
+              }
+
+              const float collarR = dockRingScale * 0.65f;
+              m_planetShader->bind();
+              m_planetShader->setUniformMat4f("u_MVP", mvp);
+              m_planetShader->setUniform1i("u_Type", 2);
+              m_planetShader->setUniform1i("u_Body", 0);
+              m_planetShader->setUniform1f("u_Seed", 77.0f);
+              m_planetShader->setUniform3f("u_ColA", 0.60f, 0.65f, 0.72f);
+              m_planetShader->setUniform3f("u_ColB", 0.32f, 0.36f, 0.42f);
+              m_planetShader->setUniform1f("u_Radius", 0.95f);
+              m_planetShader->setUniform1i("u_Spot", 0);
+              m_planetShader->setUniform1i("u_Clouds", 0);
+              m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
+              m_planetShader->setUniform1i("u_MoonOccN", 0);
+              m_planetShader->setUniform1i("u_RingOn", 0);
+
+              for (int pIdx = 0; pIdx < 3; ++pIdx) {
+                const float th = static_cast<float>(pIdx) * 2.0943951f; // 120 deg
+                const glm::vec3 localBase(collarR * std::cos(th), collarR * std::sin(th), 0.0f);
+                const glm::vec3 worldBase = portPos + glm::vec3(rotM * glm::vec4(localBase, 0.0f));
+
+                glm::mat4 petalMat = glm::translate(glm::mat4(1.0f), worldBase) *
+                                     rotM *
+                                     glm::rotate(glm::mat4(1.0f), th, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                     glm::rotate(glm::mat4(1.0f), glm::radians(petalAngleDeg), glm::vec3(0.0f, 1.0f, 0.0f)) *
+                                     glm::scale(glm::mat4(1.0f), glm::vec3(dockRingScale * 0.12f, dockRingScale * 0.28f, dockRingScale * 0.04f));
+                m_planetShader->setUniformMat4f("u_Model", petalMat);
+                m_sphere.draw();
+              }
+
+              // 4. Laser Alignment Strobe Beacons at 45, 135, 225, 315 deg
+              const float strobeR = collarR * 1.18f;
+              const bool strobeFlash = (std::fmod(time, 0.30f) < 0.15f);
+              const glm::vec3 strobeCol = (isDocked || animPhase == 2 || animPhase == 3)
+                                              ? glm::vec3(0.20f, 1.0f, 0.40f)
+                                              : (strobeFlash ? glm::vec3(1.0f, 0.85f, 0.25f) : glm::vec3(0.20f, 0.85f, 1.0f));
+
+              m_planetShader->setUniform1i("u_Type", 0);
+              m_planetShader->setUniform1i("u_Body", 1);
+              m_planetShader->setUniform3f("u_ColA", strobeCol.x, strobeCol.y, strobeCol.z);
+              m_planetShader->setUniform3f("u_ColB", strobeCol.x * 1.5f, strobeCol.y * 1.5f, strobeCol.z * 1.5f);
+
+              for (int sIdx = 0; sIdx < 4; ++sIdx) {
+                const float sTh = glm::radians(45.0f + static_cast<float>(sIdx) * 90.0f);
+                const glm::vec3 localStrobe(strobeR * std::cos(sTh), strobeR * std::sin(sTh), 0.01f);
+                const glm::vec3 worldStrobe = portPos + glm::vec3(rotM * glm::vec4(localStrobe, 0.0f));
+                glm::mat4 strobeMat = glm::translate(glm::mat4(1.0f), worldStrobe) *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(0.016f));
+                m_planetShader->setUniformMat4f("u_Model", strobeMat);
+                m_sphere.draw();
+              }
+              m_planetShader->unbind();
+            }
           }
         } // end if (warpdrive::dockSitesVisible())
 
@@ -2773,6 +2948,80 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                      kGlowTint[pal].z);
           s_engine.draw();
           m_starShader->unbind();
+        }
+
+        // === Batch A2 & Issue #65: Procedural RCS Cold-Gas Thruster Plumes ===
+        const float rcsTimer = warpdrive::rcsVisualTimer();
+        if (rcsTimer > 0.001f) {
+          const int rcsMask = warpdrive::rcsVisualMask();
+          const float sy = warpdrive::shipYaw();
+          const float fwX = -std::sin(sy);
+          const float fwZ = -std::cos(sy);
+          const float rtX = std::cos(sy);
+          const float rtZ = -std::sin(sy);
+          const glm::vec3 sCenter(warpdrive::shipX(), warpdrive::shipY(), warpdrive::shipZ());
+
+          struct RcsNozzle {
+            float localX, localY, localZ;
+            float dirX, dirY, dirZ;
+            int maskBit;
+          };
+
+          const RcsNozzle nozzles[] = {
+            { -0.25f, 0.02f, -0.45f, -1.0f, 0.0f, 0.0f, 1 },   // Bow Left
+            {  0.25f, 0.02f, -0.45f,  1.0f, 0.0f, 0.0f, 2 },   // Bow Right
+            { -0.32f, 0.02f,  0.45f, -1.0f, 0.0f, 0.0f, 4 },   // Aft Left
+            {  0.32f, 0.02f,  0.45f,  1.0f, 0.0f, 0.0f, 8 },   // Aft Right
+            { -0.15f, 0.0f,  -0.55f,  0.0f, 0.0f, -1.0f, 16 },  // Retro Bow Left (pushes back)
+            {  0.15f, 0.0f,  -0.55f,  0.0f, 0.0f, -1.0f, 16 }   // Retro Bow Right (pushes back)
+          };
+
+          static LineMesh s_rcsMesh;
+          std::vector<glm::vec3> rcsVerts;
+          std::vector<unsigned int> rcsIndices;
+          rcsVerts.reserve(48);
+          rcsIndices.reserve(48);
+
+          const float plumeLen = 0.16f * std::clamp(rcsTimer / 0.15f, 0.25f, 1.0f);
+          const float puffW = 0.045f;
+
+          for (const auto& noz : nozzles) {
+            if ((rcsMask & noz.maskBit) || rcsMask == 0) {
+              glm::vec3 nPos = sCenter + glm::vec3(rtX * noz.localX + fwX * noz.localZ,
+                                                   noz.localY,
+                                                   rtZ * noz.localX + fwZ * noz.localZ);
+              glm::vec3 nDir = glm::normalize(glm::vec3(rtX * noz.dirX + fwX * noz.dirZ,
+                                                        noz.dirY,
+                                                        rtZ * noz.dirX + fwZ * noz.dirZ));
+              glm::vec3 nPerp(-nDir.z, nDir.y + 0.15f, nDir.x);
+              if (glm::length(nPerp) > 0.001f) nPerp = glm::normalize(nPerp);
+
+              unsigned int baseIdx = static_cast<unsigned int>(rcsVerts.size());
+              rcsVerts.push_back(nPos);
+              rcsVerts.push_back(nPos + nDir * plumeLen + nPerp * puffW);
+              rcsVerts.push_back(nPos + nDir * (plumeLen * 1.25f));
+              rcsVerts.push_back(nPos + nDir * plumeLen - nPerp * puffW);
+
+              rcsIndices.push_back(baseIdx);
+              rcsIndices.push_back(baseIdx + 1);
+              rcsIndices.push_back(baseIdx);
+              rcsIndices.push_back(baseIdx + 2);
+              rcsIndices.push_back(baseIdx);
+              rcsIndices.push_back(baseIdx + 3);
+            }
+          }
+
+          if (!rcsVerts.empty()) {
+            s_rcsMesh.setGeometry(rcsVerts, rcsIndices);
+            m_linesShader->bind();
+            m_linesShader->setUniformMat4f("u_MVP", mvp);
+            m_linesShader->setUniformMat4f("u_Model", glm::mat4(1.0f));
+            m_linesShader->setUniform1f("u_Time", time);
+            const float alpha = std::clamp(rcsTimer / 0.20f, 0.0f, 1.0f);
+            m_linesShader->setUniform3f("u_LineColor", 0.85f * alpha, 0.94f * alpha, 1.0f * alpha);
+            s_rcsMesh.drawLines();
+            m_linesShader->unbind();
+          }
         }
         // === v3.6.0 (пасс D): полоса обломков в Travel === конвейер
         // из 24 «камней»: короткие LineMesh-стриики вдоль курса от носа
