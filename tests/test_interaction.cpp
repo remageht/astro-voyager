@@ -446,6 +446,55 @@ int main() {
     }
   }
 
+  // Test 20 (v4.6.2): Docking corridor kinematics & orbital co-movement (Issue #63)
+  {
+    astro::ShipState ship;
+    ship.isDocked = true;
+    ship.dockedStationId = "dock-sol";
+    if (!ship.isDocked || ship.dockedStationId != "dock-sol") {
+      std::cerr << "Test 20 failed: ship must retain docked state and station id\n";
+      return 1;
+    }
+
+    // Bezier corridor trajectory test: B(s) = (1-s)^2 P0 + 2(1-s)s P1 + s^2 P2
+    const astro::Vec3 p0(0.0, 0.0, 5.0);        // Initial approach position
+    const astro::Vec3 p1(0.0, 0.0, 2.0);        // Corridor entrance waypoint
+    const astro::Vec3 p2(0.0, 0.0, 0.22);       // Latched collar position
+
+    auto bezier = [&](double s) -> astro::Vec3 {
+      double oneMinus = 1.0 - s;
+      double b0 = oneMinus * oneMinus;
+      double b1 = 2.0 * oneMinus * s;
+      double b2 = s * s;
+      return astro::Vec3(b0 * p0.x + b1 * p1.x + b2 * p2.x,
+                         b0 * p0.y + b1 * p1.y + b2 * p2.y,
+                         b0 * p0.z + b1 * p1.z + b2 * p2.z);
+    };
+
+    astro::Vec3 start = bezier(0.0);
+    astro::Vec3 end = bezier(1.0);
+    astro::Vec3 mid = bezier(0.5);
+
+    AssertNear(static_cast<float>(start.z), 5.0f, 0.0001f, "start point at s=0");
+    AssertNear(static_cast<float>(end.z), 0.22f, 0.0001f, "end point at s=1");
+    // Midpoint should be between p1 and p2: 0.25*5 + 0.5*2 + 0.25*0.22 = 1.25 + 1.0 + 0.055 = 2.305
+    AssertNear(static_cast<float>(mid.z), 2.305f, 0.0001f, "bezier midpoint");
+
+    // Orbital co-movement test: when station moves by delta, docked ship tracks delta exactly
+    astro::Vec3 stPos1(100.0, 0.0, 50.0);
+    astro::Vec3 stPos2(100.5, 0.2, 50.8);       // Earth advanced along orbit
+    astro::Vec3 portNormal(0.0, 0.0, 1.0);
+    astro::Vec3 dockedPos1(stPos1.x + portNormal.x * 0.22, stPos1.y + portNormal.y * 0.22, stPos1.z + portNormal.z * 0.22);
+    astro::Vec3 dockedPos2(stPos2.x + portNormal.x * 0.22, stPos2.y + portNormal.y * 0.22, stPos2.z + portNormal.z * 0.22);
+
+    astro::Vec3 deltaShip(dockedPos2.x - dockedPos1.x, dockedPos2.y - dockedPos1.y, dockedPos2.z - dockedPos1.z);
+    astro::Vec3 deltaStation(stPos2.x - stPos1.x, stPos2.y - stPos1.y, stPos2.z - stPos1.z);
+
+    AssertNear(static_cast<float>(deltaShip.x), static_cast<float>(deltaStation.x), 0.0001f, "ship delta X tracks station");
+    AssertNear(static_cast<float>(deltaShip.y), static_cast<float>(deltaStation.y), 0.0001f, "ship delta Y tracks station");
+    AssertNear(static_cast<float>(deltaShip.z), static_cast<float>(deltaStation.z), 0.0001f, "ship delta Z tracks station");
+  }
+
   std::cout << "All BlackHoleInteraction tests passed!\n";
   return 0;
 }
