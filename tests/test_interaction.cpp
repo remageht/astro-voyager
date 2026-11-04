@@ -4,8 +4,10 @@
 #include "../src/WarpJump.h"  // v3.6.0: asteroid barrage in Travel (pass D)
 
 #include <cmath>
-#include <iostream>
 #include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <limits>
 #include <string>
 
 namespace {
@@ -551,6 +553,61 @@ int main() {
     }
     if (astro::docking::isGatePassed(1.0f, astro::docking::kCorridorGateDistances[0])) {
       std::cerr << "Test 21 failed: gate 0 must NOT be passed at projDist=1.0\n";
+      return 1;
+    }
+  }
+
+  // Test 22 (Issue #69): Audit hardening verification (normalizeAngleSigned, NaN/Inf immunity, asset validation)
+  {
+    constexpr double kPi = 3.14159265358979323846;
+
+    // 1. Basic angle normalization within [-pi, pi]
+    AssertNear(static_cast<float>(astro::normalizeAngleSigned(0.0)), 0.0f, 0.0001f, "angle 0");
+    AssertNear(static_cast<float>(astro::normalizeAngleSigned(0.5 * kPi)), static_cast<float>(0.5 * kPi), 0.0001f, "angle pi/2");
+    AssertNear(static_cast<float>(astro::normalizeAngleSigned(2.0 * kPi)), 0.0f, 0.0001f, "angle 2pi");
+    AssertNear(static_cast<float>(astro::normalizeAngleSigned(2.5 * kPi)), static_cast<float>(0.5 * kPi), 0.0001f, "angle 2.5pi");
+    AssertNear(static_cast<float>(astro::normalizeAngleSigned(-2.5 * kPi)), static_cast<float>(-0.5 * kPi), 0.0001f, "angle -2.5pi");
+
+    // 2. Extreme and non-finite inputs must NOT hang or enter infinite loops
+    const double largeVal = 1.0e12;
+    const double normLarge = astro::normalizeAngleSigned(largeVal);
+    if (!std::isfinite(normLarge) || std::abs(normLarge) > kPi) {
+      std::cerr << "Test 22 failed: 1e12 normalization must be bounded within [-pi, pi]\n";
+      return 1;
+    }
+
+    const double infVal = std::numeric_limits<double>::infinity();
+    const double nanVal = std::numeric_limits<double>::quiet_NaN();
+    if (astro::normalizeAngleSigned(infVal) != 0.0 ||
+        astro::normalizeAngleSigned(-infVal) != 0.0 ||
+        astro::normalizeAngleSigned(nanVal) != 0.0) {
+      std::cerr << "Test 22 failed: inf/nan normalization must safely fallback to 0.0\n";
+      return 1;
+    }
+
+    // 3. Telemetry computation with extreme angular divergence
+    const astro::Vec3 shipPos(0.0, 0.0, 5.0);
+    const astro::Vec3 shipVel(0.0, 0.0, -0.1);
+    const astro::Vec3 portPos(0.0, 0.0, 0.0);
+    const astro::Vec3 portNorm(0.0, 0.0, 1.0);
+    astro::docking::DockTelemetry telemInf = astro::docking::computeTelemetry(
+        shipPos, shipVel, infVal, nanVal, portPos, portNorm, 0.0, 0.0);
+    if (!std::isfinite(telemInf.yawErrorDeg) || !std::isfinite(telemInf.pitchErrorDeg)) {
+      std::cerr << "Test 22 failed: telemetry must remain finite when given non-finite angles\n";
+      return 1;
+    }
+
+    // 4. Verification that finale_fifth_alliance asset exists and is non-empty
+    std::filesystem::path assetPath = "res/story/finale_fifth_alliance.jpg";
+    if (!std::filesystem::exists(assetPath)) {
+      assetPath = "../res/story/finale_fifth_alliance.jpg";
+    }
+    if (!std::filesystem::exists(assetPath)) {
+      std::cerr << "Test 22 failed: res/story/finale_fifth_alliance.jpg must exist on disk\n";
+      return 1;
+    }
+    if (std::filesystem::file_size(assetPath) < 50000) {
+      std::cerr << "Test 22 failed: res/story/finale_fifth_alliance.jpg must be a valid non-empty image\n";
       return 1;
     }
   }

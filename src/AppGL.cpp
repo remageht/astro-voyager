@@ -1712,10 +1712,7 @@ void AppGL::updateFlight(float deltaTime) {
   if (t < 0.0f) t = 0.0f;
   if (t > 1.0f) t = 1.0f;
   float e = t * t * (3.0f - 2.0f * t);
-  const double kPi = 3.14159265358979323846;
-  double yawDelta = m_yawTo - m_yawFrom;
-  while (yawDelta > kPi) yawDelta -= 2.0 * kPi;
-  while (yawDelta < -kPi) yawDelta += 2.0 * kPi;
+  const double yawDelta = normalizeAngleSigned(m_yawTo - m_yawFrom);
   m_camera.position.x = m_flyFrom.x + (m_flyTo.x - m_flyFrom.x) * e;
   m_camera.position.y = m_flyFrom.y + (m_flyTo.y - m_flyFrom.y) * e;
   m_camera.position.z = m_flyFrom.z + (m_flyTo.z - m_flyFrom.z) * e;
@@ -3393,7 +3390,7 @@ void AppGL::drawSlidesOverlay() {
   if (hasVideo) {
     if (m_videoFrames == 0) {
       for (int i = 1; i <= 4000; ++i) {
-        char buf[64];
+        char buf[512];
         snprintf(buf, sizeof(buf), "%s/frame_%03d.jpg",
                  sl.videoDir.c_str(), i);
         if (!std::filesystem::exists(buf)) break;
@@ -3513,7 +3510,7 @@ void AppGL::drawSlidesOverlay() {
     int fi = static_cast<int>(vTime * 12.0);
     if (fi >= m_videoFrames) fi = m_videoFrames - 1;
     if (fi != m_videoIdx) {
-      char buf[64];
+      char buf[512];
       snprintf(buf, sizeof(buf), "%s/frame_%03d.jpg", sl.videoDir.c_str(),
                fi + 1);
       int w = 0;
@@ -3604,7 +3601,7 @@ void AppGL::drawSlidesOverlay() {
       int fi = static_cast<int>(vTime * 12.0);
       if (fi >= m_videoFrames) fi = m_videoFrames - 1;
       if (fi != m_videoIdx) {
-        char buf[64];
+        char buf[512];
         snprintf(buf, sizeof(buf), "%s/frame_%03d.jpg", sl.videoDir.c_str(),
                  fi + 1);
         int w = 0;
@@ -5206,9 +5203,7 @@ void AppGL::updateShip(float deltaTime) {
       m_camera.position.z = b0 * p0.z + b1 * p1.z + b2 * p2.z;
 
       // Shortest-arc attitude alignment
-      double diffYaw = targetYaw - m_dockStartYaw;
-      while (diffYaw > 3.14159265358979323846) diffYaw -= 2.0 * 3.14159265358979323846;
-      while (diffYaw < -3.14159265358979323846) diffYaw += 2.0 * 3.14159265358979323846;
+      const double diffYaw = normalizeAngleSigned(targetYaw - m_dockStartYaw);
       m_camera.yaw = m_dockStartYaw + diffYaw * static_cast<double>(s);
       m_camera.pitch = m_dockStartPitch + (targetPitch - m_dockStartPitch) * static_cast<double>(s);
 
@@ -8822,10 +8817,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
     m_camera.position = Vec3(m_jumpPushinPos.x + (m_jumpFpPos.x - m_jumpPushinPos.x) * e,
                              m_jumpPushinPos.y + (m_jumpFpPos.y - m_jumpPushinPos.y) * e,
                              m_jumpPushinPos.z + (m_jumpFpPos.z - m_jumpPushinPos.z) * e);
-    const double kPi = 3.14159265358979323846;
-    double yawDelta = m_jumpFpYaw - m_jumpPushinYaw;
-    while (yawDelta > kPi) yawDelta -= 2.0 * kPi;
-    while (yawDelta < -kPi) yawDelta += 2.0 * kPi;
+    const double yawDelta = normalizeAngleSigned(m_jumpFpYaw - m_jumpPushinYaw);
     m_camera.yaw = m_jumpPushinYaw + yawDelta * e;
     m_camera.pitch = m_jumpPushinPitch + (m_jumpFpPitch - m_jumpPushinPitch) * e;
     m_jumpCamPos = m_camera.position;
@@ -9703,6 +9695,7 @@ void AppGL::audioUpdate(float deltaTime) {
     }
     if (tickPeriod > 0.0) {
       m_audioTickAcc += deltaTime;
+      if (m_audioTickAcc > 0.5) m_audioTickAcc = tickPeriod;
       while (m_audioTickAcc >= tickPeriod) {
         m_audioTickAcc -= tickPeriod;
         // v4.3.0: 3D spatial panning [-1.0 .. +1.0] across camera azimuth

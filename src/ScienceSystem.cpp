@@ -10,6 +10,7 @@ namespace {
 
 // Clamps beta to avoid relativistic singularity in sqrt((1+beta)/(1-beta))
 double clampBeta(double b) {
+  if (!std::isfinite(b)) return 0.0;
   if (b < -0.95) return -0.95;
   if (b > 0.95) return 0.95;
   return b;
