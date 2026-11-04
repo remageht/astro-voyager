@@ -26,7 +26,7 @@ const std::vector<ExpeditionChapter>& expeditionChapters();
 
 // v4.1+ Adventure finale branch: 0 = decision pending, 1 = colony,
 // 2 = far horizon, 3 = solar rebirth, 4 = loop transcendence, 5 = ark citadel,
-// 6 = hyper-breakthrough (Egorka-6).
+// 6 = hyper-breakthrough (Egorka-6), 7 = fifth universe alliance (Arseny).
 // Stored in expedition.json next to chapterIndex.
 constexpr int kFinaleUnset = 0;
 constexpr int kFinaleColony = 1;            // Mia Sato: New Home at M13
@@ -35,6 +35,7 @@ constexpr int kFinaleSolarRebirth = 3;      // Dr. Elena Rostova: Reignite the S
 constexpr int kFinaleLoopTranscendence = 4;  // EgorKa: Sgr A* Singular Time Loop
 constexpr int kFinaleArkCitadel = 5;        // Cmdr. Mark Hale: Orbital Ark Citadel
 constexpr int kFinaleHyperBreakthrough = 6; // EgorKa-6: Shattered Temporal Loop & Multiverse Overclock
+constexpr int kFinaleFifthAlliance = 7;     // Arseny «Executioner of False Hopes»: Fifth Universe Alliance
 
 std::string finaleTitleRu(int choice);
 std::string finaleTitleEn(int choice);

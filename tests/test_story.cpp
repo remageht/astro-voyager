@@ -272,6 +272,38 @@ int main() {
     }
   }
 
+  // Test 7k: magnetar sgr-1806 visit unlocks executioner-hopes (Arseny).
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"sgr-1806"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "executioner-hopes") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7k failed: sgr-1806 visit should unlock executioner-hopes\n";
+      return 1;
+    }
+  }
+
+  // Test 7l: psr-b1913 binary pulsar visit unlocks stasis-mattress.
+  {
+    StoryJournal j;
+    StoryJournal::Progress p;
+    p.visited = {"psr-b1913"};
+    j.refresh(p);
+    bool ok = false;
+    for (const auto& e : j.entries()) {
+      if (e.id == "stasis-mattress") ok = e.unlocked;
+    }
+    if (!ok) {
+      std::cerr << "Test 7l failed: psr-b1913 visit should unlock stasis-mattress\n";
+      return 1;
+    }
+  }
+
   // Test 8: unread counting and markAllRead; read marks survive refresh.
   {
     StoryJournal j;
@@ -310,7 +342,7 @@ int main() {
       std::cerr << "Test 9 failed: repeated refresh changed unlock state\n";
       return 1;
     }
-    if (j.entries().size() != 20) {
+    if (j.entries().size() != 22) {
       std::cerr << "Test 9 failed: catalog size drifted ("
                 << j.entries().size() << ")\n";
       return 1;

@@ -251,6 +251,7 @@ int main() {
         astro::kFinaleLoopTranscendence,
         astro::kFinaleArkCitadel,
         astro::kFinaleHyperBreakthrough,
+        astro::kFinaleFifthAlliance,
     };
     for (int e : endings) {
       if (astro::finaleTitleRu(e).empty() || astro::finaleTitleEn(e).empty()) {

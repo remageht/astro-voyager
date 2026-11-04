@@ -399,10 +399,14 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "Мия: «Свет огибает горизонт — и мы видим его кольцо». Егорка перехватывает "
         "штурвал, когда приливная гравитация тянет корабль: «Не бойся, Мия. "
         "Я держу пузырь». Звёздный кулон резонирует на частоте метрики Керра. "
+        "В эфир с рыком пробивается Арсений («Палач Ложных Надежд»): «Куда ты лезешь, смертник?! "
+        "Твой варп сомнётся через три секунды! Ложись на мой стазис-вектор, живо!» "
         "Елена передаёт с Земли: «Гравитационное замедление на пределе — вы в миллисекундах от сингулярности!»",
         "Mia: \"Light bends around the horizon - and we see its ring.\" Egorka steeps "
         "the thrusters as tidal drag pulls toward the singularity: \"Don't be afraid, Mia. "
         "I've got the bubble.\" The star pendant resonates at the Kerr metric frequency. "
+        "Arseny (\"Executioner of False Hopes\") barks over the comms: \"Where do you think you're going, suicidal fool?! "
+        "Your warp field will buckle in three seconds! Align with my stasis vector, now!\" "
         "Elena radios: \"Gravitational dilation is extreme - you are milliseconds from the singularity!\"",
         6});
     s.push_back(StorySlide{  // 3: m87 done
@@ -417,20 +421,26 @@ const std::vector<StorySlide>& storyChapterSlides() {
         7});
     s.push_back(StorySlide{  // 4: qso done
         "Мия: «Этот свет шёл к нам ещё до первых динозавров». Егорка достаёт звёздный кулон: "
-        "«Два с половиной миллиарда лет... В этой тьме время теряет смысл. Главное — "
-        "кто сидит в кресле рядом с тобой». Квазар 3C 273 позади; метрика вакуума полностью откалибрована.",
+        "«Два с половиной миллиарда лет... В этой тьме время теряет смысл». "
+        "Арсений едко замечает по закрытому каналу: «Время теряет смысл только у романтиков. "
+        "Для физики это 2.4 миллиарда лет энтропии. Не расслабляйтесь — впереди M13». "
+        "Квазар 3C 273 позади; метрика вакуума полностью откалибрована.",
         "Mia: \"This light traveled to us before the first dinosaurs.\" Egorka reaches for "
-        "his star pendant: \"Two and a half billion years... In this void, time loses meaning. All that "
-        "matters is who sits in the seat beside you.\" Quasar 3C 273 behind them; vacuum metric fully calibrated.",
+        "his star pendant: \"Two and a half billion years... In this void, time loses meaning.\" "
+        "Arseny snaps bitterly over encrypted radio: \"Time only loses meaning to romantics. "
+        "To physics, this is 2.4 billion years of relentless entropy. Don't slack off — M13 is dead ahead.\" "
+        "Quasar 3C 273 behind them; vacuum metric fully calibrated.",
         8});
     s.push_back(StorySlide{  // 5: m13 done - new candidates
         "Мия: «Вот он — второй дом. Но у нас остался один выбор». На канале связи голоса "
         "разделились. Елена: «Вернитесь к Земле, и мы возродим Солнце!» Марк: «Объединяйте флот "
-        "в мобильный Ковчег!» Мия смотрит на звёзды M13, а Егорка сжимает кулон. "
+        "в мобильный Ковчег!» Арсений с борта крейсера «Мянь Лун» холодно бросает: «Хватит бегать от энтропии. "
+        "Объедините мой стазис-щит с варп-ядром — или погибнете в наивных иллюзиях». "
         "Судьба экспедиции — в руках экипажа.",
         "Mia: \"There it is - a second home. But we have one choice left.\" On the comm link, "
         "voices diverge. Elena: \"Return to Earth and reignite the Sun!\" Mark: \"Unite the fleet "
-        "into a mobile Ark Citadel!\" Mia looks to M13's stars, while Egorka holds his pendant. "
+        "into a mobile Ark Citadel!\" Arseny radios coldly from cruiser \"Mian Long\": \"Stop running from entropy. "
+        "Merge my stasis shield with the warp core — or perish in your naive delusions.\" "
         "The fate of the mission rests in the crew's hands.",
         9});
     s.push_back(StorySlide{  // 6: neutral finale fallback (legacy saves)
@@ -524,6 +534,18 @@ const std::vector<StorySlide>& storyChapterSlides() {
         "Astro-Voyager does not fall into the singularity, but punches straight through the multiverse membrane! "
         "The temporal loop is shattered. Ahead lie infinite realities and boundless freedom.",
         0, "res/story/finale_hyper_breakthrough.jpg"});
+    s.push_back(StorySlide{  // 14: fifth universe alliance ending (branch G - Arseny)
+        "Арсений («Палач Ложных Надежд»): «Твою мать... Коэффициент сошёлся! "
+        "Демпфер нулевой кинетики держит перегрузку, варп-пузырь стабилен!» "
+        "Обсидиановый крейсер «Мянь Лун» и Astro-Voyager слили щиты в единый каскад. "
+        "Мост между Вселенными открыт; миллионы спасены. Арсений с трудом скрывает скупую улыбку: "
+        "«Не смей говорить, что это дружба, Егорка. Это математика. А теперь дай мне поспать на моём 'матрасе'».",
+        "Arseny (\"Executioner of False Hopes\"): \"Damn it all... The metric coefficients converged! "
+        "The zero-kinetic dampener is absorbing the tidal drag, the warp bubble holds firm!\" "
+        "The obsidian cruiser \"Mian Long\" and Astro-Voyager merged their shields into a unified cascade. "
+        "The inter-universal bridge is anchored; millions are saved. Arseny barely conceals a faint, grim smile: "
+        "\"Don't you dare call this friendship, Egorka. It's pure mathematics. Now let me sleep on my so-called 'mattress'\".",
+        0, "res/story/finale_fifth_alliance.jpg"});
     return s;
   }();
   return slides;
@@ -537,6 +559,7 @@ int slideIndexForFinale(int choice) {
     case kFinaleLoopTranscendence: return 11;
     case kFinaleArkCitadel: return 12;
     case kFinaleHyperBreakthrough: return 13;
+    case kFinaleFifthAlliance: return 14;
     default: return 6;
   }
 }
