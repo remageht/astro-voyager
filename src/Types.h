@@ -332,6 +332,18 @@ inline float speedFx(float speed, float ref) {
 }
 }  // namespace view
 
+// === Safe O(1) angle normalization in [-pi, pi] ===
+namespace math {
+inline double normalizeAngleSigned(double angle) {
+  if (!std::isfinite(angle)) return 0.0;
+  constexpr double kPi = 3.14159265358979323846;
+  constexpr double kTwoPi = 2.0 * kPi;
+  return std::remainder(angle, kTwoPi);
+}
+}  // namespace math
+
+using math::normalizeAngleSigned;
+
 // === Docking Realism: Telemetry, 3D Corridor & RCS (Issue #65) ===
 namespace docking {
 
@@ -367,15 +379,11 @@ inline DockTelemetry computeTelemetry(const Vec3& shipPos, const Vec3& shipVel,
     t.closingRateMps = static_cast<float>(-relVelProj * 25.0);
   }
 
-  // Shortest-arc angular deviations
-  double dYaw = targetYaw - shipYaw;
-  while (dYaw > 3.14159265358979323846) dYaw -= 2.0 * 3.14159265358979323846;
-  while (dYaw < -3.14159265358979323846) dYaw += 2.0 * 3.14159265358979323846;
+  // Shortest-arc angular deviations: O(1) remainder guaranteed finite & bounded
+  const double dYaw = normalizeAngleSigned(targetYaw - shipYaw);
   t.yawErrorDeg = static_cast<float>(dYaw * 180.0 / 3.14159265358979323846);
 
-  double dPitch = targetPitch - shipPitch;
-  while (dPitch > 3.14159265358979323846) dPitch -= 2.0 * 3.14159265358979323846;
-  while (dPitch < -3.14159265358979323846) dPitch += 2.0 * 3.14159265358979323846;
+  const double dPitch = normalizeAngleSigned(targetPitch - shipPitch);
   t.pitchErrorDeg = static_cast<float>(dPitch * 180.0 / 3.14159265358979323846);
 
   // Longitudinal & lateral positions along corridor axis

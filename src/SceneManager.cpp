@@ -805,6 +805,7 @@ void SceneManager::updateDockSites() {
 
 void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float time) {
   if (!m_currentStation) return;
+  if (fbWidth <= 0 || fbHeight <= 0) return;
 
   // === PostFX === весь кадр идёт в scene FBO, композит в конце render():
   // и петля, и харнесс скриншотов зовут только этот метод.
