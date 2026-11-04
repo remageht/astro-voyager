@@ -182,6 +182,8 @@ int AppGL::run() {
   m_saveInteractive = true;
   loadProfileNow(true);
   loadExpeditionFileNow();  // === Expedition === (v3.5.0): свой сейв арки.
+  loadZettelkastenFileNow(); // === Zettelkasten === (v4.8.0): Второй мозг Егорки.
+  m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
   float lastTime = static_cast<float>(glfwGetTime());
   static float menuAngle = 0.0f;
 
@@ -476,7 +478,8 @@ int AppGL::run() {
 
   // === SaveGame === (v3.4.0): автосейв при выходе (тихо, без тостов).
   saveProfileNow(true);
-  saveExpeditionFileNow();  // === Expedition === (v3.5.0).
+  saveExpeditionFileNow();   // === Expedition === (v3.5.0).
+  saveZettelkastenFileNow(); // === Zettelkasten === (v4.8.0).
 
   return 0;
 }
@@ -502,9 +505,10 @@ void AppGL::processInput(float deltaTime) {
 
   const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
   if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard && !m_slidesOpen) {
-    // === Expedition === (v3.5.0): Esc сначала закрывает карту глав; на
-    // слайдах Esc обрабатывает сам оверлей (там же — «досмотреть»).
-    if (m_expeditionMapOpen) {
+    // === Expedition & Zettelkasten ===: Esc сначала закрывает оверлеи.
+    if (m_zettelkastenOpen) {
+      m_zettelkastenOpen = false;
+    } else if (m_expeditionMapOpen) {
       m_expeditionMapOpen = false;
     } else {
       m_inMenu = true;
@@ -552,6 +556,16 @@ void AppGL::processInput(float deltaTime) {
     if (m_storyOpen) m_story.markAllRead();
   }
   m_prevJPressed = jDown;
+
+  // === Astro-Zettelkasten === (v4.8.0): B — ментальный граф мыслей Егорки (Second Brain)
+  const bool bDown = (glfwGetKey(win, GLFW_KEY_B) == GLFW_PRESS);
+  if (bDown && !m_prevBPressed && !io.WantCaptureKeyboard && !m_inMenu && m_slidesCurrent.empty()) {
+    m_zettelkastenOpen = !m_zettelkastenOpen;
+    if (m_zettelkastenOpen) {
+      m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
+    }
+  }
+  m_prevBPressed = bDown;
 
   // === Expedition === (v3.5.0): N — карта глав экспедиции (M занят
   // audio-mute; в прологе и меню не мешает).
@@ -3155,6 +3169,33 @@ void AppGL::openEndingSlide(int choice) {
   const int idx = slideIndexForFinale(choice);
   if (idx < 0 || idx >= static_cast<int>(slides.size())) return;
   m_slidesCurrent.assign(1, slides[idx]);
+  // === Astro-Zettelkasten True Ending Injection ===
+  if (choice == kFinaleSolarRebirth && m_zettelkasten.isClusterTrueEndingUnlocked(kClusterSolar)) {
+    StorySlide ts;
+    ts.textRu = ZettelGraph::getTrueEndingEpilogueRu(kClusterSolar);
+    ts.textEn = ZettelGraph::getTrueEndingEpilogueEn(kClusterSolar);
+    ts.art = 1;
+    m_slidesCurrent.push_back(ts);
+  } else if (choice == kFinaleFifthAlliance && m_zettelkasten.isClusterTrueEndingUnlocked(kClusterStasis)) {
+    StorySlide ts;
+    ts.textRu = ZettelGraph::getTrueEndingEpilogueRu(kClusterStasis);
+    ts.textEn = ZettelGraph::getTrueEndingEpilogueEn(kClusterStasis);
+    ts.art = 2;
+    m_slidesCurrent.push_back(ts);
+  } else if (choice == kFinaleColony && m_zettelkasten.isClusterTrueEndingUnlocked(kClusterEden)) {
+    StorySlide ts;
+    ts.textRu = ZettelGraph::getTrueEndingEpilogueRu(kClusterEden);
+    ts.textEn = ZettelGraph::getTrueEndingEpilogueEn(kClusterEden);
+    ts.art = 0;
+    m_slidesCurrent.push_back(ts);
+  } else if ((choice == kFinaleHyperBreakthrough || choice == kFinaleLoopTranscendence) &&
+             m_zettelkasten.isClusterTrueEndingUnlocked(kClusterMultiverse)) {
+    StorySlide ts;
+    ts.textRu = ZettelGraph::getTrueEndingEpilogueRu(kClusterMultiverse);
+    ts.textEn = ZettelGraph::getTrueEndingEpilogueEn(kClusterMultiverse);
+    ts.art = 3;
+    m_slidesCurrent.push_back(ts);
+  }
   if (slides.size() > 9) m_slidesCurrent.push_back(slides[9]);
   m_slidesHead = uiRu(finaleTitleRu(choice).c_str(),
                       finaleTitleEn(choice).c_str());
@@ -3194,6 +3235,25 @@ void AppGL::loadExpeditionFileNow() {
       m_finaleChoiceOpen = true;
     }
   }
+}
+
+void AppGL::saveZettelkastenFileNow() {
+  const std::string dir = saveProfileDir();
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  std::ofstream f(zettelkastenFilePathFor(dir), std::ios::binary | std::ios::trunc);
+  if (!f.is_open()) return;
+  const std::string text = m_zettelkasten.serialize();
+  f.write(text.c_str(), static_cast<std::streamsize>(text.size()));
+}
+
+void AppGL::loadZettelkastenFileNow() {
+  const std::string dir = saveProfileDir();
+  std::ifstream f(zettelkastenFilePathFor(dir), std::ios::binary);
+  if (!f.is_open()) return;
+  std::ostringstream buf;
+  buf << f.rdbuf();
+  m_zettelkasten.deserialize(buf.str());
 }
 
 namespace {
@@ -4052,6 +4112,16 @@ void AppGL::drawFinaleChoice() {
     ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
                        uiRu("«Остаться здесь, основать цветущую колонию и дать детям увидеть чистое небо».",
                             "\"Stay here, found a thriving colony, and let our children see a true sky.\""));
+    const float edenProg = m_zettelkasten.getClusterProgress(kClusterEden);
+    if (m_zettelkasten.isClusterTrueEndingUnlocked(kClusterEden)) {
+      ImGui::TextColored(ImVec4(0.30f, 1.00f, 0.50f, 1.0f), "   ★ %s",
+                         uiRu("[Второй Мозг: 100% · ОТКРЫТ ИСТИННЫЙ ФИНАЛ: ЦВЕТУЩИЙ ЭДЕМ]",
+                              "[Second Brain: 100% · UNLOCKED TRUE ENDING: BLOSSOMING EDEN]"));
+    } else {
+      ImGui::TextColored(ImVec4(0.50f, 0.70f, 0.85f, 0.8f), "   %s: %d%%",
+                         uiRu("Резонанс кластера Новый Эдем", "New Eden Cluster Resonance"),
+                         static_cast<int>(edenProg * 100.0f));
+    }
     if (m_finaleChoiceOpen &&
         ImGui::Button(uiRu("✔ Выбрать: Основать колонию на M13",
                            "✔ Choose: Found Colony at M13"), ImVec2(-1.0f, 30.0f))) {
@@ -4090,6 +4160,16 @@ void AppGL::drawFinaleChoice() {
     ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
                        uiRu("«Вернуться к Земле с формулой Казимира, впрыснуть антиматерию и спасти 8 миллиардов людей».",
                             "\"Return to Earth with the Casimir formula, inject antimatter and save 8 billion lives.\""));
+    const float solarProg = m_zettelkasten.getClusterProgress(kClusterSolar);
+    if (m_zettelkasten.isClusterTrueEndingUnlocked(kClusterSolar)) {
+      ImGui::TextColored(ImVec4(1.00f, 0.85f, 0.30f, 1.0f), "   ★ %s",
+                         uiRu("[Второй Мозг: 100% · ОТКРЫТ ИСТИННЫЙ ФИНАЛ: ВЕЧНЫЙ РАССВЕТ]",
+                              "[Second Brain: 100% · UNLOCKED TRUE ENDING: ETERNAL DAWN]"));
+    } else {
+      ImGui::TextColored(ImVec4(0.50f, 0.70f, 0.85f, 0.8f), "   %s: %d%%",
+                         uiRu("Резонанс кластера Солнечный Синтез", "Solar Synthesis Cluster Resonance"),
+                         static_cast<int>(solarProg * 100.0f));
+    }
     if (m_finaleChoiceOpen &&
         ImGui::Button(uiRu("✔ Выбрать: Возродить Солнце и спасти Землю",
                            "✔ Choose: Reignite the Sun and Save Earth"), ImVec2(-1.0f, 30.0f))) {
@@ -4147,6 +4227,16 @@ void AppGL::drawFinaleChoice() {
     ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
                        uiRu("«Разогнать варп-ядро до 135%, пробить сингулярность Sgr A* фазовым кристаллом и выйти в Мультивселенную».",
                             "\"Overclock the warp core to 135%, shatter Sgr A* with the phase shard and punch into the Multiverse.\""));
+    const float multiProg = m_zettelkasten.getClusterProgress(kClusterMultiverse);
+    if (m_zettelkasten.isClusterTrueEndingUnlocked(kClusterMultiverse)) {
+      ImGui::TextColored(ImVec4(0.90f, 0.50f, 1.00f, 1.0f), "   ★ %s",
+                         uiRu("[Второй Мозг: 100% · ОТКРЫТ ИСТИННЫЙ ФИНАЛ: АРХИТЕКТОРЫ БЕСКОНЕЧНОСТИ]",
+                              "[Second Brain: 100% · UNLOCKED TRUE ENDING: ARCHITECTS OF INFINITY]"));
+    } else {
+      ImGui::TextColored(ImVec4(0.50f, 0.70f, 0.85f, 0.8f), "   %s: %d%%",
+                         uiRu("Резонанс кластера Мультивселенная", "Multiverse Cluster Resonance"),
+                         static_cast<int>(multiProg * 100.0f));
+    }
     if (m_finaleChoiceOpen &&
         ImGui::Button(uiRu("✔ Выбрать: Совершить гиперпрорыв в Мультивселенную",
                            "✔ Choose: Execute Multiverse Hyper-Breakthrough"), ImVec2(-1.0f, 30.0f))) {
@@ -4166,6 +4256,16 @@ void AppGL::drawFinaleChoice() {
     ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.82f, 1.0f), "   %s",
                        uiRu("«Объединить квантовый стазис-щит 'Мянь Луна' с варп-ядром. Спасти цивилизации холодной математикой».",
                             "\"Merge 'Mian Long' zero-kinetic stasis shield with the warp core. Save civilizations with cold mathematics.\""));
+    const float stasisProg = m_zettelkasten.getClusterProgress(kClusterStasis);
+    if (m_zettelkasten.isClusterTrueEndingUnlocked(kClusterStasis)) {
+      ImGui::TextColored(ImVec4(0.30f, 0.90f, 1.00f, 1.0f), "   ★ %s",
+                         uiRu("[Второй Мозг: 100% · ОТКРЫТ ИСТИННЫЙ ФИНАЛ: БРАТСТВО ПЯТИ МИРОВ]",
+                              "[Second Brain: 100% · UNLOCKED TRUE ENDING: BROTHERHOOD OF FIVE REALITIES]"));
+    } else {
+      ImGui::TextColored(ImVec4(0.50f, 0.70f, 0.85f, 0.8f), "   %s: %d%%",
+                         uiRu("Резонанс кластера Пакт Пятой Вселенной", "Universe-05 Pact Cluster Resonance"),
+                         static_cast<int>(stasisProg * 100.0f));
+    }
     if (m_finaleChoiceOpen &&
         ImGui::Button(uiRu("✔ Выбрать: Заключить Пакт Палача Ложных Надежд",
                            "✔ Choose: Forge the Pact of the Executioner of False Hopes"), ImVec2(-1.0f, 30.0f))) {
@@ -4393,6 +4493,10 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (m_surfaceReportOpen && !m_inMenu) {
     drawSurfaceReportModal();
   }
+  // === Astro-Zettelkasten / Second Brain === (v4.8.0)
+  if (m_zettelkastenOpen && !m_inMenu) {
+    drawZettelkasten();
+  }
   ImGui::SetNextWindowPos(ImVec2(15.0f, 15.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(340.0f, 500.0f), ImGuiCond_FirstUseEver);
 
@@ -4415,6 +4519,12 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   ImGui::SameLine();
   if (ImGui::Button(uiRu("✦ Кодекс (K)", "✦ Codex (K)"), ImVec2(150.0f, 0))) {
     m_codexOpen = !m_codexOpen;
+  }
+  if (ImGui::Button(uiRu("🧠 Второй Мозг (B)", "🧠 Second Brain (B)"), ImVec2(150.0f, 0))) {
+    m_zettelkastenOpen = !m_zettelkastenOpen;
+    if (m_zettelkastenOpen) {
+      m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
+    }
   }
 
   // Station search box with hotkey '/' focus
@@ -6179,6 +6289,7 @@ void AppGL::saveProfileNow(bool quiet) {
       saveWriteFile(saveFilePath(SaveMode::Sandbox), saveSerialize(g), err);
 
   if (saveOk && settingsOk) {
+    saveZettelkastenFileNow();
     m_saveStatus = uiRu("Профиль сохранён", "Profile saved");
     if (!quiet) {
       m_audio.playClick();
@@ -6229,6 +6340,8 @@ void AppGL::loadProfileNow(bool quiet) {
     return;
   }
   applySaveGame(g);
+  loadZettelkastenFileNow();
+  m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
   m_saveStatus = std::string(uiRu("Профиль загружен", "Profile loaded")) +
                  ": " + g.session.station;
   if (!quiet) {
@@ -10849,4 +10962,428 @@ void AppGL::drawSurfaceReportModal() {
   ImGui::End();
 }
 
+void AppGL::drawZettelkasten() {
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowSize(ImVec2(980.0f, 640.0f), ImGuiCond_FirstUseEver);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.022f, 0.038f, 0.96f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.35f, 0.65f, 0.95f, 0.50f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+
+  if (ImGui::Begin(uiRu("🧠 Второй Мозг Егорки · Astro-Zettelkasten (B)",
+                        "🧠 Egorka's Second Brain · Astro-Zettelkasten (B)"),
+                   &m_zettelkastenOpen)) {
+    // Header summary
+    int discCount = m_zettelkasten.getDiscoveredCount();
+    int synthCount = m_zettelkasten.getSynthesizedCount();
+    int totalCount = m_zettelkasten.getTotalCount();
+    int linksCount = m_zettelkasten.getTotalLinksCount();
+
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.00f, 1.0f), "✦ %s",
+                       uiRu("МЕНТАЛЬНАЯ НЕЙРОСЕТЬ ВОСПОМИНАНИЙ И ОЗАРЕНИЙ",
+                            "NEURAL MATRIX OF MEMORIES AND EPISODIC INSIGHTS"));
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 0.9f),
+                       "| %s: %d/%d | %s: %d | %s: %d",
+                       uiRu("Открыто", "Discovered"), discCount, totalCount,
+                       uiRu("Синтез", "Synthesized"), synthCount,
+                       uiRu("Связи", "Links"), linksCount);
+
+    ImGui::Separator();
+
+    // Cluster Resonance Badges
+    float solarProg = m_zettelkasten.getClusterProgress(kClusterSolar);
+    float stasisProg = m_zettelkasten.getClusterProgress(kClusterStasis);
+    float edenProg = m_zettelkasten.getClusterProgress(kClusterEden);
+    float multiProg = m_zettelkasten.getClusterProgress(kClusterMultiverse);
+
+    auto drawClusterBadge = [&](const char* nameRu, const char* nameEn, float prog, const ImVec4& col) {
+      ImGui::TextColored(col, "%s: %d%%", uiRu(nameRu, nameEn), static_cast<int>(prog * 100.0f));
+      if (prog >= 0.999f) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "★ %s", uiRu("ИСТИННЫЙ", "TRUE"));
+      }
+    };
+
+    drawClusterBadge("Солнце", "Solar", solarProg, ImVec4(1.0f, 0.8f, 0.3f, 1.0f));
+    ImGui::SameLine(0, 20.0f);
+    drawClusterBadge("Стазис", "Stasis", stasisProg, ImVec4(0.3f, 0.85f, 1.0f, 1.0f));
+    ImGui::SameLine(0, 20.0f);
+    drawClusterBadge("Эдем", "Eden", edenProg, ImVec4(0.3f, 1.0f, 0.5f, 1.0f));
+    ImGui::SameLine(0, 20.0f);
+    drawClusterBadge("Мультивселенная", "Multiverse", multiProg, ImVec4(0.9f, 0.5f, 1.0f, 1.0f));
+
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Two-column layout: Canvas (left) and Thought Inspector (right)
+    float canvasWidth = ImGui::GetContentRegionAvail().x - 330.0f;
+    if (canvasWidth < 300.0f) canvasWidth = 300.0f;
+    float canvasHeight = ImGui::GetContentRegionAvail().y - 38.0f;
+    if (canvasHeight < 200.0f) canvasHeight = 200.0f;
+
+    // LEFT: Interactive 2D Graph Canvas
+    ImGui::BeginChild("ZettelCanvas", ImVec2(canvasWidth, canvasHeight), true,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
+    {
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      ImVec2 canvasP0 = ImGui::GetCursorScreenPos();
+      ImVec2 canvasP1 = ImVec2(canvasP0.x + canvasWidth, canvasP0.y + canvasHeight);
+      ImVec2 center = ImVec2(canvasP0.x + canvasWidth * 0.5f, canvasP0.y + canvasHeight * 0.5f);
+
+      // Clip canvas area
+      dl->PushClipRect(canvasP0, canvasP1, true);
+
+      // Canvas background
+      dl->AddRectFilled(canvasP0, canvasP1, IM_COL32(8, 12, 22, 255));
+
+      // Coordinate grid lines
+      for (float gx = canvasP0.x; gx < canvasP1.x; gx += 40.0f) {
+        dl->AddLine(ImVec2(gx, canvasP0.y), ImVec2(gx, canvasP1.y), IM_COL32(25, 35, 55, 60));
+      }
+      for (float gy = canvasP0.y; gy < canvasP1.y; gy += 40.0f) {
+        dl->AddLine(ImVec2(canvasP0.x, gy), ImVec2(canvasP1.x, gy), IM_COL32(25, 35, 55, 60));
+      }
+
+      // Draw decorative star dust
+      for (int i = 0; i < 25; ++i) {
+        float sx = canvasP0.x + std::fmod((float)(i * 97 + 31), canvasWidth);
+        float sy = canvasP0.y + std::fmod((float)(i * 73 + 17), canvasHeight);
+        float alpha = 0.3f + 0.2f * std::sin((float)glfwGetTime() * 1.5f + (float)i);
+        dl->AddCircleFilled(ImVec2(sx, sy), 1.5f, ImColor(0.6f, 0.7f, 1.0f, alpha));
+      }
+
+      auto& notes = m_zettelkasten.getNotes();
+
+      // 1. Draw Links
+      double curTime = glfwGetTime();
+      for (const auto& n : notes) {
+        if (!n.seedDiscovered) continue;
+        ImVec2 posA = ImVec2(center.x + n.posX, center.y + n.posY);
+        for (const auto& lkId : n.links) {
+          const ZettelNote* linked = m_zettelkasten.getNote(lkId);
+          if (!linked || !linked->seedDiscovered) continue;
+          if (n.id > lkId) continue; // draw each undirected link once
+
+          ImVec2 posB = ImVec2(center.x + linked->posX, center.y + linked->posY);
+          bool isSynth = n.synthesized && linked->synthesized;
+          if (isSynth) {
+            float pulse = 0.65f + 0.35f * std::sin((float)curTime * 3.5f);
+            dl->AddLine(posA, posB, ImColor(1.00f, 0.85f, 0.30f, pulse), 2.5f);
+            dl->AddLine(posA, posB, ImColor(1.00f, 1.00f, 1.00f, pulse * 0.7f), 1.0f);
+          } else {
+            dl->AddLine(posA, posB, IM_COL32(70, 110, 160, 140), 1.5f);
+          }
+        }
+      }
+
+      // If linking active, draw rubber-band line from source to mouse
+      if (!m_linkingSourceId.empty()) {
+        const ZettelNote* srcNote = m_zettelkasten.getNote(m_linkingSourceId);
+        if (srcNote) {
+          ImVec2 srcPos = ImVec2(center.x + srcNote->posX, center.y + srcNote->posY);
+          dl->AddLine(srcPos, io.MousePos, IM_COL32(255, 200, 80, 220), 2.0f);
+        }
+      }
+
+      // 2. Draw Nodes
+      ImVec2 mousePos = io.MousePos;
+      bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+      for (auto& n : notes) {
+        ImVec2 nodePos = ImVec2(center.x + n.posX, center.y + n.posY);
+        float dist = std::hypot(mousePos.x - nodePos.x, mousePos.y - nodePos.y);
+        bool hovered = (dist <= 22.0f);
+        bool selected = (m_selectedZettelId == n.id);
+
+        float radius = hovered ? 22.0f : (selected ? 20.0f : 16.0f);
+
+        // Pick color scheme by cluster
+        ImU32 colFill = IM_COL32(40, 50, 70, 220);
+        ImU32 colGlow = IM_COL32(80, 110, 160, 100);
+        ImU32 colBorder = IM_COL32(100, 140, 200, 255);
+
+        if (n.cluster == kClusterSolar) {
+          colFill = IM_COL32(80, 55, 15, 230);
+          colGlow = IM_COL32(255, 180, 40, 90);
+          colBorder = IM_COL32(255, 200, 70, 255);
+        } else if (n.cluster == kClusterStasis) {
+          colFill = IM_COL32(20, 50, 75, 230);
+          colGlow = IM_COL32(50, 180, 255, 90);
+          colBorder = IM_COL32(90, 210, 255, 255);
+        } else if (n.cluster == kClusterEden) {
+          colFill = IM_COL32(15, 60, 35, 230);
+          colGlow = IM_COL32(50, 230, 120, 90);
+          colBorder = IM_COL32(80, 255, 150, 255);
+        } else if (n.cluster == kClusterMultiverse) {
+          colFill = IM_COL32(65, 20, 75, 230);
+          colGlow = IM_COL32(220, 70, 255, 90);
+          colBorder = IM_COL32(240, 110, 255, 255);
+        }
+
+        if (!n.seedDiscovered) {
+          // Undiscovered seed: dim hollow grey circle
+          dl->AddCircleFilled(nodePos, radius, IM_COL32(25, 30, 40, 180));
+          dl->AddCircle(nodePos, radius, IM_COL32(60, 70, 85, 150), 16, 1.5f);
+          dl->AddText(ImVec2(nodePos.x - 4.0f, nodePos.y - 7.0f), IM_COL32(120, 130, 145, 200), "?");
+        } else {
+          // Discovered node
+          if (n.synthesized) {
+            float glowR = radius + 6.0f + 2.0f * std::sin((float)curTime * 4.0f);
+            dl->AddCircleFilled(nodePos, glowR, colGlow);
+          }
+          dl->AddCircleFilled(nodePos, radius, colFill);
+          dl->AddCircle(nodePos, radius, selected ? IM_COL32(255, 255, 255, 255) : colBorder,
+                        24, selected ? 3.0f : 2.0f);
+
+          // Node label or category initial
+          const char* catInit = n.categoryRu.empty() ? "N" : n.categoryRu.substr(0, 2).c_str();
+          dl->AddText(ImVec2(nodePos.x - 7.0f, nodePos.y - 7.0f), IM_COL32(255, 255, 255, 240), catInit);
+
+          // Title hint above/below node
+          std::string shortTitle = uiRu(n.titleRu.c_str(), n.titleEn.c_str());
+          if (shortTitle.size() > 20) shortTitle = shortTitle.substr(0, 18) + "..";
+          dl->AddText(ImVec2(nodePos.x - 30.0f, nodePos.y + radius + 3.0f),
+                      IM_COL32(200, 215, 235, 220), shortTitle.c_str());
+
+          // Handle click & drag
+          if (hovered && mouseClicked) {
+            if (!m_linkingSourceId.empty()) {
+              if (m_linkingSourceId != n.id) {
+                m_zettelkasten.linkNotes(m_linkingSourceId, n.id);
+                saveZettelkastenFileNow();
+              }
+              m_linkingSourceId.clear();
+            } else {
+              m_selectedZettelId = n.id;
+            }
+          }
+
+          if (hovered && ImGui::IsMouseDown(ImGuiMouseButton_Left) && io.MouseDelta.x != 0.0f) {
+            n.posX += io.MouseDelta.x;
+            n.posY += io.MouseDelta.y;
+          }
+        }
+      }
+
+      // Cancel linking if clicked empty canvas space
+      if (mouseClicked && !m_linkingSourceId.empty()) {
+        bool anyHovered = false;
+        for (const auto& n : notes) {
+          if (!n.seedDiscovered) continue;
+          ImVec2 np = ImVec2(center.x + n.posX, center.y + n.posY);
+          if (std::hypot(mousePos.x - np.x, mousePos.y - np.y) <= 22.0f) {
+            anyHovered = true;
+            break;
+          }
+        }
+        if (!anyHovered) m_linkingSourceId.clear();
+      }
+
+      dl->PopClipRect();
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    // RIGHT: Thought Inspector
+    ImGui::BeginChild("ZettelInspector", ImVec2(320.0f, canvasHeight), true);
+    {
+      const ZettelNote* sel = m_zettelkasten.getNote(m_selectedZettelId);
+      if (!sel || !sel->seedDiscovered) {
+        ImGui::TextColored(ImVec4(0.5f, 0.7f, 0.9f, 0.8f), "%s",
+                           uiRu("ИНСПЕКТОР МЫСЛЕЙ", "THOUGHT INSPECTOR"));
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextWrapped(
+            "%s",
+            uiRu("Выберите узел в ментальном графе Егорки для изучения инсайта, "
+                 "синтеза гармоник или установления связи с другими мыслями.\n\n"
+                 "✦ 100% резонанс кластера открывает Истинный Финал!",
+                 "Select a node in Egorka's mental graph to examine the insight, "
+                 "synthesize harmonics, or link with other thoughts.\n\n"
+                 "✦ 100% cluster resonance unlocks the True Ending!"));
+      } else {
+        // Node details
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s",
+                           uiRu(sel->titleRu.c_str(), sel->titleEn.c_str()));
+        ImGui::TextColored(ImVec4(0.4f, 0.7f, 0.9f, 0.9f), "%s · %s",
+                           uiRu(sel->categoryRu.c_str(), sel->categoryEn.c_str()),
+                           ZettelGraph::getClusterTitleRu(sel->cluster).c_str());
+        ImGui::Separator();
+
+        // Status
+        if (sel->synthesized) {
+          ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "✔ %s",
+                             uiRu("СИНТЕЗИРОВАНО (В РЕЗОНАНСЕ)", "SYNTHESIZED (IN RESONANCE)"));
+        } else {
+          ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "✦ %s",
+                             uiRu("ТРЕБУЕТСЯ СИНТЕЗ МЫСЛИ", "SYNTHESIS REQUIRED"));
+        }
+
+        ImGui::Spacing();
+
+        // Quote Box
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f, 0.08f, 0.14f, 0.8f));
+        ImGui::BeginChild("QuoteBox", ImVec2(0.0f, 90.0f), true);
+        ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.65f, 1.0f), "%s:",
+                           uiRu(sel->speakerRu.c_str(), sel->speakerEn.c_str()));
+        ImGui::TextWrapped("«%s»", uiRu(sel->quoteRu.c_str(), sel->quoteEn.c_str()));
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", uiRu(sel->textRu.c_str(), sel->textEn.c_str()));
+        ImGui::Spacing();
+        ImGui::Separator();
+
+        // Actions
+        if (!sel->synthesized) {
+          if (ImGui::Button(uiRu("✦ Синтезировать (Mind Matrix)", "✦ Synthesize (Mind Matrix)"),
+                            ImVec2(-1.0f, 32.0f))) {
+            m_mindSynthesizingId = sel->id;
+            m_mindMiniGameActive = true;
+            m_mindResonancePhase = 0.0f;
+          }
+        }
+
+        if (m_linkingSourceId == sel->id) {
+          if (ImGui::Button(uiRu("✖ Отменить режим связывания", "✖ Cancel Linking"),
+                            ImVec2(-1.0f, 26.0f))) {
+            m_linkingSourceId.clear();
+          }
+        } else {
+          if (ImGui::Button(uiRu("⟷ Протянуть связь (клик на другой узел)", "⟷ Link Thought (click other node)"),
+                            ImVec2(-1.0f, 26.0f))) {
+            m_linkingSourceId = sel->id;
+          }
+        }
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%s (%zu):",
+                           uiRu("Связанные мысли", "Linked thoughts"), sel->links.size());
+        for (const auto& lkId : sel->links) {
+          const ZettelNote* lkn = m_zettelkasten.getNote(lkId);
+          if (lkn) {
+            ImGui::BulletText("%s", uiRu(lkn->titleRu.c_str(), lkn->titleEn.c_str()));
+            ImGui::SameLine();
+            ImGui::PushID(lkId.c_str());
+            if (ImGui::SmallButton(uiRu("разрыв", "unlink"))) {
+              m_zettelkasten.unlinkNotes(sel->id, lkId);
+              saveZettelkastenFileNow();
+            }
+            ImGui::PopID();
+          }
+        }
+      }
+    }
+    ImGui::EndChild();
+
+    ImGui::Spacing();
+    if (ImGui::Button(uiRu("Закрыть (B / Esc)", "Close (B / Esc)"), ImVec2(160.0f, 28.0f))) {
+      m_zettelkastenOpen = false;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(uiRu("Сохранить состояние", "Save State"), ImVec2(160.0f, 28.0f))) {
+      saveZettelkastenFileNow();
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor(2);
+
+  if (m_mindMiniGameActive) {
+    drawMindMatrixMiniGame();
+  }
+}
+
+void AppGL::drawMindMatrixMiniGame() {
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
+                          ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(480.0f, 270.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.025f, 0.045f, 0.98f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.95f, 0.75f, 0.30f, 0.80f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+
+  const ImGuiWindowFlags fl = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
+  if (ImGui::Begin(uiRu("Мини-игра: Квантовый Синтез Мысли (Mind Matrix)",
+                        "Minigame: Quantum Thought Synthesis (Mind Matrix)"),
+                   &m_mindMiniGameActive, fl)) {
+    m_mindResonancePhase += io.DeltaTime * 3.0f;
+    float currentHarmonic = 0.5f + 0.5f * std::sin(m_mindResonancePhase);
+
+    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "✦ %s",
+                       uiRu("РЕЗОНАТОР ВОЛН КАЗИМИРА", "CASIMIR WAVE RESONATOR"));
+    ImGui::TextWrapped(
+        "%s",
+        uiRu("Поймайте фазу вакуумных флуктуаций в зоне синхронизации (58%..72%) "
+             "для закрепления квантового инсайта.",
+             "Capture the vacuum fluctuation phase within the resonance window (58%..72%) "
+             "to crystallize the insight."));
+    ImGui::Spacing();
+
+    // Visual Wave Meter
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    float meterW = ImGui::GetContentRegionAvail().x;
+    float meterH = 34.0f;
+    ImVec2 p1 = ImVec2(p0.x + meterW, p0.y + meterH);
+
+    dl->AddRectFilled(p0, p1, IM_COL32(15, 20, 30, 255), 6.0f);
+    dl->AddRect(p0, p1, IM_COL32(60, 80, 110, 255), 6.0f);
+
+    // Target Sweet Spot (0.58 .. 0.72)
+    float targetX0 = p0.x + meterW * 0.58f;
+    float targetX1 = p0.x + meterW * 0.72f;
+    dl->AddRectFilled(ImVec2(targetX0, p0.y), ImVec2(targetX1, p1.y),
+                      IM_COL32(40, 180, 80, 100), 4.0f);
+    dl->AddRect(ImVec2(targetX0, p0.y), ImVec2(targetX1, p1.y),
+                IM_COL32(80, 255, 120, 220), 4.0f);
+
+    // Current Wave Needle
+    float needleX = p0.x + meterW * currentHarmonic;
+    bool inZone = (currentHarmonic >= 0.58f && currentHarmonic <= 0.72f);
+    ImU32 needleCol = inZone ? IM_COL32(255, 255, 100, 255) : IM_COL32(100, 200, 255, 255);
+    dl->AddLine(ImVec2(needleX, p0.y), ImVec2(needleX, p1.y), needleCol, 3.5f);
+
+    ImGui::Dummy(ImVec2(meterW, meterH + 10.0f));
+
+    if (inZone) {
+      ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), ">>> %s <<<",
+                         uiRu("РЕЗОНАНС ДОСТИГНУТ! ЖМИТЕ СИНХРОНИЗИРОВАТЬ",
+                              "RESONANCE REACHED! PRESS SYNCHRONIZE"));
+    } else {
+      ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 0.8f), "%s: %.1f%%",
+                         uiRu("Текущая фаза", "Current phase"), currentHarmonic * 100.0f);
+    }
+
+    ImGui::Spacing();
+    if (ImGui::Button(uiRu("⚡ СИНХРОНИЗИРОВАТЬ МЫСЛЬ", "⚡ SYNCHRONIZE THOUGHT"),
+                      ImVec2(meterW, 36.0f))) {
+      if (inZone) {
+        m_zettelkasten.synthesizeNote(m_mindSynthesizingId);
+        saveZettelkastenFileNow();
+        m_audio.playChime();
+        Toast t;
+        t.title = uiRu("МЕНТАЛЬНЫЙ СИНТЕЗ", "MENTAL SYNTHESIS");
+        t.desc = uiRu("Мысль успешно зафиксирована в нейросети!",
+                      "Thought successfully crystallized in the neural matrix!");
+        t.time = static_cast<float>(glfwGetTime());
+        m_toasts.push_back(t);
+        m_mindMiniGameActive = false;
+      } else {
+        m_audio.playBlip();
+      }
+    }
+
+    if (ImGui::Button(uiRu("Отмена", "Cancel"), ImVec2(meterW, 24.0f))) {
+      m_mindMiniGameActive = false;
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor(2);
+}
+
 }  // namespace astro
+
