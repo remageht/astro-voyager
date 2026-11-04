@@ -472,6 +472,13 @@ Check 'landing test source exists' (Test-Path (Join-Path $root 'tests/test_landi
 Check 'cmake lists LandingSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/LandingSystem\.cpp')
 Check 'cmake lists test_landing' ((Read-File 'CMakeLists.txt') -match 'test_landing')
 
+# v4.8.0: Astro-Zettelkasten / Second Brain & Mind Matrix
+Check 'zettelkasten header exists' (Test-Path (Join-Path $root 'src/Zettelkasten.h'))
+Check 'zettelkasten source exists' (Test-Path (Join-Path $root 'src/Zettelkasten.cpp'))
+Check 'zettelkasten test source exists' (Test-Path (Join-Path $root 'tests/test_zettelkasten.cpp'))
+Check 'cmake lists Zettelkasten.cpp' ((Read-File 'CMakeLists.txt') -match 'src/Zettelkasten\.cpp')
+Check 'cmake lists test_zettelkasten' ((Read-File 'CMakeLists.txt') -match 'test_zettelkasten')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

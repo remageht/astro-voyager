@@ -17,6 +17,7 @@
 #include "Window.h"
 #include "ScienceSystem.h"
 #include "LandingSystem.h"
+#include "Zettelkasten.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"
@@ -78,6 +79,11 @@ class AppGL {
   // === Planetary Landing & Surface Operations === (v4.6.1)
   void drawSurfaceReportModal();
   void updateLandingOperations(float deltaTime);
+  // === Astro-Zettelkasten / Second Brain === (v4.8.0)
+  void drawZettelkasten();
+  void drawMindMatrixMiniGame();
+  void saveZettelkastenFileNow();
+  void loadZettelkastenFileNow();
   // v3.8.0: stopJumpCine=false — только для телепорта Бурста в jump-катсцене
   // (внутренний вызов не должен убивать собственный прыжок).
   void teleportToStation(const std::string& id, bool stopJumpCine = true);
@@ -177,6 +183,18 @@ class AppGL {
   std::string m_discoveryConstellationId;
   std::set<std::string> m_discoveredConstellations;
   void drawDiscoveryCard(const ConstellationInfo* cInfo);
+
+  // === Astro-Zettelkasten / Second Brain === (v4.8.0): ментальный граф мыслей Егорки
+  ZettelGraph m_zettelkasten;
+  bool m_zettelkastenOpen = false;
+  bool m_prevBPressed = false;
+  std::string m_selectedZettelId;
+  std::string m_linkingSourceId;
+  float m_mindResonancePhase = 0.0f;
+  float m_mindTargetFrequency = 0.65f;
+  float m_mindPlayerFrequency = 0.50f;
+  bool m_mindMiniGameActive = false;
+  std::string m_mindSynthesizingId;
 
   // === Expedition === (v3.5.0): сюжетная арка + вводные слайды (рестайл).
   ExpeditionState m_expedition;
