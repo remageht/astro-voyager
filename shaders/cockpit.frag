@@ -126,15 +126,12 @@ void main() {
   vec4 col = vec4(0.0);
 
   if (isCanopySolid) {
-    // Carbon-composite / titanium cockpit interior material
-    vec3 frameBase = vec3(0.055, 0.058, 0.065);
-    
-    // Carbon weave micro-pattern
-    vec2 weaveUV = headP * 120.0;
-    float weave = sin(weaveUV.x) * cos(weaveUV.y);
-    frameBase += vec3(weave * 0.012);
+    // Cockpit interior material: White aerospace composite for Egor's Ring Ship (style 1),
+    // dark carbon-composite for Dart (style 0) / other ships
+    vec3 frameBase;
+    float bevelHighlight = 0.0;
 
-    // Subtle edge bevel highlight
+    // Edge proximity for bevels
     float edgeProx = 1.0;
     if (isDashboard) {
       edgeProx = min(edgeProx, abs(headP.y - dashCurve));
@@ -145,8 +142,23 @@ void main() {
     if (isOverhead) {
       edgeProx = min(edgeProx, headP.y - 0.86);
     }
-    float bevelHighlight = (1.0 - smoothstep(0.0, 0.02, edgeProx)) * 0.18;
-    frameBase += vec3(bevelHighlight * 1.2);
+    bevelHighlight = (1.0 - smoothstep(0.0, 0.02, edgeProx)) * 0.18;
+
+    if (u_ShipStyle == 1) {
+      // Egor's White Ship (Astro-Voyager / IXS Alcubierre): matte white aerospace ceramic
+      frameBase = vec3(0.82, 0.84, 0.86);
+      vec2 tileUV = headP * 35.0;
+      float tileSeam = step(0.965, fract(tileUV.x)) + step(0.965, fract(tileUV.y));
+      frameBase = mix(frameBase, vec3(0.20, 0.22, 0.24), clamp(tileSeam, 0.0, 1.0));
+      frameBase -= vec3(bevelHighlight * 0.45); // Dark bevel lines on white panels
+    } else {
+      // Carbon-composite / titanium dark cockpit interior material
+      frameBase = vec3(0.055, 0.058, 0.065);
+      vec2 weaveUV = headP * 120.0;
+      float weave = sin(weaveUV.x) * cos(weaveUV.y);
+      frameBase += vec3(weave * 0.012);
+      frameBase += vec3(bevelHighlight * 1.2);
+    }
 
     // Dashboard instrument panel glows
     if (isDashboard) {
