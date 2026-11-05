@@ -1,0 +1,59 @@
+﻿name: "🐛 Bug Report / Сообщение об ошибке"
+description: "Сообщить о сбое, графическом артефакте, ошибке физики или падении приложения"
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что помогаете делать Astro-Voyager лучше! Пожалуйста, заполните форму ниже.
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: Подсистема / Subsystem
+      description: К какому компоненту относится ошибка?
+      options:
+        - "OpenGL Renderer / Шейдеры (bh.frag, postFX)"
+        - "Physics / Релятивистская динамика (RK4, Керр, орбиты)"
+        - "Cockpit & HUD / Авионика и ImGui"
+        - "Planetary Landing / Поверхности и шасси"
+        - "Audio & Bridge Radio / Звуковой движок"
+        - "Save / Load System"
+        - "Build & CMake / Сборка и компиляция"
+        - "Другое"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание проблемы / Problem Description
+      description: Что произошло?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Шаги воспроизведения / Steps to Reproduce
+      description: 1. Запустить с параметрами... 2. Выбрать станцию... 3. Увидеть ошибку...
+      placeholder: |
+        1. Запустить ./astro-voyager.exe
+        2. Телепортироваться на станцию 'oj287'
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Окружение / Environment
+      description: Операционная система, модель видеокарты (GPU), версия драйвера OpenGL.
+      placeholder: |
+        - OS: Windows 11 / Ubuntu 24.04 / macOS Sonoma
+        - GPU: NVIDIA RTX ... / AMD Radeon ... / Apple M-series
+        - OpenGL Version: 3.3 Core (or driver version)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи / Консольный вывод (если есть)
+      render: shell

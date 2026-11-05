@@ -1,0 +1,8 @@
+﻿blank_issues_enabled: true
+contact_links:
+  - name: 📖 Astro-Voyager Wiki
+    url: https://github.com/remageht/astro-voyager/wiki
+    about: Изучите научную базу знаний, лор и архитектуру проекта перед созданием тикета.
+  - name: 🗺️ Roadmap проекта
+    url: https://github.com/remageht/astro-voyager/blob/main/ROADMAP.md
+    about: Ознакомьтесь с текущими планами разработки и стадиями релизов.

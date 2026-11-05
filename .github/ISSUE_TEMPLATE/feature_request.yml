@@ -1,0 +1,34 @@
+﻿name: "✨ Feature Request / Предложение фичи"
+description: "Предложить новый космический объект, улучшение физики, шейдеров или сюжета"
+title: "[Feat]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Идеи и предложения для расширения вселенной Astro-Voyager!
+  - type: dropdown
+    id: category
+    attributes:
+      label: Категория предложения / Category
+      options:
+        - "Новый объект каталога (черная дыра, пульсар, квазар, туманность)"
+        - "Физика и математика (геодезические, гравитационные маневры, ОТО)"
+        - "Графика и шейдеры (пост-эффекты, PBR, аккреционные диски)"
+        - "Кокпит и авионика (приборы, HUD, SpaceX-телеметрия)"
+        - "Сюжет и Лор (Мистик Пятой, Арсений, радиопереговоры)"
+        - "Оптимизация и портирование"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Суть предложения / Proposal
+      description: Подробное описание идеи или фичи.
+    validations:
+      required: true
+  - type: textarea
+    id: scientific_context
+    attributes:
+      label: Научный / игровой контекст (если применимо)
+      description: Ссылки на статьи (arXiv / NASA), научные параметры или концепт-арты.
