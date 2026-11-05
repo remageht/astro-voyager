@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 4.8.0 - 2026-11-05
+
+## What's new / Что нового
+
+- EN: Astro-Zettelkasten Second Brain (Hotkey `B`) - Egorka's personal cognitive knowledge graph modeling thoughts, revelations, and physics discoveries across 5 categories (Physics, Memory, Stasis, Multiverse, Eden). Features interactive 2D Mind Matrix canvas, thought seed discovery, bidirectional linking, and resonance synthesis mini-game.
+- RU: «Второй мозг» Егорки Astro-Zettelkasten (клавиша `B`) - персональный когнитивный граф знаний Егорки, моделирующий мысли, откровения и физические открытия по 5 категориям (физика, память, стазис, мультивселенная, эдем). Включает интерактивную 2D-Матрицу Разума, сбор мыслей-семян, двусторонние связи и мини-игру резонансного синтеза.
+- EN: Knowledge Clusters & Canonical True Endings - 4 high-level knowledge clusters (Solar Genesis, Cryo-Stasis, Eden Project, and Multiverse Bridge). Reaching synthesis threshold unlocks canonical True Endings for story branches, persisted in player save profiles.
+- RU: Кластеры знаний и Истинные концовки - 4 макро-кластера знаний (Солнечный Генезис, Криостазис, Проект Эдем и Мост Мультивселенной). Достижение порога зрелости кластера открывает каноничные Истинные концовки сюжета с сохранением в профиле игрока.
+- Gates / Гейты: GL Release build OK, static checks 306/306 PASS, ctest 14/14 PASS (including `test_zettelkasten`). Closes #71.
+
+## 4.7.0 - 2026-11-05
+
+## What's new / Что нового
+
+- EN: 3D Holographic Approach Corridor & Telemetry - 4 concentric circular approach gates (2.25, 1.55, 0.95, 0.45 units) with dynamic emerald/cyan pass-through illumination; collimated SpaceX / COAS Docking HUD with target reticle `[ + ]`, attitude alignment diamond, and real-time telemetry card (range in meters, closing rate in m/s, yaw/pitch angular deviations, lateral corridor offset); smooth cubic Bézier approach curve locking attitude to port normal and syncing reference velocity with orbiting stations.
+- RU: 3D голографический коридор сближения и телеметрия - 4 концентрических круглых створа (2.25, 1.55, 0.95, 0.45 ед.) с динамической изумрудно-бирюзовой подсветкой пролёта; коллиматорный ИЛС стыковки SpaceX / COAS с прицельной маркой `[ + ]`, ромбом углового выравнивания и карточкой телеметрии (дистанция в метрах, скорость сближения в м/с, отклонения по рысканию/тангажу, боковое смещение); плавная кубическая кривая Безье с выравниванием по нормали порта и синхронизацией орбитальной скорости.
+- EN: Mechanical Latching & Procedural Cold-Gas RCS Plumes - animated IDA-2 / NDS 3-petal guide collar closing around docking ports during capture with green alignment laser strobes; procedural multi-cluster cold-gas RCS thruster puffs during attitude correction and corridor translation.
+- RU: Механический захват и процедурные факелы РСУ - анимированный 3-лепестковый стыковочный воротник IDA-2 / NDS, плотно смыкающийся вокруг стыковочного узла с лазерными стробоскопами; процедурные импульсы струй РСУ холодного газа при коррекции ориентации и сноса.
+- EN: Arseny «Executioner of False Hopes» & 7th Multiverse Finale - introduces character Arseny in Expedition lore; Branch G ending («Финал · Альянс Пятой Вселенной» / `kFinaleFifthAlliance`) with widescreen 16:9 cinematic illustration (`finale_fifth_alliance.jpg`) and Sgr A* StoryJournal beat.
+- RU: Персонаж Арсений («Палач Ложных Надежд») и 7-й финал Мультивселенной - введён Арсений в сюжет Экспедиции; финал ветки G («Финал · Альянс Пятой Вселенной» / `kFinaleFifthAlliance`) с широкоформатным 16:9 кинематографичным артом (`finale_fifth_alliance.jpg`) и записью судового журнала у Sgr A*.
+- EN: Code Audit Hardening & Numerical Stability - $O(1)$ `normalizeAngleSigned` via `std::remainder(angle, 2.0 * kPi)` with `std::isfinite` guard, eliminating infinite while-loop risks on `inf`/`nan`/`1e12`; expanded video slide path stack buffers to 512 bytes; guarded `SceneManager::render` against zero/negative viewport dimensions on minimization; guarded Doppler beta against NaN and clamped pulsar audio tick accumulator.
+- RU: Аудит кода, безопасность и численная стабильность - введено $O(1)$ безопасное приведение углов `normalizeAngleSigned` через `std::remainder` с защитой от `inf`/`nan`/`1e12`, исключившее риск зависаний в циклах `while`; буферы путей видеослайдов расширены до 512 байт; добавлен гейт нулевого вьюпорта при свёртывании окна в `SceneManager::render`; защищён `clampBeta` от NaN и ограничен аудио-аккумулятор тиков.
+- Gates / Гейты: GL Release build OK, static checks 301/301 PASS, ctest 13/13 PASS (including `Test 21` and `Test 22`). Closes #63, #65, #66, #69.
+
 ## 4.6.2 - 2026-11-03
 
 ## What's new / Что нового
