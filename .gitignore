@@ -11,6 +11,7 @@ src/vendor/
 # Local agent instructions: never push to GitHub
 AGENTS.md
 INTERNAL.md
+.agents/
 *.obj
 *.mtl
 *.pdb

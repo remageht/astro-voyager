@@ -200,6 +200,10 @@ class AppGL {
   ExpeditionState m_expedition;
   bool m_expeditionMapOpen = false;
   bool m_prevNPressed = false;  // N — карта глав (M занят аудио-mute)
+  // Narrative progression priority helpers (v4.8.0)
+  std::string getActiveObjectiveStationId() const;
+  bool isStationStoryObjective(const std::string& stationId) const;
+  void warpToCurrentStoryObjective();
   std::vector<StorySlide> m_slidesCurrent;
   std::string m_slidesHead;  // заголовок слайда главы (для done-карточек)
   bool m_slidesOpen = false;

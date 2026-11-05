@@ -2033,7 +2033,7 @@ void AppGL::applyModernThemeOnce() {
   done = true;
   ImGuiStyle& st = ImGui::GetStyle();
 
-  // === Obsidian Glass Aerospace Theme (v4.1.0) ===
+  // === Sci-Fi FUI Aerospace Theme (v4.8.0) ===
   // Строгий прецизионный радиус скругления 6px для окон, 4px для контролов.
   st.WindowRounding = 6.0f;
   st.ChildRounding = 6.0f;
@@ -2044,7 +2044,7 @@ void AppGL::applyModernThemeOnce() {
   st.TabRounding = 5.0f;
 
   st.WindowBorderSize = 1.0f;
-  st.FrameBorderSize = 0.5f;
+  st.FrameBorderSize = 1.0f;
   st.PopupBorderSize = 1.0f;
 
   st.WindowPadding = ImVec2(14.0f, 12.0f);
@@ -2054,66 +2054,66 @@ void AppGL::applyModernThemeOnce() {
   st.ScrollbarSize = 10.0f;
   st.GrabMinSize = 10.0f;
 
-  // Фон: полупрозрачное обсидиановое стекло (глубокий космос).
-  st.Colors[ImGuiCol_WindowBg] = ImVec4(0.035f, 0.050f, 0.075f, 0.86f);
-  st.Colors[ImGuiCol_ChildBg] = ImVec4(0.045f, 0.065f, 0.095f, 0.65f);
-  st.Colors[ImGuiCol_PopupBg] = ImVec4(0.040f, 0.058f, 0.088f, 0.95f);
+  // Фон: глубокое обсидиановое стекло (#070B12).
+  st.Colors[ImGuiCol_WindowBg] = ImVec4(0.027f, 0.043f, 0.068f, 0.94f);
+  st.Colors[ImGuiCol_ChildBg] = ImVec4(0.035f, 0.052f, 0.082f, 0.75f);
+  st.Colors[ImGuiCol_PopupBg] = ImVec4(0.030f, 0.048f, 0.076f, 0.96f);
 
-  // Тонкая чистая кромка (без грязных золотых оттенков).
-  st.Colors[ImGuiCol_Border] = ImVec4(0.20f, 0.32f, 0.48f, 0.28f);
+  // Высококонтрастная чистая кромка аэрокосмического циана-стали (#2563EB/#38BDF8 blend).
+  st.Colors[ImGuiCol_Border] = ImVec4(0.22f, 0.48f, 0.72f, 0.55f);
   st.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
 
-  // Текст: чистый холодный белый + приглушённый графит.
-  st.Colors[ImGuiCol_Text] = ImVec4(0.90f, 0.93f, 0.97f, 1.00f);
-  st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.48f, 0.55f, 0.65f, 1.00f);
+  // Текст: чистый холодный белый высокой контрастности + приглушённый графит.
+  st.Colors[ImGuiCol_Text] = ImVec4(0.94f, 0.96f, 0.99f, 1.00f);
+  st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.48f, 0.56f, 0.66f, 1.00f);
 
-  // Акценты: аэрокосмический циан (#38BDF8) + чистый мягкий янтарь.
+  // Акценты: аэрокосмический кибер-циан (#38BDF8) + тактический янтарь (#F59E0B).
   const ImVec4 cyan(0.22f, 0.74f, 0.97f, 1.00f);
-  const ImVec4 cyanHover(0.35f, 0.82f, 1.00f, 1.00f);
-  const ImVec4 amber(0.98f, 0.75f, 0.20f, 1.00f);
+  const ImVec4 cyanHover(0.38f, 0.85f, 1.00f, 1.00f);
+  const ImVec4 amber(0.96f, 0.62f, 0.07f, 1.00f);
 
   // Поля ввода (Frames)
-  st.Colors[ImGuiCol_FrameBg] = ImVec4(0.07f, 0.11f, 0.17f, 0.80f);
-  st.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.12f, 0.18f, 0.28f, 0.90f);
-  st.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.16f, 0.25f, 0.38f, 1.00f);
+  st.Colors[ImGuiCol_FrameBg] = ImVec4(0.08f, 0.13f, 0.20f, 0.85f);
+  st.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.14f, 0.22f, 0.34f, 0.95f);
+  st.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.18f, 0.30f, 0.46f, 1.00f);
 
-  // Кнопки: тёмное стекло с элегантной подсветкой при наведении
-  st.Colors[ImGuiCol_Button] = ImVec4(0.10f, 0.16f, 0.25f, 0.75f);
-  st.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.18f, 0.28f, 0.44f, 0.95f);
-  st.Colors[ImGuiCol_ButtonActive] = ImVec4(0.14f, 0.38f, 0.60f, 1.00f);
+  // Кнопки: люминесцентное аэрокосмическое стекло с чётким откликом
+  st.Colors[ImGuiCol_Button] = ImVec4(0.11f, 0.20f, 0.32f, 0.82f);
+  st.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.18f, 0.35f, 0.56f, 0.98f);
+  st.Colors[ImGuiCol_ButtonActive] = ImVec4(0.24f, 0.50f, 0.78f, 1.00f);
 
   // Заголовки (Headers)
-  st.Colors[ImGuiCol_Header] = ImVec4(0.12f, 0.20f, 0.32f, 0.60f);
-  st.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.18f, 0.30f, 0.48f, 0.85f);
-  st.Colors[ImGuiCol_HeaderActive] = ImVec4(0.22f, 0.38f, 0.60f, 0.95f);
+  st.Colors[ImGuiCol_Header] = ImVec4(0.13f, 0.24f, 0.38f, 0.75f);
+  st.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.20f, 0.38f, 0.60f, 0.92f);
+  st.Colors[ImGuiCol_HeaderActive] = ImVec4(0.26f, 0.50f, 0.78f, 1.00f);
 
-  // Заголовки окон: стильный обсидиан вместо старого коричнево-оранжевого
-  st.Colors[ImGuiCol_TitleBg] = ImVec4(0.05f, 0.08f, 0.12f, 0.92f);
-  st.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.08f, 0.13f, 0.20f, 0.95f);
-  st.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.04f, 0.06f, 0.09f, 0.75f);
+  // Заголовки окон
+  st.Colors[ImGuiCol_TitleBg] = ImVec4(0.04f, 0.07f, 0.11f, 0.95f);
+  st.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.08f, 0.15f, 0.24f, 0.98f);
+  st.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.03f, 0.05f, 0.08f, 0.80f);
 
   // Разделители: тонкая деликатная линия
-  st.Colors[ImGuiCol_Separator] = ImVec4(0.22f, 0.32f, 0.46f, 0.30f);
-  st.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.35f, 0.65f, 0.95f, 0.60f);
-  st.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.35f, 0.65f, 0.95f, 0.90f);
+  st.Colors[ImGuiCol_Separator] = ImVec4(0.22f, 0.42f, 0.64f, 0.45f);
+  st.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.38f, 0.76f, 1.00f, 0.75f);
+  st.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.38f, 0.76f, 1.00f, 1.00f);
 
   // Индикаторы и ползунки
   st.Colors[ImGuiCol_CheckMark] = cyan;
-  st.Colors[ImGuiCol_SliderGrab] = ImVec4(0.22f, 0.74f, 0.97f, 0.85f);
+  st.Colors[ImGuiCol_SliderGrab] = ImVec4(0.22f, 0.74f, 0.97f, 0.90f);
   st.Colors[ImGuiCol_SliderGrabActive] = cyanHover;
 
   // Скроллбары
-  st.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.03f, 0.05f, 0.08f, 0.45f);
-  st.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.18f, 0.26f, 0.38f, 0.60f);
-  st.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.25f, 0.36f, 0.50f, 0.85f);
-  st.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.30f, 0.46f, 0.65f, 1.00f);
+  st.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.02f, 0.04f, 0.07f, 0.55f);
+  st.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.20f, 0.32f, 0.48f, 0.70f);
+  st.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.28f, 0.44f, 0.64f, 0.90f);
+  st.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.35f, 0.56f, 0.80f, 1.00f);
 
   // Вкладки
-  st.Colors[ImGuiCol_Tab] = ImVec4(0.08f, 0.13f, 0.20f, 0.80f);
-  st.Colors[ImGuiCol_TabHovered] = ImVec4(0.18f, 0.30f, 0.46f, 0.90f);
-  st.Colors[ImGuiCol_TabActive] = ImVec4(0.14f, 0.24f, 0.38f, 1.00f);
-  st.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.06f, 0.10f, 0.15f, 0.80f);
-  st.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.10f, 0.18f, 0.28f, 0.90f);
+  st.Colors[ImGuiCol_Tab] = ImVec4(0.09f, 0.16f, 0.25f, 0.85f);
+  st.Colors[ImGuiCol_TabHovered] = ImVec4(0.20f, 0.36f, 0.56f, 0.95f);
+  st.Colors[ImGuiCol_TabActive] = ImVec4(0.16f, 0.30f, 0.48f, 1.00f);
+  st.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.07f, 0.12f, 0.19f, 0.85f);
+  st.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.12f, 0.22f, 0.35f, 0.95f);
 }
 
 const char* AppGL::stationTypeRuShort(StationType t) {
@@ -3830,6 +3830,68 @@ void AppGL::drawSlidesOverlay() {
   ImGui::PopStyleColor();
 }
 
+std::string AppGL::getActiveObjectiveStationId() const {
+  const ExpeditionChapter* ch = m_expedition.current();
+  if (!ch) return "";
+  if (ch->id == "fleet") return "sol";
+  std::string st = ch->station;
+  size_t pipePos = st.find('|');
+  if (pipePos != std::string::npos) {
+    st = st.substr(0, pipePos);
+  }
+  return st;
+}
+
+bool AppGL::isStationStoryObjective(const std::string& stationId) const {
+  const ExpeditionChapter* ch = m_expedition.current();
+  if (!ch || stationId.empty()) return false;
+  if (ch->id == "fleet" && (stationId == "sol" || stationId == "dock-dragon" || stationId == "dock-soyuz")) {
+    return true;
+  }
+  std::string target = ch->station;
+  if (stationId == target) return true;
+  size_t start = 0;
+  while (start < target.size()) {
+    size_t nextPipe = target.find('|', start);
+    std::string token = (nextPipe == std::string::npos) ? target.substr(start) : target.substr(start, nextPipe - start);
+    if (stationId == token) return true;
+    if (nextPipe == std::string::npos) break;
+    start = nextPipe + 1;
+  }
+  return false;
+}
+
+void AppGL::warpToCurrentStoryObjective() {
+  const ExpeditionChapter* ch = m_expedition.current();
+  if (!ch) {
+    m_inMenu = false;
+    return;
+  }
+  std::string targetStation = getActiveObjectiveStationId();
+  if (targetStation.empty()) {
+    m_inMenu = false;
+    return;
+  }
+
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  std::string curId = curSt ? curSt->id : "";
+
+  if (ch->id == "fleet") {
+    if (curId == "sol") {
+      dockToHistoricShip("dock-dragon");
+    } else {
+      teleportToStation("sol");
+      triggerWarpInHalo();
+    }
+  } else {
+    if (curId != targetStation) {
+      teleportToStation(targetStation);
+      triggerWarpInHalo();
+    }
+  }
+  m_inMenu = false;
+}
+
 void AppGL::drawExpeditionHud() {
   // === Expedition ===: компактная карточка главы вверху по центру.
   const ExpeditionChapter* ch = m_expedition.current();
@@ -3837,14 +3899,29 @@ void AppGL::drawExpeditionHud() {
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, 56.0f), ImGuiCond_Always,
                           ImVec2(0.5f, 0.0f));
   ImGui::SetNextWindowSize(ImVec2(560.0f, 0.0f), ImGuiCond_Always);
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.70f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.35f));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.020f, 0.030f, 0.050f, 0.82f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.00f, 0.75f, 0.28f, 0.55f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
   ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
   if (!ch || ImGui::Begin("##expeditionHud", nullptr, fl)) {
     if (ch) {
+      // 1px Technical Sci-Fi corner brackets
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      const ImVec2 pMin = ImGui::GetWindowPos();
+      const ImVec2 pMax = ImVec2(pMin.x + ImGui::GetWindowWidth(), pMin.y + ImGui::GetWindowHeight());
+      const ImU32 brkCol = IM_COL32(56, 189, 248, 180);
+      const float brkLen = 12.0f;
+      dl->AddLine(pMin, ImVec2(pMin.x + brkLen, pMin.y), brkCol, 1.5f);
+      dl->AddLine(pMin, ImVec2(pMin.x, pMin.y + brkLen), brkCol, 1.5f);
+      dl->AddLine(ImVec2(pMax.x - brkLen, pMin.y), ImVec2(pMax.x, pMin.y), brkCol, 1.5f);
+      dl->AddLine(ImVec2(pMax.x, pMin.y), ImVec2(pMax.x, pMin.y + brkLen), brkCol, 1.5f);
+      dl->AddLine(ImVec2(pMin.x, pMax.y - brkLen), ImVec2(pMin.x, pMax.y), brkCol, 1.5f);
+      dl->AddLine(ImVec2(pMin.x, pMax.y), ImVec2(pMin.x + brkLen, pMax.y), brkCol, 1.5f);
+      dl->AddLine(ImVec2(pMax.x - brkLen, pMax.y), pMax, brkCol, 1.5f);
+      dl->AddLine(ImVec2(pMax.x, pMax.y - brkLen), pMax, brkCol, 1.5f);
+
       std::string titleRu = ch->titleRu;
       std::string titleEn = ch->titleEn;
       std::string goalRu = ch->goalRu;
@@ -3866,7 +3943,7 @@ void AppGL::drawExpeditionHud() {
       // Wrap text so long descriptions are never clipped at window edges
       ImGui::SetWindowFontScale(0.88f);
       ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 530.0f);
-      ImGui::TextColored(ImVec4(0.62f, 0.65f, 0.72f, 1.0f), "%s",
+      ImGui::TextColored(ImVec4(0.68f, 0.72f, 0.80f, 1.0f), "%s",
                          uiRu(goalRu.c_str(), goalEn.c_str()));
       ImGui::PopTextWrapPos();
       ImGui::SetWindowFontScale(1.0f);
@@ -3888,6 +3965,31 @@ void AppGL::drawExpeditionHud() {
         if (ImGui::Button(uiRu("⚓ Стыковка: «Союз-МС»", "⚓ Dock: Soyuz-MS"),
                           ImVec2(260.0f, 26.0f))) {
           dockToHistoricShip("dock-soyuz");
+        }
+      } else if (!m_expedition.finished()) {
+        const Station* curSt = m_sceneManager->getCurrentStation();
+        const std::string curStId = curSt ? curSt->id : "";
+        const std::string targetStId = getActiveObjectiveStationId();
+        if (!targetStId.empty() && curStId != targetStId) {
+          const Station* targetSt = findStation(targetStId);
+          std::string targetName = targetSt ? targetSt->name : targetStId;
+          ImGui::Spacing();
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.35f, 0.25f, 0.85f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.50f, 0.35f, 0.95f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.24f, 0.65f, 0.45f, 1.00f));
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.95f, 0.70f, 1.00f));
+          const std::string warpPrompt = "🚀 " + std::string(uiRu("Варп-прыжок к цели главы (", "Warp to Chapter Objective (")) +
+                                         targetName + ")";
+          if (ImGui::Button(warpPrompt.c_str(), ImVec2(-1.0f, 26.0f))) {
+            warpToCurrentStoryObjective();
+          }
+          ImGui::PopStyleColor(4);
+          if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s: %s [%s]",
+                              uiRu("Совершить гиперпространственный прыжок к сюжетной станции",
+                                   "Execute warp jump to the story objective station"),
+                              targetName.c_str(), targetStId.c_str());
+          }
         }
       }
     }
@@ -6466,20 +6568,23 @@ void AppGL::drawMenu() {
                               "A JOURNEY THROUGH CURVED SPACETIME"));
       ImGui::Spacing();
 
-      // v4.4.0: Заметный бейдж релиза и стадии проекта
+      // v4.8.0: Заметный бейдж релиза и примечаний
       {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.22f, 0.35f, 0.75f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.14f, 0.34f, 0.52f, 0.90f));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.88f, 1.00f, 1.0f));
-        if (ImGui::Button(uiRu(" [ v4.4.0 • BETA STAGE ]  Что нового / Patch Notes ",
-                               " [ v4.4.0 • BETA STAGE ]  What's New / Patch Notes "),
-                          ImVec2(-1.0f, 26.0f))) {
+        const std::string patchNotesBtnText =
+            " [ v" + std::string(kVersion) + " • PRODUCTION RELEASE ]  " +
+            std::string(uiRu("Что нового / Patch Notes", "What's New / Patch Notes"));
+        if (ImGui::Button(patchNotesBtnText.c_str(), ImVec2(-1.0f, 26.0f))) {
           m_showPatchNotesModal = true;
         }
         ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("%s", uiRu("Открыть примечания к выпуску v4.4.0 [Beta Stage]",
-                                       "Open v4.4.0 [Beta Stage] Patch Notes"));
+          const std::string patchNotesTip =
+              std::string(uiRu("Открыть примечания к выпуску v", "Open v")) +
+              kVersion + std::string(uiRu(" [Production Release]", " [Production Release]"));
+          ImGui::SetTooltip("%s", patchNotesTip.c_str());
         }
         ImGui::Spacing();
       }
@@ -6494,6 +6599,44 @@ void AppGL::drawMenu() {
       gdl->AddLine(gp, ImVec2(gp.x + 28.0f, gp.y), IM_COL32(56, 189, 248, 180), 1.5f);
       ImGui::Dummy(ImVec2(gw, 6.0f));
     };
+
+    // Сюжетный приоритет: карточка активной директивы экспедиции (v4.8.0)
+    const ExpeditionChapter* activeCh = m_expedition.current();
+    if (activeCh && !m_expedition.finished()) {
+      menuGlow();
+      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.10f, 0.16f, 0.90f));
+      ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.96f, 0.62f, 0.07f, 0.70f));
+      ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+
+      const float directiveCardH = 88.0f;
+      if (ImGui::BeginChild("##activeStoryDirectiveCard", ImVec2(-1.0f, directiveCardH), true)) {
+        ImGui::TextColored(ImVec4(0.96f, 0.62f, 0.07f, 1.0f), "◈ %s",
+                           uiRu("СЮЖЕТНАЯ ДИРЕКТИВА", "STORY MISSION DIRECTIVE"));
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.38f, 0.85f, 1.0f, 1.0f), "[ %s ]",
+                           uiRu(m_expedition.statusRu().c_str(), m_expedition.statusEn().c_str()));
+
+        ImGui::TextColored(ImVec4(0.94f, 0.96f, 0.99f, 1.0f), "%s",
+                           uiRu(activeCh->titleRu.c_str(), activeCh->titleEn.c_str()));
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.14f, 0.36f, 0.22f, 0.90f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.48f, 0.30f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.60f, 0.38f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.95f, 0.70f, 1.00f));
+        const std::string warpDirBtn = "🚀 " + std::string(uiRu("ВАРП-ПРЫЖОК К ЦЕЛИ СЮЖЕТА", "WARP DIRECTLY TO MISSION TARGET"));
+        if (ImGui::Button(warpDirBtn.c_str(), ImVec2(-1.0f, 24.0f))) {
+          warpToCurrentStoryObjective();
+        }
+        ImGui::PopStyleColor(4);
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("%s", uiRu(activeCh->goalRu.c_str(), activeCh->goalEn.c_str()));
+        }
+      }
+      ImGui::EndChild();
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor(2);
+    }
 
     ImGui::Spacing();
     // Главные действия: благородный глубокий циан-синий
@@ -6547,6 +6690,9 @@ void AppGL::drawMenu() {
 
     menuGlow();
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "Destinations");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.75f, 1.0f), "%s",
+                       uiRu("(★ - сюжет, ✓ - посещено)", "(★ - story, ✓ - visited)"));
     ImGui::SetWindowFontScale(0.95f);
     {
       const int gridCols = 2;
@@ -6557,17 +6703,41 @@ void AppGL::drawMenu() {
           static_cast<float>(gridCols);
       for (const auto& station : builtinCatalog()) {
         if (gridCol > 0) ImGui::SameLine();
+        const bool isObjective = isStationStoryObjective(station.id);
+        const bool isVisited = std::find(m_route.begin(), m_route.end(), station.id) != m_route.end();
+
+        std::string badge;
+        if (isObjective) {
+          badge = "★ ";
+        } else if (isVisited) {
+          badge = "✓ ";
+        }
+
         // Имя станции дублируется в "Recent" — уникальный ID через ##id
         // (иначе Dear ImGui: "2 visible items with conflicting ID").
-        const std::string destLabel = station.name + "##dest-" + station.id;
+        const std::string destLabel = badge + station.name + (isObjective ? " [ЦЕЛЬ]" : "") + "##dest-" + station.id;
+        if (isObjective) {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.35f, 0.24f, 0.90f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.48f, 0.32f, 1.00f));
+          ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.96f, 0.62f, 0.07f, 0.90f));
+        }
         if (ImGui::Button(destLabel.c_str(), ImVec2(cellW, 0.0f))) {
           teleportToStation(station.id);
           triggerWarpInHalo();
           m_inMenu = false;
         }
+        if (isObjective) {
+          ImGui::PopStyleColor(3);
+        }
         if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("%s\n%s", station.id.c_str(),
-                            station.description.c_str());
+          if (isObjective) {
+            ImGui::SetTooltip("[★ %s]\n%s\n%s",
+                              uiRu("СЮЖЕТНЫЙ ПРИОРИТЕТ ЭКСПЕДИЦИИ", "ACTIVE EXPEDITION DIRECTIVE"),
+                              station.id.c_str(), station.description.c_str());
+          } else {
+            ImGui::SetTooltip("%s\n%s", station.id.c_str(),
+                              station.description.c_str());
+          }
         }
         gridCol = (gridCol + 1) % gridCols;
       }
@@ -6658,7 +6828,7 @@ void AppGL::drawMenu() {
     ImGui::SetWindowFontScale(0.85f);
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "WASD fly | drag look | / search | dbl-click go");
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "P time | F1 help | H hide UI | ESC menu");
-    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "Version %s [BETA STAGE] • Build 2026.10", kVersion);
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "Version %s [Production Release] • Spaceflight Build 2026.11", kVersion);
     ImGui::SetWindowFontScale(1.0f);
   } else if (m_menuPage == 1) {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "%s",
@@ -6912,57 +7082,95 @@ void AppGL::drawMenu() {
 void AppGL::drawPatchNotesModal() {
   if (!m_showPatchNotesModal) return;
   ImGuiIO& io = ImGui::GetIO();
-  ImGui::SetNextWindowSize(ImVec2(720.0f, 520.0f), ImGuiCond_Appearing);
+  ImGui::SetNextWindowSize(ImVec2(760.0f, 540.0f), ImGuiCond_Appearing);
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
                           ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-  if (ImGui::Begin(uiRu("Примечания к выпуску v4.4.0 [Beta Stage]###PatchNotes",
-                        "Release Notes v4.4.0 [Beta Stage]###PatchNotes"),
+  const std::string modalTitle =
+      std::string(uiRu("Примечания к выпуску v", "Release Notes v")) +
+      kVersion + " [Production Release]###PatchNotes";
+  if (ImGui::Begin(modalTitle.c_str(),
                    &m_showPatchNotesModal,
                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f),
-                       "%s", uiRu("ASTRO-VOYAGER — ВЕРСИЯ 4.4.0 [BETA STAGE]",
-                                  "ASTRO-VOYAGER — VERSION 4.4.0 [BETA STAGE]"));
+                       "ASTRO-VOYAGER — %s v%s",
+                       uiRu("ВЕРСИЯ", "VERSION"), kVersion);
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
-                       "%s", uiRu("Этап Beta: режим кинорежиссёра, кинематографическая цветокоррекция (LUT), виньетирование и гравитационно-волновой интерферометр",
-                                  "Beta Stage: Cinematography Director Mode, Filmic Color Grading (LUTs), Lens Vignette & Gravitational Wave Interferometer"));
+                       "%s", uiRu("Научные исследования планет, спектрометрия, интерстеллар-Zettelkasten и сюжетные финалы",
+                                  "Planetary science exploration, spectrometry, interstellar Zettelkasten & story finales"));
     ImGui::Separator();
     ImGui::Spacing();
 
     if (ImGui::BeginTabBar("##PatchNotesTabs")) {
-      if (ImGui::BeginTabItem(uiRu("Что нового", "What's New"))) {
+      if (ImGui::BeginTabItem(uiRu("Что нового (v4.8.0)", "What's New (v4.8.0)"))) {
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("1. Режим кинорежиссёра и сетки кадрирования (F8)",
-                                      "1. Cinematography Director Mode & Framing Grids (F8)"));
-        ImGui::BulletText("%s", uiRu("Сетки композиции: Правило третей (3x3), Золотое сечение (1:0.618:1) и Визирный прицел с точками фокуса.",
-                                     "Framing overlays: Rule of Thirds (3x3), Golden Ratio (Phi) and Center Crosshair with focal power points."));
-        ImGui::BulletText("%s", uiRu("Плавная кинематографическая автоорбита вокруг космических объектов и мгновенный экспорт в PNG.",
-                                     "Smooth cinematic auto-orbit around celestial bodies and high-resolution PNG snapshot capture."));
+                           "%s", uiRu("1. Научные высадки и спектрометрия минералов (Landing & Science)",
+                                      "1. Planetary Landing & Science Spectrometry"));
+        ImGui::BulletText("%s", uiRu("Высадка на поверхность небесных тел (Earth, Mars, Moon, Europa, Titan, Exoplanets).",
+                                     "Surface landing on celestial bodies (Earth, Mars, Moon, Europa, Titan, Exoplanets)."));
+        ImGui::BulletText("%s", uiRu("Рентгенофлуоресцентная (XRF) спектрометрия, нейтронно-гамма анализ и механический пробоотборник грунта.",
+                                     "X-ray fluorescence (XRF) spectrometry, neutron-gamma ray analysis and surface core drill sampling."));
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("2. Кинематографическая цветокоррекция и профили LUT",
-                                      "2. Filmic Color Grading & LUT Profiles"));
-        ImGui::BulletText("%s", uiRu("5 режимов калибровки: Raw Linear, Интерстеллар янтарь, Киберпанк неон, NASA Kodak Tri-X 400 и Техниколор 1950-х.",
-                                     "5 calibrated filmic grades: Raw Linear, Interstellar Amber, Cyberpunk Neon, NASA Kodak Tri-X 400 & 1950s Technicolor."));
-        ImGui::BulletText("%s", uiRu("Мягкое виньетирование краев кадра для создания эффекта анаморфотного кинообъектива.",
-                                     "Smooth lens vignette shading for an authentic anamorphic cinematography aesthetic."));
+                           "%s", uiRu("2. Бортовая база знаний Zettelkasten (Межзвёздный гиперграф)",
+                                      "2. Onboard Zettelkasten Knowledge Base (Interstellar Hypergraph)"));
+        ImGui::BulletText("%s", uiRu("Атомарные карточки знаний с двунаправленными ссылками и отслеживанием цитирований.",
+                                     "Atomic knowledge cards with bidirectional cross-linking and citation tracking."));
+        ImGui::BulletText("%s", uiRu("Миниигра ментального синаптического резонанса для синтеза новых научных концепций.",
+                                     "Synaptic resonance minigame to synthesize novel interdisciplinary astrophysics insights."));
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("3. Зум объектива и фокусное расстояние (FOV)",
-                                      "3. Camera Lens Zoom & Focal Length (FOV)"));
-        ImGui::BulletText("%s", uiRu("Регулировка угла обзора от 15° (мощный телеобъектив для деталей) до 120° (ультраширокий IMAX формат).",
-                                     "Dynamic FOV focal slider from 15 deg (deep telephoto close-up) to 120 deg (ultra-wide IMAX panorama)."));
+                           "%s", uiRu("3. Калибровка орбитального масштаба (Orbital Scale LOD)",
+                                      "3. Orbital Scale LOD & Station Proportions"));
+        ImGui::BulletText("%s", uiRu("Плавный дистанционный LOD масштаба станций: естественные реалистичные пропорции к Земле и Луне на орбите.",
+                                     "Smooth distance-based station LOD scaling: natural, realistic scale proportions relative to Earth and Moon."));
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                           "%s", uiRu("4. Научный интерферометр гравитационных волн (GW)",
-                                      "4. Scientific Gravitational Wave Interferometer (GW)"));
-        ImGui::BulletText("%s", uiRu("Двухполяризационный осциллограф натяжения метрики h+(t) и h_x(t) синтетического канала LIGO/LISA.",
-                                     "Dual-polarization metric strain oscilloscope h+(t) and h_x(t) modeling synthetic LIGO/LISA arrays."));
-        ImGui::BulletText("%s", uiRu("Автозахват чирп-сигналов слияний нейтронных звезд (GW170817), квазинормальных мод черных дыр и пульсаров.",
-                                     "Signal tracking: BNS coalescence chirp (GW170817), black hole QNM ringdowns (Sgr A*, M87) and pulsar CW."));
+                           "%s", uiRu("4. Приоритет сюжетной прогрессии и FUI-интерфейс",
+                                      "4. Narrative Progression Priority & Sci-Fi FUI"));
+        ImGui::BulletText("%s", uiRu("Инженерная карточка текущей директивы экспедиции в главном меню с кнопкой мгновенного варп-прыжка.",
+                                     "Expedition directive card in the main menu with one-click direct warp jump to mission objective."));
+        ImGui::BulletText("%s", uiRu("Высококонтрастные Sci-Fi FUI стили: технические угловые скобы, контрастные рамки и звёздочки [★] у целей.",
+                                     "High-contrast Sci-Fi FUI design: technical corner brackets, crisp aerospace borders, and [★] objective markers."));
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
+                           "%s", uiRu("5. Семь путей финала человечества (Adventure Finale)",
+                                      "5. Seven Endings for Humanity (Adventure Finale)"));
+        ImGui::BulletText("%s", uiRu("Колония на M13, Дальний горизонт, Возрождение Солнца, Временная петля Sgr A*, Орбитальный Ковчег, Гиперпрорыв Егорки-6 и Пятый Межвселенский Альянс Арсения.",
+                                     "New Home Colony, Far Horizon, Solar Rebirth, Sgr A* Time Loop, Ark Citadel, Egorka-6 Hyper-Breakthrough, and Arseny's Fifth Universe Alliance."));
+        ImGui::EndTabItem();
+      }
+
+      if (ImGui::BeginTabItem(uiRu("Хронология (v4.5 - v4.7)", "History (v4.5 - v4.7)"))) {
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "v4.7.0 — %s",
+                           uiRu("Экстремальные релятивистские явления", "Extreme Relativistic Phenomena"));
+        ImGui::BulletText("%s", uiRu("Приливное разрушение звезды черной дырой (AT2019qiz TDE) с дебрис-диском и аккреционной вспышкой.",
+                                     "Tidal Disruption Event (AT2019qiz TDE) with stellar debris stream and relativistic accretion flare."));
+        ImGui::BulletText("%s", uiRu("Звездные ясли «Столпы Творения» (M16) с ионизационными фронтами и глобулами EGGs.",
+                                     "Stellar nursery «Pillars of Creation» (M16) with photo-evaporation fronts and evaporating gaseous globules."));
+        ImGui::BulletText("%s", uiRu("Пульсарный ветер Крабовидной туманности с тороидальным магнитным полем и релятивистскими виспами.",
+                                     "Crab Nebula Pulsar Wind Nebula with toroidal magnetic field and synchrotron wisps."));
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "v4.6.0 — %s",
+                           uiRu("Астрофизика сверхновых и радиопереговоры", "Astrophysics & Bridge Chatter"));
+        ImGui::BulletText("%s", uiRu("Внегалактическая сверхновая SN 1987A в БМО с тройным люминесцентным кольцом и радиоактивным распадом.",
+                                     "Extragalactic Supernova SN 1987A with triple circumstellar ring system and radioactive decay."));
+        ImGui::BulletText("%s", uiRu("Килоновая GW170817: слияние двойной нейтронной звезды с радиоактивным синтезом тяжелых элементов r-процесса.",
+                                     "Kilonova GW170817: binary neutron star merger with r-process nucleosynthesis lanthanide glow."));
+        ImGui::BulletText("%s", uiRu("Сюжетные радиопереговоры экипажа на мостике при сближении с ключевыми космическими объектами.",
+                                     "Narrative bridge communications and radio chatter on approaching major celestial destinations."));
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "v4.5.0 — %s",
+                           uiRu("Романтическая линия и диалоги", "Story Romance & Dialogues"));
+        ImGui::BulletText("%s", uiRu("Романтические диалоги и воспоминания Егорки в сюжетном журнале и слайдах.",
+                                     "Romantic dialogues and Egorka's personal memories in the story journal and slides."));
         ImGui::EndTabItem();
       }
 
@@ -6970,18 +7178,18 @@ void AppGL::drawPatchNotesModal() {
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s",
                            uiRu("Жизненный цикл релизов Astro Voyager:", "Astro Voyager Release Lifecycle:"));
-        ImGui::BulletText("v1.0.0 - v4.1.0: Pre-Alpha (%s)",
-                          uiRu("Физика, черные дыры, Солнечная система, сюжетная кампания",
+        ImGui::BulletText("v1.0 - v4.1: Pre-Alpha (%s)",
+                          uiRu("Физика, чёрные дыры, Солнечная система, сюжетная кампания",
                                "Physics, black holes, Solar system, story campaign prototype"));
-        ImGui::BulletText("v4.2.0: Alpha Stage (%s)",
-                          uiRu("3D-кокпит, коллиматорный ИЛС, SpaceDrive туннель, авионика",
-                               "3D Cockpit, collimated HUD, SpaceDrive tunnel, avionics"));
-        ImGui::BulletText("v4.3.0: Beta Stage (%s)",
-                          uiRu("PBR-рельеф планет, рэлеевская атмосфера, 128x256 LOD сфера, 3D-аудио",
-                               "PBR planetary relief, Rayleigh atmosphere, 128x256 LOD sphere, 3D audio"));
-        ImGui::BulletText("v4.4.0: Beta Stage (%s)",
-                          uiRu("Режим кинорежиссёра, цветокоррекция LUT, виньетка, грав-волновой интерферометр",
-                               "Cinematography Director Mode, LUT color grading, vignette, GW interferometer"));
+        ImGui::BulletText("v4.2 - v4.4: Alpha & Beta (%s)",
+                          uiRu("3D-кокпит, PBR планет, атмосфера, режим кинорежиссёра, грав-волновой интерферометр",
+                               "3D Cockpit, planetary PBR, atmosphere, cinematography, GW interferometer"));
+        ImGui::BulletText("v4.5 - v4.7: Astrophysics Suite (%s)",
+                          uiRu("Романтика, сверхновые, килоновые, TDE, Столпы Творения, пульсарный ветер",
+                               "Romance, Supernova SN1987A, Kilonova GW170817, TDE, Pillars of Creation, Crab PWN"));
+        ImGui::BulletText("v4.8.0: Science & Zettelkasten Release (%s)",
+                          uiRu("Научные высадки, XRF-спектрометрия, граф Zettelkasten, 7 финалов",
+                               "Planetary landings, XRF spectrometry, Zettelkasten graph, 7 endings"));
         ImGui::BulletText("v5.0.0: Release 1.0 (%s)",
                           uiRu("Финальный коммерческий AAA-релиз", "Full commercial AAA release"));
         ImGui::EndTabItem();

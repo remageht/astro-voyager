@@ -2473,6 +2473,17 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             if (!m_currentStation || dock.stationId != m_currentStation->id) continue;
             glm::vec3 stPos(static_cast<float>(dock.pos.x), static_cast<float>(dock.pos.y), static_cast<float>(dock.pos.z));
 
+            // Adaptive distance-based LOD scale: preserves 100% full scale close up for
+            // docking corridors, attitude alignment and latching, while scaling down smoothly
+            // at orbital distances so stations appear authentic in scale relative to Moon and Earth.
+            const float camDist = glm::length(eye - stPos);
+            float lodScale = 1.0f;
+            if (camDist > 1.8f) {
+              const float t = glm::clamp((camDist - 1.8f) / 2.7f, 0.0f, 1.0f);
+              const float s = t * t * (3.0f - 2.0f * t);
+              lodScale = glm::mix(1.0f, 0.22f, s);
+            }
+
             ObjModel* siteModel = &s_stationModel;
             float stScale = 0.38f;
             glm::mat4 stModel(1.0f);
@@ -2491,11 +2502,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               // clearly below the station while still visible in Earth orbit.
               stScale = 0.095f;
               dockRingScale = 0.12f;
+              const float effScale = stScale * lodScale;
               // SpaceX Crew Dragon: stable orbital attitude holding with subtle drift
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.03f * time + 0.45f, glm::vec3(0.0f, 1.0f, 0.0f)) *
                         glm::rotate(glm::mat4(1.0f), -0.15f, glm::vec3(1.0f, 0.0f, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               customMetal = 0.82f;
               customRough = 0.35f;
             } else if (dock.id == "dock-soyuz" && s_soyuzModel.ready()) {
@@ -2505,27 +2517,30 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               // well under the orbital station.
               stScale = 0.085f;
               dockRingScale = 0.11f;
+              const float effScale = stScale * lodScale;
               // Soyuz MS-25: orbital velocity alignment with solar arrays perpendicular to Sol
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.04f * time - 0.55f, glm::vec3(0.0f, 1.0f, 0.0f)) *
                         glm::rotate(glm::mat4(1.0f), 0.18f, glm::vec3(1.0f, 0.0f, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               customMetal = 0.70f;
               customRough = 0.42f;
             } else if (dock.id == "dock-warp-bubble" && s_warpBubbleModel.ready()) {
               siteModel = &s_warpBubbleModel;
               stScale = 0.30f;
               dockRingScale = 0.22f;
+              const float effScale = stScale * lodScale;
               // Alcubierre Warp Bubble: spinning spacetime distortion field
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               customMetal = 0.60f;
               customRough = 0.20f;
               emOverride = glm::vec3(0.1f, 0.4f, 0.9f);
             } else if (dock.id == "dock-warp-tunnel") {
               stScale = 0.25f;
               dockRingScale = 0.20f;
+              const float effScale = stScale * lodScale;
               // SpaceDrive Warp Tunnel (tamminen, CC BY 4.0): live differential 3D rotations
               const glm::mat4 dockBase = glm::translate(glm::mat4(1.0f), stPos) *
                                         glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -2533,12 +2548,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               if (s_warpTunnelTubeModel.ready() && s_shipShader) {
                 const glm::mat4 mTube = dockBase * alignToZ *
                                         glm::rotate(glm::mat4(1.0f), 0.30f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
                 drawStationObjModel(&s_warpTunnelTubeModel, mTube, 0.90f, 0.05f, glm::vec3(0.0f), 16.5f, 0.0f);
                 if (s_warpTunnelScrapModel.ready()) {
                   const glm::mat4 mScrap = dockBase * alignToZ *
                                           glm::rotate(glm::mat4(1.0f), -0.60f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                          glm::scale(glm::mat4(1.0f), glm::vec3(stScale * 0.96f));
+                                          glm::scale(glm::mat4(1.0f), glm::vec3(effScale * 0.96f));
                   drawStationObjModel(&s_warpTunnelScrapModel, mScrap, 0.95f, 0.20f, glm::vec3(0.145f, 0.216f, 1.0f) * 2.0f, 16.5f, 0.0f);
                 }
                 if (s_warpTunnelCloudModel.ready()) {
@@ -2547,7 +2562,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                   glDepthMask(GL_FALSE);
                   const glm::mat4 mCloud = dockBase * alignToZ *
                                           glm::rotate(glm::mat4(1.0f), 1.20f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                          glm::scale(glm::mat4(1.0f), glm::vec3(stScale * 0.92f));
+                                          glm::scale(glm::mat4(1.0f), glm::vec3(effScale * 0.92f));
                   drawStationObjModel(&s_warpTunnelCloudModel, mCloud, 0.10f, 0.10f, glm::vec3(0.559f, 0.512f, 1.0f) * 3.0f, 16.5f, 0.0f);
                   glDisable(GL_BLEND);
                   glDepthMask(GL_TRUE);
@@ -2555,7 +2570,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 siteModel = nullptr;  // already rendered
               } else if (s_warpTunnelModel.ready()) {
                 siteModel = &s_warpTunnelModel;
-                stModel = dockBase * glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                stModel = dockBase * glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
                 customMetal = 0.30f;
                 customRough = 0.50f;
                 emOverride = glm::vec3(0.05f, 0.3f, 0.8f);
@@ -2564,10 +2579,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               siteModel = &s_warpDriveVisModel;
               stScale = 0.30f;
               dockRingScale = 0.22f;
+              const float effScale = stScale * lodScale;
               // Warp Drive Visualisation: spacetime grid distortion
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.03f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               customMetal = 0.20f;
               customRough = 0.60f;
               emOverride = glm::vec3(0.05f, 0.2f, 0.6f);
@@ -2578,22 +2594,24 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               // the 0.247 Dragon, instead of towering over the station.
               stScale = 0.135f;
               dockRingScale = 0.20f;
+              const float effScale = stScale * lodScale;
               // James Webb Telescope: oriented into deep space, sunshield facing Sol
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.02f * time + 0.785f, glm::vec3(0.0f, 1.0f, 0.0f)) *
                         glm::rotate(glm::mat4(1.0f), 0.25f, glm::vec3(1.0f, 0.0f, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               customMetal = 0.92f;
               customRough = 0.25f;
             } else if ((dock.id == "dock-sgra" || dock.id == "dock-m13") && s_warpCoreModel.ready()) {
               siteModel = &s_warpCoreModel;
               stScale = 0.35f;
               dockRingScale = 0.24f;
+              const float effScale = stScale * lodScale;
               // Alcubierre Warp Core / Quantum Singularity Station: concentric rings rotation
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.12f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
                         glm::rotate(glm::mat4(1.0f), 0.35f, glm::vec3(0.0f, 0.0f, 1.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               const float pulse = 0.6f + 0.4f * std::sin(time * 3.5f);
               emOverride = glm::vec3(0.18f, 0.55f, 0.95f) * pulse;
               customMetal = 0.85f;
@@ -2604,11 +2622,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               // craft, clearly below the crew capsules and the observatory.
               stScale = 0.06f;
               dockRingScale = 0.14f;
+              const float effScale = stScale * lodScale;
               // Deep Space Science Probe: slow attitude stabilization roll
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
                         glm::rotate(glm::mat4(1.0f), -0.30f, glm::vec3(1.0f, 0.0f, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               const float blink = (std::sin(time * 6.0f) > 0.65f) ? 1.0f : 0.0f;
               emOverride = glm::vec3(0.1f, 0.85f, 0.65f) * blink;
               customMetal = 0.80f;
@@ -2617,9 +2636,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               // Standard orbital space station (ISS)
               siteModel = &s_stationModel;
               stScale = 0.38f;
+              const float effScale = stScale * lodScale;
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
             }
 
             if (siteModel && siteModel->ready() && s_shipShader) {
