@@ -67,6 +67,18 @@ static void appGlfwScrollCallback(GLFWwindow* window, double xoffset, double yof
 // не заменяем: киношрифт используется точечно в drawCinematic(), поэтому
 // эталонные скриншоты попиксельно не меняются. Промах = nullptr (fallback).
 namespace {
+static const ImWchar kCyrillicAndSymbolsRanges[] = {
+    0x0020, 0x00FF,  // Basic Latin + Latin Supplement (including · U+00B7)
+    0x0400, 0x052F,  // Cyrillic + Cyrillic Supplement
+    0x2000, 0x206F,  // General Punctuation (• U+2022 bullet, –, —, etc.)
+    0x2190, 0x21FF,  // Arrows (←, ↑, →, ↓, etc.)
+    0x25A0, 0x25FF,  // Geometric shapes (◈ U+25C8, ▲, ▼, ◆, ◇, etc.)
+    0x2600, 0x26FF,  // Misc symbols (★ U+2605, ☆, ⚡, ⚓, etc.)
+    0x2700, 0x27BF,  // Dingbats (✓ U+2713, ✔ U+2714, ✦ U+2726, ✧, etc.)
+    0x27C0, 0x27EF,  // Misc Math Symbols A (⟡ U+27E1, etc.)
+    0,
+};
+
 ImFont* loadCineFont() {
   ImGuiIO& io = ImGui::GetIO();
   static const char* kPaths[] = {
@@ -79,7 +91,7 @@ ImFont* loadCineFont() {
   };
   for (const char* p : kPaths) {
     ImFont* f = io.Fonts->AddFontFromFileTTF(
-        p, 16.0f, nullptr, io.Fonts->GetGlyphRangesCyrillic());
+        p, 16.0f, nullptr, kCyrillicAndSymbolsRanges);
     if (f) return f;
   }
   return nullptr;
@@ -3893,6 +3905,7 @@ void AppGL::warpToCurrentStoryObjective() {
 }
 
 void AppGL::drawExpeditionHud() {
+  const bool fontPushed = modernPushFont();
   // === Expedition ===: компактная карточка главы вверху по центру.
   const ExpeditionChapter* ch = m_expedition.current();
   ImGuiIO& io = ImGui::GetIO();
@@ -3978,7 +3991,7 @@ void AppGL::drawExpeditionHud() {
           ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.50f, 0.35f, 0.95f));
           ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.24f, 0.65f, 0.45f, 1.00f));
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.95f, 0.70f, 1.00f));
-          const std::string warpPrompt = "🚀 " + std::string(uiRu("Варп-прыжок к цели главы (", "Warp to Chapter Objective (")) +
+          const std::string warpPrompt = ">> " + std::string(uiRu("Варп-прыжок к цели главы (", "Warp to Chapter Objective (")) +
                                          targetName + ")";
           if (ImGui::Button(warpPrompt.c_str(), ImVec2(-1.0f, 26.0f))) {
             warpToCurrentStoryObjective();
@@ -3997,6 +4010,7 @@ void AppGL::drawExpeditionHud() {
   if (ch) ImGui::End();
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor(2);
+  if (fontPushed) ImGui::PopFont();
 }
 
 void AppGL::drawExpeditionMap() {
@@ -4063,14 +4077,14 @@ void AppGL::drawExpeditionMap() {
         ImGui::TextColored(ImVec4(0.35f, 0.70f, 0.90f, 1.0f), "[%s]",
                            uiRu("ДОСТУПНО", "UNLOCKED"));
       } else {
-        ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.55f, 0.75f), "🔒 %s",
+        ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.55f, 0.75f), "[X] %s",
                            uiRu(rowRu.c_str(), rowEn.c_str()));
       }
 
       // Description / Goal
       ImGui::Indent(22.0f);
       if (current && !m_expedition.finished()) {
-        ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "🎯 %s: %s",
+        ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "✦ %s: %s",
                            uiRu("Цель", "Objective"),
                            uiRu(c.goalRu.c_str(), c.goalEn.c_str()));
       } else if (unlocked) {
@@ -4615,14 +4629,14 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
                      curSt ? curSt->name.c_str() : "None");
   ImGui::TextWrapped("%s", curSt ? curSt->description.c_str() : "");
 
-  if (ImGui::Button(uiRu("⟡ Спектрометр (C)", "⟡ Spectrometer (C)"), ImVec2(150.0f, 0))) {
+  if (ImGui::Button(uiRu("[S] Спектрометр (C)", "[S] Spectrometer (C)"), ImVec2(150.0f, 0))) {
     m_spectrometerOpen = !m_spectrometerOpen;
   }
   ImGui::SameLine();
-  if (ImGui::Button(uiRu("✦ Кодекс (K)", "✦ Codex (K)"), ImVec2(150.0f, 0))) {
+  if (ImGui::Button(uiRu("[K] Кодекс (K)", "[K] Codex (K)"), ImVec2(150.0f, 0))) {
     m_codexOpen = !m_codexOpen;
   }
-  if (ImGui::Button(uiRu("🧠 Второй Мозг (B)", "🧠 Second Brain (B)"), ImVec2(150.0f, 0))) {
+  if (ImGui::Button(uiRu("[B] Второй Мозг (B)", "[B] Second Brain (B)"), ImVec2(150.0f, 0))) {
     m_zettelkastenOpen = !m_zettelkastenOpen;
     if (m_zettelkastenOpen) {
       m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
@@ -4745,7 +4759,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.35f, 0.22f, 0.85f));
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.95f, 0.65f, 1.0f));
           }
-          if (ImGui::Button(isCurrent ? uiRu("✓ На месте", "✓ Here")
+          if (ImGui::Button(isCurrent ? uiRu("[V] На месте", "[V] Here")
                                       : uiRu("Варп сюда", "Fly here"),
                             ImVec2(-1.0f, 0.0f))) {
             teleportToStation(station.id);
@@ -6530,6 +6544,7 @@ void AppGL::drawHelpOverlay() {
 }
 
 void AppGL::drawMenu() {
+  const bool fontPushed = modernPushFont();
   ImGuiIO& io = ImGui::GetIO();
   ImVec2 menuCenter(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
   ImGui::SetNextWindowPos(menuCenter, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
@@ -6537,14 +6552,14 @@ void AppGL::drawMenu() {
   ImGuiWindowFlags menuFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
 
-  // === MenuStyle (v4.1.0) ===: обсидиановое стекло аэрокосмического визира
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.030f, 0.045f, 0.070f, 0.88f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.35f, 0.52f, 0.35f));
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.080f, 0.135f, 0.210f, 0.80f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.150f, 0.240f, 0.360f, 0.95f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.140f, 0.380f, 0.600f, 1.00f));
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.93f, 0.97f, 1.00f));
-  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.22f, 0.32f, 0.46f, 0.30f));
+  // === Sci-Fi FUI Aerospace Theme (v4.8.0) ===: глубокое обсидиановое стекло
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.027f, 0.043f, 0.068f, 0.94f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.48f, 0.72f, 0.55f));
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.11f, 0.20f, 0.32f, 0.82f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.35f, 0.56f, 0.98f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.24f, 0.50f, 0.78f, 1.00f));
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.94f, 0.96f, 0.99f, 1.00f));
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.22f, 0.42f, 0.64f, 0.45f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22.0f, 18.0f));
@@ -6611,7 +6626,7 @@ void AppGL::drawMenu() {
 
       const float directiveCardH = 88.0f;
       if (ImGui::BeginChild("##activeStoryDirectiveCard", ImVec2(-1.0f, directiveCardH), true)) {
-        ImGui::TextColored(ImVec4(0.96f, 0.62f, 0.07f, 1.0f), "◈ %s",
+        ImGui::TextColored(ImVec4(0.96f, 0.62f, 0.07f, 1.0f), ">> %s",
                            uiRu("СЮЖЕТНАЯ ДИРЕКТИВА", "STORY MISSION DIRECTIVE"));
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.38f, 0.85f, 1.0f, 1.0f), "[ %s ]",
@@ -6624,7 +6639,7 @@ void AppGL::drawMenu() {
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.48f, 0.30f, 1.00f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.60f, 0.38f, 1.00f));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.95f, 0.70f, 1.00f));
-        const std::string warpDirBtn = "🚀 " + std::string(uiRu("ВАРП-ПРЫЖОК К ЦЕЛИ СЮЖЕТА", "WARP DIRECTLY TO MISSION TARGET"));
+        const std::string warpDirBtn = ">> " + std::string(uiRu("ВАРП-ПРЫЖОК К ЦЕЛИ СЮЖЕТА", "WARP DIRECTLY TO MISSION TARGET"));
         if (ImGui::Button(warpDirBtn.c_str(), ImVec2(-1.0f, 24.0f))) {
           warpToCurrentStoryObjective();
         }
@@ -6692,7 +6707,7 @@ void AppGL::drawMenu() {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "Destinations");
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.75f, 1.0f), "%s",
-                       uiRu("(★ - сюжет, ✓ - посещено)", "(★ - story, ✓ - visited)"));
+                       uiRu("([*] - сюжет, [V] - исследовано)", "([*] - story, [V] - visited)"));
     ImGui::SetWindowFontScale(0.95f);
     {
       const int gridCols = 2;
@@ -6708,9 +6723,9 @@ void AppGL::drawMenu() {
 
         std::string badge;
         if (isObjective) {
-          badge = "★ ";
+          badge = "[*] ";
         } else if (isVisited) {
-          badge = "✓ ";
+          badge = "[V] ";
         }
 
         // Имя станции дублируется в "Recent" — уникальный ID через ##id
@@ -6731,7 +6746,7 @@ void AppGL::drawMenu() {
         }
         if (ImGui::IsItemHovered()) {
           if (isObjective) {
-            ImGui::SetTooltip("[★ %s]\n%s\n%s",
+            ImGui::SetTooltip("[* %s]\n%s\n%s",
                               uiRu("СЮЖЕТНЫЙ ПРИОРИТЕТ ЭКСПЕДИЦИИ", "ACTIVE EXPEDITION DIRECTIVE"),
                               station.id.c_str(), station.description.c_str());
           } else {
@@ -7075,6 +7090,7 @@ void AppGL::drawMenu() {
   ImGui::End();
   ImGui::PopStyleVar(4);
   ImGui::PopStyleColor(7);
+  if (fontPushed) ImGui::PopFont();
 
   drawPatchNotesModal();
 }
@@ -11177,8 +11193,8 @@ void AppGL::drawZettelkasten() {
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.35f, 0.65f, 0.95f, 0.50f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
 
-  if (ImGui::Begin(uiRu("🧠 Второй Мозг Егорки · Astro-Zettelkasten (B)",
-                        "🧠 Egorka's Second Brain · Astro-Zettelkasten (B)"),
+  if (ImGui::Begin(uiRu("✦ Второй Мозг Егорки · Astro-Zettelkasten (B)",
+                        "✦ Egorka's Second Brain · Astro-Zettelkasten (B)"),
                    &m_zettelkastenOpen)) {
     // Header summary
     int discCount = m_zettelkasten.getDiscoveredCount();
