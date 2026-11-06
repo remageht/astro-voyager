@@ -80,6 +80,11 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform1f("u_IsLanded", hud.isLanded ? 1.0f : 0.0f);
   m_shader->setUniform1f("u_SurfaceDustK", hud.surfaceDustK);
 
+  // v4.9.0 Diegetic Cockpit MFDs & Hypersonic Re-entry
+  m_shader->setUniform1f("u_HullTemp", hud.hullTempNorm);
+  m_shader->setUniform2f("u_TargetRadarPos", hud.targetRadarPos.x, hud.targetRadarPos.y);
+  m_shader->setUniform1f("u_AtmoDensity", hud.atmoDensity);
+
   m_quad->draw();
 
   m_shader->unbind();

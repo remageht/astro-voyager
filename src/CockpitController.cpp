@@ -15,6 +15,7 @@ void CockpitController::reset() {
   m_headTiltVel = glm::vec3(0.0f);
   m_rumble = 0.0f;
   m_autoTint = 0.0f;
+  m_hullTemp = 0.0f;
   m_hud = CockpitHUDData();
   m_initialized = false;
 }
@@ -216,16 +217,17 @@ void CockpitController::update(float deltaTime,
     m_hud.terrainAlert = false;
   }
 
-  // v4.6.0 Realism: Atmospheric hypersonic re-entry plasma ionization
+  // v4.6.0 / v4.9.0 Realism: Atmospheric hypersonic re-entry plasma ionization & thermal modeling
+  float currentAtmoDensity = 0.0f;
   if (hasAtmosphere && nearestBodyRadius > 0.01f && m_hud.radarAltitudeKm >= 0.0f) {
     float atmThickness = nearestBodyRadius * 0.22f;
     glm::vec3 relBody = camPos - nearestBodyPos;
     float alt = glm::length(relBody) - nearestBodyRadius;
     if (alt >= 0.0f && alt < atmThickness) {
       float altNorm = alt / atmThickness;
-      float atmDensity = std::exp(-altNorm * 3.8f);
-      float speedFactor = std::clamp((spd - 12.0f) / 25.0f, 0.0f, 1.0f);
-      float targetPlasma = atmDensity * speedFactor;
+      currentAtmoDensity = std::exp(-altNorm * 3.8f);
+      float speedFactor = std::clamp((spd - 8.0f) / 20.0f, 0.0f, 1.0f);
+      float targetPlasma = currentAtmoDensity * speedFactor;
       m_hud.entryPlasma += (targetPlasma - m_hud.entryPlasma) * (1.0f - std::exp(-deltaTime * 6.0f));
     } else {
       m_hud.entryPlasma *= std::exp(-deltaTime * 4.0f);
@@ -233,8 +235,25 @@ void CockpitController::update(float deltaTime,
   } else {
     m_hud.entryPlasma *= std::exp(-deltaTime * 4.0f);
   }
+  m_hud.atmoDensity = currentAtmoDensity;
 
-  // Target relative direction and distance
+  // Thermal dissipation and hull heating
+  // Aerodynamic compression heating + engine boost heat, radiated via Stefan-Boltzmann cooling
+  float targetHullHeat = std::clamp(m_hud.entryPlasma * 1.15f + (throttleInput > 1.0f ? 0.35f : 0.0f), 0.0f, 1.0f);
+  if (targetHullHeat > m_hullTemp) {
+    m_hullTemp += (targetHullHeat - m_hullTemp) * (1.0f - std::exp(-deltaTime * 3.5f));
+  } else {
+    m_hullTemp -= (m_hullTemp - targetHullHeat) * (1.0f - std::exp(-deltaTime * 0.8f));
+  }
+  m_hud.hullTempNorm = std::clamp(m_hullTemp, 0.0f, 1.0f);
+
+  // Atmospheric buffeting / violent cockpit shaking during hypersonic re-entry
+  if (m_hud.entryPlasma > 0.02f) {
+    float atmoShake = m_hud.entryPlasma * 0.85f;
+    m_rumble = std::max(m_rumble, atmoShake);
+  }
+
+  // Target relative direction, distance, and 2D radar disk projection
   m_hud.targetName = targetName;
   if (!targetName.empty()) {
     glm::vec3 toTarget = targetPos - camPos;
@@ -243,16 +262,25 @@ void CockpitController::update(float deltaTime,
     if (dist > 1e-4f) {
       glm::vec3 dir = toTarget / dist;
       float dotFwd = glm::dot(dir, camFwd);
+      float dotRight = glm::dot(dir, camRight);
       m_hud.targetAngleDeg = std::acos(std::clamp(dotFwd, -1.0f, 1.0f)) * (180.0f / 3.14159265f);
       m_hud.targetLocked = (m_hud.targetAngleDeg < 15.0f);
+
+      // Project into normalized radar disk coordinates
+      // Radar X = right, Radar Y = forward component (projected on ship horizontal plane)
+      float radarDistNorm = std::clamp(dist / 40.0f, 0.10f, 0.88f);
+      float angleHoriz = std::atan2(dotRight, dotFwd);
+      m_hud.targetRadarPos = glm::vec2(std::sin(angleHoriz) * radarDistNorm, std::cos(angleHoriz) * radarDistNorm);
     } else {
       m_hud.targetAngleDeg = 0.0f;
       m_hud.targetLocked = true;
+      m_hud.targetRadarPos = glm::vec2(0.0f);
     }
   } else {
     m_hud.targetDistLy = 0.0f;
     m_hud.targetAngleDeg = 0.0f;
     m_hud.targetLocked = false;
+    m_hud.targetRadarPos = glm::vec2(0.0f);
   }
 }
 
