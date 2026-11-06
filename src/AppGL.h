@@ -184,7 +184,7 @@ class AppGL {
   std::set<std::string> m_discoveredConstellations;
   void drawDiscoveryCard(const ConstellationInfo* cInfo);
 
-  // === Astro-Zettelkasten / Second Brain === (v4.8.0): ментальный граф мыслей Егорки
+  // === Astro-Zettelkasten / Second Brain === (v4.8.0, v5.1.0): ментальный граф мыслей Егорки
   ZettelGraph m_zettelkasten;
   bool m_zettelkastenOpen = false;
   bool m_prevBPressed = false;
@@ -195,6 +195,25 @@ class AppGL {
   float m_mindPlayerFrequency = 0.50f;
   bool m_mindMiniGameActive = false;
   std::string m_mindSynthesizingId;
+
+  // v5.1.0: Анимация Эврики и модели синтеза
+  bool m_eurekaActive = false;
+  float m_eurekaTimer = 0.0f;
+  float m_eurekaDuration = 3.6f;
+  int m_eurekaModel = 0; // 0: Quantum Wave, 1: Orbital Constellation, 2: Supernova Burst
+  float m_eurekaCenterX = 0.0f;
+  float m_eurekaCenterY = 0.0f;
+  std::vector<std::string> m_eurekaParentIds;
+  std::string m_eurekaRecipeId;
+  std::string m_eurekaMasterId;
+  std::vector<std::pair<float, float>> m_eurekaStartPositions;
+  void startEurekaAnimation(const std::string& recipeId, int modelOverride = -1);
+  void triggerDemoEureka(int model);
+
+  // Obsidian features (Force-directed layout & Dataview filters)
+  bool m_forceDirectedActive = false;
+  int m_categoryFilter = 0; // 0: All, 1: Memory, 2: Physics, 3: Stasis, 4: Biosphere, 5: Echo, 6: Master
+  void stepForceDirectedLayout(float dt);
 
   // === Expedition === (v3.5.0): сюжетная арка + вводные слайды (рестайл).
   ExpeditionState m_expedition;

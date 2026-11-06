@@ -17,8 +17,8 @@ constexpr const char* kClusterMultiverse = "multiverse";  // Прорыв Мул
 struct ZettelNote {
   std::string id;             // Unique key, e.g. "z_paris_rain"
   std::string cluster;        // "solar", "stasis", "eden", "multiverse"
-  std::string categoryRu;     // "Память", "Физика", "Стазис", "Биосфера", "Эхо"
-  std::string categoryEn;     // "Memory", "Physics", "Stasis", "Biosphere", "Echo"
+  std::string categoryRu;     // "Память", "Физика", "Стазис", "Биосфера", "Эхо", "Эврика"
+  std::string categoryEn;     // "Memory", "Physics", "Stasis", "Biosphere", "Echo", "Eureka"
   std::string titleRu;
   std::string titleEn;
   std::string textRu;         // Insight / reflection
@@ -32,9 +32,32 @@ struct ZettelNote {
   float posY = 0.0f;
 
   bool seedDiscovered = false;// Found through exploration / story
-  bool synthesized = false;   // Synthesized via Mind Resonance mini-game
+  bool synthesized = false;   // Synthesized via Mind Resonance / Eureka
+
+  bool isMasterNode = false;  // Synthesized Master Node / Breakthrough Insight
+  std::vector<std::string> parentIds; // Component notes that yielded this master note
+  int depthLevel = 0;         // 0: foreground, 1: background ancestor layer
 
   std::vector<std::string> links; // IDs of connected notes
+};
+
+enum class EurekaModel : int {
+  QuantumWave = 0,          // Волновой коллапс / схождение
+  OrbitalConstellation = 1, // Орбитальное вращение спутников
+  SupernovaBurst = 2        // Взрыв сверхновой / расширение кольца
+};
+
+// Recipe defining the synthesis of a new breakthrough Master Node
+struct ZettelSynthesisRecipe {
+  std::string id;
+  std::string cluster;
+  std::string masterNoteId;
+  std::vector<std::string> requiredNoteIds;
+  std::string titleRu;
+  std::string titleEn;
+  std::string descriptionRu;
+  std::string descriptionEn;
+  bool synthesized = false;
 };
 
 class ZettelGraph {
@@ -47,6 +70,15 @@ class ZettelGraph {
   std::vector<ZettelNote>& getNotes() { return m_notes; }
   const ZettelNote* getNote(const std::string& id) const;
   ZettelNote* getNote(const std::string& id);
+
+  // Recipes Accessors
+  const std::vector<ZettelSynthesisRecipe>& getRecipes() const { return m_recipes; }
+  std::vector<ZettelSynthesisRecipe>& getRecipes() { return m_recipes; }
+  const ZettelSynthesisRecipe* getRecipe(const std::string& id) const;
+  bool canSynthesizeRecipe(const std::string& id) const;
+  bool triggerSynthesisRecipe(const std::string& id);
+  const ZettelSynthesisRecipe* findMatchingRecipe(const std::string& noteA, const std::string& noteB) const;
+  const ZettelSynthesisRecipe* checkPendingSynthesis() const;
 
   // Link connections
   bool linkNotes(const std::string& idA, const std::string& idB);
@@ -68,6 +100,7 @@ class ZettelGraph {
 
   int getDiscoveredCount() const;
   int getSynthesizedCount() const;
+  int getMasterNodesCount() const;
   int getTotalCount() const { return static_cast<int>(m_notes.size()); }
   int getTotalLinksCount() const;
 
@@ -85,6 +118,7 @@ class ZettelGraph {
 
  private:
   std::vector<ZettelNote> m_notes;
+  std::vector<ZettelSynthesisRecipe> m_recipes;
   void addSeed(const ZettelNote& note);
 };
 

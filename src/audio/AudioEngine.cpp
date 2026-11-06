@@ -364,6 +364,20 @@ void AudioEngine::playTargetLockPing(float pan) {
   m_voices.push_back({VoiceType::TargetLock, m_samples.load(), nullptr, 0.0f, std::clamp(pan, -1.0f, 1.0f)});
 }
 
+void AudioEngine::playLiquidDrop(float pan) {
+  if (!m_tried) return;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (m_voices.size() > 32) return;
+  m_voices.push_back({VoiceType::LiquidDrop, m_samples.load(), nullptr, 0.0f, std::clamp(pan, -1.0f, 1.0f)});
+}
+
+void AudioEngine::playEurekaChime() {
+  if (!m_tried) return;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (m_voices.size() > 32) return;
+  m_voices.push_back({VoiceType::Eureka, m_samples.load(), nullptr, 0.0f, 0.0f});
+}
+
 // v4.0: С„Р°Р№Р»-РіРѕР»РѕСЃ РєР°С‚СЃС†РµРЅС‹. Р”РµРєРѕРґ СЃРёРЅС…СЂРѕРЅРЅС‹Р№ РІ РІС‹Р·С‹РІР°СЋС‰РµРј С‚СЂРµРґРµ (UI):
 // РєРѕСЂРѕС‚РєРёР№ wav РєР°С‚СЃС†РµРЅС‹ С‡РёС‚Р°РµС‚СЃСЏ Р·Р° РјРёР»Р»РёСЃРµРєСѓРЅРґС‹; audio-РїРѕС‚РѕРє РїРѕС‚РѕРј
 // С‚РѕР»СЊРєРѕ С‡РёС‚Р°РµС‚ РіРѕС‚РѕРІС‹Р№ Р±СѓС„РµСЂ (no lock).
@@ -558,6 +572,44 @@ float AudioEngine::renderVoice(const Voice& v, double age,
                       0.2f * static_cast<float>(std::sin(2.0 * kPi * 2.0 * f * age));
       const float env = static_cast<float>(std::exp(-age * 16.0));
       return s * env * 0.55f;
+    }
+    case VoiceType::LiquidDrop: {
+      // Процедурный «бульк» капли: частотный свип 600 -> 1750 Гц за 40 мс, затухание 120 мс
+      if (age > 0.16) return 0.0f;
+      double f;
+      if (age < 0.045) {
+        f = 600.0 + (1750.0 - 600.0) * (age / 0.045);
+      } else {
+        f = 1750.0 - 150.0 * (age - 0.045);
+      }
+      const double phase = 2.0 * kPi * f * age;
+      const float s = static_cast<float>(std::sin(phase)) +
+                      0.3f * static_cast<float>(std::sin(phase * 2.0));
+      // Всплеск поверхностного натяжения (pop transient в первые 8 мс)
+      const float pop = (age < 0.008) ? static_cast<float>(std::sin(2.0 * kPi * 2800.0 * age)) * 0.4f : 0.0f;
+      const float env = static_cast<float>(std::exp(-age * 28.0));
+      return (s * 0.7f + pop) * env * 0.65f;
+    }
+    case VoiceType::Eureka: {
+      // Небесный полифонический перезвон открытия: арпеджированный аккорд C5-G5-C6-E6
+      if (age > 3.2) return 0.0f;
+      static const double kNotes[4] = {523.251, 783.991, 1046.502, 1318.510};
+      static const double kDelays[4] = {0.0, 0.06, 0.13, 0.22};
+      float sum = 0.0f;
+      for (int i = 0; i < 4; ++i) {
+        const double a = age - kDelays[i];
+        if (a < 0.0) continue;
+        const double f = kNotes[i];
+        // Мягкое мерцающее вибрато 4.5 Гц
+        const double vib = 1.0 + 0.003 * std::sin(2.0 * kPi * 4.5 * a);
+        const float tone = static_cast<float>(std::sin(2.0 * kPi * (f * vib) * a)) +
+                           0.35f * static_cast<float>(std::sin(2.0 * kPi * (f * vib * 2.0) * a)) +
+                           0.12f * static_cast<float>(std::sin(2.0 * kPi * (f * vib * 3.0) * a));
+        const float env = static_cast<float>(std::exp(-a * 1.5));
+        const float att = (a < 0.012) ? static_cast<float>(a / 0.012) : 1.0f;
+        sum += tone * env * att;
+      }
+      return sum * 0.30f;
     }
     case VoiceType::File: {
       // Р¤Р°Р№Р»-РіРѕР»РѕСЃ: Р»РёРЅРµР№РЅС‹Р№ Р»РµСЂРї РїРѕ РіРѕС‚РѕРІРѕРјСѓ float-Р±СѓС„РµСЂСѓ (РјРѕРЅРѕ,

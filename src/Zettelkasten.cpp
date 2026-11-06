@@ -293,6 +293,247 @@ void ZettelGraph::init() {
     n.synthesized = false;
     addSeed(n);
   }
+
+  // -------------------------------------------------------------
+  // MASTER BREAKTHROUGH NODES (Эврика · Новые Открытия)
+  // -------------------------------------------------------------
+  {
+    ZettelNote n;
+    n.id = "z_master_solar_dawn";
+    n.cluster = kClusterSolar;
+    n.categoryRu = "Эврика";
+    n.categoryEn = "Eureka";
+    n.titleRu = "Рассвет Первого Огня";
+    n.titleEn = "Dawn of the First Flame";
+    n.textRu = "Объединение квантовой метрики отрицательной плотности Казимира с релятивистской протонной инжекцией открыло способ обратить вспять гравитационный коллапс Солнца. Дождь над Сорбонной больше не воспоминание об угасшем мире — это обещание нового полудня.";
+    n.textEn = "Synthesizing the Casimir negative energy density metric with relativistic proton cascades unlocks a method to reverse solar collapse. The rain over Sorbonne is no longer an elegy for a dying world — it is the pledge of a new noon.";
+    n.quoteRu = "Мы зажгли огонь, который согреет миллиарды жизней. Спи спокойно, Земля: рассвет настал.";
+    n.quoteEn = "We rekindled a hearth that will warm billions of lives. Sleep peacefully, Earth: the dawn is here.";
+    n.speakerRu = "Д-р Елена Ростова";
+    n.speakerEn = "Dr. Elena Rostova";
+    n.posX = -135.0f;
+    n.posY = -105.0f;
+    n.seedDiscovered = false;
+    n.synthesized = false;
+    n.isMasterNode = true;
+    n.parentIds = {"z_paris_rain", "z_casimir_metric", "z_solar_injection"};
+    n.depthLevel = 0;
+    addSeed(n);
+  }
+  {
+    ZettelNote n;
+    n.id = "z_master_stasis_bastion";
+    n.cluster = kClusterStasis;
+    n.categoryRu = "Эврика";
+    n.categoryEn = "Eureka";
+    n.titleRu = "Бастион Сингулярного Покоя";
+    n.titleEn = "Bastion of Singular Stasis";
+    n.textRu = "Синхронизация многослойных амортизаторов криосна с приливными градиентами Sgr A* позволила создать топологический щит, абсолютно неуязвимый для энтропийного распада. Опыт гибели Вселенной-05 стал величайшей броней для нашего выживания.";
+    n.textEn = "Synchronizing multi-layer cryostatis dampeners with Sgr A* tidal shear gradients establishes a topological shield impervious to entropic decay. The demise of Universe-05 transformed into our supreme armor.";
+    n.quoteRu = "Палач Ложных Надежд стал хранителем истинного рассвета. Теперь ни одна сингулярность нас не сломит.";
+    n.quoteEn = "The Executioner of False Hopes has become guardian of the true dawn. No singularity shall break us now.";
+    n.speakerRu = "Арсений";
+    n.speakerEn = "Arseny";
+    n.posX = -120.0f;
+    n.posY = 120.0f;
+    n.seedDiscovered = false;
+    n.synthesized = false;
+    n.isMasterNode = true;
+    n.parentIds = {"z_stasis_dampener", "z_universe5_collapse", "z_sgra_tidal"};
+    n.depthLevel = 0;
+    addSeed(n);
+  }
+  {
+    ZettelNote n;
+    n.id = "z_master_eden_cradle";
+    n.cluster = kClusterEden;
+    n.categoryRu = "Эврика";
+    n.categoryEn = "Eureka";
+    n.titleRu = "Колыбель Бесконечного Дома";
+    n.titleEn = "Cradle of the Infinite Home";
+    n.textRu = "Генетическая память семян Земли, хлорофилл скопления M13 и вечные базальтовые шпили Цитадели Номад соединились в проект Нового Эдема. Человечество пустило корни в сердце Млечного Пути.";
+    n.textEn = "Earth's heirloom seed heritage, M13 chlorophyll resonance, and Nomad Citadel basalt spires united into the New Eden synthesis. Humanity takes root in the very heart of the Milky Way.";
+    n.quoteRu = "Посмотри на эти зелёные небеса, Егорка! Мы нашли наш вечный дом среди звёзд!";
+    n.quoteEn = "Look at those emerald skies, Egorka! We found our eternal home among the stars!";
+    n.speakerRu = "Мия Сато";
+    n.speakerEn = "Mia Sato";
+    n.posX = 140.0f;
+    n.posY = -85.0f;
+    n.seedDiscovered = false;
+    n.synthesized = false;
+    n.isMasterNode = true;
+    n.parentIds = {"z_mia_promise", "z_m13_biosphere", "z_nomad_citadel"};
+    n.depthLevel = 0;
+    addSeed(n);
+  }
+  {
+    ZettelNote n;
+    n.id = "z_master_omni_nexus";
+    n.cluster = kClusterMultiverse;
+    n.categoryRu = "Эврика";
+    n.categoryEn = "Eureka";
+    n.titleRu = "Омни-Нексус Мультивселенной";
+    n.titleEn = "Omni-Nexus of the Multiverse";
+    n.textRu = "Тахионная гармоника Шестого Егорки, свернутая фаза горизонта событий и мост Эйнштейна-Розена слились в абсолютное понимание структуры бытия. Временная петля разорвана — теперь все ветви реальности открыты для бесконечного странствия.";
+    n.textEn = "The Sixth Egorka's tachyon harmonic, curved horizon phase geometry, and Einstein-Rosen corridor converged into mastery over reality's loom. The causal loop is shattered — all branches are open for eternal voyage.";
+    n.quoteRu = "Шесть итераций искали выход. Седьмая сделала космос бесконечным.";
+    n.quoteEn = "Six iterations searched for an exit. The seventh turned infinity into our highway.";
+    n.speakerRu = "Егорка-6";
+    n.speakerEn = "Egorka-6";
+    n.posX = 125.0f;
+    n.posY = 105.0f;
+    n.seedDiscovered = false;
+    n.synthesized = false;
+    n.isMasterNode = true;
+    n.parentIds = {"z_sixth_resonance", "z_phase_shard", "z_loop_transcend"};
+    n.depthLevel = 0;
+    addSeed(n);
+  }
+
+  // Recipes
+  m_recipes.clear();
+  {
+    ZettelSynthesisRecipe r;
+    r.id = "recipe_solar_dawn";
+    r.cluster = kClusterSolar;
+    r.masterNoteId = "z_master_solar_dawn";
+    r.requiredNoteIds = {"z_paris_rain", "z_casimir_metric", "z_solar_injection"};
+    r.titleRu = "Синтез: Рассвет Первого Огня";
+    r.titleEn = "Synthesis: Dawn of the First Flame";
+    r.descriptionRu = "Объединение физики Казимира, воспоминаний о Париже и релятивистской инжекции.";
+    r.descriptionEn = "Uniting Casimir physics, Paris memories, and relativistic injection.";
+    r.synthesized = false;
+    m_recipes.push_back(r);
+  }
+  {
+    ZettelSynthesisRecipe r;
+    r.id = "recipe_stasis_bastion";
+    r.cluster = kClusterStasis;
+    r.masterNoteId = "z_master_stasis_bastion";
+    r.requiredNoteIds = {"z_stasis_dampener", "z_universe5_collapse", "z_sgra_tidal"};
+    r.titleRu = "Синтез: Бастион Сингулярного Покоя";
+    r.titleEn = "Synthesis: Bastion of Singular Stasis";
+    r.descriptionRu = "Объединение графенового криостазиса, хроник Вселенной-05 и приливных градиентов Sgr A*.";
+    r.descriptionEn = "Uniting graphene cryostasis, Universe-05 chronicles, and Sgr A* tidal gradients.";
+    r.synthesized = false;
+    m_recipes.push_back(r);
+  }
+  {
+    ZettelSynthesisRecipe r;
+    r.id = "recipe_eden_cradle";
+    r.cluster = kClusterEden;
+    r.masterNoteId = "z_master_eden_cradle";
+    r.requiredNoteIds = {"z_mia_promise", "z_m13_biosphere", "z_nomad_citadel"};
+    r.titleRu = "Синтез: Колыбель Бесконечного Дома";
+    r.titleEn = "Synthesis: Cradle of the Infinite Home";
+    r.descriptionRu = "Объединение клятвы Мии, биосферного отклика M13 и Цитадели Номад.";
+    r.descriptionEn = "Uniting Mia's vow, M13 biosphere resonance, and Nomad Citadel.";
+    r.synthesized = false;
+    m_recipes.push_back(r);
+  }
+  {
+    ZettelSynthesisRecipe r;
+    r.id = "recipe_omni_nexus";
+    r.cluster = kClusterMultiverse;
+    r.masterNoteId = "z_master_omni_nexus";
+    r.requiredNoteIds = {"z_sixth_resonance", "z_phase_shard", "z_loop_transcend"};
+    r.titleRu = "Синтез: Омни-Нексус Мультивселенной";
+    r.titleEn = "Synthesis: Omni-Nexus of the Multiverse";
+    r.descriptionRu = "Объединение гармоники Шестого Егорки, фазового осколка и моста Эйнштейна-Розена.";
+    r.descriptionEn = "Uniting the Sixth Egorka's harmonic, phase shard, and Einstein-Rosen bridge.";
+    r.synthesized = false;
+    m_recipes.push_back(r);
+  }
+}
+
+const ZettelSynthesisRecipe* ZettelGraph::getRecipe(const std::string& id) const {
+  for (const auto& r : m_recipes) {
+    if (r.id == id) return &r;
+  }
+  return nullptr;
+}
+
+bool ZettelGraph::canSynthesizeRecipe(const std::string& id) const {
+  const ZettelSynthesisRecipe* r = getRecipe(id);
+  if (!r || r->synthesized) return false;
+  // All required notes must be discovered and synthesized
+  for (const auto& nid : r->requiredNoteIds) {
+    const ZettelNote* n = getNote(nid);
+    if (!n || !n->seedDiscovered || !n->synthesized) return false;
+  }
+  // All required notes must be connected to each other
+  int innerLinks = 0;
+  for (size_t i = 0; i < r->requiredNoteIds.size(); ++i) {
+    for (size_t j = i + 1; j < r->requiredNoteIds.size(); ++j) {
+      if (areLinked(r->requiredNoteIds[i], r->requiredNoteIds[j])) {
+        innerLinks++;
+      }
+    }
+  }
+  return (innerLinks >= static_cast<int>(r->requiredNoteIds.size()) - 1);
+}
+
+bool ZettelGraph::triggerSynthesisRecipe(const std::string& id) {
+  ZettelSynthesisRecipe* r = nullptr;
+  for (auto& rec : m_recipes) {
+    if (rec.id == id) {
+      r = &rec;
+      break;
+    }
+  }
+  if (!r || r->synthesized) return false;
+
+  r->synthesized = true;
+  ZettelNote* master = getNote(r->masterNoteId);
+  if (master) {
+    master->seedDiscovered = true;
+    master->synthesized = true;
+    master->depthLevel = 0; // foreground
+
+    // Demote parent notes to background layer and establish radiant feeder links
+    for (const auto& pId : r->requiredNoteIds) {
+      ZettelNote* parent = getNote(pId);
+      if (parent) {
+        parent->depthLevel = 1; // background layer
+        if (std::find(master->links.begin(), master->links.end(), pId) == master->links.end()) {
+          master->links.push_back(pId);
+        }
+        if (std::find(parent->links.begin(), parent->links.end(), master->id) == parent->links.end()) {
+          parent->links.push_back(master->id);
+        }
+      }
+    }
+  }
+  return true;
+}
+
+const ZettelSynthesisRecipe* ZettelGraph::checkPendingSynthesis() const {
+  for (const auto& r : m_recipes) {
+    if (!r.synthesized && canSynthesizeRecipe(r.id)) {
+      return &r;
+    }
+  }
+  return nullptr;
+}
+
+const ZettelSynthesisRecipe* ZettelGraph::findMatchingRecipe(const std::string& noteA, const std::string& noteB) const {
+  for (const auto& r : m_recipes) {
+    if (r.synthesized) continue;
+    bool hasA = (std::find(r.requiredNoteIds.begin(), r.requiredNoteIds.end(), noteA) != r.requiredNoteIds.end());
+    bool hasB = (std::find(r.requiredNoteIds.begin(), r.requiredNoteIds.end(), noteB) != r.requiredNoteIds.end());
+    if (hasA && hasB) {
+      return &r;
+    }
+  }
+  return nullptr;
+}
+
+int ZettelGraph::getMasterNodesCount() const {
+  int count = 0;
+  for (const auto& n : m_notes) {
+    if (n.isMasterNode && n.seedDiscovered) count++;
+  }
+  return count;
 }
 
 const ZettelNote* ZettelGraph::getNote(const std::string& id) const {
@@ -408,6 +649,13 @@ void ZettelGraph::refresh(const std::vector<std::string>& visitedStations,
 }
 
 float ZettelGraph::getClusterProgress(const std::string& cluster) const {
+  // If master node for this cluster is synthesized, 100% resonance is achieved!
+  for (const auto& n : m_notes) {
+    if (n.cluster == cluster && n.isMasterNode && n.synthesized) {
+      return 1.0f;
+    }
+  }
+
   std::vector<std::string> clusterNodes;
   std::vector<std::pair<std::string, std::string>> requiredLinks;
 
@@ -482,19 +730,24 @@ int ZettelGraph::getTotalLinksCount() const {
 
 std::string ZettelGraph::serialize() const {
   std::ostringstream os;
-  os << "# astro-voyager zettelkasten second brain state (version=1)\n";
-  os << "version=1\n";
+  os << "# astro-voyager zettelkasten second brain state (version=2)\n";
+  os << "version=2\n";
   for (const auto& n : m_notes) {
     os << "note=" << n.id
        << "|disc=" << (n.seedDiscovered ? 1 : 0)
        << "|synth=" << (n.synthesized ? 1 : 0)
        << "|pos=" << n.posX << "," << n.posY
+       << "|depth=" << n.depthLevel
+       << "|master=" << (n.isMasterNode ? 1 : 0)
        << "|links=";
     for (size_t i = 0; i < n.links.size(); ++i) {
       if (i > 0) os << ",";
       os << n.links[i];
     }
     os << "\n";
+  }
+  for (const auto& r : m_recipes) {
+    os << "recipe=" << r.id << "|synth=" << (r.synthesized ? 1 : 0) << "\n";
   }
   return os.str();
 }
@@ -507,9 +760,32 @@ bool ZettelGraph::deserialize(const std::string& data) {
 
   while (std::getline(is, line)) {
     if (line.empty() || line[0] == '#') continue;
+
+    // Recipe line
+    if (line.rfind("recipe=", 0) == 0) {
+      std::string payload = line.substr(7);
+      size_t pipe = payload.find('|');
+      std::string recId = (pipe == std::string::npos) ? payload : payload.substr(0, pipe);
+      bool synth = false;
+      if (pipe != std::string::npos) {
+        std::string rest = payload.substr(pipe + 1);
+        if (rest.rfind("synth=", 0) == 0) {
+          synth = (std::atoi(rest.substr(6).c_str()) != 0);
+        }
+      }
+      for (auto& r : m_recipes) {
+        if (r.id == recId) {
+          r.synthesized = synth;
+          any = true;
+          break;
+        }
+      }
+      continue;
+    }
+
     if (line.rfind("note=", 0) != 0) continue;
 
-    // Format: note=ID|disc=0|synth=0|pos=x,y|links=a,b
+    // Format: note=ID|disc=0|synth=0|pos=x,y|depth=0|master=0|links=a,b
     std::string payload = line.substr(5);
     std::istringstream ss(payload);
     std::string token;
@@ -518,6 +794,7 @@ bool ZettelGraph::deserialize(const std::string& data) {
     bool disc = false;
     bool synth = false;
     float px = 0.0f, py = 0.0f;
+    int depth = 0;
     std::vector<std::string> loadedLinks;
 
     size_t pipe1 = payload.find('|');
@@ -540,6 +817,8 @@ bool ZettelGraph::deserialize(const std::string& data) {
             px = static_cast<float>(std::atof(coords.substr(0, c).c_str()));
             py = static_cast<float>(std::atof(coords.substr(c + 1).c_str()));
           }
+        } else if (field.rfind("depth=", 0) == 0) {
+          depth = std::atoi(field.substr(6).c_str());
         } else if (field.rfind("links=", 0) == 0) {
           std::string lks = field.substr(6);
           std::istringstream lkStream(lks);
@@ -557,6 +836,7 @@ bool ZettelGraph::deserialize(const std::string& data) {
       n->synthesized = synth;
       n->posX = px;
       n->posY = py;
+      n->depthLevel = depth;
       n->links = loadedLinks;
       any = true;
     }

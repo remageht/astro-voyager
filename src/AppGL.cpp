@@ -11969,6 +11969,125 @@ void AppGL::drawSurfaceReportModal() {
   ImGui::End();
 }
 
+void AppGL::stepForceDirectedLayout(float dt) {
+  auto& notes = m_zettelkasten.getNotes();
+  if (notes.empty()) return;
+
+  const float kRepulsion = 38000.0f;
+  const float kSpring = 0.040f;
+  const float kCenterGravity = 0.012f;
+  const float targetLength = 110.0f;
+
+  std::vector<ImVec2> forces(notes.size(), ImVec2(0.0f, 0.0f));
+
+  // 1. Center gravity & Coulomb repulsion
+  for (size_t i = 0; i < notes.size(); ++i) {
+    if (!notes[i].seedDiscovered) continue;
+    forces[i].x -= notes[i].posX * kCenterGravity;
+    forces[i].y -= notes[i].posY * kCenterGravity;
+
+    for (size_t j = i + 1; j < notes.size(); ++j) {
+      if (!notes[j].seedDiscovered) continue;
+      float dx = notes[i].posX - notes[j].posX;
+      float dy = notes[i].posY - notes[j].posY;
+      float dist2 = dx * dx + dy * dy + 100.0f;
+      float dist = std::sqrt(dist2);
+      float f = kRepulsion / dist2;
+      float fx = (dx / dist) * f;
+      float fy = (dy / dist) * f;
+      forces[i].x += fx;
+      forces[i].y += fy;
+      forces[j].x -= fx;
+      forces[j].y -= fy;
+    }
+  }
+
+  // 2. Hooke springs along links
+  for (size_t i = 0; i < notes.size(); ++i) {
+    if (!notes[i].seedDiscovered) continue;
+    for (const auto& lkId : notes[i].links) {
+      for (size_t j = 0; j < notes.size(); ++j) {
+        if (notes[j].id == lkId && notes[j].seedDiscovered && i < j) {
+          float dx = notes[j].posX - notes[i].posX;
+          float dy = notes[j].posY - notes[i].posY;
+          float dist = std::hypot(dx, dy);
+          if (dist > 0.001f) {
+            float delta = dist - targetLength;
+            float f = delta * kSpring;
+            float fx = (dx / dist) * f;
+            float fy = (dy / dist) * f;
+            forces[i].x += fx;
+            forces[i].y += fy;
+            forces[j].x -= fx;
+            forces[j].y -= fy;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. Integration with clamping
+  float step = std::min(dt, 0.05f) * 60.0f;
+  for (size_t i = 0; i < notes.size(); ++i) {
+    if (!notes[i].seedDiscovered) continue;
+    float moveX = std::clamp(forces[i].x * 0.08f * step, -12.0f, 12.0f);
+    float moveY = std::clamp(forces[i].y * 0.08f * step, -12.0f, 12.0f);
+    notes[i].posX += moveX;
+    notes[i].posY += moveY;
+  }
+}
+
+void AppGL::startEurekaAnimation(const std::string& recipeId, int modelOverride) {
+  const ZettelSynthesisRecipe* r = m_zettelkasten.getRecipe(recipeId);
+  if (!r) return;
+
+  m_eurekaActive = true;
+  m_eurekaTimer = 0.0f;
+  m_eurekaDuration = 3.6f;
+  if (modelOverride >= 0) {
+    m_eurekaModel = modelOverride;
+  }
+  m_eurekaRecipeId = recipeId;
+  m_eurekaMasterId = r->masterNoteId;
+  m_eurekaParentIds = r->requiredNoteIds;
+  m_eurekaStartPositions.clear();
+
+  float sumX = 0.0f, sumY = 0.0f;
+  int count = 0;
+  for (const auto& pId : m_eurekaParentIds) {
+    const ZettelNote* pn = m_zettelkasten.getNote(pId);
+    if (pn) {
+      sumX += pn->posX;
+      sumY += pn->posY;
+      m_eurekaStartPositions.push_back({pn->posX, pn->posY});
+      count++;
+    }
+  }
+  m_eurekaCenterX = (count > 0) ? (sumX / count) : 0.0f;
+  m_eurekaCenterY = (count > 0) ? (sumY / count) : 0.0f;
+
+  // Place master note at barycenter
+  ZettelNote* master = m_zettelkasten.getNote(m_eurekaMasterId);
+  if (master) {
+    master->posX = m_eurekaCenterX;
+    master->posY = m_eurekaCenterY;
+  }
+
+  // Play procedural liquid droplet "bloop"
+  m_audio.playLiquidDrop(0.0f);
+}
+
+void AppGL::triggerDemoEureka(int model) {
+  m_zettelkasten.discoverSeed("z_paris_rain");
+  m_zettelkasten.discoverSeed("z_casimir_metric");
+  m_zettelkasten.discoverSeed("z_solar_injection");
+  m_zettelkasten.linkNotes("z_paris_rain", "z_casimir_metric");
+  m_zettelkasten.linkNotes("z_casimir_metric", "z_solar_injection");
+
+  startEurekaAnimation("recipe_solar_dawn", model);
+}
+
 void AppGL::drawZettelkasten() {
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowSize(ImVec2(980.0f, 640.0f), ImGuiCond_FirstUseEver);
@@ -12020,6 +12139,62 @@ void AppGL::drawZettelkasten() {
     drawClusterBadge("Мультивселенная", "Multiverse", multiProg, ImVec4(0.9f, 0.5f, 1.0f, 1.0f));
 
     ImGui::Separator();
+
+    // Obsidian Controls Toolbar: Force-Directed Layout & Eureka Models
+    if (ImGui::Button(m_forceDirectedActive ? uiRu("■ Стоп Физика", "■ Stop Physics")
+                                           : uiRu("⟳ Физика Графа (Obsidian)", "⟳ Force-Directed Layout"),
+                     ImVec2(175.0f, 24.0f))) {
+      m_forceDirectedActive = !m_forceDirectedActive;
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Физический симулятор сил отталкивания Кулона и натяжения Гука для автоматического органичного расправления графа мыслей в стиле Obsidian.",
+                                   "Obsidian-style force-directed spring simulation to organically untangle thought nodes."));
+    }
+    ImGui::SameLine(0, 15.0f);
+    ImGui::TextColored(ImVec4(0.95f, 0.80f, 0.35f, 1.0f), "%s:", uiRu("Модель Эврики", "Eureka Model"));
+    ImGui::SameLine();
+    const char* modelNamesRu[3] = {"1. Квантовый Синтез", "2. Констелляция", "3. Сверхновая"};
+    const char* modelNamesEn[3] = {"1. Quantum Wave", "2. Constellation", "3. Supernova"};
+    for (int mi = 0; mi < 3; ++mi) {
+      if (mi > 0) ImGui::SameLine();
+      bool isCur = (m_eurekaModel == mi);
+      if (isCur) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 0.95f));
+      if (ImGui::SmallButton(uiRu(modelNamesRu[mi], modelNamesEn[mi]))) {
+        m_eurekaModel = mi;
+      }
+      if (isCur) ImGui::PopStyleColor();
+    }
+    ImGui::SameLine(0, 15.0f);
+    if (ImGui::Button(uiRu("✦ Тест Эврики", "✦ Test Eureka"), ImVec2(110.0f, 24.0f))) {
+      triggerDemoEureka(m_eurekaModel);
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Запуск демонстрации озарения Эврики: капля («бульк» вакуума), дрейф заметок, небесный перезвон и уход в фоновый слой со светящимися аксонами.",
+                                   "Preview the Eureka breakthrough: vacuum drop ripple, drifting notes, celestial chime, and background transition with axon threads."));
+    }
+
+    // Dataview Category Filter Buttons
+    ImGui::TextColored(ImVec4(0.40f, 0.75f, 0.95f, 0.9f), "%s:", uiRu("Фильтр (Dataview)", "Filter (Dataview)"));
+    ImGui::SameLine();
+    const char* filterNamesRu[7] = {"Все", "★ Эврика", "Память", "Физика", "Стазис", "Биосфера", "Эхо"};
+    const char* filterNamesEn[7] = {"All", "★ Eureka", "Memory", "Physics", "Stasis", "Biosphere", "Echo"};
+    for (int fi = 0; fi < 7; ++fi) {
+      if (fi > 0) ImGui::SameLine();
+      bool isF = (m_categoryFilter == fi);
+      if (isF) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.50f, 0.85f, 0.95f));
+      if (ImGui::SmallButton(uiRu(filterNamesRu[fi], filterNamesEn[fi]))) {
+        m_categoryFilter = fi;
+      }
+      if (isF) ImGui::PopStyleColor();
+    }
+    if (m_eurekaActive) {
+      ImGui::SameLine(0, 20.0f);
+      float remain = std::max(0.0f, m_eurekaDuration - m_eurekaTimer);
+      ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "⚡ %s (%.1f c)",
+                         uiRu("СИНТЕЗ ЭВРИКИ В ПРОЦЕССЕ", "EUREKA SYNTHESIS IN PROGRESS"), remain);
+    }
+
+    ImGui::Separator();
     ImGui::Spacing();
 
     // Two-column layout: Canvas (left) and Thought Inspector (right)
@@ -12059,10 +12234,103 @@ void AppGL::drawZettelkasten() {
         dl->AddCircleFilled(ImVec2(sx, sy), 1.5f, ImColor(0.6f, 0.7f, 1.0f, alpha));
       }
 
-      auto& notes = m_zettelkasten.getNotes();
+      // 1. Force-Directed Layout Simulation step
+      if (m_forceDirectedActive) {
+        stepForceDirectedLayout(io.DeltaTime);
+      }
 
-      // 1. Draw Links
+      // 2. Eureka Animation Physics and Convergence
+      if (m_eurekaActive) {
+        m_eurekaTimer += io.DeltaTime;
+        float u = std::clamp((m_eurekaTimer - 0.7f) / 1.3f, 0.0f, 1.0f);
+
+        if (m_eurekaTimer >= 0.7f && m_eurekaTimer < 2.0f) {
+          for (size_t i = 0; i < m_eurekaParentIds.size(); ++i) {
+            ZettelNote* pn = m_zettelkasten.getNote(m_eurekaParentIds[i]);
+            if (!pn || i >= m_eurekaStartPositions.size()) continue;
+            float startX = m_eurekaStartPositions[i].first;
+            float startY = m_eurekaStartPositions[i].second;
+
+            if (m_eurekaModel == 0) {
+              // Quantum Wave: fluid sinusoidal drift + gentle gravitational pull
+              float waveX = 26.0f * std::sin(u * 9.42f + (float)i * 2.1f);
+              float waveY = 20.0f * std::cos(u * 7.85f + (float)i * 1.7f);
+              pn->posX = startX + (m_eurekaCenterX - startX) * (u * u * 0.7f) + waveX;
+              pn->posY = startY + (m_eurekaCenterY - startY) * (u * u * 0.7f) + waveY;
+            } else if (m_eurekaModel == 1) {
+              // Orbital Constellation: Keplerian satellite orbit
+              float dx = startX - m_eurekaCenterX;
+              float dy = startY - m_eurekaCenterY;
+              float r0 = std::hypot(dx, dy);
+              float th0 = std::atan2(dy, dx);
+              float currentR = r0 * (1.0f - 0.40f * u);
+              float currentTh = th0 + 7.85f * u; // rotations
+              pn->posX = m_eurekaCenterX + currentR * std::cos(currentTh);
+              pn->posY = m_eurekaCenterY + currentR * std::sin(currentTh);
+            } else {
+              // Supernova Burst: inward implosion then shockwave expansion
+              if (u < 0.50f) {
+                float inU = u / 0.50f;
+                pn->posX = startX + (m_eurekaCenterX - startX) * (inU * inU);
+                pn->posY = startY + (m_eurekaCenterY - startY) * (inU * inU);
+              } else {
+                float outU = (u - 0.50f) / 0.50f;
+                float angle = (float)i * (6.28318f / (float)m_eurekaParentIds.size()) + 0.5f;
+                float outR = 30.0f + 85.0f * std::sin(outU * 1.5707f);
+                pn->posX = m_eurekaCenterX + outR * std::cos(angle);
+                pn->posY = m_eurekaCenterY + outR * std::sin(angle);
+              }
+            }
+          }
+        }
+
+        // Phase 3 trigger at 2.0s: trigger recipe synthesis & celestial chime!
+        if (m_eurekaTimer >= 2.0f) {
+          const ZettelSynthesisRecipe* rec = m_zettelkasten.getRecipe(m_eurekaRecipeId);
+          if (rec && !rec->synthesized) {
+            m_audio.playEurekaChime();
+            m_zettelkasten.triggerSynthesisRecipe(m_eurekaRecipeId);
+            saveZettelkastenFileNow();
+          }
+        }
+
+        if (m_eurekaTimer >= m_eurekaDuration) {
+          m_eurekaActive = false;
+        }
+      }
+
+      auto& notes = m_zettelkasten.getNotes();
       double curTime = glfwGetTime();
+      ImVec2 mousePos = io.MousePos;
+      bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+      // Filtering helper (Obsidian Dataview)
+      auto matchesFilter = [&](const ZettelNote& n) {
+        if (m_categoryFilter == 0) return true;
+        if (m_categoryFilter == 1) return n.isMasterNode;
+        if (m_categoryFilter == 2) return n.categoryRu == "Память";
+        if (m_categoryFilter == 3) return (n.categoryRu == "Физика" || n.categoryRu == "Синтез");
+        if (m_categoryFilter == 4) return (n.categoryRu == "Стазис" || n.categoryRu == "Гравитация" || n.categoryRu == "Хроника");
+        if (m_categoryFilter == 5) return (n.categoryRu == "Биосфера" || n.categoryRu == "Ковчег" || n.categoryRu == "Реликвия" || n.categoryRu == "Обещание");
+        if (m_categoryFilter == 6) return (n.categoryRu == "Эхо" || n.categoryRu == "Фаза" || n.categoryRu == "Трансцендентность");
+        return true;
+      };
+
+      // Local graph focus helper (Obsidian Local Graph)
+      auto isConnectedToSelection = [&](const std::string& id) {
+        if (m_selectedZettelId.empty()) return true;
+        if (id == m_selectedZettelId) return true;
+        const ZettelNote* selNote = m_zettelkasten.getNote(m_selectedZettelId);
+        if (!selNote) return true;
+        for (const auto& lk : selNote->links) {
+          if (lk == id) return true;
+        }
+        return false;
+      };
+
+      // =========================================================================
+      // PASS 1: DRAW LINKS (BACKGROUND FEEDER AXONS & STANDARD LINKS)
+      // =========================================================================
       for (const auto& n : notes) {
         if (!n.seedDiscovered) continue;
         ImVec2 posA = ImVec2(center.x + n.posX, center.y + n.posY);
@@ -12072,13 +12340,33 @@ void AppGL::drawZettelkasten() {
           if (n.id > lkId) continue; // draw each undirected link once
 
           ImVec2 posB = ImVec2(center.x + linked->posX, center.y + linked->posY);
-          bool isSynth = n.synthesized && linked->synthesized;
-          if (isSynth) {
-            float pulse = 0.65f + 0.35f * std::sin((float)curTime * 3.5f);
-            dl->AddLine(posA, posB, ImColor(1.00f, 0.85f, 0.30f, pulse), 2.5f);
-            dl->AddLine(posA, posB, ImColor(1.00f, 1.00f, 1.00f, pulse * 0.7f), 1.0f);
+          bool isFeederLink = (n.isMasterNode && linked->depthLevel == 1) ||
+                              (linked->isMasterNode && n.depthLevel == 1);
+
+          bool localFocus = isConnectedToSelection(n.id) || isConnectedToSelection(lkId);
+          float alphaMult = localFocus ? 1.0f : 0.25f;
+
+          if (isFeederLink) {
+            // Radiant golden feeder axon link from background parent to Master Node
+            float pulse = (0.75f + 0.25f * std::sin((float)curTime * 4.0f)) * alphaMult;
+            dl->AddLine(posA, posB, ImColor(1.0f, 0.85f, 0.25f, pulse * 0.9f), 2.2f);
+            dl->AddLine(posA, posB, ImColor(1.0f, 1.00f, 0.70f, pulse * 0.5f), 1.0f);
+
+            // Flowing photon packet along feeder thread
+            ImVec2 pFrom = (n.isMasterNode) ? posB : posA;
+            ImVec2 pTo = (n.isMasterNode) ? posA : posB;
+            float packetT = std::fmod((float)curTime * 1.4f + (float)(n.id[0] % 5) * 0.2f, 1.0f);
+            ImVec2 pkt = ImVec2(pFrom.x + (pTo.x - pFrom.x) * packetT, pFrom.y + (pTo.y - pFrom.y) * packetT);
+            dl->AddCircleFilled(pkt, 2.5f, ImColor(1.0f, 1.0f, 0.7f, 0.9f * alphaMult));
           } else {
-            dl->AddLine(posA, posB, IM_COL32(70, 110, 160, 140), 1.5f);
+            bool isSynth = n.synthesized && linked->synthesized;
+            if (isSynth) {
+              float pulse = (0.65f + 0.35f * std::sin((float)curTime * 3.5f)) * alphaMult;
+              dl->AddLine(posA, posB, ImColor(1.00f, 0.85f, 0.30f, pulse), 2.5f);
+              dl->AddLine(posA, posB, ImColor(1.00f, 1.00f, 1.00f, pulse * 0.7f), 1.0f);
+            } else {
+              dl->AddLine(posA, posB, IM_COL32(70, 110, 160, static_cast<int>(140 * alphaMult)), 1.5f);
+            }
           }
         }
       }
@@ -12092,82 +12380,179 @@ void AppGL::drawZettelkasten() {
         }
       }
 
-      // 2. Draw Nodes
-      ImVec2 mousePos = io.MousePos;
-      bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-
-      for (auto& n : notes) {
-        ImVec2 nodePos = ImVec2(center.x + n.posX, center.y + n.posY);
-        float dist = std::hypot(mousePos.x - nodePos.x, mousePos.y - nodePos.y);
-        bool hovered = (dist <= 22.0f);
-        bool selected = (m_selectedZettelId == n.id);
-
-        float radius = hovered ? 22.0f : (selected ? 20.0f : 16.0f);
-
-        // Pick color scheme by cluster
-        ImU32 colFill = IM_COL32(40, 50, 70, 220);
-        ImU32 colGlow = IM_COL32(80, 110, 160, 100);
-        ImU32 colBorder = IM_COL32(100, 140, 200, 255);
-
-        if (n.cluster == kClusterSolar) {
-          colFill = IM_COL32(80, 55, 15, 230);
-          colGlow = IM_COL32(255, 180, 40, 90);
-          colBorder = IM_COL32(255, 200, 70, 255);
-        } else if (n.cluster == kClusterStasis) {
-          colFill = IM_COL32(20, 50, 75, 230);
-          colGlow = IM_COL32(50, 180, 255, 90);
-          colBorder = IM_COL32(90, 210, 255, 255);
-        } else if (n.cluster == kClusterEden) {
-          colFill = IM_COL32(15, 60, 35, 230);
-          colGlow = IM_COL32(50, 230, 120, 90);
-          colBorder = IM_COL32(80, 255, 150, 255);
-        } else if (n.cluster == kClusterMultiverse) {
-          colFill = IM_COL32(65, 20, 75, 230);
-          colGlow = IM_COL32(220, 70, 255, 90);
-          colBorder = IM_COL32(240, 110, 255, 255);
-        }
-
-        if (!n.seedDiscovered) {
-          // Undiscovered seed: dim hollow grey circle
-          dl->AddCircleFilled(nodePos, radius, IM_COL32(25, 30, 40, 180));
-          dl->AddCircle(nodePos, radius, IM_COL32(60, 70, 85, 150), 16, 1.5f);
-          dl->AddText(ImVec2(nodePos.x - 4.0f, nodePos.y - 7.0f), IM_COL32(120, 130, 145, 200), "?");
-        } else {
-          // Discovered node
-          if (n.synthesized) {
-            float glowR = radius + 6.0f + 2.0f * std::sin((float)curTime * 4.0f);
-            dl->AddCircleFilled(nodePos, glowR, colGlow);
+      // =========================================================================
+      // PASS 2: DRAW NODES (LAYER 0: BACKGROUND PARENTS, THEN LAYER 1: FOREGROUND)
+      // =========================================================================
+      for (int pass = 0; pass < 2; ++pass) {
+        for (auto& n : notes) {
+          // pass 0: background layer (depthLevel == 1)
+          // pass 1: foreground layer (depthLevel == 0)
+          if ((pass == 0 && n.depthLevel != 1) || (pass == 1 && n.depthLevel == 1)) {
+            continue;
           }
-          dl->AddCircleFilled(nodePos, radius, colFill);
-          dl->AddCircle(nodePos, radius, selected ? IM_COL32(255, 255, 255, 255) : colBorder,
-                        24, selected ? 3.0f : 2.0f);
 
-          // Node label or category initial
-          const char* catInit = n.categoryRu.empty() ? "N" : n.categoryRu.substr(0, 2).c_str();
-          dl->AddText(ImVec2(nodePos.x - 7.0f, nodePos.y - 7.0f), IM_COL32(255, 255, 255, 240), catInit);
+          ImVec2 nodePos = ImVec2(center.x + n.posX, center.y + n.posY);
+          float dist = std::hypot(mousePos.x - nodePos.x, mousePos.y - nodePos.y);
 
-          // Title hint above/below node
-          std::string shortTitle = uiRu(n.titleRu.c_str(), n.titleEn.c_str());
-          if (shortTitle.size() > 20) shortTitle = shortTitle.substr(0, 18) + "..";
-          dl->AddText(ImVec2(nodePos.x - 30.0f, nodePos.y + radius + 3.0f),
-                      IM_COL32(200, 215, 235, 220), shortTitle.c_str());
+          bool isBg = (n.depthLevel == 1);
+          float baseR = isBg ? 12.0f : (n.isMasterNode ? 24.0f : 16.0f);
+          float hoverR = isBg ? 15.0f : (n.isMasterNode ? 28.0f : 22.0f);
+          float selR = isBg ? 14.0f : (n.isMasterNode ? 26.0f : 20.0f);
 
-          // Handle click & drag
-          if (hovered && mouseClicked) {
-            if (!m_linkingSourceId.empty()) {
-              if (m_linkingSourceId != n.id) {
-                m_zettelkasten.linkNotes(m_linkingSourceId, n.id);
-                saveZettelkastenFileNow();
-              }
-              m_linkingSourceId.clear();
+          bool hovered = (dist <= hoverR);
+          bool selected = (m_selectedZettelId == n.id);
+          float radius = hovered ? hoverR : (selected ? selR : baseR);
+
+          bool localFocus = isConnectedToSelection(n.id);
+          bool filterPass = matchesFilter(n);
+          float alphaMult = (localFocus && filterPass) ? 1.0f : 0.22f;
+
+          // Color scheme by cluster
+          ImU32 colFill = IM_COL32(40, 50, 70, isBg ? 120 : 220);
+          ImU32 colGlow = IM_COL32(80, 110, 160, isBg ? 50 : 100);
+          ImU32 colBorder = IM_COL32(100, 140, 200, isBg ? 160 : 255);
+
+          if (n.cluster == kClusterSolar) {
+            colFill = IM_COL32(80, 55, 15, isBg ? 120 : 230);
+            colGlow = IM_COL32(255, 180, 40, isBg ? 45 : 90);
+            colBorder = IM_COL32(255, 200, 70, isBg ? 150 : 255);
+          } else if (n.cluster == kClusterStasis) {
+            colFill = IM_COL32(20, 50, 75, isBg ? 120 : 230);
+            colGlow = IM_COL32(50, 180, 255, isBg ? 45 : 90);
+            colBorder = IM_COL32(90, 210, 255, isBg ? 150 : 255);
+          } else if (n.cluster == kClusterEden) {
+            colFill = IM_COL32(15, 60, 35, isBg ? 120 : 230);
+            colGlow = IM_COL32(50, 230, 120, isBg ? 45 : 90);
+            colBorder = IM_COL32(80, 255, 150, isBg ? 150 : 255);
+          } else if (n.cluster == kClusterMultiverse) {
+            colFill = IM_COL32(65, 20, 75, isBg ? 120 : 230);
+            colGlow = IM_COL32(220, 70, 255, isBg ? 45 : 90);
+            colBorder = IM_COL32(240, 110, 255, isBg ? 150 : 255);
+          }
+
+          if (!n.seedDiscovered) {
+            // Undiscovered seed: dim hollow grey circle
+            dl->AddCircleFilled(nodePos, radius, IM_COL32(25, 30, 40, static_cast<int>(180 * alphaMult)));
+            dl->AddCircle(nodePos, radius, IM_COL32(60, 70, 85, static_cast<int>(150 * alphaMult)), 16, 1.5f);
+            dl->AddText(ImVec2(nodePos.x - 4.0f, nodePos.y - 7.0f),
+                        IM_COL32(120, 130, 145, static_cast<int>(200 * alphaMult)), "?");
+          } else {
+            // Discovered node
+            if (n.isMasterNode) {
+              // Master Node: glorious outer corona and diamond border
+              float auraR = radius + 9.0f + 3.0f * std::sin((float)curTime * 3.5f);
+              dl->AddCircleFilled(nodePos, auraR, ImColor(1.0f, 0.85f, 0.25f, 0.25f * alphaMult));
+              dl->AddCircle(nodePos, auraR * 0.9f, ImColor(1.0f, 0.90f, 0.40f, 0.40f * alphaMult), 32, 1.5f);
+
+              dl->AddCircleFilled(nodePos, radius, IM_COL32(70, 45, 15, static_cast<int>(245 * alphaMult)));
+              dl->AddCircle(nodePos, radius, selected ? IM_COL32(255, 255, 255, 255) : IM_COL32(255, 225, 90, 255),
+                            8, selected ? 3.5f : 2.5f);
+
+              // Center Star icon
+              dl->AddText(ImVec2(nodePos.x - 5.0f, nodePos.y - 8.0f),
+                          IM_COL32(255, 245, 180, static_cast<int>(255 * alphaMult)), "★");
+
+              // Master Title
+              std::string mTitle = uiRu(n.titleRu.c_str(), n.titleEn.c_str());
+              if (mTitle.size() > 22) mTitle = mTitle.substr(0, 20) + "..";
+              dl->AddText(ImVec2(nodePos.x - 40.0f, nodePos.y + radius + 4.0f),
+                          ImColor(1.0f, 0.9f, 0.4f, alphaMult), mTitle.c_str());
             } else {
-              m_selectedZettelId = n.id;
+              // Standard node or background parent node
+              if (n.synthesized) {
+                float glowR = radius + 5.0f + 2.0f * std::sin((float)curTime * 4.0f);
+                dl->AddCircleFilled(nodePos, glowR, colGlow);
+              }
+              dl->AddCircleFilled(nodePos, radius, colFill);
+              dl->AddCircle(nodePos, radius, selected ? IM_COL32(255, 255, 255, 255) : colBorder,
+                            isBg ? 16 : 24, selected ? 3.0f : (isBg ? 1.5f : 2.0f));
+
+              // Node label or category initial
+              const char* catInit = n.categoryRu.empty() ? "N" : n.categoryRu.substr(0, 2).c_str();
+              float fontOffX = isBg ? 5.0f : 7.0f;
+              float fontOffY = isBg ? 6.0f : 7.0f;
+              dl->AddText(ImVec2(nodePos.x - fontOffX, nodePos.y - fontOffY),
+                          IM_COL32(255, 255, 255, static_cast<int>(isBg ? 180 * alphaMult : 240 * alphaMult)),
+                          catInit);
+
+              // Title hint above/below node
+              std::string shortTitle = uiRu(n.titleRu.c_str(), n.titleEn.c_str());
+              if (shortTitle.size() > (isBg ? 16 : 20)) shortTitle = shortTitle.substr(0, isBg ? 14 : 18) + "..";
+              dl->AddText(ImVec2(nodePos.x - 30.0f, nodePos.y + radius + 3.0f),
+                          IM_COL32(200, 215, 235, static_cast<int>(isBg ? 140 * alphaMult : 220 * alphaMult)),
+                          shortTitle.c_str());
+            }
+
+            // Handle click & drag
+            if (hovered && mouseClicked) {
+              if (!m_linkingSourceId.empty()) {
+                if (m_linkingSourceId != n.id) {
+                  m_zettelkasten.linkNotes(m_linkingSourceId, n.id);
+                  saveZettelkastenFileNow();
+
+                  // Check if this newly forged link completed a breakthrough recipe!
+                  const ZettelSynthesisRecipe* ready = m_zettelkasten.checkPendingSynthesis();
+                  if (ready) {
+                    startEurekaAnimation(ready->id, m_eurekaModel);
+                  }
+                }
+                m_linkingSourceId.clear();
+              } else {
+                m_selectedZettelId = n.id;
+              }
+            }
+
+            if (hovered && ImGui::IsMouseDown(ImGuiMouseButton_Left) && io.MouseDelta.x != 0.0f) {
+              n.posX += io.MouseDelta.x;
+              n.posY += io.MouseDelta.y;
             }
           }
+        }
+      }
 
-          if (hovered && ImGui::IsMouseDown(ImGuiMouseButton_Left) && io.MouseDelta.x != 0.0f) {
-            n.posX += io.MouseDelta.x;
-            n.posY += io.MouseDelta.y;
+      // =========================================================================
+      // PASS 3: EUREKA VISUAL FX OVERLAYS (RIPPLES, FLARES, CELESTIAL SHOCKWAVES)
+      // =========================================================================
+      if (m_eurekaActive) {
+        ImVec2 baryPos = ImVec2(center.x + m_eurekaCenterX, center.y + m_eurekaCenterY);
+
+        // Phase 1 (0.0 .. 0.7s): «Бульк» (Expanding liquid ripple rings)
+        if (m_eurekaTimer < 0.75f) {
+          float ripT = m_eurekaTimer / 0.75f;
+          float r1 = ripT * 260.0f;
+          float r2 = std::max(0.0f, (ripT - 0.15f) * 260.0f);
+          float r3 = std::max(0.0f, (ripT - 0.30f) * 260.0f);
+
+          float a1 = (1.0f - ripT) * 255.0f;
+          float a2 = (1.0f - ripT * 0.9f) * 210.0f;
+          float a3 = (1.0f - ripT * 0.8f) * 160.0f;
+
+          dl->AddCircle(baryPos, r1, IM_COL32(90, 220, 255, static_cast<int>(a1)), 48, 2.8f);
+          dl->AddCircle(baryPos, r2, IM_COL32(255, 215, 80, static_cast<int>(a2)), 48, 2.0f);
+          dl->AddCircle(baryPos, r3, IM_COL32(255, 255, 255, static_cast<int>(a3)), 48, 1.5f);
+
+          // Droplet splash center dot
+          float splashA = (1.0f - ripT * 1.5f);
+          if (splashA > 0.0f) {
+            dl->AddCircleFilled(baryPos, 8.0f * (1.0f - ripT), IM_COL32(255, 255, 255, static_cast<int>(splashA * 255.0f)));
+          }
+        }
+
+        // Phase 3 & 4 (2.0 .. 3.2s): Breakthrough Celestial Starburst Flash
+        if (m_eurekaTimer >= 2.0f && m_eurekaTimer < 3.2f) {
+          float flashT = (m_eurekaTimer - 2.0f) / 1.2f;
+          float flashAlpha = (1.0f - flashT);
+          float flashR = 25.0f + 65.0f * std::sin(flashT * 1.5707f);
+
+          dl->AddCircleFilled(baryPos, flashR, ImColor(1.0f, 0.95f, 0.7f, flashAlpha * 0.7f));
+          dl->AddCircle(baryPos, flashR * 1.3f, ImColor(1.0f, 0.85f, 0.3f, flashAlpha * 0.5f), 32, 2.0f);
+
+          // 8 radial light beams
+          for (int ray = 0; ray < 8; ++ray) {
+            float ang = (float)ray * (6.28318f / 8.0f) + (float)curTime * 0.5f;
+            float rayLen = flashR * 1.8f;
+            ImVec2 rEnd = ImVec2(baryPos.x + rayLen * std::cos(ang), baryPos.y + rayLen * std::sin(ang));
+            dl->AddLine(baryPos, rEnd, ImColor(1.0f, 1.0f, 0.8f, flashAlpha * 0.8f), 2.0f);
           }
         }
       }
@@ -12205,17 +12590,43 @@ void AppGL::drawZettelkasten() {
             "%s",
             uiRu("Выберите узел в ментальном графе Егорки для изучения инсайта, "
                  "синтеза гармоник или установления связи с другими мыслями.\n\n"
+                 "✦ Соединение ключевых мыслей рождает Эврику — кристаллизацию Master-узлов Нового Знания!\n"
                  "✦ 100% резонанс кластера открывает Истинный Финал!",
                  "Select a node in Egorka's mental graph to examine the insight, "
                  "synthesize harmonics, or link with other thoughts.\n\n"
+                 "✦ Connecting key thoughts triggers Eureka — the birth of Master Breakthrough Nodes!\n"
                  "✦ 100% cluster resonance unlocks the True Ending!"));
+
+        // Check if any recipe is waiting for synthesis
+        const ZettelSynthesisRecipe* pending = m_zettelkasten.checkPendingSynthesis();
+        if (pending) {
+          ImGui::Spacing();
+          ImGui::Separator();
+          ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "✦ %s",
+                             uiRu("ОТКРЫТ РЕЦЕПТ ЭВРИКИ!", "EUREKA RECIPE UNLOCKED!"));
+          ImGui::TextWrapped("%s", uiRu(pending->titleRu.c_str(), pending->titleEn.c_str()));
+          ImGui::Spacing();
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 0.95f));
+          if (ImGui::Button(uiRu("✦ СИНТЕЗИРОВАТЬ ЭВРИКУ! ✦", "✦ SYNTHESIZE EUREKA! ✦"), ImVec2(-1.0f, 34.0f))) {
+            startEurekaAnimation(pending->id, m_eurekaModel);
+          }
+          ImGui::PopStyleColor();
+        }
       } else {
         // Node details
-        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s",
-                           uiRu(sel->titleRu.c_str(), sel->titleEn.c_str()));
-        ImGui::TextColored(ImVec4(0.4f, 0.7f, 0.9f, 0.9f), "%s · %s",
-                           uiRu(sel->categoryRu.c_str(), sel->categoryEn.c_str()),
-                           ZettelGraph::getClusterTitleRu(sel->cluster).c_str());
+        if (sel->isMasterNode) {
+          ImGui::TextColored(ImVec4(1.0f, 0.90f, 0.35f, 1.0f), "★ %s",
+                             uiRu(sel->titleRu.c_str(), sel->titleEn.c_str()));
+          ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.20f, 0.95f), "★ %s · %s",
+                             uiRu("МАСТЕР-УЗЕЛ ЭВРИКИ", "MASTER EUREKA NODE"),
+                             ZettelGraph::getClusterTitleRu(sel->cluster).c_str());
+        } else {
+          ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s",
+                             uiRu(sel->titleRu.c_str(), sel->titleEn.c_str()));
+          ImGui::TextColored(ImVec4(0.4f, 0.7f, 0.9f, 0.9f), "%s · %s",
+                             uiRu(sel->categoryRu.c_str(), sel->categoryEn.c_str()),
+                             ZettelGraph::getClusterTitleRu(sel->cluster).c_str());
+        }
         ImGui::Separator();
 
         // Status
@@ -12243,6 +12654,21 @@ void AppGL::drawZettelkasten() {
         ImGui::Spacing();
         ImGui::Separator();
 
+        // Foundational Parent Notes for Master Nodes
+        if (sel->isMasterNode && !sel->parentIds.empty()) {
+          ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "✦ %s (%zu):",
+                             uiRu("Родительские нейроны (фоновый слой)", "Parent Neurons (Background Layer)"),
+                             sel->parentIds.size());
+          for (const auto& pId : sel->parentIds) {
+            const ZettelNote* pn = m_zettelkasten.getNote(pId);
+            if (pn) {
+              ImGui::BulletText("%s (%s)", uiRu(pn->titleRu.c_str(), pn->titleEn.c_str()),
+                                uiRu(pn->categoryRu.c_str(), pn->categoryEn.c_str()));
+            }
+          }
+          ImGui::Separator();
+        }
+
         // Actions
         if (!sel->synthesized) {
           if (ImGui::Button(uiRu("✦ Синтезировать (Mind Matrix)", "✦ Synthesize (Mind Matrix)"),
@@ -12251,6 +12677,16 @@ void AppGL::drawZettelkasten() {
             m_mindMiniGameActive = true;
             m_mindResonancePhase = 0.0f;
           }
+        }
+
+        // Check if this note or any recipe can trigger Eureka
+        const ZettelSynthesisRecipe* pending = m_zettelkasten.checkPendingSynthesis();
+        if (pending) {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 0.95f));
+          if (ImGui::Button(uiRu("✦ СИНТЕЗИРОВАТЬ ЭВРИКУ! ✦", "✦ SYNTHESIZE EUREKA! ✦"), ImVec2(-1.0f, 34.0f))) {
+            startEurekaAnimation(pending->id, m_eurekaModel);
+          }
+          ImGui::PopStyleColor();
         }
 
         if (m_linkingSourceId == sel->id) {
