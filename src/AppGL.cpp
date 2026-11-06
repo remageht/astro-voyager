@@ -6144,6 +6144,11 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
   hudData.radioActive = m_bridgeComms.hasActiveMessage();
   hudData.radioSignal = m_bridgeComms.hasActiveMessage() ? (0.6f + 0.4f * static_cast<float>(std::sin(static_cast<double>(currentTime) * 16.0))) : 0.0f;
 
+  // v5.1.0: Astro-Zettelkasten Neural Resonance & Eureka Synthesis
+  hudData.neuralResonance = m_zettelkasten.getTotalLinksCount() > 0 ?
+      std::min(1.0f, static_cast<float>(m_zettelkasten.getTotalLinksCount()) / 15.0f) : 0.0f;
+  hudData.eurekaPending = (m_zettelkasten.checkPendingSynthesis() != nullptr);
+
   // v5.0.0: Audio alarms and avionics chimes
   static bool s_lastWarpReady = false;
   bool warpReadyNow = (warpCharge >= 0.999f);
@@ -12088,6 +12093,124 @@ void AppGL::triggerDemoEureka(int model) {
   startEurekaAnimation("recipe_solar_dawn", model);
 }
 
+void AppGL::renderTextWithWikilinks(const std::string& text) {
+  if (text.find("[[") == std::string::npos) {
+    ImGui::TextWrapped("%s", text.c_str());
+    return;
+  }
+
+  // Parse text into lines and tokens with Obsidian-style [[WikiLinks]]
+  std::stringstream ss(text);
+  std::string line;
+  float availMaxX = ImGui::GetWindowContentRegionMax().x - 8.0f;
+
+  while (std::getline(ss, line)) {
+    if (line.empty()) {
+      ImGui::Spacing();
+      continue;
+    }
+
+    size_t pos = 0;
+    bool firstOnLine = true;
+
+    auto printWord = [&](const std::string& w) {
+      if (w.empty()) return;
+      float wWidth = ImGui::CalcTextSize(w.c_str()).x;
+      if (!firstOnLine) {
+        if (ImGui::GetCursorPosX() + wWidth + 3.0f > availMaxX) {
+          firstOnLine = true;
+        } else {
+          ImGui::SameLine(0.0f, 3.5f);
+        }
+      }
+      ImGui::TextUnformatted(w.c_str());
+      firstOnLine = false;
+    };
+
+    while (pos < line.size()) {
+      size_t openBracket = line.find("[[", pos);
+      if (openBracket == std::string::npos) {
+        std::string rem = line.substr(pos);
+        std::stringstream remSS(rem);
+        std::string w;
+        while (remSS >> w) {
+          printWord(w);
+        }
+        break;
+      }
+
+      if (openBracket > pos) {
+        std::string pre = line.substr(pos, openBracket - pos);
+        std::stringstream preSS(pre);
+        std::string w;
+        while (preSS >> w) {
+          printWord(w);
+        }
+      }
+
+      size_t closeBracket = line.find("]]", openBracket + 2);
+      if (closeBracket == std::string::npos) {
+        printWord(line.substr(openBracket));
+        break;
+      }
+
+      std::string linkContent = line.substr(openBracket + 2, closeBracket - (openBracket + 2));
+      pos = closeBracket + 2;
+
+      std::string target = linkContent;
+      std::string display = linkContent;
+      size_t barPos = linkContent.find('|');
+      if (barPos != std::string::npos) {
+        target = linkContent.substr(0, barPos);
+        display = linkContent.substr(barPos + 1);
+      }
+
+      std::string pillLabel = "[ ☍ " + display + " ]";
+      float pillW = ImGui::CalcTextSize(pillLabel.c_str()).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+
+      if (!firstOnLine) {
+        if (ImGui::GetCursorPosX() + pillW + 3.0f > availMaxX) {
+          firstOnLine = true;
+        } else {
+          ImGui::SameLine(0.0f, 3.5f);
+        }
+      }
+
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.32f, 0.60f, 0.70f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.48f, 0.85f, 0.90f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.90f, 1.0f, 1.0f));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+      ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 1.5f));
+      ImGui::PushID(target.c_str());
+
+      if (ImGui::SmallButton(pillLabel.c_str())) {
+        if (m_zettelkasten.getNote(target) != nullptr) {
+          m_selectedZettelId = target;
+        } else if (target == "expedition" || target == "story") {
+          m_expeditionMapOpen = true;
+        } else {
+          m_codexOpen = true;
+        }
+      }
+      if (ImGui::IsItemHovered()) {
+        const ZettelNote* tn = m_zettelkasten.getNote(target);
+        if (tn) {
+          ImGui::SetTooltip("☍ %s (%s)", uiRu(tn->titleRu.c_str(), tn->titleEn.c_str()),
+                            uiRu(tn->categoryRu.c_str(), tn->categoryEn.c_str()));
+        } else {
+          ImGui::SetTooltip("☍ %s", uiRu("Открыть в Кодексе / Журнале", "Open in Science Codex"));
+        }
+      }
+
+      ImGui::PopID();
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor(3);
+
+      firstOnLine = false;
+    }
+  }
+}
+
 void AppGL::drawZettelkasten() {
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowSize(ImVec2(980.0f, 640.0f), ImGuiCond_FirstUseEver);
@@ -12187,8 +12310,22 @@ void AppGL::drawZettelkasten() {
       }
       if (isF) ImGui::PopStyleColor();
     }
+    // Quick Search (Obsidian Quick Switcher / Search filter)
+    ImGui::SameLine(0, 15.0f);
+    ImGui::TextColored(ImVec4(0.40f, 0.75f, 0.95f, 0.9f), "%s:", uiRu("Поиск", "Search"));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(130.0f);
+    ImGui::InputTextWithHint("##ZettelSearch", uiRu("Поиск...", "Search..."),
+                             m_zettelSearchQuery, IM_ARRAYSIZE(m_zettelSearchQuery));
+    if (m_zettelSearchQuery[0] != '\0') {
+      ImGui::SameLine();
+      if (ImGui::SmallButton("X##ClearSearch")) {
+        m_zettelSearchQuery[0] = '\0';
+      }
+    }
+
     if (m_eurekaActive) {
-      ImGui::SameLine(0, 20.0f);
+      ImGui::SameLine(0, 15.0f);
       float remain = std::max(0.0f, m_eurekaDuration - m_eurekaTimer);
       ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "⚡ %s (%.1f c)",
                          uiRu("СИНТЕЗ ЭВРИКИ В ПРОЦЕССЕ", "EUREKA SYNTHESIS IN PROGRESS"), remain);
@@ -12284,13 +12421,23 @@ void AppGL::drawZettelkasten() {
           }
         }
 
-        // Phase 3 trigger at 2.0s: trigger recipe synthesis & celestial chime!
+        // Phase 3 trigger at 2.0s: trigger recipe synthesis, radio congratulations & celestial chime!
         if (m_eurekaTimer >= 2.0f) {
           const ZettelSynthesisRecipe* rec = m_zettelkasten.getRecipe(m_eurekaRecipeId);
           if (rec && !rec->synthesized) {
             m_audio.playEurekaChime();
             m_zettelkasten.triggerSynthesisRecipe(m_eurekaRecipeId);
             saveZettelkastenFileNow();
+
+            // Bridge Comms: Dr. Elena Rostova congratulates Egorka on cognitive breakthrough
+            RadioMessage msg;
+            msg.id = "radio_eureka_" + m_eurekaRecipeId;
+            msg.callsignRu = "Др. Елена Ростова";
+            msg.callsignEn = "Dr. Elena Rostova";
+            msg.textRu = "Егорка, наши нейросенсоры фиксируют колоссальный всплеск ментального резонанса! Синтезировано знание: «" + rec->titleRu + "»!";
+            msg.textEn = "Egorka, our neural telemetry detects a massive burst of cognitive resonance! Breakthrough synthesized: \"" + rec->titleEn + "\"!";
+            msg.durationSec = 8.0;
+            m_bridgeComms.queueMessage(msg, glfwGetTime());
           }
         }
 
@@ -12314,6 +12461,51 @@ void AppGL::drawZettelkasten() {
         if (m_categoryFilter == 5) return (n.categoryRu == "Биосфера" || n.categoryRu == "Ковчег" || n.categoryRu == "Реликвия" || n.categoryRu == "Обещание");
         if (m_categoryFilter == 6) return (n.categoryRu == "Эхо" || n.categoryRu == "Фаза" || n.categoryRu == "Трансцендентность");
         return true;
+      };
+
+      // Quick Search helper (Obsidian Quick Switcher) with UTF-8 support
+      auto toLowerUtf8 = [](const std::string& s) -> std::string {
+        std::string res;
+        res.reserve(s.size());
+        for (size_t i = 0; i < s.size(); ++i) {
+          unsigned char c1 = static_cast<unsigned char>(s[i]);
+          if (c1 >= 'A' && c1 <= 'Z') {
+            res.push_back(static_cast<char>(c1 + 32));
+          } else if (c1 == 0xD0 && i + 1 < s.size()) {
+            unsigned char c2 = static_cast<unsigned char>(s[i + 1]);
+            if (c2 >= 0x90 && c2 <= 0x9F) {
+              res.push_back(static_cast<char>(0xD0));
+              res.push_back(static_cast<char>(c2 + 0x20));
+              i++;
+            } else if (c2 >= 0xA0 && c2 <= 0xAF) {
+              res.push_back(static_cast<char>(0xD1));
+              res.push_back(static_cast<char>(c2 - 0x20));
+              i++;
+            } else if (c2 == 0x81) {
+              res.push_back(static_cast<char>(0xD1));
+              res.push_back(static_cast<char>(0x91));
+              i++;
+            } else {
+              res.push_back(static_cast<char>(c1));
+            }
+          } else {
+            res.push_back(static_cast<char>(c1));
+          }
+        }
+        return res;
+      };
+
+      std::string queryLower = toLowerUtf8(m_zettelSearchQuery);
+      auto matchesSearch = [&](const ZettelNote& n) {
+        if (queryLower.empty()) return true;
+        if (toLowerUtf8(n.titleRu).find(queryLower) != std::string::npos) return true;
+        if (toLowerUtf8(n.titleEn).find(queryLower) != std::string::npos) return true;
+        if (toLowerUtf8(n.categoryRu).find(queryLower) != std::string::npos) return true;
+        if (toLowerUtf8(n.categoryEn).find(queryLower) != std::string::npos) return true;
+        if (toLowerUtf8(n.textRu).find(queryLower) != std::string::npos) return true;
+        if (toLowerUtf8(n.textEn).find(queryLower) != std::string::npos) return true;
+        if (toLowerUtf8(n.id).find(queryLower) != std::string::npos) return true;
+        return false;
       };
 
       // Local graph focus helper (Obsidian Local Graph)
@@ -12345,6 +12537,11 @@ void AppGL::drawZettelkasten() {
 
           bool localFocus = isConnectedToSelection(n.id) || isConnectedToSelection(lkId);
           float alphaMult = localFocus ? 1.0f : 0.25f;
+
+          if (!queryLower.empty()) {
+            bool searchMatch = matchesSearch(n) || matchesSearch(*linked);
+            if (!searchMatch) alphaMult *= 0.18f;
+          }
 
           if (isFeederLink) {
             // Radiant golden feeder axon link from background parent to Master Node
@@ -12405,7 +12602,8 @@ void AppGL::drawZettelkasten() {
 
           bool localFocus = isConnectedToSelection(n.id);
           bool filterPass = matchesFilter(n);
-          float alphaMult = (localFocus && filterPass) ? 1.0f : 0.22f;
+          bool searchPass = matchesSearch(n);
+          float alphaMult = (localFocus && filterPass && searchPass) ? 1.0f : 0.18f;
 
           // Color scheme by cluster
           ImU32 colFill = IM_COL32(40, 50, 70, isBg ? 120 : 220);
@@ -12650,7 +12848,7 @@ void AppGL::drawZettelkasten() {
         ImGui::PopStyleColor();
 
         ImGui::Spacing();
-        ImGui::TextWrapped("%s", uiRu(sel->textRu.c_str(), sel->textEn.c_str()));
+        renderTextWithWikilinks(uiRu(sel->textRu.c_str(), sel->textEn.c_str()));
         ImGui::Spacing();
         ImGui::Separator();
 
@@ -12662,8 +12860,14 @@ void AppGL::drawZettelkasten() {
           for (const auto& pId : sel->parentIds) {
             const ZettelNote* pn = m_zettelkasten.getNote(pId);
             if (pn) {
-              ImGui::BulletText("%s (%s)", uiRu(pn->titleRu.c_str(), pn->titleEn.c_str()),
-                                uiRu(pn->categoryRu.c_str(), pn->categoryEn.c_str()));
+              std::string pill = std::string("☍ ") + uiRu(pn->titleRu.c_str(), pn->titleEn.c_str());
+              ImGui::PushID(pId.c_str());
+              if (ImGui::SmallButton(pill.c_str())) {
+                m_selectedZettelId = pId;
+              }
+              ImGui::PopID();
+              ImGui::SameLine();
+              ImGui::TextColored(ImVec4(0.5f, 0.7f, 0.85f, 0.8f), "(%s)", uiRu(pn->categoryRu.c_str(), pn->categoryEn.c_str()));
             }
           }
           ImGui::Separator();

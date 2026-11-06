@@ -52,6 +52,10 @@ struct CockpitHUDData {
   // v5.0.0 Bridge Comms & Radio Avionics
   bool  radioActive = false;
   float radioSignal = 0.0f;           // 0.0 .. 1.0 voice modulation
+
+  // v5.1.0 Astro-Zettelkasten Neural Resonance & Eureka Synthesis
+  float neuralResonance = 0.0f;       // 0.0 .. 1.0 brain / graph synthesis resonance
+  bool  eurekaPending = false;        // true if at least one Master Node synthesis is ready
 };
 
 class CockpitController {
