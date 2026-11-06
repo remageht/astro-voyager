@@ -7,9 +7,10 @@ using namespace astro;
 
 static void test_init() {
   ZettelGraph zg;
-  assert(zg.getTotalCount() == 13);
+  assert(zg.getTotalCount() == 17);
   assert(zg.getDiscoveredCount() == 1);
   assert(zg.getSynthesizedCount() == 0);
+  assert(zg.getMasterNodesCount() == 0);
   assert(zg.getTotalLinksCount() == 0);
 
   const ZettelNote* paris = zg.getNote("z_paris_rain");
@@ -30,6 +31,13 @@ static void test_init() {
   (void)voyager;
   assert(voyager->seedDiscovered == false);
   assert(voyager->cluster == kClusterEden);
+
+  const ZettelNote* masterSolar = zg.getNote("z_master_solar_dawn");
+  assert(masterSolar != nullptr);
+  (void)masterSolar;
+  assert(masterSolar->isMasterNode == true);
+  assert(masterSolar->seedDiscovered == false);
+  assert(masterSolar->parentIds.size() == 3);
 
   std::cout << "PASS: test_init\n";
 }
@@ -163,12 +171,94 @@ static void test_serialization_roundtrip() {
   std::cout << "PASS: test_serialization_roundtrip\n";
 }
 
+static void test_synthesis_recipes() {
+  ZettelGraph zg;
+  zg.discoverSeed("z_paris_rain");
+  zg.discoverSeed("z_casimir_metric");
+  zg.discoverSeed("z_solar_injection");
+
+  assert(!zg.canSynthesizeRecipe("recipe_solar_dawn"));
+
+  // Link notes into connected chain
+  zg.linkNotes("z_paris_rain", "z_casimir_metric");
+  zg.linkNotes("z_casimir_metric", "z_solar_injection");
+
+  assert(zg.canSynthesizeRecipe("recipe_solar_dawn"));
+  const ZettelSynthesisRecipe* pending = zg.checkPendingSynthesis();
+  assert(pending != nullptr);
+  assert(pending->id == "recipe_solar_dawn");
+  (void)pending;
+
+  // Trigger synthesis
+  bool ok = zg.triggerSynthesisRecipe("recipe_solar_dawn");
+  assert(ok);
+  (void)ok;
+
+  // Master node should now be discovered, synthesized, and in foreground (depthLevel == 0)
+  const ZettelNote* master = zg.getNote("z_master_solar_dawn");
+  assert(master != nullptr);
+  assert(master->seedDiscovered);
+  assert(master->synthesized);
+  assert(master->depthLevel == 0);
+  assert(master->isMasterNode);
+  assert(zg.getMasterNodesCount() == 1);
+  (void)master;
+
+  // Component notes should be demoted to background layer (depthLevel == 1)
+  assert(zg.getNote("z_paris_rain")->depthLevel == 1);
+  assert(zg.getNote("z_casimir_metric")->depthLevel == 1);
+  assert(zg.getNote("z_solar_injection")->depthLevel == 1);
+
+  // Master note should be linked to all 3 parents
+  assert(zg.areLinked("z_master_solar_dawn", "z_paris_rain"));
+  assert(zg.areLinked("z_master_solar_dawn", "z_casimir_metric"));
+  assert(zg.areLinked("z_master_solar_dawn", "z_solar_injection"));
+
+  // Cluster progress should be 1.0f (100% resonance)
+  assert(zg.getClusterProgress(kClusterSolar) >= 0.999f);
+  assert(zg.isClusterTrueEndingUnlocked(kClusterSolar));
+
+  std::cout << "PASS: test_synthesis_recipes\n";
+}
+
+static void test_master_layering_and_serialization() {
+  ZettelGraph zg1;
+  zg1.discoverSeed("z_stasis_dampener");
+  zg1.discoverSeed("z_universe5_collapse");
+  zg1.discoverSeed("z_sgra_tidal");
+  zg1.linkNotes("z_stasis_dampener", "z_universe5_collapse");
+  zg1.linkNotes("z_universe5_collapse", "z_sgra_tidal");
+  zg1.triggerSynthesisRecipe("recipe_stasis_bastion");
+
+  std::string data = zg1.serialize();
+  assert(!data.empty());
+  assert(data.find("recipe=recipe_stasis_bastion|synth=1") != std::string::npos);
+  assert(data.find("depth=1") != std::string::npos);
+
+  ZettelGraph zg2;
+  bool ok = zg2.deserialize(data);
+  assert(ok);
+  (void)ok;
+
+  const ZettelNote* m2 = zg2.getNote("z_master_stasis_bastion");
+  assert(m2 != nullptr);
+  assert(m2->seedDiscovered);
+  assert(m2->synthesized);
+  assert(zg2.getNote("z_stasis_dampener")->depthLevel == 1);
+  assert(zg2.areLinked("z_master_stasis_bastion", "z_sgra_tidal"));
+  (void)m2;
+
+  std::cout << "PASS: test_master_layering_and_serialization\n";
+}
+
 int main() {
   test_init();
   test_refresh_discovery();
   test_linking_and_synthesis();
   test_cluster_progress_and_true_endings();
   test_serialization_roundtrip();
-  std::cout << "\nAll 5 Zettelkasten tests passed successfully.\n";
+  test_synthesis_recipes();
+  test_master_layering_and_serialization();
+  std::cout << "\nAll 7 Zettelkasten tests passed successfully.\n";
   return 0;
 }

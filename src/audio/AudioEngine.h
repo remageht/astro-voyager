@@ -76,6 +76,10 @@ class AudioEngine {
   void playHazardAlarm();                 // тревожный тактический пульсирующий зуммер (880/440 Гц)
   void playTargetLockPing(float pan = 0.0f); // тактический пинг захвата цели на МФД (1200->950 Гц)
 
+  // v5.1.0: Эврика и синтез Zettelkasten
+  void playLiquidDrop(float pan = 0.0f);  // процедурный «бульк» капли / квантовый всплеск вакуума
+  void playEurekaChime();                 // небесный полифонический перезвон открытия (C5-G5-C6-E6)
+
   // v4.0: файл-голос для катсцен (wav, декодируется miniaudio в float
   // моно kSampleRate синхронно при запуске; каталог с аудио рядом).
   void playFile(const std::string& path, float db);
@@ -89,7 +93,8 @@ class AudioEngine {
  private:
   enum class VoiceType : int {
     Click, Whoosh, Jump, Chime, Blip, Capture, Tick, File,
-    RadioBeep, RadioEnd, WarpReady, Hazard, TargetLock
+    RadioBeep, RadioEnd, WarpReady, Hazard, TargetLock,
+    LiquidDrop, Eureka
   };
   struct Voice {
     VoiceType type = VoiceType::Click;
