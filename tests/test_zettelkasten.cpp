@@ -7,7 +7,7 @@ using namespace astro;
 
 static void test_init() {
   ZettelGraph zg;
-  assert(zg.getTotalCount() == 12);
+  assert(zg.getTotalCount() == 13);
   assert(zg.getDiscoveredCount() == 1);
   assert(zg.getSynthesizedCount() == 0);
   assert(zg.getTotalLinksCount() == 0);
@@ -25,6 +25,12 @@ static void test_init() {
   (void)casimir;
   assert(casimir->seedDiscovered == false);
 
+  const ZettelNote* voyager = zg.getNote("z_voyager_golden_record");
+  assert(voyager != nullptr);
+  (void)voyager;
+  assert(voyager->seedDiscovered == false);
+  assert(voyager->cluster == kClusterEden);
+
   std::cout << "PASS: test_init\n";
 }
 
@@ -36,6 +42,7 @@ static void test_refresh_discovery() {
   assert(zg.getNote("z_paris_rain")->seedDiscovered);
   assert(zg.getNote("z_casimir_metric")->seedDiscovered);
   assert(zg.getNote("z_mia_promise")->seedDiscovered);
+  assert(zg.getNote("z_voyager_golden_record")->seedDiscovered);
   assert(zg.getNote("z_stasis_dampener")->seedDiscovered);
 
   // Black hole visit
@@ -58,7 +65,7 @@ static void test_refresh_discovery() {
   assert(zg.getNote("z_sixth_resonance")->seedDiscovered);
   assert(zg.getNote("z_phase_shard")->seedDiscovered);
 
-  assert(zg.getDiscoveredCount() == 12);
+  assert(zg.getDiscoveredCount() == 13);
   std::cout << "PASS: test_refresh_discovery\n";
 }
 

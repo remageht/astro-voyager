@@ -48,6 +48,10 @@ struct CockpitHUDData {
   float hullTempNorm = 0.0f;          // 0.0 .. 1.0 (ambient to 2800K thermal shock)
   glm::vec2 targetRadarPos{0.0f};     // 2D polar-projected radar coordinates (-1..1)
   float atmoDensity = 0.0f;           // 0.0 (vacuum) .. 1.0 (sea level standard atmosphere)
+
+  // v5.0.0 Bridge Comms & Radio Avionics
+  bool  radioActive = false;
+  float radioSignal = 0.0f;           // 0.0 .. 1.0 voice modulation
 };
 
 class CockpitController {

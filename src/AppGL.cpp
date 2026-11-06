@@ -1295,9 +1295,20 @@ void AppGL::drawCodex() {
 
 void AppGL::drawBridgeCommsToast() {
   double now = glfwGetTime();
+  bool hadActiveBefore = m_bridgeComms.hasActiveMessage();
   m_bridgeComms.update(now);
+  bool hasActiveNow = m_bridgeComms.hasActiveMessage();
 
-  if (!m_bridgeComms.hasActiveMessage()) return;
+  // v5.0.0: Bridge Comms Radio Squelch & Static audio
+  if (!hadActiveBefore && hasActiveNow) {
+    m_audio.playRadioBeep();
+    m_audio.setRadioStatic(0.38f);
+  } else if (hadActiveBefore && !hasActiveNow) {
+    m_audio.playRadioEnd();
+    m_audio.setRadioStatic(0.0f);
+  }
+
+  if (!hasActiveNow) return;
   const RadioMessage* msg = m_bridgeComms.getActiveMessage();
   if (!msg) return;
 
@@ -1325,6 +1336,8 @@ void AppGL::drawBridgeCommsToast() {
     ImGui::SameLine(ImGui::GetContentRegionAvail().x - 16.0f);
     if (ImGui::SmallButton("x")) {
       m_bridgeComms.dismiss();
+      m_audio.playRadioEnd();
+      m_audio.setRadioStatic(0.0f);
     }
 
     ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.35f, 1.0f), "▲ %s",
@@ -1416,6 +1429,56 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.textEn = "Astro-Voyager, welcome back to the cradle of humanity! Spectrometry and Codex telemetry successfully synchronized.";
     msg.priority = 1.5f;
     msg.durationSec = 7.5;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "m1" && !m_bridgeComms.hasTriggered("comms_m1")) {
+    RadioMessage msg;
+    msg.id = "comms_m1";
+    msg.callsignRu = "Миа Сато [Пилот]";
+    msg.callsignEn = "Mia Sato [Pilot]";
+    msg.textRu = "Фиксирую релятивистский синхротронный ветер пульсара M1. 30 импульсов в секунду! Включаю магнитные дефлекторы.";
+    msg.textEn = "Detecting relativistic synchrotron wind of the M1 Crab pulsar. 30 pulses per second! Engaging magnetic deflectors.";
+    msg.priority = 1.8f;
+    msg.durationSec = 7.5;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "m87" && !m_bridgeComms.hasTriggered("comms_m87")) {
+    RadioMessage msg;
+    msg.id = "comms_m87";
+    msg.callsignRu = "Елена Ростова [Астрофизик]";
+    msg.callsignEn = "Elena Rostova [Astrophysicist]";
+    msg.textRu = "Внимание! Релятивистский джет M87* бьёт на 5000 световых лет прямо по траверзу. Мы летим сквозь струю ускоренной плазмы!";
+    msg.textEn = "Warning! M87* relativistic jet spans 5,000 light-years abeam. We are slicing right through accelerated plasma!";
+    msg.priority = 1.8f;
+    msg.durationSec = 8.0;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "sn1987a" && !m_bridgeComms.hasTriggered("comms_sn1987a")) {
+    RadioMessage msg;
+    msg.id = "comms_sn1987a";
+    msg.callsignRu = "Егорка-6 [Командир]";
+    msg.callsignEn = "Egorka-6 [Commander]";
+    msg.textRu = "Сверхновая 1987A в Большом Магеллановом Облаке! 32 жемчужины ударной волны. Наша память о Земле так же ярко вспыхивает в кольцах времени.";
+    msg.textEn = "Supernova 1987A in the Large Magellanic Cloud! 32 shock-wave pearls glowing. Our memory of Earth shines just as bright across the rings of time.";
+    msg.priority = 1.8f;
+    msg.durationSec = 8.0;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "at2019qiz" && !m_bridgeComms.hasTriggered("comms_at2019qiz")) {
+    RadioMessage msg;
+    msg.id = "comms_at2019qiz";
+    msg.callsignRu = "Миа Сато [Пилот]";
+    msg.callsignEn = "Mia Sato [Pilot]";
+    msg.textRu = "Приливной разрыв звезды! Потоки плазмы падают по спирали t^-5/3. Какая колоссальная гравитационная мощь!";
+    msg.textEn = "Tidal disruption of a star! Infalling plasma streams cascading at t^-5/3. What immense gravitational fury!";
+    msg.priority = 1.8f;
+    msg.durationSec = 7.5;
+    m_bridgeComms.queueMessage(msg, now);
+  } else if (stationId == "voyager1" && !m_bridgeComms.hasTriggered("comms_voyager1")) {
+    RadioMessage msg;
+    msg.id = "comms_voyager1";
+    msg.callsignRu = "Елена Ростова [Астрофизик]";
+    msg.callsignEn = "Elena Rostova [Astrophysicist]";
+    msg.textRu = "Несущая частота на 1420.4 МГц... Боже мой, это зонд «Вояджер-1»! Золотая пластинка сияет в свете далекого Солнца! Включаю запись в Кодекс.";
+    msg.textEn = "Carrier frequency on 1420.4 MHz... It is Voyager 1! The Golden Record gleaming in the faint light of distant Sol! Logging to Ship Codex.";
+    msg.priority = 2.5f;
+    msg.durationSec = 9.0;
     m_bridgeComms.queueMessage(msg, now);
   }
 }
@@ -6076,7 +6139,33 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
       m_landingTelem.surfaceDustK,
       m_landingTelem.suspensionCompression);
 
-  const CockpitHUDData& hudData = m_cockpitController.getHUDData();
+  CockpitHUDData hudData = m_cockpitController.getHUDData();
+  // v5.0.0: Bridge Comms & Radio Avionics
+  hudData.radioActive = m_bridgeComms.hasActiveMessage();
+  hudData.radioSignal = m_bridgeComms.hasActiveMessage() ? (0.6f + 0.4f * static_cast<float>(std::sin(static_cast<double>(currentTime) * 16.0))) : 0.0f;
+
+  // v5.0.0: Audio alarms and avionics chimes
+  static bool s_lastWarpReady = false;
+  bool warpReadyNow = (warpCharge >= 0.999f);
+  if (!s_lastWarpReady && warpReadyNow) {
+    m_audio.playWarpReadyChime();
+  }
+  s_lastWarpReady = warpReadyNow;
+
+  static bool s_lastTargetLocked = false;
+  if (!s_lastTargetLocked && hudData.targetLocked) {
+    m_audio.playTargetLockPing();
+  }
+  s_lastTargetLocked = hudData.targetLocked;
+
+  static double s_lastHazardAlarm = 0.0;
+  if (hudData.hullTempNorm > 0.82f || (hudData.atmoDensity > 0.85f && m_camSpeed > 25.0f)) {
+    if (static_cast<double>(currentTime) - s_lastHazardAlarm > 1.4) {
+      m_audio.playHazardAlarm();
+      s_lastHazardAlarm = static_cast<double>(currentTime);
+    }
+  }
+
   // v4.9.0: Drive procedural atmospheric hypersonic roar audio
   m_audio.setAtmosphereRoar(std::clamp(hudData.entryPlasma * 1.2f + hudData.atmoDensity * (m_camSpeed / 60.0f) * 0.45f, 0.0f, 1.0f));
 

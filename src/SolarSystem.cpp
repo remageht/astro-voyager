@@ -233,6 +233,18 @@ std::vector<PlanetDef> initDefs() {
     d.mass = 0.05f;
     list.push_back(d);
   }
+  // 17: Voyager 1 (v5.0.0; humanity's interstellar relic probe, Kuiper belt / heliosphere boundary)
+  {
+    PlanetDef d = makeDef("voyager1", "Voyager 1", 0.08f, 55.0f, 0.005f, 1.2f, 2, 18.0f,
+                          Vec3(0.95f, 0.82f, 0.30f), Vec3(0.85f, 0.70f, 0.20f));
+    d.ecc = 0.25f;
+    d.incl = 0.62f; // ~35.5 deg inclination, matching real Voyager 1 trajectory
+    d.facts = {"Launched 1977, interstellar relic", "Carries Golden Record & pulsar map"};
+    d.spinRate = 0.05f;
+    d.detail = 0;
+    d.mass = 0.001f;
+    list.push_back(d);
+  }
 
   return list;
 }

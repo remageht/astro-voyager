@@ -66,6 +66,16 @@ class AudioEngine {
   void playChime();    // ачивка: 3 щипка
   void playBlip();     // ошибка/тур: короткий blip
   void playCapture();  // тревога захвата ЧД (зовёт PH-хук наружу)
+
+  // v5.0.0: Радиопереговоры мостика и авионика бортового ИИ
+  void playRadioBeep(float pan = 0.0f);   // PTT squelch open chirp + click
+  void playRadioEnd(float pan = 0.0f);    // PTT squelch close tail burst
+  void setRadioStatic(float level);       // 0..1: фоновый радиоэфир/несущая частота
+  float radioStatic() const { return m_radioStaticCurrent.load(); }
+  void playWarpReadyChime();              // двухтоновый колокольчик готовности варп-ядра (523->659 Гц)
+  void playHazardAlarm();                 // тревожный тактический пульсирующий зуммер (880/440 Гц)
+  void playTargetLockPing(float pan = 0.0f); // тактический пинг захвата цели на МФД (1200->950 Гц)
+
   // v4.0: файл-голос для катсцен (wav, декодируется miniaudio в float
   // моно kSampleRate синхронно при запуске; каталог с аудио рядом).
   void playFile(const std::string& path, float db);
@@ -77,7 +87,10 @@ class AudioEngine {
   float warpLevel() const { return m_warpCurrent.load(); }
 
  private:
-  enum class VoiceType : int { Click, Whoosh, Jump, Chime, Blip, Capture, Tick, File };
+  enum class VoiceType : int {
+    Click, Whoosh, Jump, Chime, Blip, Capture, Tick, File,
+    RadioBeep, RadioEnd, WarpReady, Hazard, TargetLock
+  };
   struct Voice {
     VoiceType type = VoiceType::Click;
     uint64_t startSample = 0;
@@ -116,6 +129,8 @@ class AudioEngine {
   std::atomic<float> m_tensionCurrent{0.0f};
   std::atomic<float> m_atmoTarget{0.0f};
   std::atomic<float> m_atmoCurrent{0.0f};
+  std::atomic<float> m_radioStaticTarget{0.0f};
+  std::atomic<float> m_radioStaticCurrent{0.0f};
   std::atomic<uint64_t> m_samples{0};  // счётчик сэмплов (live: колбэк)
 
   std::mutex m_mutex;
@@ -125,6 +140,8 @@ class AudioEngine {
   uint32_t m_rng = 0x12345678u;
   float m_brown = 0.0f;
   float m_atmoNoise = 0.0f;
+  float m_radioBandpass1 = 0.0f;
+  float m_radioBandpass2 = 0.0f;
 
   friend struct AudioCallbackBridge;
 };

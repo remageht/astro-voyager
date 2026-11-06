@@ -327,6 +327,22 @@ int main() {
     std::cout << "PASS: Cockpit Test 11 (re-entry buffeting & hull heating)\n";
   }
 
+  // Test 12: Cockpit radio avionics telemetry & modulation flags (v5.0.0)
+  {
+    CockpitHUDData hud;
+    hud.radioActive = true;
+    hud.radioSignal = 0.85f;
+    if (!hud.radioActive) {
+      std::cerr << "Test 12 failed: radioActive expected true\n";
+      return 1;
+    }
+    if (std::abs(hud.radioSignal - 0.85f) > 1e-4f) {
+      std::cerr << "Test 12 failed: radioSignal mismatch: " << hud.radioSignal << "\n";
+      return 1;
+    }
+    std::cout << "PASS: Cockpit Test 12 (radio avionics & signal modulation)\n";
+  }
+
   std::cout << "ALL COCKPIT CONTROLLER TESTS PASSED\n";
   return 0;
 }

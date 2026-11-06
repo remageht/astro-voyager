@@ -48,6 +48,8 @@ uniform float u_SurfaceDustK;
 uniform float u_HullTemp;
 uniform vec2  u_TargetRadarPos;
 uniform float u_AtmoDensity;
+uniform float u_RadioActive;
+uniform float u_RadioSignal;
 
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
@@ -316,23 +318,67 @@ void main() {
           vec3 wCol = (u_WarpActive > 0.5) ? vec3(0.35, 0.95, 1.0) : vec3(0.85, 0.55, 0.12);
           diagBg += wCol * wBar * (1.2 + 0.3 * sin(u_Time * 8.0));
 
-          // Annunciator Status Lamps
-          vec4 annunStatus = vec4(
-            step(0.5, u_WarpActive),
-            step(0.01, u_AtmoDensity),
-            step(1.5, u_GearState) * step(u_GearState, 2.5),
-            step(0.85, u_HullTemp)
-          );
-          for (int a = 0; a < 4; ++a) {
-            float aX = -0.18 + float(a) * 0.12;
-            float inLampX = step(aX - 0.04, rightMfdP.x) * step(rightMfdP.x, aX + 0.04);
+          // Annunciator Status Lamps (WARP, ATMO, GEAR, HEAT, COMM)
+          float lampActiveArr[5];
+          lampActiveArr[0] = step(0.5, u_WarpActive);
+          lampActiveArr[1] = step(0.01, u_AtmoDensity);
+          lampActiveArr[2] = step(1.5, u_GearState) * step(u_GearState, 2.5);
+          lampActiveArr[3] = step(0.85, u_HullTemp);
+          lampActiveArr[4] = step(0.5, u_RadioActive) * (0.65 + 0.35 * sin(u_Time * 12.0));
+
+          for (int a = 0; a < 5; ++a) {
+            float aX = -0.19 + float(a) * 0.095;
+            float inLampX = step(aX - 0.032, rightMfdP.x) * step(rightMfdP.x, aX + 0.032);
             float inLampY = step(-0.075, rightMfdP.y) * step(rightMfdP.y, -0.055);
-            float lampActive = (a == 0) ? annunStatus.x : (a == 1) ? annunStatus.y : (a == 2) ? annunStatus.z : annunStatus.w;
-            vec3 lampCol = (a == 3) ? vec3(1.0, 0.15, 0.1) : (a == 2) ? vec3(0.2, 0.95, 0.3) : vec3(0.2, 0.8, 1.0);
-            diagBg += lampCol * inLampX * inLampY * (lampActive * 1.5 + 0.15);
+            float lampActive = lampActiveArr[a];
+            vec3 lampCol = (a == 4) ? vec3(0.3, 0.85, 1.0) :
+                           (a == 3) ? vec3(1.0, 0.15, 0.1) :
+                           (a == 2) ? vec3(0.2, 0.95, 0.3) :
+                           (a == 1) ? vec3(1.0, 0.75, 0.1) : vec3(0.2, 0.8, 1.0);
+            diagBg += lampCol * inLampX * inLampY * (lampActive * 1.5 + 0.12);
           }
           float edgeDark = smoothstep(0.0, -0.012, rightBox);
           frameBase = diagBg * (0.65 + 0.35 * edgeDark);
+        }
+      }
+    }
+
+    // Overhead Radio & Interstellar Transceiver Console (v5.0.0)
+    if (isOverhead) {
+      vec2 radioBoxP = headP - vec2(0.0, 0.93);
+      float radioBoxD = sdBox(radioBoxP, vec2(0.38, 0.045));
+      if (radioBoxD < 0.015) {
+        if (radioBoxD > 0.0) {
+          float rim = 1.0 - smoothstep(0.0, 0.015, radioBoxD);
+          vec3 rimCol = (u_ShipStyle == 1) ? vec3(0.65, 0.70, 0.75) : vec3(0.18, 0.22, 0.26);
+          frameBase = mix(frameBase, rimCol, rim);
+        } else {
+          vec3 radioBg = vec3(0.010, 0.015, 0.024);
+          float scan = 0.88 + 0.12 * sin(radioBoxP.y * 700.0);
+          radioBg *= scan;
+
+          // LED Status: RX Carrier
+          float rxLampD = length(radioBoxP - vec2(-0.30, 0.0)) - 0.014;
+          if (rxLampD < 0.0) {
+            float blink = (u_RadioActive > 0.5) ? (0.65 + 0.35 * sin(u_Time * 14.0)) : 0.12;
+            vec3 rxCol = (u_RadioActive > 0.5) ? vec3(0.15, 1.0, 0.40) : vec3(0.2, 0.3, 0.25);
+            radioBg += rxCol * blink * 2.0;
+          }
+
+          // Modulation waveform bars when active
+          if (u_RadioActive > 0.01) {
+            float wave = sin(radioBoxP.x * 85.0 + u_Time * 25.0) * cos(radioBoxP.x * 45.0 - u_Time * 18.0);
+            float barNorm = abs(radioBoxP.y) * 35.0;
+            float signalMod = clamp(u_RadioSignal * 1.5, 0.25, 1.0);
+            if (barNorm < abs(wave) * signalMod && abs(radioBoxP.x) < 0.24) {
+              radioBg += vec3(0.25, 0.85, 1.0) * 1.6;
+            }
+          } else {
+            // Idle frequency carrier line (1420.405 MHz)
+            float freqLine = 1.0 - smoothstep(0.001, 0.003, abs(radioBoxP.y));
+            radioBg += vec3(0.2, 0.5, 0.7) * freqLine * 0.4 * step(abs(radioBoxP.x), 0.24);
+          }
+          frameBase = radioBg;
         }
       }
     }

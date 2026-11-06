@@ -194,6 +194,27 @@ SpectralAnalysis analyzeSpectrum(const std::string& stationId, double dopplerBet
     };
     sp.summaryRu = "Гигантский аккреционный диск: кеплеровский профиль скоростей, идеальный для разгона варпа.";
     sp.summaryEn = "Colossal accretion disc: Keplerian velocity profile suited for warp slingshots.";
+  } else if (stationId == "voyager1") {
+    sp.targetName = "Зонд «Вояджер-1» / Золотая пластинка";
+    sp.spectralClass = "Межзвёздный аппарат / Реликвия человечества (1977)";
+    sp.surfaceTempK = 38.0f;
+    sp.magneticFieldTesla = 1e-6f;
+    sp.radiationLevel = "Межзвёздные космические лучи (Гелиопауза)";
+    sp.hasBiosignature = true;
+    sp.chemicalAbundance = {
+        {"Au (Золото / Фонографическая пластинка)", 68.0f},
+        {"Al (Алюминий / Корпус)", 22.0f},
+        {"Pu-238 (Плутоний / РИТЭГ)", 7.0f},
+        {"Cu (Медь / Позолоченная матрица)", 3.0f},
+    };
+    sp.lines = {
+        {1420.4f, 1.0f, "H-I 21cm (Радиочастота нейтрального водорода)", true},
+        {267.6f, 0.90f, "Au-I (Позолоченное покрытие пластинки)", false},
+        {396.1f, 0.75f, "Al-I (Несущая ферма антенны)", false},
+        {589.0f, 0.60f, "Na-I (След межзвёздного газа)", false},
+    };
+    sp.summaryRu = "Зарегистрирован золотой диск «Sounds of Earth» и радиоизлучение на волне 21 см. Величайшая капсула времени человечества.";
+    sp.summaryEn = "Detected 'Sounds of Earth' Golden Record and 21 cm hydrogen emission line. Humanity's greatest time capsule.";
   } else {
     // Default fallback celestial spectral profile
     sp.targetName = stationId;
@@ -384,6 +405,14 @@ void ScienceCodex::init() {
       "мореплавателей.",
       "Famous northern constellation whose Pointer stars guide navigation "
       "toward Polaris.");
+
+  add("voyager1", "Зонд «Вояджер-1»", "Voyager 1 Probe", "Реликвия",
+      "Cosmic Relic",
+      "Запущенный в 1977 году посланник Земли. Несёт Золотую пластинку с "
+      "приветствиями на 55 языках, музыкой Баха и схемой расположения Солнца "
+      "относительно 14 пульсаров.",
+      "Launched in 1977, Earth's first interstellar ambassador. Carries the "
+      "Golden Record with greetings in 55 languages and a 14-pulsar map.");
 }
 
 const CodexEntry* ScienceCodex::getEntry(const std::string& stationId) const {
