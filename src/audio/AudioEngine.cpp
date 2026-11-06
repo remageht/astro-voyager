@@ -173,8 +173,14 @@ void AudioEngine::update(float dt) {
   ac += (at - ac) * std::clamp(dt * 5.0f, 0.0f, 1.0f);
   m_atmoCurrent.store(ac);
 
+  // v5.0.0: Smooth radio carrier static
+  float rc = m_radioStaticCurrent.load();
+  float rt = m_radioStaticTarget.load();
+  rc += (rt - rc) * std::clamp(dt * 8.0f, 0.0f, 1.0f);
+  m_radioStaticCurrent.store(rc);
+
   if (!m_live) {
-    // Null-backend: РґРІРёРіР°РµРј РІРёСЂС‚СѓР°Р»СЊРЅРѕРµ РІСЂРµРјСЏ, С‡РёСЃС‚РёРј РіРѕР»РѕСЃР° РїРѕ РЅРµРјСѓ.
+    // Null-backend: двигаем виртуальное время, чистим голоса по нему.
     uint64_t adv = static_cast<uint64_t>(static_cast<double>(dt) * kSampleRate);
     m_samples.fetch_add(adv);
   }
@@ -194,6 +200,11 @@ void AudioEngine::update(float dt) {
       case VoiceType::Blip: dur = 0.3; break;
       case VoiceType::Capture: dur = 2.4; break;
       case VoiceType::Tick: dur = 0.05; break;
+      case VoiceType::RadioBeep: dur = 0.08; break;
+      case VoiceType::RadioEnd: dur = 0.06; break;
+      case VoiceType::WarpReady: dur = 0.55; break;
+      case VoiceType::Hazard: dur = 0.45; break;
+      case VoiceType::TargetLock: dur = 0.22; break;
       case VoiceType::File:
         dur = m_voices[i].pcm ? static_cast<double>(m_voices[i].pcm->size()) /
                                     kSampleRate
@@ -245,6 +256,12 @@ void AudioEngine::setAtmosphereRoar(float level) {
   if (level < 0.0f) level = 0.0f;
   if (level > 1.0f) level = 1.0f;
   m_atmoTarget.store(level);
+}
+
+void AudioEngine::setRadioStatic(float level) {
+  if (level < 0.0f) level = 0.0f;
+  if (level > 1.0f) level = 1.0f;
+  m_radioStaticTarget.store(level);
 }
 
 void AudioEngine::playClick() {
@@ -303,6 +320,48 @@ void AudioEngine::playCapture() {
   }
   if (m_voices.size() > 32) return;
   m_voices.push_back({VoiceType::Capture, m_samples.load(), nullptr, 0.0f});
+}
+
+void AudioEngine::playRadioBeep(float pan) {
+  if (!m_tried) return;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (m_voices.size() > 32) return;
+  m_voices.push_back({VoiceType::RadioBeep, m_samples.load(), nullptr, 0.0f, std::clamp(pan, -1.0f, 1.0f)});
+}
+
+void AudioEngine::playRadioEnd(float pan) {
+  if (!m_tried) return;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (m_voices.size() > 32) return;
+  m_voices.push_back({VoiceType::RadioEnd, m_samples.load(), nullptr, 0.0f, std::clamp(pan, -1.0f, 1.0f)});
+}
+
+void AudioEngine::playWarpReadyChime() {
+  if (!m_tried) return;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (m_voices.size() > 32) return;
+  m_voices.push_back({VoiceType::WarpReady, m_samples.load(), nullptr, 0.0f, 0.0f});
+}
+
+void AudioEngine::playHazardAlarm() {
+  if (!m_tried) return;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  for (const auto& v : m_voices) {
+    if (v.type == VoiceType::Hazard) {
+      const double age =
+          static_cast<double>(m_samples.load() - v.startSample) / kSampleRate;
+      if (age < 0.45) return;
+    }
+  }
+  if (m_voices.size() > 32) return;
+  m_voices.push_back({VoiceType::Hazard, m_samples.load(), nullptr, 0.0f, 0.0f});
+}
+
+void AudioEngine::playTargetLockPing(float pan) {
+  if (!m_tried) return;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (m_voices.size() > 32) return;
+  m_voices.push_back({VoiceType::TargetLock, m_samples.load(), nullptr, 0.0f, std::clamp(pan, -1.0f, 1.0f)});
 }
 
 // v4.0: С„Р°Р№Р»-РіРѕР»РѕСЃ РєР°С‚СЃС†РµРЅС‹. Р”РµРєРѕРґ СЃРёРЅС…СЂРѕРЅРЅС‹Р№ РІ РІС‹Р·С‹РІР°СЋС‰РµРј С‚СЂРµРґРµ (UI):
@@ -444,10 +503,61 @@ float AudioEngine::renderVoice(const Voice& v, double age,
       return s * 0.45f * pulse * env;
     }
     case VoiceType::Tick: {
-      // РўРёРє РїСѓР»СЊСЃР°СЂР°: РїРёРЅРі 2200 Р“С†, Р·Р°С‚СѓС…Р°РЅРёРµ 25 РјСЃ (СЂР°РґРёРѕСѓРґР°СЂ).
+      // Тик пульсара: пинг 2200 Гц, затухание 25 мс (радиоудар).
       if (age > 0.05) return 0.0f;
       const float s = static_cast<float>(std::sin(2.0 * kPi * 2200.0 * age));
       return s * static_cast<float>(std::exp(-age * 120.0)) * 0.5f;
+    }
+    case VoiceType::RadioBeep: {
+      // PTT chirp + relay click
+      if (age > 0.08) return 0.0f;
+      const double f = 2400.0 - (age / 0.08) * 600.0; // 2400 -> 1800 Hz sweep
+      const float tone = static_cast<float>(std::sin(2.0 * kPi * f * age));
+      const float n = (age < 0.02) ? whiteNoise(rng) * 0.5f : 0.0f;
+      const float env = static_cast<float>(std::sin(kPi * (age / 0.08)));
+      return (tone * 0.6f + n) * env * 0.5f;
+    }
+    case VoiceType::RadioEnd: {
+      // PTT tail squelch burst + release click
+      if (age > 0.06) return 0.0f;
+      const float n = whiteNoise(rng);
+      const float env = static_cast<float>(std::exp(-age * 60.0));
+      const float click = static_cast<float>(std::sin(2.0 * kPi * 400.0 * age)) * env;
+      return (n * 0.7f + click * 0.4f) * env * 0.45f;
+    }
+    case VoiceType::WarpReady: {
+      // Ascending two-tone chime: 523.25 Hz (C5) -> 659.25 Hz (E5)
+      if (age > 0.55) return 0.0f;
+      if (age < 0.18) {
+        const float s = static_cast<float>(std::sin(2.0 * kPi * 523.25 * age)) +
+                        0.25f * static_cast<float>(std::sin(2.0 * kPi * 1046.5 * age));
+        const float env = static_cast<float>(std::exp(-age * 6.0));
+        return s * env * 0.45f;
+      } else {
+        const double a2 = age - 0.18;
+        const float s = static_cast<float>(std::sin(2.0 * kPi * 659.25 * a2)) +
+                        0.25f * static_cast<float>(std::sin(2.0 * kPi * 1318.5 * a2));
+        const float env = static_cast<float>(std::exp(-a2 * 5.0));
+        return s * env * 0.5f;
+      }
+    }
+    case VoiceType::Hazard: {
+      // Pulsed alarm: alternates between 880 Hz and 440 Hz
+      if (age > 0.45) return 0.0f;
+      const double f = (std::fmod(age, 0.12) < 0.06) ? 880.0 : 440.0;
+      const float s = static_cast<float>(std::sin(2.0 * kPi * f * age)) +
+                      0.3f * static_cast<float>(std::sin(2.0 * kPi * f * 2.0 * age));
+      const float env = static_cast<float>(std::sin(kPi * (age / 0.45)));
+      return s * env * 0.5f;
+    }
+    case VoiceType::TargetLock: {
+      // Tactical lock ping: 1200 Hz -> 950 Hz drop
+      if (age > 0.22) return 0.0f;
+      const double f = 950.0 + 250.0 * std::exp(-age * 18.0);
+      const float s = static_cast<float>(std::sin(2.0 * kPi * f * age)) +
+                      0.2f * static_cast<float>(std::sin(2.0 * kPi * 2.0 * f * age));
+      const float env = static_cast<float>(std::exp(-age * 16.0));
+      return s * env * 0.55f;
     }
     case VoiceType::File: {
       // Р¤Р°Р№Р»-РіРѕР»РѕСЃ: Р»РёРЅРµР№РЅС‹Р№ Р»РµСЂРї РїРѕ РіРѕС‚РѕРІРѕРјСѓ float-Р±СѓС„РµСЂСѓ (РјРѕРЅРѕ,
@@ -544,8 +654,20 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
       atmoRoar = (m_atmoNoise * 3.2f + m_brown * 1.4f) * flutter * atmoK * 0.40f;
     }
 
-    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar) * vol;
-    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar) * vol;
+    // Radio carrier static (v5.0.0): Deep-space shortwave static & ionization hiss
+    const float radioK = m_radioStaticCurrent.load();
+    float radioStaticSound = 0.0f;
+    if (radioK > 0.001f) {
+      const float w = whiteNoise(m_rng);
+      m_radioBandpass1 += (w - m_radioBandpass1) * 0.35f;
+      m_radioBandpass2 += (m_radioBandpass1 - m_radioBandpass2) * 0.10f;
+      float bandpass = m_radioBandpass1 - m_radioBandpass2;
+      float crackle = ((m_rng & 0x7ff) == 0) ? (whiteNoise(m_rng) * 0.5f) : 0.0f;
+      radioStaticSound = (bandpass * 1.8f + crackle) * radioK * 0.20f;
+    }
+
+    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar + radioStaticSound) * vol;
+    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar + radioStaticSound) * vol;
     mixL = std::tanh(mixL * 1.1f);
     mixR = std::tanh(mixR * 1.1f);
     out[i * 2 + 0] = mixL;

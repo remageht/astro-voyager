@@ -100,8 +100,8 @@ int main() {
   // Test 5: Science Codex scanning and progression (+100 RP per discovery)
   {
     ScienceCodex codex;
-    if (codex.getTotalCount() != 22) {
-      std::cerr << "Test 5 failed: expected 22 catalog entries, got " << codex.getTotalCount() << '\n';
+    if (codex.getTotalCount() != 23) {
+      std::cerr << "Test 5 failed: expected 23 catalog entries, got " << codex.getTotalCount() << '\n';
       return 1;
     }
     if (codex.getScannedCount() != 0 || codex.getTotalResearchPoints() != 0) {
@@ -221,6 +221,40 @@ int main() {
     }
   }
 
-  std::cout << "All 7 ScienceSystem tests passed successfully!\n";
+  // Test 8: Voyager 1 interstellar probe spectrum and Golden Record codex entry
+  {
+    SpectralAnalysis voyager = analyzeSpectrum("voyager1", 0.0);
+    if (voyager.stationId != "voyager1") {
+      std::cerr << "Test 8 failed: expected stationId voyager1\n";
+      return 1;
+    }
+    if (!voyager.hasBiosignature) {
+      std::cerr << "Test 8 failed: Voyager 1 must have biosignature true (Earth voices)\n";
+      return 1;
+    }
+    bool foundH1 = false;
+    bool foundAu = false;
+    for (const auto& line : voyager.lines) {
+      if (std::abs(line.wavelengthNm - 1420.4f) < 0.2f) foundH1 = true;
+      if (std::abs(line.wavelengthNm - 267.6f) < 0.2f) foundAu = true;
+    }
+    if (!foundH1 || !foundAu) {
+      std::cerr << "Test 8 failed: Voyager 1 missing 21cm H-I or Au-I spectral lines\n";
+      return 1;
+    }
+
+    ScienceCodex codex;
+    const auto* entry = codex.getEntry("voyager1");
+    if (!entry) {
+      std::cerr << "Test 8 failed: missing voyager1 entry in ScienceCodex\n";
+      return 1;
+    }
+    if (entry->categoryEn != "Cosmic Relic") {
+      std::cerr << "Test 8 failed: unexpected category: " << entry->categoryEn << '\n';
+      return 1;
+    }
+  }
+
+  std::cout << "All 8 ScienceSystem tests passed successfully!\n";
   return 0;
 }

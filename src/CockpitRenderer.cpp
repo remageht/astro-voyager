@@ -85,6 +85,10 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform2f("u_TargetRadarPos", hud.targetRadarPos.x, hud.targetRadarPos.y);
   m_shader->setUniform1f("u_AtmoDensity", hud.atmoDensity);
 
+  // v5.0.0 Bridge Comms & Radio Avionics
+  m_shader->setUniform1f("u_RadioActive", hud.radioActive ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_RadioSignal", hud.radioSignal);
+
   m_quad->draw();
 
   m_shader->unbind();

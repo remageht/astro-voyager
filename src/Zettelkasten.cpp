@@ -171,6 +171,26 @@ void ZettelGraph::init() {
   }
   {
     ZettelNote n;
+    n.id = "z_voyager_golden_record";
+    n.cluster = kClusterEden;
+    n.categoryRu = "Реликвия";
+    n.categoryEn = "Relic";
+    n.titleRu = "Золотая пластинка «Вояджера»: Послание сквозь эпохи";
+    n.titleEn = "Voyager Golden Record: A Message Across Epochs";
+    n.textRu = "В поясе Койпера мы настигли «Вояджер-1». На позолоченной медной пластинке выгравированы схема водорода, координаты 14 пульсаров и 115 изображений нашей цивилизации. Экипаж слушал шёпот Земли 1977 года.";
+    n.textEn = "In the Kuiper belt, we caught up with Voyager 1. The gold-plated copper phonograph disc preserves the hydrogen diagram, 14-pulsar map, and 115 pictures of our home. The bridge crew listened to the whispered heartbeat of 1977 Earth.";
+    n.quoteRu = "Они не знали, покорим ли мы варп. Они просто верили, что в бесконечной темноте кто-то протянет руку в ответ.";
+    n.quoteEn = "They didn't know if we'd ever conquer warp. They simply believed that out in the infinite dark, someone would reach out a hand in return.";
+    n.speakerRu = "Елена Ростова";
+    n.speakerEn = "Elena Rostova";
+    n.posX = 145.0f;
+    n.posY = -195.0f;
+    n.seedDiscovered = false;
+    n.synthesized = false;
+    addSeed(n);
+  }
+  {
+    ZettelNote n;
     n.id = "z_m13_biosphere";
     n.cluster = kClusterEden;
     n.categoryRu = "Биосфера";
@@ -355,9 +375,10 @@ void ZettelGraph::refresh(const std::vector<std::string>& visitedStations,
   discoverSeed("z_paris_rain");
 
   // Earth / Fleet stations
-  if (hasStation("sol") || hasStation("dock-dragon") || hasStation("dock-soyuz")) {
+  if (hasStation("sol") || hasStation("dock-dragon") || hasStation("dock-soyuz") || hasStation("voyager1")) {
     discoverSeed("z_casimir_metric");
     discoverSeed("z_mia_promise");
+    discoverSeed("z_voyager_golden_record");
   }
 
   // Stasis / Fleet contact
