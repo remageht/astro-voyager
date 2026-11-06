@@ -274,8 +274,28 @@ class AppGL {
 
   // Main menu / overlay state
   bool m_inMenu = true;
-  int m_menuPage = 0;  // 0 main, 1 settings, 2 help
+  int m_menuPage = 0;  // 0 main, 1 settings, 2 help, 3 patch notes
+  int m_prevMenuPage = 0;
   bool m_showPatchNotesModal = false;  // v4.2.0: модальное окно примечаний к выпуску
+  bool m_menuCrtFx = true;             // v4.8.1: CRT сканирующие линии и тень от белой рамки
+  std::string m_selectedRadarId = "sol"; // Выбранная цель на тактическом радаре
+  bool m_toggleWarpStandby = true;     // Тумблер готовности варп-ядра
+  bool m_toggleShieldEco = false;      // Тумблер щитов (eco vs 100%)
+  bool m_toggleDeepRadar = true;       // Тумблер глубокого сканирования
+
+  // Анимации терминала и аппаратных тумблеров (v4.8.1)
+  bool m_menuBooting = true;
+  float m_menuBootTimer = 0.0f;
+  bool m_menuClosing = false;
+  float m_menuCloseTimer = 0.0f;
+  float m_pageTransitionTimer = 1.0f;
+  float m_togglePosWarp = 1.0f;
+  float m_togglePosShield = 0.0f;
+  float m_togglePosScanner = 1.0f;
+  float m_togglePosCrt = 1.0f;
+  float m_radarLockTimer = 1.0f;
+  void requestCloseMenu();
+
   void drawPatchNotesModal();
   bool m_hideUI = false;
   bool m_helpOverlay = false;
