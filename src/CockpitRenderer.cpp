@@ -89,6 +89,10 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform1f("u_RadioActive", hud.radioActive ? 1.0f : 0.0f);
   m_shader->setUniform1f("u_RadioSignal", hud.radioSignal);
 
+  // v5.1.0 Astro-Zettelkasten Neural Resonance & Eureka Synthesis
+  m_shader->setUniform1f("u_NeuralResonance", hud.neuralResonance);
+  m_shader->setUniform1f("u_EurekaPending", hud.eurekaPending ? 1.0f : 0.0f);
+
   m_quad->draw();
 
   m_shader->unbind();

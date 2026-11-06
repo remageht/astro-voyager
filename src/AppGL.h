@@ -210,10 +210,12 @@ class AppGL {
   void startEurekaAnimation(const std::string& recipeId, int modelOverride = -1);
   void triggerDemoEureka(int model);
 
-  // Obsidian features (Force-directed layout & Dataview filters)
+  // Obsidian features (Force-directed layout, Dataview filters, Quick Search, Wikilinks)
   bool m_forceDirectedActive = false;
   int m_categoryFilter = 0; // 0: All, 1: Memory, 2: Physics, 3: Stasis, 4: Biosphere, 5: Echo, 6: Master
+  char m_zettelSearchQuery[128] = {0};
   void stepForceDirectedLayout(float dt);
+  void renderTextWithWikilinks(const std::string& text);
 
   // === Expedition === (v3.5.0): сюжетная арка + вводные слайды (рестайл).
   ExpeditionState m_expedition;

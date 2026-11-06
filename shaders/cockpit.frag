@@ -50,6 +50,8 @@ uniform vec2  u_TargetRadarPos;
 uniform float u_AtmoDensity;
 uniform float u_RadioActive;
 uniform float u_RadioSignal;
+uniform float u_NeuralResonance;
+uniform float u_EurekaPending;
 
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
@@ -365,6 +367,15 @@ void main() {
             radioBg += rxCol * blink * 2.0;
           }
 
+          // LED Status: Mind Resonance & Eureka Synthesis (v5.1.0)
+          float mindLampD = length(radioBoxP - vec2(0.30, 0.0)) - 0.014;
+          if (mindLampD < 0.0) {
+            float blink = (u_EurekaPending > 0.5) ? (0.65 + 0.35 * sin(u_Time * 14.0)) : (0.4 + 0.6 * u_NeuralResonance);
+            vec3 mindCol = (u_EurekaPending > 0.5) ? vec3(1.0, 0.82, 0.20) :
+                           (u_NeuralResonance > 0.05) ? vec3(0.55, 0.35, 1.0) : vec3(0.20, 0.18, 0.30);
+            radioBg += mindCol * blink * (u_EurekaPending > 0.5 ? 2.4 : (1.0 + u_NeuralResonance * 1.2));
+          }
+
           // Modulation waveform bars when active
           if (u_RadioActive > 0.01) {
             float wave = sin(radioBoxP.x * 85.0 + u_Time * 25.0) * cos(radioBoxP.x * 45.0 - u_Time * 18.0);
@@ -524,6 +535,14 @@ void main() {
       vec2 warpBadgeP = hudP - vec2(0.0, 0.32);
       float badgeBox = sdBox(warpBadgeP, vec2(0.18, 0.035));
       hudGlow += (1.0 - smoothstep(0.001, 0.003, abs(badgeBox))) * (0.8 + 0.4 * sin(u_Time * 6.0));
+    }
+
+    // F2. Eureka Synthesis Pending Hologram (v5.1.0)
+    if (u_EurekaPending > 0.5) {
+      vec2 eurekaBadgeP = hudP - vec2(0.0, 0.26);
+      float badgeBox = sdBox(eurekaBadgeP, vec2(0.20, 0.026));
+      float blink = 0.85 + 0.40 * sin(u_Time * 9.0);
+      hudGlow += (1.0 - smoothstep(0.001, 0.0028, abs(badgeBox))) * blink * 1.35;
     }
 
     // G. Tactical Compass Heading Tape (v4.3.0)
