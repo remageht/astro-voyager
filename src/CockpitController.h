@@ -43,6 +43,11 @@ struct CockpitHUDData {
   bool  isLanded = false;
   float surfaceDustK = 0.0f;  // 0.0 .. 1.0
   float suspensionCompression = 0.0f; // 0.0 .. 1.0
+
+  // v4.9.0 Diegetic Cockpit MFDs & Hypersonic Re-entry
+  float hullTempNorm = 0.0f;          // 0.0 .. 1.0 (ambient to 2800K thermal shock)
+  glm::vec2 targetRadarPos{0.0f};     // 2D polar-projected radar coordinates (-1..1)
+  float atmoDensity = 0.0f;           // 0.0 (vacuum) .. 1.0 (sea level standard atmosphere)
 };
 
 class CockpitController {
@@ -97,6 +102,7 @@ class CockpitController {
   glm::vec3 m_headTiltVel{0.0f};
   float m_rumble = 0.0f;
   float m_autoTint = 0.0f;
+  float m_hullTemp = 0.0f;
   CockpitHUDData m_hud;
   bool m_initialized = false;
 };

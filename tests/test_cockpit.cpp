@@ -270,6 +270,63 @@ int main() {
     std::cout << "PASS: Cockpit Test 9 (hypersonic atmospheric entry plasma)\n";
   }
 
+  // Test 10: Diegetic MFD radar 2D projection (v4.9.0)
+  {
+    ctrl.reset();
+    glm::vec3 shipPos(0.0f);
+    glm::vec3 fwd(0.0f, 0.0f, -1.0f);
+    glm::vec3 right(1.0f, 0.0f, 0.0f);
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    // Target 20 units ahead and 10 units to the right
+    glm::vec3 tgtPos(10.0f, 0.0f, -20.0f);
+
+    ctrl.update(0.016f, shipPos, fwd, right, up, 0.0f, 0.0f, false, 0.0f, 1.0f, 1.0f, "Target Station", tgtPos, 0.0f);
+    const CockpitHUDData& hud = ctrl.getHUDData();
+
+    if (hud.targetRadarPos.x <= 0.0f || hud.targetRadarPos.y <= 0.0f) {
+      std::cerr << "Test 10 failed: Target to the right-ahead must have positive X and positive Y radar coords: "
+                << hud.targetRadarPos.x << ", " << hud.targetRadarPos.y << "\n";
+      return 1;
+    }
+    if (glm::length(hud.targetRadarPos) > 1.0f) {
+      std::cerr << "Test 10 failed: Target radar position out of bounds: " << glm::length(hud.targetRadarPos) << "\n";
+      return 1;
+    }
+    std::cout << "PASS: Cockpit Test 10 (diegetic radar MFD projection)\n";
+  }
+
+  // Test 11: Atmospheric buffeting and thermal dissipation (v4.9.0)
+  {
+    ctrl.reset();
+    glm::vec3 bodyPos(0.0f);
+    float bodyRadius = 20.0f;
+    glm::vec3 entryPos(0.0f, 0.0f, 21.0f);
+    glm::vec3 fwd(0.0f, 0.0f, -1.0f);
+    glm::vec3 right(1.0f, 0.0f, 0.0f);
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    glm::vec3 hypersonicVel(0.0f, 0.0f, -25.0f);
+
+    for (int i = 0; i < 30; ++i) {
+      ctrl.update(0.016f, entryPos, fwd, right, up, 25.0f, 1.0f, false, 0.0f, 1.0f, 1.0f, "Earth", glm::vec3(0.0f), 0.0f,
+                  hypersonicVel, bodyPos, bodyRadius, true);
+    }
+    const CockpitHUDData& hud = ctrl.getHUDData();
+
+    if (hud.hullTempNorm <= 0.05f) {
+      std::cerr << "Test 11 failed: Hull temperature expected > 0.05 under sustained re-entry, got " << hud.hullTempNorm << "\n";
+      return 1;
+    }
+    if (hud.atmoDensity <= 0.1f) {
+      std::cerr << "Test 11 failed: Atmospheric density expected > 0.1 at altitude 1.0, got " << hud.atmoDensity << "\n";
+      return 1;
+    }
+    if (ctrl.getCanopyRumble() < 0.1f) {
+      std::cerr << "Test 11 failed: Canopy buffeting rumble expected > 0.1, got " << ctrl.getCanopyRumble() << "\n";
+      return 1;
+    }
+    std::cout << "PASS: Cockpit Test 11 (re-entry buffeting & hull heating)\n";
+  }
+
   std::cout << "ALL COCKPIT CONTROLLER TESTS PASSED\n";
   return 0;
 }

@@ -6076,10 +6076,14 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
       m_landingTelem.surfaceDustK,
       m_landingTelem.suspensionCompression);
 
+  const CockpitHUDData& hudData = m_cockpitController.getHUDData();
+  // v4.9.0: Drive procedural atmospheric hypersonic roar audio
+  m_audio.setAtmosphereRoar(std::clamp(hudData.entryPlasma * 1.2f + hudData.atmoDensity * (m_camSpeed / 60.0f) * 0.45f, 0.0f, 1.0f));
+
   m_cockpitRenderer.render(fbWidth,
                            fbHeight,
                            currentTime,
-                           m_cockpitController.getHUDData(),
+                           hudData,
                            m_cockpitController.getHeadOffset(),
                            m_cockpitController.getHeadAngularTilt(),
                            m_cockpitController.getCanopyRumble(),

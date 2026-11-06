@@ -55,6 +55,8 @@ class AudioEngine {
                                // сам же дакает музыку (-8 дБ при K=1)
   void setEngineLevel(float k);  // v3.3.0: гул двигателя от скорости 0..1
                                  // (тон 52-82 Гц + обертон + шум-дыхание)
+  void setAtmosphereRoar(float level);  // v4.9.0: гиперзвуковой аэродинамический свист и рев плазмы 0..1
+  float atmosphereRoar() const { return m_atmoCurrent.load(); }
   // v4.3.0: эффект Доплера и напряжение у гравитационных аномалий
   void setDopplerShift(float factor);  // 0.5 .. 2.0 (pitch shift)
   float dopplerShift() const { return m_dopplerFactor.load(); }
@@ -112,6 +114,8 @@ class AudioEngine {
   std::atomic<float> m_dopplerFactor{1.0f};
   std::atomic<float> m_tensionTarget{0.0f};
   std::atomic<float> m_tensionCurrent{0.0f};
+  std::atomic<float> m_atmoTarget{0.0f};
+  std::atomic<float> m_atmoCurrent{0.0f};
   std::atomic<uint64_t> m_samples{0};  // счётчик сэмплов (live: колбэк)
 
   std::mutex m_mutex;
@@ -120,6 +124,7 @@ class AudioEngine {
   // Состояние шума — ТОЛЬКО аудиопоток (renderFrames), update() не трогает.
   uint32_t m_rng = 0x12345678u;
   float m_brown = 0.0f;
+  float m_atmoNoise = 0.0f;
 
   friend struct AudioCallbackBridge;
 };

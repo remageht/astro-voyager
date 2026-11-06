@@ -44,6 +44,11 @@ uniform float u_GearProgress;
 uniform float u_IsLanded;
 uniform float u_SurfaceDustK;
 
+// v4.9.0 Diegetic Cockpit MFDs & Hypersonic Re-entry
+uniform float u_HullTemp;
+uniform vec2  u_TargetRadarPos;
+uniform float u_AtmoDensity;
+
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
   p = fract(p * vec2(234.34, 435.345));
@@ -160,43 +165,183 @@ void main() {
       frameBase += vec3(bevelHighlight * 1.2);
     }
 
-    // Dashboard instrument panel glows
+    // Dashboard instrument panel & Diegetic MFDs (v4.9.0)
     if (isDashboard) {
-      // Left MFD: Shield & Hull status bar
-      vec2 leftMfdP = headP - vec2(-0.62 * aspect, -0.76);
-      if (abs(leftMfdP.x) < 0.28 && abs(leftMfdP.y) < 0.08) {
-        frameBase = vec3(0.02, 0.03, 0.04);
-        // Hull bar (horizontal)
-        float hBar = step(-0.03, leftMfdP.y) * step(leftMfdP.y, -0.01) *
-                     step(-0.24, leftMfdP.x) * step(leftMfdP.x, -0.24 + 0.48 * u_Hull);
-        // Shield bar (horizontal)
-        float sBar = step(0.01, leftMfdP.y) * step(leftMfdP.y, 0.03) *
-                     step(-0.24, leftMfdP.x) * step(leftMfdP.x, -0.24 + 0.48 * u_Shield);
-        vec3 barCol = mix(vec3(1.0, 0.2, 0.1), vec3(0.2, 0.9, 0.4), u_Hull) * hBar +
-                      vec3(0.2, 0.7, 1.0) * sBar;
-        frameBase += barCol * 1.5;
+      vec2 mfdHalf = vec2(0.26, 0.082);
+
+      // 1. LEFT MFD: Diegetic 360 Tactical Radar & Navigation Scope
+      vec2 leftMfdP = headP - vec2(-0.60 * aspect, -0.76);
+      float leftBox = sdBox(leftMfdP, mfdHalf);
+      if (leftBox < 0.02) {
+        if (leftBox > 0.0) {
+          float bezelLip = 1.0 - smoothstep(0.0, 0.02, leftBox);
+          vec3 bezelCol = (u_ShipStyle == 1) ? vec3(0.68, 0.72, 0.75) : vec3(0.12, 0.14, 0.16);
+          frameBase = mix(frameBase, bezelCol, bezelLip);
+        } else {
+          // Deep obsidian CRT background with scanlines
+          vec3 radarBg = (u_ShipStyle == 1) ? vec3(0.015, 0.038, 0.024) : vec3(0.010, 0.020, 0.030);
+          float scan = 0.90 + 0.10 * sin(leftMfdP.y * 620.0);
+          radarBg *= scan;
+
+          // Circular Radar Scope (radius ~0.074)
+          vec2 rP = leftMfdP;
+          float rDist = length(rP);
+          if (rDist < 0.076) {
+            // Concentric range rings: 25%, 50%, 80%
+            float ring1 = abs(rDist - 0.022);
+            float ring2 = abs(rDist - 0.046);
+            float ring3 = abs(rDist - 0.070);
+            float rings = (1.0 - smoothstep(0.0008, 0.0022, min(ring1, min(ring2, ring3)))) * 0.45;
+            float axes = (1.0 - smoothstep(0.0008, 0.0020, min(abs(rP.x), abs(rP.y)))) * 0.35;
+
+            // Rotating Radar Sweep Beam with Phosphor Decay
+            float sweepAngle = mod(u_Time * 2.4, 6.2831853);
+            float ptAngle = mod(atan(rP.y, rP.x) + 3.14159265, 6.2831853);
+            float angleDiff = mod(sweepAngle - ptAngle + 6.2831853, 6.2831853);
+            float phosphorTrail = exp(-angleDiff * 2.8) * step(rDist, 0.072);
+
+            // Target Beacon Blip
+            vec2 tgtBlipP = rP - u_TargetRadarPos * 0.070;
+            float dBlip = length(tgtBlipP);
+            float blipCore = (1.0 - smoothstep(0.002, 0.006, dBlip)) * 1.8;
+            float blipRing = (1.0 - smoothstep(0.001, 0.003, abs(dBlip - 0.010))) * (1.0 + 0.35 * sin(u_Time * 10.0));
+            float tgtLine = 0.0;
+            if (length(u_TargetRadarPos) > 0.05) {
+              tgtLine = (1.0 - smoothstep(0.0006, 0.0018, sdSegment(rP, vec2(0.0), u_TargetRadarPos * 0.070))) * 0.50;
+            }
+
+            vec3 radarBeamCol = (u_ShipStyle == 1) ? vec3(0.20, 0.95, 0.45) : vec3(0.25, 0.85, 1.0);
+            radarBg += radarBeamCol * (rings + axes * 0.6);
+            radarBg += radarBeamCol * phosphorTrail * 0.80;
+            radarBg += vec3(1.0, 0.75, 0.15) * (blipCore + blipRing + tgtLine);
+          }
+          float edgeDark = smoothstep(0.0, -0.012, leftBox);
+          frameBase = radarBg * (0.65 + 0.35 * edgeDark);
+        }
       }
 
-      // Right MFD: Warp & Velocity status
-      vec2 rightMfdP = headP - vec2(0.62 * aspect, -0.76);
-      if (abs(rightMfdP.x) < 0.28 && abs(rightMfdP.y) < 0.08) {
-        frameBase = vec3(0.02, 0.03, 0.04);
-        float wBar = step(-0.01, rightMfdP.y) * step(rightMfdP.y, 0.02) *
-                     step(-0.24, rightMfdP.x) * step(rightMfdP.x, -0.24 + 0.48 * u_WarpCharge);
-        vec3 wCol = (u_WarpActive > 0.5) ? vec3(0.3, 0.9, 1.0) : vec3(0.8, 0.5, 0.1);
-        frameBase += wCol * wBar * (1.2 + 0.3 * sin(u_Time * 8.0));
+      // 2. CENTER MFD: Primary Flight Display (PFD) Horizon & Atmo-Altimeter
+      vec2 centerP = headP - vec2(0.0, -0.76);
+      vec2 centerHalf = vec2(0.18, 0.082);
+      float centerBox = sdBox(centerP, centerHalf);
+      if (centerBox < 0.02) {
+        if (centerBox > 0.0) {
+          float bezelLip = 1.0 - smoothstep(0.0, 0.02, centerBox);
+          vec3 bezelCol = (u_ShipStyle == 1) ? vec3(0.68, 0.72, 0.75) : vec3(0.12, 0.14, 0.16);
+          frameBase = mix(frameBase, bezelCol, bezelLip);
+        } else {
+          vec3 pfdBg = vec3(0.010, 0.016, 0.022);
+          float scan = 0.90 + 0.10 * sin(centerP.y * 620.0);
+          pfdBg *= scan;
+
+          // Artificial Horizon Ball
+          vec2 horizonP = rotate2D(centerP, -radians(u_Roll));
+          float pitchSh = radians(u_Pitch) * 0.12;
+          float horizonDiv = horizonP.y + pitchSh;
+          vec3 skyCol = vec3(0.04, 0.12, 0.24);
+          vec3 gndCol = vec3(0.18, 0.09, 0.04);
+          vec3 ballCol = mix(gndCol, skyCol, step(0.0, horizonDiv));
+          float horizLine = 1.0 - smoothstep(0.0008, 0.0022, abs(horizonDiv));
+          pfdBg = mix(pfdBg, ballCol, step(length(centerP), 0.065));
+          pfdBg += vec3(1.0, 0.9, 0.7) * horizLine * step(length(centerP), 0.065) * 1.5;
+
+          // Atmospheric Density & Dynamic Pressure (Q) bars on sides
+          if (u_AtmoDensity > 0.005) {
+            float atmoH = -0.06 + 0.12 * clamp(u_AtmoDensity, 0.0, 1.0);
+            float aBar = step(-0.15, centerP.x) * step(centerP.x, -0.13) *
+                         step(-0.06, centerP.y) * step(centerP.y, atmoH);
+            pfdBg += vec3(0.2, 0.8, 1.0) * aBar * 1.6;
+
+            float machNorm = clamp(u_Speed / 40.0, 0.0, 1.0);
+            float machH = -0.06 + 0.12 * machNorm;
+            float mBar = step(0.13, centerP.x) * step(centerP.x, 0.15) *
+                         step(-0.06, centerP.y) * step(centerP.y, machH);
+            pfdBg += vec3(1.0, 0.6, 0.1) * mBar * 1.6;
+          }
+          float edgeDark = smoothstep(0.0, -0.012, centerBox);
+          frameBase = pfdBg * (0.65 + 0.35 * edgeDark);
+        }
       }
 
-      // Warning stencils / indicator LEDs on central cowling
-      vec2 centerCowlingP = headP - vec2(0.0, -0.67);
-      float ledSpacing = 0.04;
-      for (int i = -3; i <= 3; ++i) {
-        float dLed = length(centerCowlingP - vec2(float(i) * ledSpacing, 0.0));
-        float ledGlow = 1.0 - smoothstep(0.003, 0.010, dLed);
-        vec3 ledC = (i == 0 && u_WarpActive > 0.5) ? vec3(0.2, 1.0, 0.9) :
-                    (abs(float(i)) > 2) ? vec3(0.1, 0.9, 0.3) : vec3(0.08, 0.5, 0.9);
-        frameBase += ledC * ledGlow * 1.2;
+      // 3. RIGHT MFD: Subsystem Diagnostics, Hull Temperature & Annunciators
+      vec2 rightMfdP = headP - vec2(0.60 * aspect, -0.76);
+      float rightBox = sdBox(rightMfdP, mfdHalf);
+      if (rightBox < 0.02) {
+        if (rightBox > 0.0) {
+          float bezelLip = 1.0 - smoothstep(0.0, 0.02, rightBox);
+          vec3 bezelCol = (u_ShipStyle == 1) ? vec3(0.68, 0.72, 0.75) : vec3(0.12, 0.14, 0.16);
+          frameBase = mix(frameBase, bezelCol, bezelLip);
+        } else {
+          vec3 diagBg = vec3(0.015, 0.018, 0.024);
+          float scan = 0.90 + 0.10 * sin(rightMfdP.y * 620.0);
+          diagBg *= scan;
+
+          // 12-segment Hull Integrity Bar (Top)
+          for (int s = 0; s < 12; ++s) {
+            float segMinX = -0.24 + float(s) * 0.040;
+            float segMaxX = segMinX + 0.032;
+            float inSegX = step(segMinX, rightMfdP.x) * step(rightMfdP.x, segMaxX);
+            float inSegY = step(0.045, rightMfdP.y) * step(rightMfdP.y, 0.065);
+            float segActive = step(float(s + 1) / 12.0, u_Hull);
+            vec3 segCol = mix(vec3(0.9, 0.2, 0.1), vec3(0.15, 0.95, 0.45), float(s) / 11.0);
+            diagBg += segCol * inSegX * inSegY * (segActive * 1.2 + 0.15);
+          }
+
+          // 12-segment Shield Integrity Bar (Middle-High)
+          for (int s = 0; s < 12; ++s) {
+            float segMinX = -0.24 + float(s) * 0.040;
+            float segMaxX = segMinX + 0.032;
+            float inSegX = step(segMinX, rightMfdP.x) * step(rightMfdP.x, segMaxX);
+            float inSegY = step(0.015, rightMfdP.y) * step(rightMfdP.y, 0.035);
+            float segActive = step(float(s + 1) / 12.0, u_Shield);
+            vec3 segCol = vec3(0.20, 0.75, 1.0);
+            diagBg += segCol * inSegX * inSegY * (segActive * 1.2 + 0.15);
+          }
+
+          // 12-segment Thermal Hull Heat Bar (Middle-Low)
+          for (int s = 0; s < 12; ++s) {
+            float segMinX = -0.24 + float(s) * 0.040;
+            float segMaxX = segMinX + 0.032;
+            float inSegX = step(segMinX, rightMfdP.x) * step(rightMfdP.x, segMaxX);
+            float inSegY = step(-0.015, rightMfdP.y) * step(rightMfdP.y, 0.005);
+            float segActive = step(float(s + 1) / 12.0, u_HullTemp);
+            vec3 segCol = mix(vec3(0.95, 0.70, 0.10), vec3(1.0, 0.15, 0.05), float(s) / 11.0);
+            diagBg += segCol * inSegX * inSegY * (segActive * 1.4 + 0.12);
+          }
+
+          // Warp Core Bar (Bottom)
+          float wFill = -0.24 + 0.48 * u_WarpCharge;
+          float wBar = step(-0.045, rightMfdP.y) * step(rightMfdP.y, -0.025) *
+                       step(-0.24, rightMfdP.x) * step(rightMfdP.x, wFill);
+          vec3 wCol = (u_WarpActive > 0.5) ? vec3(0.35, 0.95, 1.0) : vec3(0.85, 0.55, 0.12);
+          diagBg += wCol * wBar * (1.2 + 0.3 * sin(u_Time * 8.0));
+
+          // Annunciator Status Lamps
+          vec4 annunStatus = vec4(
+            step(0.5, u_WarpActive),
+            step(0.01, u_AtmoDensity),
+            step(1.5, u_GearState) * step(u_GearState, 2.5),
+            step(0.85, u_HullTemp)
+          );
+          for (int a = 0; a < 4; ++a) {
+            float aX = -0.18 + float(a) * 0.12;
+            float inLampX = step(aX - 0.04, rightMfdP.x) * step(rightMfdP.x, aX + 0.04);
+            float inLampY = step(-0.075, rightMfdP.y) * step(rightMfdP.y, -0.055);
+            float lampActive = (a == 0) ? annunStatus.x : (a == 1) ? annunStatus.y : (a == 2) ? annunStatus.z : annunStatus.w;
+            vec3 lampCol = (a == 3) ? vec3(1.0, 0.15, 0.1) : (a == 2) ? vec3(0.2, 0.95, 0.3) : vec3(0.2, 0.8, 1.0);
+            diagBg += lampCol * inLampX * inLampY * (lampActive * 1.5 + 0.15);
+          }
+          float edgeDark = smoothstep(0.0, -0.012, rightBox);
+          frameBase = diagBg * (0.65 + 0.35 * edgeDark);
+        }
       }
+    }
+
+    // Thermal radiance bleeding onto cockpit structure from atmospheric re-entry
+    if (u_EntryPlasma > 0.005) {
+      float flicker = 1.0 + 0.18 * sin(u_Time * 45.0) + 0.10 * cos(u_Time * 32.0);
+      vec3 radiantGlow = vec3(1.0, 0.42, 0.08) * u_EntryPlasma * 0.45 * flicker;
+      frameBase += radiantGlow;
     }
 
     col = vec4(frameBase, 1.0);
@@ -218,16 +363,36 @@ void main() {
 
     vec3 glassRgb = vec3(0.05, 0.12, 0.20) * glassFresnel + vec3(scratch) + tintColor;
 
-    // Atmospheric hypersonic entry plasma ionization glow (v4.6.0)
+    // Atmospheric hypersonic entry plasma ionization glow & bow-shock flames (v4.9.0)
     if (u_EntryPlasma > 0.005) {
-      vec2 flowP = headP * vec2(1.5, 3.5) + vec2(0.0, u_Time * 14.0);
-      float plasmaNoise = noise2D(flowP) * 0.6 + noise2D(flowP * 2.2 + vec2(u_Time * 8.0, 0.0)) * 0.4;
-      float streak = pow(plasmaNoise, 3.0) * 1.8;
-      float shockMask = smoothstep(-0.6, 0.4, headP.y);
-      vec3 plasmaCol = mix(vec3(1.0, 0.38, 0.06), vec3(1.0, 0.88, 0.55), streak);
-      float plasmaAlpha = clamp((streak * 0.7 + shockMask * 0.3) * u_EntryPlasma, 0.0, 0.85);
-      glassRgb += plasmaCol * plasmaAlpha * 2.2;
-      glassAlpha = max(glassAlpha, plasmaAlpha * 0.8);
+      // 1. Bow-Shock Paraboloid Wavefront across canopy apex
+      float bowCurve = headP.y - 0.22 * (headP.x * headP.x);
+      float shockFront = smoothstep(0.40, -0.30, bowCurve);
+      float shockBand = (1.0 - smoothstep(0.0, 0.18, abs(bowCurve - 0.15))) * 1.5;
+
+      // 2. Dual-scale supersonic turbulent flow streaks
+      vec2 flowP1 = headP * vec2(1.8, 4.2) + vec2(0.0, u_Time * 18.0);
+      vec2 flowP2 = headP * vec2(3.5, 9.0) + vec2(sin(u_Time * 12.0) * 0.15, u_Time * 28.0);
+      float n1 = noise2D(flowP1);
+      float n2 = noise2D(flowP2);
+      float streak = pow(n1 * 0.65 + n2 * 0.35, 2.5) * 2.2;
+
+      // 3. Incandescent blackbody temperature color mapping
+      vec3 colCore = vec3(1.0, 0.94, 0.72);
+      vec3 colSheath = vec3(1.0, 0.42, 0.06);
+      vec3 colWake = vec3(0.75, 0.10, 0.28);
+      vec3 plasmaCol = mix(colWake, colSheath, clamp(streak * 1.2, 0.0, 1.0));
+      plasmaCol = mix(plasmaCol, colCore, clamp(streak * shockBand * 0.8, 0.0, 1.0));
+
+      // 4. Ablation sparks & debris shed from heat shield
+      vec2 sparkGrid = floor(headP * vec2(24.0, 60.0) + vec2(0.0, u_Time * 50.0));
+      float sparkRnd = hash21(sparkGrid);
+      float sparkMask = pow(sparkRnd, 42.0) * step(0.15, u_EntryPlasma);
+      vec3 sparkCol = vec3(1.0, 0.95, 0.85) * sparkMask * 4.0;
+
+      float plasmaAlpha = clamp((streak * 0.65 + shockFront * 0.35 + shockBand * 0.25) * u_EntryPlasma, 0.0, 0.92);
+      glassRgb += (plasmaCol * plasmaAlpha * 2.5) + sparkCol;
+      glassAlpha = max(glassAlpha, plasmaAlpha * 0.85);
     }
 
     col = vec4(glassRgb, glassAlpha);

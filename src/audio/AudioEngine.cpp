@@ -167,6 +167,12 @@ void AudioEngine::update(float dt) {
   tc += (tt - tc) * std::clamp(dt * 3.0f, 0.0f, 1.0f);
   m_tensionCurrent.store(tc);
 
+  // v4.9.0: Smooth atmospheric roar level
+  float ac = m_atmoCurrent.load();
+  float at = m_atmoTarget.load();
+  ac += (at - ac) * std::clamp(dt * 5.0f, 0.0f, 1.0f);
+  m_atmoCurrent.store(ac);
+
   if (!m_live) {
     // Null-backend: РґРІРёРіР°РµРј РІРёСЂС‚СѓР°Р»СЊРЅРѕРµ РІСЂРµРјСЏ, С‡РёСЃС‚РёРј РіРѕР»РѕСЃР° РїРѕ РЅРµРјСѓ.
     uint64_t adv = static_cast<uint64_t>(static_cast<double>(dt) * kSampleRate);
@@ -233,6 +239,12 @@ void AudioEngine::setTensionLevel(float k) {
   if (k < 0.0f) k = 0.0f;
   if (k > 1.0f) k = 1.0f;
   m_tensionTarget.store(k);
+}
+
+void AudioEngine::setAtmosphereRoar(float level) {
+  if (level < 0.0f) level = 0.0f;
+  if (level > 1.0f) level = 1.0f;
+  m_atmoTarget.store(level);
 }
 
 void AudioEngine::playClick() {
@@ -522,8 +534,18 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
       drone = sub * tension * 0.22f;
     }
 
-    float mixL = (music + sfxL + rumble + engine + drone) * vol;
-    float mixR = (music + sfxR + rumble + engine + drone) * vol;
+    // Atmospheric roar (v4.9.0): Hypersonic air-shearing & plasma ionization roar
+    const float atmoK = m_atmoCurrent.load();
+    float atmoRoar = 0.0f;
+    if (atmoK > 0.001f) {
+      const float w = whiteNoise(m_rng);
+      m_atmoNoise = (m_atmoNoise + 0.06f * w) / 1.06f;
+      float flutter = 1.0f + 0.28f * static_cast<float>(std::sin(2.0 * kPi * 22.0 * tAbs));
+      atmoRoar = (m_atmoNoise * 3.2f + m_brown * 1.4f) * flutter * atmoK * 0.40f;
+    }
+
+    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar) * vol;
+    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar) * vol;
     mixL = std::tanh(mixL * 1.1f);
     mixR = std::tanh(mixR * 1.1f);
     out[i * 2 + 0] = mixL;
