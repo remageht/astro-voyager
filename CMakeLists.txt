@@ -30,6 +30,7 @@ add_executable(astro-voyager
   src/Zettelkasten.cpp  # === Zettelkasten === (v4.8.0): Второй Мозг Егорки, граф мыслей и истинные концовки
   src/EpilogueSystem.cpp  # === EpilogueSystem === (v5.3.0): синематик и свиток хроники
   src/BenchmarkSystem.cpp  # === BenchmarkSystem === (Stage 4): перф-бенчмарк
+  src/AtmosphereSystem.cpp  # === AtmosphereSystem === (Stage 5): вход в атмосферу
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -520,6 +521,23 @@ endif()
 
 if(TARGET test_benchmark)
   add_test(NAME test_benchmark COMMAND test_benchmark)
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_atmosphere.cpp")
+  add_executable(test_atmosphere
+    tests/test_atmosphere.cpp
+    src/AtmosphereSystem.cpp
+  )
+  target_include_directories(test_atmosphere PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_atmosphere PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_atmosphere PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_atmosphere)
+  add_test(NAME test_atmosphere COMMAND test_atmosphere)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):

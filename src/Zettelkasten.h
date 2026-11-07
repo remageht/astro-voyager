@@ -48,6 +48,20 @@ enum class EurekaModel : int {
   SupernovaBurst = 2        // Взрыв сверхновой / расширение кольца
 };
 
+// === Zettelkasten 2.0: Hypotheses Matrix ===
+struct ZettelHypothesis {
+  std::string id;
+  std::string titleRu;
+  std::string titleEn;
+  std::string descriptionRu;
+  std::string descriptionEn;
+  std::string requiredStationId;
+  std::string sourceNoteA;
+  std::string sourceNoteB;
+  bool resolved = false;
+  int rewardPoints = 350;
+};
+
 // Recipe defining the synthesis of a new breakthrough Master Node
 struct ZettelSynthesisRecipe {
   std::string id;
@@ -85,6 +99,18 @@ class ZettelGraph {
   bool linkNotes(const std::string& idA, const std::string& idB);
   bool unlinkNotes(const std::string& idA, const std::string& idB);
   bool areLinked(const std::string& idA, const std::string& idB) const;
+
+  // === Zettelkasten 2.0: Backlinks Inspector ===
+  std::vector<std::string> getIncomingLinks(const std::string& noteId) const;
+  std::vector<std::string> getUnlinkedMentions(const std::string& noteId) const;
+  int getNodeDegree(const std::string& noteId) const;
+
+  // === Zettelkasten 2.0: Hypotheses Matrix ===
+  const std::vector<ZettelHypothesis>& getHypotheses() const;
+  std::vector<ZettelHypothesis>& getHypotheses();
+  bool resolveHypothesis(const std::string& id);
+  void checkHypothesesProgression(const std::string& currentStation, bool isLanded,
+                                  int researchPoints);
 
   // State modifiers
   bool discoverSeed(const std::string& id);
@@ -129,7 +155,10 @@ class ZettelGraph {
  private:
   std::vector<ZettelNote> m_notes;
   std::vector<ZettelSynthesisRecipe> m_recipes;
+  std::vector<ZettelHypothesis> m_hypotheses;
   void addSeed(const ZettelNote& note);
+  void maybeGenerateHypotheses(const std::string& idA, const std::string& idB);
+  void seedDefaultHypotheses();
 };
 
 std::string zettelkastenFilePathFor(const std::string& dir);
