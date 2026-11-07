@@ -5819,6 +5819,9 @@ void AppGL::updateShip(float deltaTime) {
     }
   }
 
+  // Экспоненциальное затухание вспышки щита (регрессия v5.3: восстановлено).
+  m_shieldFlashK = ship::shieldFlashDecay(m_shieldFlashK, deltaTime);
+
   if (haveGrav && !m_jumpCine) {
     m_camera.applyGravityStep(m_ship.gravVel, gravAcc, deltaTime);
     if (st->type == StationType::BlackHole) {
