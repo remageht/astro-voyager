@@ -18,9 +18,11 @@ class Window {
 
   GLFWwindow* getNativeWindow() const { return m_window; }
   void getFramebufferSize(int& width, int& height) const;
+  bool isDebugContextEnabled() const { return m_debugContext; }
 
  private:
   GLFWwindow* m_window = nullptr;
+  bool m_debugContext = false;
 #ifdef _WIN32
   // Owned HICON handles installed with WM_SETICON; destroyed with the window.
   void* m_iconBig = nullptr;

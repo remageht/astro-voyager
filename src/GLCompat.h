@@ -12,6 +12,13 @@
 #endif
 #include <OpenGL/gl3.h>
 
+#ifndef GLAPIENTRY
+#define GLAPIENTRY
+#endif
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+
 #define GLEW_OK 0
 inline bool glewExperimental = false;
 inline unsigned int glewInit() { return GLEW_OK; }
