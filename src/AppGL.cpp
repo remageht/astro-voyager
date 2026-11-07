@@ -4952,7 +4952,7 @@ void AppGL::drawActionHorizon() {
         m_landingTelem.isLanded = false;
         m_shipVel.y += 0.8;
       }
-    } else if (m_landingTelem.altitudeM > 0.0f && m_landingTelem.altitudeM < 80000.0f) {
+    } else if (m_landingTelem.radarAltM > 0.0f && m_landingTelem.radarAltM < 80000.0f) {
       ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.50f, 0.10f, 0.92f));
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.08f, 0.12f, 1.0f));
       char landBtn[64];

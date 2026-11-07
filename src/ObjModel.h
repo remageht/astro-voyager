@@ -37,6 +37,10 @@ class ObjModel {
   // нашлось ни одной карты (меш при этом остаётся годным — плоский металл).
   bool loadTextures(const std::string& base);
 
+  // Share PBR texture handles from another model (same UV atlas files).
+  // No duplicate GL uploads; this model does not own the shared textures.
+  void shareTexturesFrom(const ObjModel& other);
+
   bool ready() const { return m_indexCount > 0; }
   bool textured() const { return m_texAlbedo != 0; }
   bool emissive() const { return m_texEmissive != 0; }
@@ -61,6 +65,7 @@ class ObjModel {
   unsigned int m_texRough = 0;
   unsigned int m_texMetal = 0;
   unsigned int m_texEmissive = 0;
+  bool m_sharedTex = false;
   glm::vec3 m_center{0.0f};
 };
 
