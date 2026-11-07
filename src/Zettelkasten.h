@@ -35,6 +35,7 @@ struct ZettelNote {
   bool synthesized = false;   // Synthesized via Mind Resonance / Eureka
 
   bool isMasterNode = false;  // Synthesized Master Node / Breakthrough Insight
+  bool isCustom = false;      // Player-authored thought note
   std::vector<std::string> parentIds; // Component notes that yielded this master note
   int depthLevel = 0;         // 0: foreground, 1: background ancestor layer
 
@@ -101,8 +102,17 @@ class ZettelGraph {
   int getDiscoveredCount() const;
   int getSynthesizedCount() const;
   int getMasterNodesCount() const;
+  bool isAllMasterNodesSynthesized() const;
   int getTotalCount() const { return static_cast<int>(m_notes.size()); }
   int getTotalLinksCount() const;
+
+  // Player-authored custom notes
+  bool addCustomNote(const std::string& titleRu,
+                     const std::string& textRu,
+                     const std::string& categoryRu,
+                     float posX = 0.0f,
+                     float posY = 0.0f);
+  bool deleteCustomNote(const std::string& id);
 
   // Serialization / Deserialization
   std::string serialize() const;

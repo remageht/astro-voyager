@@ -52,6 +52,8 @@ uniform float u_RadioActive;
 uniform float u_RadioSignal;
 uniform float u_NeuralResonance;
 uniform float u_EurekaPending;
+uniform float u_TapePlaying;
+uniform int   u_TapeIndex;
 
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
@@ -388,6 +390,50 @@ void main() {
             // Idle frequency carrier line (1420.405 MHz)
             float freqLine = 1.0 - smoothstep(0.001, 0.003, abs(radioBoxP.y));
             radioBg += vec3(0.2, 0.5, 0.7) * freqLine * 0.4 * step(abs(radioBoxP.x), 0.24);
+          }
+
+          // Cosmic Ambient Cassette Deck (v5.2.0)
+          if (u_TapeIndex > 0) {
+            // Twin spinning cassette reels at x = -0.09 and x = +0.09
+            float reelSpin = (u_TapePlaying > 0.5) ? (u_Time * 6.5) : 0.0;
+            vec2 reelPosL = radioBoxP - vec2(-0.09, 0.0);
+            vec2 reelPosR = radioBoxP - vec2(0.09, 0.0);
+            float distL = length(reelPosL);
+            float distR = length(reelPosR);
+
+            vec3 tapeCol = (u_TapeIndex == 1) ? vec3(0.20, 0.75, 1.0) : // Paris Rain: cyan
+                           (u_TapeIndex == 2) ? vec3(1.0, 0.70, 0.20) : // Pulsar Beat: amber
+                                                vec3(0.70, 0.40, 1.0);  // Deep Space: violet
+
+            // Draw left reel
+            if (distL < 0.025) {
+              float spoke = cos(atan(reelPosL.y, reelPosL.x) * 3.0 + reelSpin);
+              float outer = 1.0 - smoothstep(0.021, 0.024, distL);
+              float inner = 1.0 - smoothstep(0.006, 0.008, distL);
+              float ring = clamp(outer - inner, 0.0, 1.0);
+              float spokeMask = step(0.65, abs(spoke)) * step(0.006, distL) * step(distL, 0.021);
+              float hub = 1.0 - smoothstep(0.004, 0.006, distL);
+              radioBg += tapeCol * (ring * 0.4 + spokeMask * 0.7 + hub * 0.8) * 1.5;
+            }
+            // Draw right reel
+            if (distR < 0.025) {
+              float spoke = cos(atan(reelPosR.y, reelPosR.x) * 3.0 + reelSpin);
+              float outer = 1.0 - smoothstep(0.021, 0.024, distR);
+              float inner = 1.0 - smoothstep(0.006, 0.008, distR);
+              float ring = clamp(outer - inner, 0.0, 1.0);
+              float spokeMask = step(0.65, abs(spoke)) * step(0.006, distR) * step(distR, 0.021);
+              float hub = 1.0 - smoothstep(0.004, 0.006, distR);
+              radioBg += tapeCol * (ring * 0.4 + spokeMask * 0.7 + hub * 0.8) * 1.5;
+            }
+            // Magnetic head & tape bridge
+            if (abs(radioBoxP.x) < 0.05 && abs(radioBoxP.y + 0.015) < 0.006) {
+              radioBg += vec3(0.4, 0.5, 0.6) * 0.8;
+            }
+            // Tape indicator glow
+            if (length(radioBoxP - vec2(0.0, 0.016)) < 0.007) {
+              float glow = (u_TapePlaying > 0.5) ? (0.8 + 0.2 * sin(u_Time * 10.0)) : 0.4;
+              radioBg += tapeCol * glow * 2.0;
+            }
           }
           frameBase = radioBg;
         }

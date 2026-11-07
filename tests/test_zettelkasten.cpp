@@ -251,6 +251,71 @@ static void test_master_layering_and_serialization() {
   std::cout << "PASS: test_master_layering_and_serialization\n";
 }
 
+static void test_custom_notes_and_grand_synthesis() {
+  ZettelGraph zg;
+  assert(!zg.isAllMasterNodesSynthesized());
+
+  // 1. Add custom note
+  bool added = zg.addCustomNote("Заметка пилота", "Проверить [[sol|Солнце]] и метрику", "Гипотеза", 10.0f, 20.0f);
+  assert(added);
+  (void)added;
+  assert(zg.getTotalCount() == 18);
+
+  const ZettelNote* custom = nullptr;
+  for (const auto& n : zg.getNotes()) {
+    if (n.isCustom) {
+      custom = &n;
+      break;
+    }
+  }
+  assert(custom != nullptr);
+  assert(custom->isCustom);
+  assert(custom->titleRu == "Заметка пилота");
+  assert(custom->textRu == "Проверить [[sol|Солнце]] и метрику");
+  assert(custom->categoryRu == "Гипотеза");
+  assert(custom->seedDiscovered);
+  assert(custom->synthesized);
+  std::string customId = custom->id;
+
+  // 2. Link custom note with Paris Rain
+  assert(zg.linkNotes(customId, "z_paris_rain"));
+  assert(zg.areLinked(customId, "z_paris_rain"));
+
+  // 3. Serialize & Deserialize
+  std::string s = zg.serialize();
+  assert(s.find("custom_note=" + customId) != std::string::npos);
+
+  ZettelGraph zg2;
+  bool ok = zg2.deserialize(s);
+  assert(ok);
+  (void)ok;
+  const ZettelNote* c2 = zg2.getNote(customId);
+  assert(c2 != nullptr);
+  (void)c2;
+  assert(c2->isCustom);
+  assert(c2->titleRu == "Заметка пилота");
+  assert(c2->textRu == "Проверить [[sol|Солнце]] и метрику");
+  assert(zg2.areLinked(customId, "z_paris_rain"));
+
+  // 4. Delete custom note
+  assert(zg.deleteCustomNote(customId));
+  assert(zg.getNote(customId) == nullptr);
+  assert(zg.getTotalCount() == 17);
+  assert(!zg.areLinked(customId, "z_paris_rain"));
+
+  // 5. Test Grand Synthesis
+  ZettelGraph zgGrand;
+  assert(!zgGrand.isAllMasterNodesSynthesized());
+  zgGrand.synthesizeNote("z_master_solar_dawn");
+  zgGrand.synthesizeNote("z_master_stasis_bastion");
+  zgGrand.synthesizeNote("z_master_eden_spring");
+  assert(!zgGrand.isAllMasterNodesSynthesized());
+  zgGrand.synthesizeNote("z_master_omni_nexus");
+  assert(zgGrand.isAllMasterNodesSynthesized());
+
+  std::cout << "PASS: test_custom_notes_and_grand_synthesis\n";
+}
+
 int main() {
   test_init();
   test_refresh_discovery();
@@ -259,6 +324,7 @@ int main() {
   test_serialization_roundtrip();
   test_synthesis_recipes();
   test_master_layering_and_serialization();
-  std::cout << "\nAll 7 Zettelkasten tests passed successfully.\n";
+  test_custom_notes_and_grand_synthesis();
+  std::cout << "\nAll 8 Zettelkasten tests passed successfully.\n";
   return 0;
 }

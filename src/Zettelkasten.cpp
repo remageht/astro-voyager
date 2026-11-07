@@ -536,6 +536,70 @@ int ZettelGraph::getMasterNodesCount() const {
   return count;
 }
 
+bool ZettelGraph::isAllMasterNodesSynthesized() const {
+  int count = 0;
+  for (const auto& n : m_notes) {
+    if (n.isMasterNode && n.synthesized) count++;
+  }
+  return count >= 4;
+}
+
+bool ZettelGraph::addCustomNote(const std::string& titleRu,
+                                const std::string& textRu,
+                                const std::string& categoryRu,
+                                float posX,
+                                float posY) {
+  if (titleRu.empty()) return false;
+
+  static uint64_t s_customIdx = 1;
+  std::string id = "z_custom_" + std::to_string(s_customIdx++);
+  while (getNote(id) != nullptr) {
+    id = "z_custom_" + std::to_string(s_customIdx++);
+  }
+
+  ZettelNote n;
+  n.id = id;
+  n.cluster = "custom";
+  n.categoryRu = categoryRu.empty() ? "Заметка" : categoryRu;
+  n.categoryEn = n.categoryRu;
+  n.titleRu = titleRu;
+  n.titleEn = titleRu;
+  n.textRu = textRu;
+  n.textEn = textRu;
+  n.quoteRu = "";
+  n.quoteEn = "";
+  n.speakerRu = "Пилот Егорка";
+  n.speakerEn = "Pilot Egorka";
+  n.posX = posX;
+  n.posY = posY;
+  n.seedDiscovered = true;
+  n.synthesized = true;
+  n.isMasterNode = false;
+  n.isCustom = true;
+  n.depthLevel = 0;
+
+  m_notes.push_back(n);
+  return true;
+}
+
+bool ZettelGraph::deleteCustomNote(const std::string& id) {
+  auto it = std::find_if(m_notes.begin(), m_notes.end(), [&](const ZettelNote& n) {
+    return n.id == id && n.isCustom;
+  });
+  if (it == m_notes.end()) return false;
+
+  // Remove references to this note from all other notes' links
+  for (auto& n : m_notes) {
+    auto lkIt = std::find(n.links.begin(), n.links.end(), id);
+    if (lkIt != n.links.end()) {
+      n.links.erase(lkIt);
+    }
+  }
+
+  m_notes.erase(it);
+  return true;
+}
+
 const ZettelNote* ZettelGraph::getNote(const std::string& id) const {
   for (const auto& n : m_notes) {
     if (n.id == id) return &n;
@@ -728,23 +792,69 @@ int ZettelGraph::getTotalLinksCount() const {
   return count / 2; // bidirectional
 }
 
+static std::string toHex(const std::string& s) {
+  static const char hexChars[] = "0123456789ABCDEF";
+  std::string out;
+  out.reserve(s.size() * 2);
+  for (unsigned char c : s) {
+    out.push_back(hexChars[c >> 4]);
+    out.push_back(hexChars[c & 0x0F]);
+  }
+  return out;
+}
+
+static std::string fromHex(const std::string& s) {
+  std::string out;
+  if (s.size() % 2 != 0) return out;
+  out.reserve(s.size() / 2);
+  auto hexVal = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+  for (size_t i = 0; i < s.size(); i += 2) {
+    int h1 = hexVal(s[i]);
+    int h2 = hexVal(s[i + 1]);
+    if (h1 < 0 || h2 < 0) return "";
+    out.push_back(static_cast<char>((h1 << 4) | h2));
+  }
+  return out;
+}
+
 std::string ZettelGraph::serialize() const {
   std::ostringstream os;
   os << "# astro-voyager zettelkasten second brain state (version=2)\n";
   os << "version=2\n";
   for (const auto& n : m_notes) {
-    os << "note=" << n.id
-       << "|disc=" << (n.seedDiscovered ? 1 : 0)
-       << "|synth=" << (n.synthesized ? 1 : 0)
-       << "|pos=" << n.posX << "," << n.posY
-       << "|depth=" << n.depthLevel
-       << "|master=" << (n.isMasterNode ? 1 : 0)
-       << "|links=";
-    for (size_t i = 0; i < n.links.size(); ++i) {
-      if (i > 0) os << ",";
-      os << n.links[i];
+    if (n.isCustom) {
+      os << "custom_note=" << n.id
+         << "|title=" << toHex(n.titleRu)
+         << "|text=" << toHex(n.textRu)
+         << "|cat=" << toHex(n.categoryRu)
+         << "|pos=" << n.posX << "," << n.posY
+         << "|disc=" << (n.seedDiscovered ? 1 : 0)
+         << "|synth=" << (n.synthesized ? 1 : 0)
+         << "|links=";
+      for (size_t i = 0; i < n.links.size(); ++i) {
+        if (i > 0) os << ",";
+        os << n.links[i];
+      }
+      os << "\n";
+    } else {
+      os << "note=" << n.id
+         << "|disc=" << (n.seedDiscovered ? 1 : 0)
+         << "|synth=" << (n.synthesized ? 1 : 0)
+         << "|pos=" << n.posX << "," << n.posY
+         << "|depth=" << n.depthLevel
+         << "|master=" << (n.isMasterNode ? 1 : 0)
+         << "|links=";
+      for (size_t i = 0; i < n.links.size(); ++i) {
+        if (i > 0) os << ",";
+        os << n.links[i];
+      }
+      os << "\n";
     }
-    os << "\n";
   }
   for (const auto& r : m_recipes) {
     os << "recipe=" << r.id << "|synth=" << (r.synthesized ? 1 : 0) << "\n";
@@ -779,6 +889,95 @@ bool ZettelGraph::deserialize(const std::string& data) {
           any = true;
           break;
         }
+      }
+      continue;
+    }
+
+    // Custom Note line
+    if (line.rfind("custom_note=", 0) == 0) {
+      // Format: custom_note=ID|title=HEX|text=HEX|cat=HEX|pos=x,y|disc=1|synth=1|links=a,b
+      std::string payload = line.substr(12);
+      size_t pipe1 = payload.find('|');
+      std::string noteId = (pipe1 == std::string::npos) ? payload : payload.substr(0, pipe1);
+      std::string titleHex, textHex, catHex;
+      float px = 0.0f, py = 0.0f;
+      bool disc = true, synth = true;
+      std::vector<std::string> loadedLinks;
+
+      if (pipe1 != std::string::npos) {
+        std::string rest = payload.substr(pipe1 + 1);
+        std::istringstream restStream(rest);
+        std::string field;
+        while (std::getline(restStream, field, '|')) {
+          if (field.rfind("title=", 0) == 0) {
+            titleHex = field.substr(6);
+          } else if (field.rfind("text=", 0) == 0) {
+            textHex = field.substr(5);
+          } else if (field.rfind("cat=", 0) == 0) {
+            catHex = field.substr(4);
+          } else if (field.rfind("disc=", 0) == 0) {
+            disc = (std::atoi(field.substr(5).c_str()) != 0);
+          } else if (field.rfind("synth=", 0) == 0) {
+            synth = (std::atoi(field.substr(6).c_str()) != 0);
+          } else if (field.rfind("pos=", 0) == 0) {
+            std::string coords = field.substr(4);
+            size_t c = coords.find(',');
+            if (c != std::string::npos) {
+              px = static_cast<float>(std::atof(coords.substr(0, c).c_str()));
+              py = static_cast<float>(std::atof(coords.substr(c + 1).c_str()));
+            }
+          } else if (field.rfind("links=", 0) == 0) {
+            std::string lks = field.substr(6);
+            std::istringstream lkStream(lks);
+            std::string linkId;
+            while (std::getline(lkStream, linkId, ',')) {
+              if (!linkId.empty()) loadedLinks.push_back(linkId);
+            }
+          }
+        }
+      }
+
+      std::string title = fromHex(titleHex);
+      std::string text = fromHex(textHex);
+      std::string cat = fromHex(catHex);
+      if (title.empty()) title = "Заметка пилота";
+
+      ZettelNote* n = getNote(noteId);
+      if (!n) {
+        ZettelNote cn;
+        cn.id = noteId;
+        cn.cluster = "custom";
+        cn.categoryRu = cat.empty() ? "Заметка" : cat;
+        cn.categoryEn = cn.categoryRu;
+        cn.titleRu = title;
+        cn.titleEn = title;
+        cn.textRu = text;
+        cn.textEn = text;
+        cn.speakerRu = "Пилот Егорка";
+        cn.speakerEn = "Pilot Egorka";
+        cn.posX = px;
+        cn.posY = py;
+        cn.seedDiscovered = disc;
+        cn.synthesized = synth;
+        cn.isMasterNode = false;
+        cn.isCustom = true;
+        cn.depthLevel = 0;
+        cn.links = loadedLinks;
+        m_notes.push_back(cn);
+        any = true;
+      } else {
+        n->titleRu = title;
+        n->titleEn = title;
+        n->textRu = text;
+        n->textEn = text;
+        n->categoryRu = cat;
+        n->categoryEn = cat;
+        n->posX = px;
+        n->posY = py;
+        n->seedDiscovered = disc;
+        n->synthesized = synth;
+        n->links = loadedLinks;
+        any = true;
       }
       continue;
     }
@@ -850,6 +1049,7 @@ std::string ZettelGraph::getClusterTitleRu(const std::string& cluster) {
   if (cluster == kClusterStasis) return "Пакт Вселенной-05";
   if (cluster == kClusterEden) return "Новый Эдем";
   if (cluster == kClusterMultiverse) return "Прорыв Мультивселенной";
+  if (cluster == "custom") return "Дневник Пилота";
   return "Нейросеть Сознания";
 }
 
@@ -858,6 +1058,7 @@ std::string ZettelGraph::getClusterTitleEn(const std::string& cluster) {
   if (cluster == kClusterStasis) return "Universe-05 Pact";
   if (cluster == kClusterEden) return "New Eden";
   if (cluster == kClusterMultiverse) return "Multiverse Breakthrough";
+  if (cluster == "custom") return "Pilot Logbook";
   return "Consciousness Matrix";
 }
 

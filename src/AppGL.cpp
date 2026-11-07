@@ -6149,6 +6149,10 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
       std::min(1.0f, static_cast<float>(m_zettelkasten.getTotalLinksCount()) / 15.0f) : 0.0f;
   hudData.eurekaPending = (m_zettelkasten.checkPendingSynthesis() != nullptr);
 
+  // v5.2.0: Cosmic Ambient Cassette Deck
+  hudData.tapeIndex = m_audio.cassetteTape();
+  hudData.tapePlaying = (hudData.tapeIndex > 0);
+
   // v5.0.0: Audio alarms and avionics chimes
   static bool s_lastWarpReady = false;
   bool warpReadyNow = (warpCharge >= 0.999f);
@@ -12263,6 +12267,25 @@ void AppGL::drawZettelkasten() {
 
     ImGui::Separator();
 
+    // Grand Synthesis Climax Banner (v5.2.0: Triggered when all 4 Master Nodes are synthesized)
+    if (m_zettelkasten.isAllMasterNodesSynthesized()) {
+      ImGui::Spacing();
+      float pulse = 0.75f + 0.25f * static_cast<float>(std::sin(glfwGetTime() * 4.0));
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.95f * pulse, 0.70f * pulse, 0.15f * pulse, 0.95f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
+      if (ImGui::Button(uiRu("✦ ВЕЛИКИЙ СИНТЕЗ: ОПРЕДЕЛИТЬ СУДЬБУ ВСЕЛЕННОЙ (ОТКРЫТЫ ВСЕ 4 МАСТЕР-УЗЛА) ✦",
+                             "✦ GRAND SYNTHESIS: FORGE THE FATE OF THE UNIVERSE (ALL 4 MASTER NODES SYNTHESIZED) ✦"),
+                        ImVec2(-1.0f, 32.0f))) {
+        triggerGrandSynthesisClimax();
+      }
+      ImGui::PopStyleColor(2);
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", uiRu("Все четыре потока мысли (Солнце, Стазис, Эдем, Мультивселенная) слились в абсолютную точку сингулярности сознания. Переход к решающему финалу космоса.",
+                                     "All four streams of thought have converged into the singularity of consciousness. Proceed to the ultimate climax of the cosmos."));
+      }
+      ImGui::Separator();
+    }
+
     // Obsidian Controls Toolbar: Force-Directed Layout & Eureka Models
     if (ImGui::Button(m_forceDirectedActive ? uiRu("■ Стоп Физика", "■ Stop Physics")
                                            : uiRu("⟳ Физика Графа (Obsidian)", "⟳ Force-Directed Layout"),
@@ -12299,9 +12322,9 @@ void AppGL::drawZettelkasten() {
     // Dataview Category Filter Buttons
     ImGui::TextColored(ImVec4(0.40f, 0.75f, 0.95f, 0.9f), "%s:", uiRu("Фильтр (Dataview)", "Filter (Dataview)"));
     ImGui::SameLine();
-    const char* filterNamesRu[7] = {"Все", "★ Эврика", "Память", "Физика", "Стазис", "Биосфера", "Эхо"};
-    const char* filterNamesEn[7] = {"All", "★ Eureka", "Memory", "Physics", "Stasis", "Biosphere", "Echo"};
-    for (int fi = 0; fi < 7; ++fi) {
+    const char* filterNamesRu[8] = {"Все", "★ Эврика", "Память", "Физика", "Стазис", "Биосфера", "Эхо", "★ Пилот"};
+    const char* filterNamesEn[8] = {"All", "★ Eureka", "Memory", "Physics", "Stasis", "Biosphere", "Echo", "★ Pilot"};
+    for (int fi = 0; fi < 8; ++fi) {
       if (fi > 0) ImGui::SameLine();
       bool isF = (m_categoryFilter == fi);
       if (isF) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.50f, 0.85f, 0.95f));
@@ -12314,7 +12337,7 @@ void AppGL::drawZettelkasten() {
     ImGui::SameLine(0, 15.0f);
     ImGui::TextColored(ImVec4(0.40f, 0.75f, 0.95f, 0.9f), "%s:", uiRu("Поиск", "Search"));
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(130.0f);
+    ImGui::SetNextItemWidth(120.0f);
     ImGui::InputTextWithHint("##ZettelSearch", uiRu("Поиск...", "Search..."),
                              m_zettelSearchQuery, IM_ARRAYSIZE(m_zettelSearchQuery));
     if (m_zettelSearchQuery[0] != '\0') {
@@ -12322,6 +12345,34 @@ void AppGL::drawZettelkasten() {
       if (ImGui::SmallButton("X##ClearSearch")) {
         m_zettelSearchQuery[0] = '\0';
       }
+    }
+
+    // [+ Своя мысль] Player-authored custom notes button
+    ImGui::SameLine(0, 12.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.50f, 0.40f, 0.90f));
+    if (ImGui::Button(uiRu("+ Своя мысль", "+ Custom Note"), ImVec2(105.0f, 22.0f))) {
+      m_createNoteModalOpen = true;
+    }
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Записать собственное наблюдение, гипотезу или маяк в ментальную сеть Егорки с поддержкой [[Wikilinks]].",
+                                   "Author your own observation, hypothesis, or beacon into Egorka's Second Brain with [[Wikilinks]]."));
+    }
+
+    // [♬ Магнитофон] Cosmic Ambient Deck toggle
+    ImGui::SameLine(0, 8.0f);
+    int curTape = m_audio.cassetteTape();
+    const char* tapeIconsRu[4] = {"♬ Магнитофон", "▶ Дождь Парижа", "▶ Пульс Космоса", "▶ Эфир Пустоты"};
+    const char* tapeIconsEn[4] = {"♬ Tape Deck", "▶ Paris Rain", "▶ Pulsar Beat", "▶ Deep Space"};
+    bool isTapeOn = (curTape > 0);
+    if (isTapeOn) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.35f, 0.95f));
+    if (ImGui::Button(uiRu(tapeIconsRu[curTape], tapeIconsEn[curTape]), ImVec2(140.0f, 22.0f))) {
+      m_cassetteDeckOpen = !m_cassetteDeckOpen;
+    }
+    if (isTapeOn) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Бортовой аналоговый кассетный магнитофон: процедурный эмбиент и звуки уюта в кабине.",
+                                   "On-board analog cassette deck: procedural ambient and cozy cabin sounds."));
     }
 
     if (m_eurekaActive) {
@@ -12460,6 +12511,7 @@ void AppGL::drawZettelkasten() {
         if (m_categoryFilter == 4) return (n.categoryRu == "Стазис" || n.categoryRu == "Гравитация" || n.categoryRu == "Хроника");
         if (m_categoryFilter == 5) return (n.categoryRu == "Биосфера" || n.categoryRu == "Ковчег" || n.categoryRu == "Реликвия" || n.categoryRu == "Обещание");
         if (m_categoryFilter == 6) return (n.categoryRu == "Эхо" || n.categoryRu == "Фаза" || n.categoryRu == "Трансцендентность");
+        if (m_categoryFilter == 7) return n.isCustom;
         return true;
       };
 
@@ -12610,7 +12662,11 @@ void AppGL::drawZettelkasten() {
           ImU32 colGlow = IM_COL32(80, 110, 160, isBg ? 50 : 100);
           ImU32 colBorder = IM_COL32(100, 140, 200, isBg ? 160 : 255);
 
-          if (n.cluster == kClusterSolar) {
+          if (n.isCustom) {
+            colFill = IM_COL32(15, 60, 50, isBg ? 120 : 230);
+            colGlow = IM_COL32(35, 210, 160, isBg ? 45 : 95);
+            colBorder = IM_COL32(60, 240, 190, isBg ? 150 : 255);
+          } else if (n.cluster == kClusterSolar) {
             colFill = IM_COL32(80, 55, 15, isBg ? 120 : 230);
             colGlow = IM_COL32(255, 180, 40, isBg ? 45 : 90);
             colBorder = IM_COL32(255, 200, 70, isBg ? 150 : 255);
@@ -12812,7 +12868,13 @@ void AppGL::drawZettelkasten() {
         }
       } else {
         // Node details
-        if (sel->isMasterNode) {
+        if (sel->isCustom) {
+          ImGui::TextColored(ImVec4(0.35f, 0.95f, 0.65f, 1.0f), "★ %s",
+                             uiRu(sel->titleRu.c_str(), sel->titleEn.c_str()));
+          ImGui::TextColored(ImVec4(0.30f, 0.85f, 0.60f, 0.95f), "★ %s · %s",
+                             uiRu("ЗАМЕТКА ПИЛОТА (CUSTOM)", "PILOT LOGBOOK NOTE"),
+                             uiRu(sel->categoryRu.c_str(), sel->categoryEn.c_str()));
+        } else if (sel->isMasterNode) {
           ImGui::TextColored(ImVec4(1.0f, 0.90f, 0.35f, 1.0f), "★ %s",
                              uiRu(sel->titleRu.c_str(), sel->titleEn.c_str()));
           ImGui::TextColored(ImVec4(1.0f, 0.70f, 0.20f, 0.95f), "★ %s · %s",
@@ -12838,14 +12900,16 @@ void AppGL::drawZettelkasten() {
 
         ImGui::Spacing();
 
-        // Quote Box
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f, 0.08f, 0.14f, 0.8f));
-        ImGui::BeginChild("QuoteBox", ImVec2(0.0f, 90.0f), true);
-        ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.65f, 1.0f), "%s:",
-                           uiRu(sel->speakerRu.c_str(), sel->speakerEn.c_str()));
-        ImGui::TextWrapped("«%s»", uiRu(sel->quoteRu.c_str(), sel->quoteEn.c_str()));
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
+        // Quote Box (only if character quote is provided)
+        if (!sel->quoteRu.empty()) {
+          ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f, 0.08f, 0.14f, 0.8f));
+          ImGui::BeginChild("QuoteBox", ImVec2(0.0f, 90.0f), true);
+          ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.65f, 1.0f), "%s:",
+                             uiRu(sel->speakerRu.c_str(), sel->speakerEn.c_str()));
+          ImGui::TextWrapped("«%s»", uiRu(sel->quoteRu.c_str(), sel->quoteEn.c_str()));
+          ImGui::EndChild();
+          ImGui::PopStyleColor();
+        }
 
         ImGui::Spacing();
         renderTextWithWikilinks(uiRu(sel->textRu.c_str(), sel->textEn.c_str()));
@@ -12905,6 +12969,20 @@ void AppGL::drawZettelkasten() {
           }
         }
 
+        // Action: Delete custom player note
+        if (sel->isCustom) {
+          ImGui::Spacing();
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.70f, 0.22f, 0.22f, 0.85f));
+          if (ImGui::Button(uiRu("✖ Удалить мысль пилота", "✖ Delete Pilot Thought"), ImVec2(-1.0f, 26.0f))) {
+            std::string delId = sel->id;
+            m_selectedZettelId.clear();
+            m_zettelkasten.deleteCustomNote(delId);
+            saveZettelkastenFileNow();
+            m_audio.playClick();
+          }
+          ImGui::PopStyleColor();
+        }
+
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%s (%zu):",
                            uiRu("Связанные мысли", "Linked thoughts"), sel->links.size());
@@ -12940,6 +13018,12 @@ void AppGL::drawZettelkasten() {
 
   if (m_mindMiniGameActive) {
     drawMindMatrixMiniGame();
+  }
+  if (m_createNoteModalOpen) {
+    drawCreateCustomNoteModal();
+  }
+  if (m_cassetteDeckOpen) {
+    drawCassetteDeckControls();
   }
 }
 
@@ -13030,6 +13114,171 @@ void AppGL::drawMindMatrixMiniGame() {
   ImGui::End();
   ImGui::PopStyleVar();
   ImGui::PopStyleColor(2);
+}
+
+void AppGL::drawCreateCustomNoteModal() {
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
+                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(520.0f, 380.0f), ImGuiCond_Appearing);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.02f, 0.03f, 0.05f, 0.98f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.35f, 0.80f, 0.65f, 0.85f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+
+  if (ImGui::Begin(uiRu("✦ Новая мысль пилота · Astro-Zettelkasten",
+                        "✦ New Pilot Thought · Astro-Zettelkasten"),
+                   &m_createNoteModalOpen)) {
+    ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.7f, 1.0f), "%s",
+                       uiRu("ЗАПИСЬ В БОРТОВОЙ ДНЕВНИК ВТОРОГО МОЗГА",
+                            "ENTRY IN THE SECOND BRAIN LOGBOOK"));
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::Text("%s:", uiRu("Заголовок мысли", "Thought Title"));
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##NoteTitle", uiRu("Например: Гипотеза о сингулярности Sgr A*",
+                                                "e.g.: Sgr A* Singularity Hypothesis"),
+                             m_newNoteTitle, IM_ARRAYSIZE(m_newNoteTitle));
+
+    ImGui::Spacing();
+    ImGui::Text("%s:", uiRu("Категория (тег)", "Category (Tag)"));
+    const char* catNamesRu[5] = {"Гипотеза", "Наблюдение", "Маяк", "Теория", "Память"};
+    const char* catNamesEn[5] = {"Hypothesis", "Observation", "Beacon", "Theory", "Memory"};
+    for (int ci = 0; ci < 5; ++ci) {
+      if (ci > 0) ImGui::SameLine();
+      bool isSel = (m_newNoteCategory == ci);
+      if (isSel) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.65f, 0.50f, 0.95f));
+      if (ImGui::SmallButton(uiRu(catNamesRu[ci], catNamesEn[ci]))) {
+        m_newNoteCategory = ci;
+      }
+      if (isSel) ImGui::PopStyleColor();
+    }
+
+    ImGui::Spacing();
+    ImGui::Text("%s:", uiRu("Текст размышления (поддерживает [[ссылки]]):",
+                            "Thought Reflection (supports [[wikilinks]]):"));
+    ImGui::InputTextMultiline("##NoteText", m_newNoteText, IM_ARRAYSIZE(m_newNoteText),
+                              ImVec2(-1.0f, 110.0f));
+
+    ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 0.8f), "%s",
+                       uiRu("Подсказка: используйте [[sol]], [[sgra]] или [[id_заметки]] для создания ссылок.",
+                            "Tip: use [[sol]], [[sgra]], or [[note_id]] to create wikilinks."));
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::Button(uiRu("✔ Записать мысль в граф", "✔ Add Thought to Graph"), ImVec2(230.0f, 32.0f))) {
+      if (m_newNoteTitle[0] != '\0') {
+        const char* chosenCat = catNamesRu[std::clamp(m_newNoteCategory, 0, 4)];
+        float rx = static_cast<float>((std::rand() % 160) - 80);
+        float ry = static_cast<float>((std::rand() % 120) - 60);
+        m_zettelkasten.addCustomNote(m_newNoteTitle, m_newNoteText, chosenCat, rx, ry);
+        saveZettelkastenFileNow();
+        m_audio.playClick();
+        m_newNoteTitle[0] = '\0';
+        m_newNoteText[0] = '\0';
+        m_createNoteModalOpen = false;
+      }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(uiRu("Отмена", "Cancel"), ImVec2(120.0f, 32.0f))) {
+      m_createNoteModalOpen = false;
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor(2);
+}
+
+void AppGL::drawCassetteDeckControls() {
+  ImGui::SetNextWindowSize(ImVec2(420.0f, 260.0f), ImGuiCond_FirstUseEver);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.02f, 0.035f, 0.05f, 0.97f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.75f, 0.60f, 0.80f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+
+  if (ImGui::Begin(uiRu("♬ Бортовой Кассетный Магнитофон (Cosmic Deck)",
+                        "♬ Cosmic Ambient Cassette Deck"),
+                   &m_cassetteDeckOpen)) {
+    ImGui::TextColored(ImVec4(0.35f, 0.90f, 0.70f, 1.0f), "♬ %s",
+                       uiRu("АНАЛОГОВАЯ КАССЕТНАЯ ДЕКА КОКПИТА",
+                            "ANALOG COCKPIT CASSETTE DECK"));
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    int curTape = m_audio.cassetteTape();
+    const char* tapeTitlesRu[4] = {
+      "Магнитофон выключен (Тишина)",
+      "1. «Звуки Дома / Дождь над Сорбонной» (Paris Rain)",
+      "2. «Пульс Космоса / Ритм Пульсара» (Pulsar Beat)",
+      "3. «Эфир Пустоты / Резонанс Бездны» (Deep Space Void)"
+    };
+    const char* tapeTitlesEn[4] = {
+      "Cassette Deck Off (Silence)",
+      "1. «Sounds of Home / Paris Rain»",
+      "2. «Cosmic Pulse / Pulsar Beat»",
+      "3. «Deep Space Void / Ether Resonance»"
+    };
+
+    ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.35f, 1.0f), "%s: %s",
+                       uiRu("Текущая кассета", "Current Tape"),
+                       uiRu(tapeTitlesRu[curTape], tapeTitlesEn[curTape]));
+    ImGui::Spacing();
+
+    auto tapeBtn = [&](int id, const char* nameRu, const char* nameEn, const ImVec4& color) {
+      bool active = (curTape == id);
+      if (active) ImGui::PushStyleColor(ImGuiCol_Button, color);
+      std::string label = (active ? "▶ " : "▷ ") + std::string(uiRu(nameRu, nameEn));
+      if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 28.0f))) {
+        m_audio.setCassetteTape(id);
+        m_audio.playClick();
+      }
+      if (active) ImGui::PopStyleColor();
+    };
+
+    tapeBtn(1, "Кассета 1: Звуки Дома (Парижский дождь + пианино)",
+               "Tape 1: Sounds of Home (Paris Rain + Piano)", ImVec4(0.18f, 0.60f, 0.85f, 0.95f));
+    tapeBtn(2, "Кассета 2: Пульс Космоса (Ритм пульсара 84 BPM)",
+               "Tape 2: Cosmic Pulse (84 BPM Pulsar Beat)", ImVec4(0.85f, 0.60f, 0.15f, 0.95f));
+    tapeBtn(3, "Кассета 3: Эфир Пустоты (4-голосный космический дрон)",
+               "Tape 3: Deep Space Void (4-Voice Cosmic Drone)", ImVec4(0.65f, 0.35f, 0.90f, 0.95f));
+
+    ImGui::Spacing();
+    if (ImGui::Button(uiRu("■ Остановить воспроизведение / Извлечь",
+                           "■ Stop Playback / Eject Tape"), ImVec2(-1.0f, 26.0f))) {
+      m_audio.setCassetteTape(0);
+      m_audio.playClick();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    float cVol = m_audio.cassetteVolume();
+    ImGui::Text("%s:", uiRu("Громкость магнитофона", "Tape Volume"));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(180.0f);
+    if (ImGui::SliderFloat("##TapeVol", &cVol, 0.0f, 1.0f, "%.2f")) {
+      m_audio.setCassetteVolume(cVol);
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor(2);
+}
+
+void AppGL::triggerGrandSynthesisClimax() {
+  m_audio.playEurekaChime();
+  RadioMessage msg;
+  msg.id = "radio_grand_synthesis";
+  msg.callsignRu = "Д-р Елена Ростова";
+  msg.callsignEn = "Dr. Elena Rostova";
+  msg.textRu = "Егорка! Все четыре потока мысли сошлись воедино: Солнце, Стазис, Эдем и Мультивселенная! "
+               "Мы держим в руках саму ткань судьбы — соверши решающий выбор!";
+  msg.textEn = "Egorka! All four streams of thought have converged: Solar, Stasis, Eden, and Multiverse! "
+               "We hold the destiny of the cosmos in our hands — make your final choice!";
+  msg.durationSec = 8.0;
+  m_bridgeComms.queueMessage(msg, glfwGetTime());
+  m_finaleChoiceOpen = true;
+  m_zettelkastenOpen = false;
 }
 
 }  // namespace astro

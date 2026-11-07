@@ -56,6 +56,10 @@ struct CockpitHUDData {
   // v5.1.0 Astro-Zettelkasten Neural Resonance & Eureka Synthesis
   float neuralResonance = 0.0f;       // 0.0 .. 1.0 brain / graph synthesis resonance
   bool  eurekaPending = false;        // true if at least one Master Node synthesis is ready
+
+  // v5.2.0 Cosmic Ambient Cassette Deck
+  int   tapeIndex = 0;                // 0 Off, 1 Paris Rain, 2 Pulsar Beat, 3 Deep Space Void
+  bool  tapePlaying = false;          // true when tape reel is rotating
 };
 
 class CockpitController {

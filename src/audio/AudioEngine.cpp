@@ -179,6 +179,12 @@ void AudioEngine::update(float dt) {
   rc += (rt - rc) * std::clamp(dt * 8.0f, 0.0f, 1.0f);
   m_radioStaticCurrent.store(rc);
 
+  // v5.2.0: Smooth cassette tape gain
+  float cg = m_cassetteGainCurrent.load();
+  float cgt = m_cassetteGainTarget.load();
+  cg += (cgt - cg) * std::clamp(dt * 3.5f, 0.0f, 1.0f);
+  m_cassetteGainCurrent.store(cg);
+
   if (!m_live) {
     // Null-backend: двигаем виртуальное время, чистим голоса по нему.
     uint64_t adv = static_cast<uint64_t>(static_cast<double>(dt) * kSampleRate);
@@ -262,6 +268,19 @@ void AudioEngine::setRadioStatic(float level) {
   if (level < 0.0f) level = 0.0f;
   if (level > 1.0f) level = 1.0f;
   m_radioStaticTarget.store(level);
+}
+
+void AudioEngine::setCassetteTape(int tape) {
+  if (tape < 0) tape = 0;
+  if (tape > 3) tape = 3;
+  m_cassetteTape.store(tape);
+  m_cassetteGainTarget.store(tape > 0 ? 1.0f : 0.0f);
+}
+
+void AudioEngine::setCassetteVolume(float v) {
+  if (v < 0.0f) v = 0.0f;
+  if (v > 1.0f) v = 1.0f;
+  m_cassetteVolume.store(v);
 }
 
 void AudioEngine::playClick() {
@@ -718,8 +737,71 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
       radioStaticSound = (bandpass * 1.8f + crackle) * radioK * 0.20f;
     }
 
-    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar + radioStaticSound) * vol;
-    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar + radioStaticSound) * vol;
+    // Cassette Tape Player (v5.2.0: Cosmic Ambient Deck)
+    const float cassK = m_cassetteGainCurrent.load();
+    const float cassVol = m_cassetteVolume.load();
+    const int tapeId = m_cassetteTape.load();
+    float tapeL = 0.0f;
+    float tapeR = 0.0f;
+    if (cassK > 0.001f && tapeId > 0) {
+      if (tapeId == 1) {
+        // Tape 1: Paris Rain (Звуки Дома)
+        const float w = whiteNoise(m_rng);
+        m_cassetteRainNoise = (m_cassetteRainNoise + 0.045f * w) / 1.045f;
+        float patter = 1.0f + 0.35f * static_cast<float>(std::sin(2.0 * kPi * 13.0 * tAbs) * std::cos(2.0 * kPi * 4.3 * tAbs));
+        float rainL = m_cassetteRainNoise * 3.0f * patter;
+        float rainR = m_cassetteRainNoise * 2.7f * (1.8f - patter);
+
+        // Electric piano / warm chord progression (Fm -> Cm -> Eb -> Bb)
+        const int chordIdx = static_cast<int>(tAbs / 6.0) % 4;
+        float f1 = 174.61f, f2 = 207.65f, f3 = 261.63f, f4 = 311.13f; // Fm
+        if (chordIdx == 1) { // Cm
+          f1 = 130.81f; f2 = 196.00f; f3 = 261.63f; f4 = 311.13f;
+        } else if (chordIdx == 2) { // Eb
+          f1 = 155.56f; f2 = 233.08f; f3 = 311.13f; f4 = 392.00f;
+        } else if (chordIdx == 3) { // Bb
+          f1 = 116.54f; f2 = 174.61f; f3 = 261.63f; f4 = 349.23f;
+        }
+        float wow = 1.0f + 0.0035f * static_cast<float>(std::sin(2.0 * kPi * 0.35 * tAbs));
+        float pTone = 0.28f * static_cast<float>(std::sin(2.0 * kPi * f1 * wow * tAbs)) +
+                      0.24f * static_cast<float>(std::sin(2.0 * kPi * f2 * wow * tAbs + 0.4)) +
+                      0.22f * static_cast<float>(std::sin(2.0 * kPi * f3 * wow * tAbs + 0.8)) +
+                      0.18f * static_cast<float>(std::sin(2.0 * kPi * f4 * wow * tAbs + 1.2));
+        tapeL = (rainL * 0.45f + pTone * 0.55f) * cassK * cassVol;
+        tapeR = (rainR * 0.45f + pTone * 0.55f) * cassK * cassVol;
+      } else if (tapeId == 2) {
+        // Tape 2: Pulsar Beat (Пульс Космоса)
+        double beatT = std::fmod(tAbs * 1.4, 1.0);
+        float kickEnv = static_cast<float>(std::exp(-beatT * 12.0));
+        float subFreq = 42.0f + 26.0f * kickEnv;
+        float kick = static_cast<float>(std::sin(2.0 * kPi * subFreq * tAbs)) * kickEnv;
+
+        double clickT = std::fmod(tAbs * 2.8, 1.0);
+        float clickEnv = static_cast<float>(std::exp(-clickT * 42.0));
+        const float w = whiteNoise(m_rng);
+        float clickSound = w * clickEnv * 0.30f;
+
+        float subDrone = 0.20f * static_cast<float>(std::sin(2.0 * kPi * 55.0 * tAbs));
+        tapeL = (kick * 0.70f + clickSound * 0.60f + subDrone) * cassK * cassVol;
+        tapeR = (kick * 0.70f + clickSound * 0.25f + subDrone) * cassK * cassVol;
+      } else if (tapeId == 3) {
+        // Tape 3: Deep Space Void (Эфир Пустоты)
+        float lfo = 0.5f + 0.5f * static_cast<float>(std::sin(2.0 * kPi * 0.07 * tAbs));
+        float s1 = static_cast<float>(std::sin(2.0 * kPi * 58.27 * tAbs));
+        float s2 = static_cast<float>(std::sin(2.0 * kPi * 87.31 * tAbs + 0.5));
+        float s3 = static_cast<float>(std::sin(2.0 * kPi * 116.54 * tAbs + 1.1));
+        float s4 = static_cast<float>(std::sin(2.0 * kPi * 146.83 * tAbs + 1.8));
+
+        float padL = s1 * 0.35f + s2 * (0.20f + 0.15f * lfo) + s4 * 0.25f;
+        float padR = s1 * 0.35f + s3 * (0.20f + 0.15f * (1.0f - lfo)) + s4 * 0.25f;
+        tapeL = padL * 0.75f * cassK * cassVol;
+        tapeR = padR * 0.75f * cassK * cassVol;
+      }
+      music *= (1.0f - 0.60f * cassK);
+    }
+
+    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar + radioStaticSound + tapeL) * vol;
+    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar + radioStaticSound + tapeR) * vol;
     mixL = std::tanh(mixL * 1.1f);
     mixR = std::tanh(mixR * 1.1f);
     out[i * 2 + 0] = mixL;
