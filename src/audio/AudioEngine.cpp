@@ -246,6 +246,13 @@ void AudioEngine::setEngineLevel(float k) {
   m_engineTarget.store(k);
 }
 
+void AudioEngine::setDrillLevel(float k, float /*strain*/) {
+  if (k < 0.0f) k = 0.0f;
+  if (k > 1.0f) k = 1.0f;
+  m_drillTarget.store(k);
+  m_drillCurrent.store(k);
+}
+
 void AudioEngine::setDopplerShift(float factor) {
   if (factor < 0.2f) factor = 0.2f;
   if (factor > 3.0f) factor = 3.0f;

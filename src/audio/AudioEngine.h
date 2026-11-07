@@ -54,6 +54,8 @@ class AudioEngine {
   void setWarpLevel(float k);  // 0..1: коричневый шум + суб-синус,
                                // сам же дакает музыку (-8 дБ при K=1)
   void setEngineLevel(float k);  // v3.3.0: гул двигателя от скорости 0..1
+  void setDrillLevel(float k, float strain = 0.0f);  // v5.3.0: бур реголита
+  float drillLevel() const { return m_drillCurrent.load(); }
                                  // (тон 52-82 Гц + обертон + шум-дыхание)
   void setAtmosphereRoar(float level);  // v4.9.0: гиперзвуковой аэродинамический свист и рев плазмы 0..1
   float atmosphereRoar() const { return m_atmoCurrent.load(); }
@@ -142,6 +144,8 @@ class AudioEngine {
   std::atomic<float> m_warpCurrent{0.0f};
   std::atomic<float> m_engineTarget{0.0f};
   std::atomic<float> m_engineCurrent{0.0f};
+  std::atomic<float> m_drillTarget{0.0f};
+  std::atomic<float> m_drillCurrent{0.0f};
   std::atomic<float> m_dopplerFactor{1.0f};
   std::atomic<float> m_tensionTarget{0.0f};
   std::atomic<float> m_tensionCurrent{0.0f};

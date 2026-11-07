@@ -302,4 +302,12 @@ void CockpitController::setOrbitalCruiseTelemetry(bool active, bool locked, floa
   m_hud.orbitTrueAnomalyDeg = anomalyDeg;
 }
 
+void CockpitController::setSurfaceDrillTelemetry(bool active, float depthM, float bitTempC, int state, bool analyzed) {
+  m_hud.drillActive = active;
+  m_hud.drillDepthM = depthM;
+  m_hud.drillBitTempC = bitTempC;
+  m_hud.drillState = state;
+  m_hud.coreAnalyzed = analyzed;
+}
+
 }  // namespace astro

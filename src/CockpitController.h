@@ -69,6 +69,13 @@ struct CockpitHUDData {
   float orbitSpeed = 0.0f;
   float orbitPeriodSec = 0.0f;
   float orbitTrueAnomalyDeg = 0.0f;
+
+  // v5.3.0 Surface Science & Core Sampler
+  bool  drillActive = false;
+  float drillDepthM = 0.0f;
+  float drillBitTempC = 20.0f;
+  int   drillState = 0;
+  bool  coreAnalyzed = false;
 };
 
 class CockpitController {
@@ -116,6 +123,9 @@ class CockpitController {
 
   // v5.3.0 Orbital Cruise & Keplerian Parking Orbit telemetry
   void setOrbitalCruiseTelemetry(bool active, bool locked, float radius, float altKm, float speed, float periodSec, float anomalyDeg);
+
+  // v5.3.0 Surface Science & Core Sampler telemetry
+  void setSurfaceDrillTelemetry(bool active, float depthM, float bitTempC, int state, bool analyzed);
 
  private:
   glm::vec3 m_prevPos{0.0f};

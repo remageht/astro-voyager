@@ -108,6 +108,7 @@ struct CoreDrillTelemetry {
   std::string rareElementsRu;
   std::string rareElementsEn;
   float helium3Ppm = 0.0f;
+  float volatileWaterPercent = 0.0f;
   float volatileWaterEquivalentPercent = 0.0f;
   std::vector<CoreStrataLayer> strata;
   int scienceYield = 250;
