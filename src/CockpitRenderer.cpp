@@ -93,6 +93,10 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform1f("u_NeuralResonance", hud.neuralResonance);
   m_shader->setUniform1f("u_EurekaPending", hud.eurekaPending ? 1.0f : 0.0f);
 
+  // v5.2.0 Cosmic Ambient Cassette Deck
+  m_shader->setUniform1f("u_TapePlaying", hud.tapePlaying ? 1.0f : 0.0f);
+  m_shader->setUniform1i("u_TapeIndex", hud.tapeIndex);
+
   m_quad->draw();
 
   m_shader->unbind();

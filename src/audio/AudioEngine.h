@@ -80,6 +80,19 @@ class AudioEngine {
   void playLiquidDrop(float pan = 0.0f);  // процедурный «бульк» капли / квантовый всплеск вакуума
   void playEurekaChime();                 // небесный полифонический перезвон открытия (C5-G5-C6-E6)
 
+  // v5.2.0: Бортовой кассетный магнитофон (Cosmic Ambient Deck)
+  enum class CassetteTape : int {
+    Off = 0,
+    ParisRain = 1,     // Звуки Дома / Paris Rain (шум дождя + фортепианный сонный аккорд)
+    PulsarBeat = 2,    // Пульс Космоса / Pulsar Beat (пульсирующий саб-бас 1.4 Гц + дилэй-щелчки)
+    DeepSpaceVoid = 3  // Эфир Пустоты / Deep Space Void (космический 4-голосный пэд с LFO-фильтром)
+  };
+
+  void setCassetteTape(int tape);
+  int cassetteTape() const { return m_cassetteTape.load(); }
+  void setCassetteVolume(float v);
+  float cassetteVolume() const { return m_cassetteVolume.load(); }
+
   // v4.0: файл-голос для катсцен (wav, декодируется miniaudio в float
   // моно kSampleRate синхронно при запуске; каталог с аудио рядом).
   void playFile(const std::string& path, float db);
@@ -136,6 +149,10 @@ class AudioEngine {
   std::atomic<float> m_atmoCurrent{0.0f};
   std::atomic<float> m_radioStaticTarget{0.0f};
   std::atomic<float> m_radioStaticCurrent{0.0f};
+  std::atomic<int> m_cassetteTape{0};
+  std::atomic<float> m_cassetteVolume{0.7f};
+  std::atomic<float> m_cassetteGainTarget{0.0f};
+  std::atomic<float> m_cassetteGainCurrent{0.0f};
   std::atomic<uint64_t> m_samples{0};  // счётчик сэмплов (live: колбэк)
 
   std::mutex m_mutex;
@@ -147,6 +164,8 @@ class AudioEngine {
   float m_atmoNoise = 0.0f;
   float m_radioBandpass1 = 0.0f;
   float m_radioBandpass2 = 0.0f;
+  float m_cassetteRainNoise = 0.0f;
+  float m_cassetteLfoPhase = 0.0f;
 
   friend struct AudioCallbackBridge;
 };

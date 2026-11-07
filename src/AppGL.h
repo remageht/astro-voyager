@@ -79,9 +79,12 @@ class AppGL {
   // === Planetary Landing & Surface Operations === (v4.6.1)
   void drawSurfaceReportModal();
   void updateLandingOperations(float deltaTime);
-  // === Astro-Zettelkasten / Second Brain === (v4.8.0)
+  // === Astro-Zettelkasten / Second Brain === (v4.8.0, v5.2.0)
   void drawZettelkasten();
   void drawMindMatrixMiniGame();
+  void drawCreateCustomNoteModal();
+  void drawCassetteDeckControls();
+  void triggerGrandSynthesisClimax();
   void saveZettelkastenFileNow();
   void loadZettelkastenFileNow();
   // v3.8.0: stopJumpCine=false — только для телепорта Бурста в jump-катсцене
@@ -212,10 +215,17 @@ class AppGL {
 
   // Obsidian features (Force-directed layout, Dataview filters, Quick Search, Wikilinks)
   bool m_forceDirectedActive = false;
-  int m_categoryFilter = 0; // 0: All, 1: Memory, 2: Physics, 3: Stasis, 4: Biosphere, 5: Echo, 6: Master
+  int m_categoryFilter = 0; // 0: All, 1: Master, 2: Memory, 3: Physics, 4: Stasis, 5: Biosphere, 6: Echo, 7: Custom
   char m_zettelSearchQuery[128] = {0};
   void stepForceDirectedLayout(float dt);
   void renderTextWithWikilinks(const std::string& text);
+
+  // v5.2.0: Пользовательские заметки пилота и кассетный магнитофон
+  bool m_createNoteModalOpen = false;
+  char m_newNoteTitle[128] = {0};
+  char m_newNoteText[512] = {0};
+  int  m_newNoteCategory = 0; // 0: Гипотеза, 1: Наблюдение, 2: Маяк, 3: Теория, 4: Память
+  bool m_cassetteDeckOpen = false;
 
   // === Expedition === (v3.5.0): сюжетная арка + вводные слайды (рестайл).
   ExpeditionState m_expedition;
