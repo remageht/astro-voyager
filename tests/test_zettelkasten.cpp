@@ -316,6 +316,31 @@ static void test_custom_notes_and_grand_synthesis() {
   std::cout << "PASS: test_custom_notes_and_grand_synthesis\n";
 }
 
+static void test_backlinks_and_hypotheses() {
+  ZettelGraph zg;
+  // Link two seeds (both must be discovered)
+  zg.discoverSeed("z_paris_rain");
+  zg.discoverSeed("z_casimir_metric");
+  assert(zg.linkNotes("z_paris_rain", "z_casimir_metric"));
+  auto in = zg.getIncomingLinks("z_paris_rain");
+  assert(in.size() >= 1);
+  assert(zg.getNodeDegree("z_paris_rain") >= 1);
+  auto unlinked = zg.getUnlinkedMentions("z_paris_rain");
+  (void)unlinked;
+  // Hypotheses seeded
+  assert(!zg.getHypotheses().empty());
+  const auto& hyps = zg.getHypotheses();
+  bool found = false;
+  for (const auto& h : hyps) {
+    if (h.id == "hyp_casimir_shield") { found = true; break; }
+  }
+  assert(found);
+  assert(zg.resolveHypothesis("hyp_casimir_shield"));
+  assert(!zg.resolveHypothesis("hyp_casimir_shield"));  // already resolved
+  zg.checkHypothesesProgression("venus", true, 100);
+  std::cout << "PASS: test_backlinks_and_hypotheses\n";
+}
+
 int main() {
   test_init();
   test_refresh_discovery();
@@ -325,6 +350,7 @@ int main() {
   test_synthesis_recipes();
   test_master_layering_and_serialization();
   test_custom_notes_and_grand_synthesis();
-  std::cout << "\nAll 8 Zettelkasten tests passed successfully.\n";
+  test_backlinks_and_hypotheses();
+  std::cout << "\nAll 9 Zettelkasten tests passed successfully.\n";
   return 0;
 }

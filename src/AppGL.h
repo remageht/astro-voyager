@@ -20,6 +20,7 @@
 #include "Zettelkasten.h"
 #include "EpilogueSystem.h"
 #include "BenchmarkSystem.h"
+#include "AtmosphereSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"

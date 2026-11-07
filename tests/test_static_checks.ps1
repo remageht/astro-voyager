@@ -495,6 +495,17 @@ Check 'benchmark test source exists' (Test-Path (Join-Path $root 'tests/test_ben
 Check 'cmake lists BenchmarkSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/BenchmarkSystem\.cpp')
 Check 'cmake lists test_benchmark' ((Read-File 'CMakeLists.txt') -match 'test_benchmark')
 
+
+# Stage 5: Atmosphere & Zettelkasten 2.0
+Check 'atmosphere header exists' (Test-Path (Join-Path $root 'src/AtmosphereSystem.h'))
+Check 'atmosphere source exists' (Test-Path (Join-Path $root 'src/AtmosphereSystem.cpp'))
+Check 'atmosphere test source exists' (Test-Path (Join-Path $root 'tests/test_atmosphere.cpp'))
+Check 'cmake lists AtmosphereSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/AtmosphereSystem\.cpp')
+Check 'cmake lists test_atmosphere' ((Read-File 'CMakeLists.txt') -match 'test_atmosphere')
+Check 'zettel backlinks' ((Read-File 'src/Zettelkasten.h') -match 'getIncomingLinks')
+Check 'zettel hypotheses' ((Read-File 'src/Zettelkasten.h') -match 'ZettelHypothesis')
+Check 'zettel resolve' ((Read-File 'src/Zettelkasten.cpp') -match 'resolveHypothesis')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
