@@ -55,6 +55,14 @@ uniform float u_EurekaPending;
 uniform float u_TapePlaying;
 uniform int   u_TapeIndex;
 
+// v5.3.0 Orbital Cruise & Keplerian Parking Orbit
+uniform float u_OrbitActive;
+uniform float u_OrbitLocked;
+uniform float u_OrbitSpeed;
+uniform float u_OrbitAlt;
+uniform float u_OrbitPeriod;
+uniform float u_OrbitAnomaly;
+
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
   p = fract(p * vec2(234.34, 435.345));
@@ -264,7 +272,30 @@ void main() {
                          step(-0.06, centerP.y) * step(centerP.y, machH);
             pfdBg += vec3(1.0, 0.6, 0.1) * mBar * 1.6;
           }
-          float edgeDark = smoothstep(0.0, -0.012, centerBox);
+
+          // Orbital Cruise Mode on Center PFD MFD (v5.3.0)
+          if (u_OrbitActive > 0.5) {
+            // Orbital track ring around artificial horizon
+            float orbRingD = abs(length(centerP) - 0.052);
+            float orbRing = 1.0 - smoothstep(0.0008, 0.0022, orbRingD);
+            vec3 orbRingCol = (u_OrbitLocked > 0.5) ? vec3(0.2, 0.95, 0.6) : vec3(1.0, 0.75, 0.15);
+            pfdBg += orbRingCol * orbRing * 1.4;
+
+            // Orbit ship blip indicator moving with true anomaly
+            float anRad = radians(u_OrbitAnomaly);
+            vec2 blipPos = vec2(cos(anRad), sin(anRad)) * 0.052;
+            float blipD = length(centerP - blipPos);
+            float blip = 1.0 - smoothstep(0.001, 0.004, blipD);
+            pfdBg += vec3(1.0, 1.0, 1.0) * blip * 2.0;
+
+            // Status bar at top of PFD
+            float topBanner = step(-0.07, centerP.x) * step(centerP.x, 0.07) *
+                              step(0.062, centerP.y) * step(centerP.y, 0.076);
+            float pulse = (u_OrbitLocked > 0.5) ? 1.0 : (0.6 + 0.4 * sin(u_Time * 10.0));
+            pfdBg += orbRingCol * topBanner * pulse * 1.5;
+          }
+
+          float edgeDark = 1.0 - smoothstep(-0.012, 0.0, centerBox);
           frameBase = pfdBg * (0.65 + 0.35 * edgeDark);
         }
       }
@@ -713,6 +744,21 @@ void main() {
         float warnG = (1.0 - smoothstep(0.001, 0.0025, boxD)) * 1.4;
         col.rgb += vec3(1.0, 0.15, 0.05) * warnG * 1.7;
         col.a = max(col.a, 0.9);
+      }
+    }
+
+    // O. Orbital Cruise HUD Annunciator (v5.3.0)
+    if (u_OrbitActive > 0.5) {
+      vec2 orbHudP = hudP - vec2(0.0, 0.28);
+      if (abs(orbHudP.x) < 0.16 && abs(orbHudP.y) < 0.035) {
+        float orbBoxD = abs(sdBox(orbHudP, vec2(0.14, 0.024)));
+        float orbBox = 1.0 - smoothstep(0.001, 0.0025, orbBoxD);
+        vec3 orbCol = (u_OrbitLocked > 0.5) ? vec3(0.25, 1.0, 0.65) : vec3(1.0, 0.78, 0.18);
+        float orbPulse = (u_OrbitLocked > 0.5) ? 1.0 : (0.55 + 0.45 * sin(u_Time * 12.0));
+        col.rgb += orbCol * orbBox * orbPulse * 1.6;
+        float centerTick = sdSegment(orbHudP, vec2(-0.08, 0.0), vec2(0.08, 0.0));
+        col.rgb += orbCol * (1.0 - smoothstep(0.0008, 0.0022, centerTick)) * 0.8;
+        col.a = max(col.a, 0.90);
       }
     }
 

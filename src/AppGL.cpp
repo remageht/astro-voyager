@@ -675,6 +675,13 @@ void AppGL::processInput(float deltaTime) {
   m_prevOPressed = oDown;
   // === Beauty === end
 
+  // === Orbital Cruise === (v5.3.0 Alpha): R — захват/отключение орбитального круиза
+  const bool rDown = (glfwGetKey(win, GLFW_KEY_R) == GLFW_PRESS);
+  if (rDown && !m_prevRPressed && !io.WantCaptureKeyboard) {
+    toggleOrbitalCruise();
+  }
+  m_prevRPressed = rDown;
+
   const bool f1Down = (glfwGetKey(win, GLFW_KEY_F1) == GLFW_PRESS);
   if (f1Down && !m_prevF1Pressed && !io.WantCaptureKeyboard) {
     m_helpOverlay = !m_helpOverlay;
@@ -890,6 +897,56 @@ void AppGL::updateOrbit(float deltaTime) {
   m_camera.yaw = std::atan2(dx, dz);
   const double horiz = std::sqrt(dx * dx + dz * dz);
   m_camera.pitch = std::atan2(dy, horiz);
+}
+
+void AppGL::toggleOrbitalCruise() {
+  m_orbitCruiseActive = !m_orbitCruiseActive;
+  if (m_orbitCruiseActive) {
+    m_audio.playBlip();
+    glm::vec3 cPos(static_cast<float>(m_camera.position.x),
+                   static_cast<float>(m_camera.position.y),
+                   static_cast<float>(m_camera.position.z));
+    std::string targetBody = "";
+    float minDist = 1e9f;
+
+    if (m_sceneManager) {
+      const auto& bodies = m_sceneManager->getBodies();
+      for (const auto& b : bodies) {
+        if (!b.def || b.def->radius <= 0.01f) continue;
+        glm::vec3 bP(static_cast<float>(b.pos.x), static_cast<float>(b.pos.y), static_cast<float>(b.pos.z));
+        float d = glm::length(cPos - bP);
+        if (d < minDist) {
+          minDist = d;
+          targetBody = b.def->name;
+        }
+      }
+    }
+    if (targetBody.empty() && m_sceneManager && m_sceneManager->getCurrentStation()) {
+      targetBody = m_sceneManager->getCurrentStation()->name;
+    }
+    m_orbitTelem.bodyName = targetBody;
+    m_orbitNoticeShown = true;
+    m_shipNotice = uiRu("Орбита: автопилот захватил курсирование вокруг ",
+                        "Orbit: cruise autopilot locked around ") + targetBody;
+    m_shipNoticeT = 4.0f;
+
+    Toast t;
+    t.title = uiRu("Орбитальный Круиз", "Orbital Cruise");
+    t.desc = uiRu("Захвачен стабильный виток вокруг ", "Stable orbital park around ") + targetBody;
+    t.time = static_cast<float>(glfwGetTime());
+    m_toasts.push_back(t);
+  } else {
+    m_audio.playClick();
+    m_orbitTelem.active = false;
+    m_orbitTelem.locked = false;
+    m_shipNotice = uiRu("Орбита: автопилот отключён, ручное управление",
+                        "Orbit: cruise disengaged, manual control");
+    m_shipNoticeT = 3.0f;
+  }
+}
+
+void AppGL::updateOrbitalCruise(float /*deltaTime*/, double /*throttleAdjust*/) {
+  // Вызывается из updateShip
 }
 
 void AppGL::drawPhotoDirectorOverlay() {
@@ -4718,6 +4775,12 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
       m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
     }
   }
+  ImGui::SameLine();
+  if (ImGui::Button(m_orbitCruiseActive ? uiRu("[R] Выйти из орбиты", "[R] Exit Orbit")
+                                       : uiRu("[R] Орбита (R)", "[R] Orbit Cruise (R)"),
+                    ImVec2(150.0f, 0))) {
+    toggleOrbitalCruise();
+  }
 
   // Station search box with hotkey '/' focus
   if (m_searchFocusRequest) {
@@ -5743,19 +5806,79 @@ void AppGL::updateShip(float deltaTime) {
     m_shieldFlashK =
         ship::shieldFlashHit(m_shieldFlashK, shieldBefore - m_ship.shield);
   }
-  m_shieldFlashK = ship::shieldFlashDecay(m_shieldFlashK, deltaTime);
+  if (!haveGrav && m_orbitCruiseActive) {
+    const double r = std::sqrt(m_camera.position.x * m_camera.position.x +
+                               m_camera.position.y * m_camera.position.y +
+                               m_camera.position.z * m_camera.position.z);
+    if (r > 0.1) {
+      const double aNom = 4.0 / (r * r);
+      gravAcc = Vec3(-m_camera.position.x / r * aNom,
+                     -m_camera.position.y / r * aNom,
+                     -m_camera.position.z / r * aNom);
+      haveGrav = true;
+    }
+  }
+
   if (haveGrav && !m_jumpCine) {
     m_camera.applyGravityStep(m_ship.gravVel, gravAcc, deltaTime);
     if (st->type == StationType::BlackHole) {
       // Дрейф не должен утаскивать под горизонт — тот же клэмп, что в run().
       m_camera.clampNearHorizon(m_sceneManager->getSettings().rs);
     }
-    // v3.6.0: орбитальный ассист — без активного ввода вблизи массивного
-    // центра корабль сам выходит на круговое курсирование (притяжение +
-    // мягкая стабилизация тангенциальной скорости).
-    if (!m_moveInputActive && !m_captureAnim &&
-        ship::orbitAssist(m_camera.position, gravAcc, m_shipVel, m_ship.gravVel,
-                          static_cast<double>(deltaTime))) {
+    // v5.3.0: Активное диегетическое орбитальное курсирование (J)
+    if (m_orbitCruiseActive && !m_captureAnim) {
+      double throttleAdj = 0.0;
+      if (glfwGetKey(m_window->getNativeWindow(), GLFW_KEY_W) == GLFW_PRESS) throttleAdj += 1.0;
+      if (glfwGetKey(m_window->getNativeWindow(), GLFW_KEY_S) == GLFW_PRESS) throttleAdj -= 1.0;
+
+      // Если включён варп, отключаем орбитальный круиз
+      if (m_warpOn) {
+        m_orbitCruiseActive = false;
+      } else {
+        double bRadius = 1.0;
+        glm::vec3 cPos(static_cast<float>(m_camera.position.x),
+                       static_cast<float>(m_camera.position.y),
+                       static_cast<float>(m_camera.position.z));
+        if (m_sceneManager) {
+          for (const auto& b : m_sceneManager->getBodies()) {
+            if (!b.def || b.def->radius <= 0.01f) continue;
+            glm::vec3 bP(static_cast<float>(b.pos.x), static_cast<float>(b.pos.y), static_cast<float>(b.pos.z));
+            if (glm::length(cPos - bP) < b.def->radius * 12.0f) {
+              bRadius = static_cast<double>(b.def->radius);
+              break;
+            }
+          }
+        }
+
+        ship::stepOrbitalCruise(m_camera.position, gravAcc, m_shipVel, m_ship.gravVel,
+                                bRadius, static_cast<double>(deltaTime),
+                                throttleAdj, m_orbitTelem);
+
+        // Синхронизация ориентации корабля с орбитой (Nadir / Horizon Lock):
+        Vec3 totalV(m_shipVel.x + m_ship.gravVel.x,
+                    m_shipVel.y + m_ship.gravVel.y,
+                    m_shipVel.z + m_ship.gravVel.z);
+        double vLen = std::sqrt(totalV.x * totalV.x + totalV.z * totalV.z);
+        if (vLen > 0.1 && !m_moveInputActive) {
+          double desiredYaw = std::atan2(-totalV.x, -totalV.z);
+          double diff = desiredYaw - m_camera.yaw;
+          while (diff < -3.14159265358979323846) diff += 6.28318530717958647692;
+          while (diff > 3.14159265358979323846) diff -= 6.28318530717958647692;
+          m_camera.yaw += diff * (1.0 - std::exp(-deltaTime * 2.5));
+        }
+
+        // Предупреждение о деорбитальном сходе при интенсивном торможении
+        if (m_orbitTelem.altitudeKm < bRadius * 25.0 && throttleAdj < -0.1) {
+          if (m_shipNoticeT <= 0.0f) {
+            m_shipNotice = uiRu("ДЕОРБИТАЛЬНЫЙ СХОД: Вход в атмосферу",
+                                "DEORBIT INITIATED: Entering atmosphere");
+            m_shipNoticeT = 2.5f;
+          }
+        }
+      }
+    } else if (!m_moveInputActive && !m_captureAnim &&
+               ship::orbitAssist(m_camera.position, gravAcc, m_shipVel, m_ship.gravVel,
+                                 static_cast<double>(deltaTime))) {
       if (!m_orbitNoticeShown) {
         m_orbitNoticeShown = true;
         m_shipNotice = uiRu("Орбита: автокурсирование стабилизировано",
@@ -5944,6 +6067,29 @@ void AppGL::drawShipHud() {
           uiRu("Топливо исчерпано. Дрейф к ближайшей звезде...",
                "Out of fuel. Drifting to the nearest star..."));
     }
+
+    // === v5.3.0: Orbital Cruise Status in Ship HUD ===
+    if (m_orbitCruiseActive) {
+      ImGui::Spacing();
+      if (m_orbitTelem.locked) {
+        ImGui::TextColored(ImVec4(0.2f, 0.95f, 0.6f, 1.0f), "%s [R]",
+                           uiRu("● ОРБИТАЛЬНЫЙ КРУИЗ: СТАБИЛИЗИРОВАН",
+                                "● ORBITAL CRUISE: STABILIZED"));
+      } else {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s [R]",
+                           uiRu("◐ ОРБИТАЛЬНЫЙ КРУИЗ: ВХОД НА ВИТОК",
+                                "◐ ORBITAL CRUISE: INSERTION"));
+      }
+      ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 0.9f), "%s: %.1f km | V: %.1f",
+                         m_orbitTelem.bodyName.empty() ? uiRu("Высота", "Altitude") : m_orbitTelem.bodyName.c_str(),
+                         m_orbitTelem.altitudeKm, m_orbitTelem.speed);
+      ImGui::TextColored(ImVec4(0.6f, 0.75f, 0.9f, 0.8f), "T: %.0f s | %s: %.0f°",
+                         m_orbitTelem.periodSec, uiRu("Фаза", "Phase"), m_orbitTelem.trueAnomalyDeg);
+      ImGui::TextColored(ImVec4(0.5f, 0.7f, 0.85f, 0.7f), "%s",
+                         uiRu("W: поднять орбиту | S: деорбитальный сход",
+                              "W: raise orbit | S: deorbit burn"));
+    }
+
     // === Batch A1: Docking & Undocking progress bar ===
     if (m_dockAnimState != DockAnimState::None) {
       float prog = 0.0f;
@@ -6138,6 +6284,16 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
       m_landingTelem.isLanded,
       m_landingTelem.surfaceDustK,
       m_landingTelem.suspensionCompression);
+
+  // v5.3.0: Pass orbital cruise telemetry to cockpit HUD
+  m_cockpitController.setOrbitalCruiseTelemetry(
+      m_orbitCruiseActive,
+      m_orbitTelem.locked,
+      static_cast<float>(m_orbitTelem.radius),
+      static_cast<float>(m_orbitTelem.altitudeKm),
+      static_cast<float>(m_orbitTelem.speed),
+      static_cast<float>(m_orbitTelem.periodSec),
+      static_cast<float>(m_orbitTelem.trueAnomalyDeg));
 
   CockpitHUDData hudData = m_cockpitController.getHUDData();
   // v5.0.0: Bridge Comms & Radio Avionics
@@ -6643,6 +6799,7 @@ void AppGL::drawHelpContent() {
   ImGui::BulletText("H hide / show UI");
   ImGui::BulletText("F8 photo mode (exposure + Save PNG)");
   ImGui::BulletText("O auto-orbit around station (WASD exits)");
+  ImGui::BulletText("R orbital cruise / parking orbit around planets and stars");
   ImGui::BulletText("F1 toggle this help");
   ImGui::BulletText("ESC back to menu");
 }

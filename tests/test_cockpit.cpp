@@ -343,6 +343,63 @@ int main() {
     std::cout << "PASS: Cockpit Test 12 (radio avionics & signal modulation)\n";
   }
 
+  // Test 13: Orbital Cruise Keplerian parking orbit & Cockpit telemetry (v5.3.0)
+  {
+    ctrl.reset();
+    Vec3 pos(10.0, 0.0, 0.0);
+    Vec3 gravAcc(-2.0, 0.0, 0.0);
+    Vec3 inputVel(0.0, 0.0, 2.0);
+    Vec3 driftVel(0.0, 0.0, 0.0);
+    double bodyRadius = 5.0;
+    ship::OrbitalCruiseTelemetry telem;
+
+    // Run convergence iterations
+    for (int i = 0; i < 60; ++i) {
+      bool ok = ship::stepOrbitalCruise(pos, gravAcc, inputVel, driftVel, bodyRadius, 0.016, 0.0, telem);
+      if (!ok) {
+        std::cerr << "Test 13 failed: stepOrbitalCruise returned false\n";
+        return 1;
+      }
+    }
+
+    if (!telem.active) {
+      std::cerr << "Test 13 failed: telem.active expected true\n";
+      return 1;
+    }
+    double expectedVcirc = std::sqrt(2.0 * 10.0);
+    if (std::abs(telem.circularSpeed - expectedVcirc) > 0.01) {
+      std::cerr << "Test 13 failed: circularSpeed expected " << expectedVcirc << ", got " << telem.circularSpeed << "\n";
+      return 1;
+    }
+    if (!telem.locked) {
+      std::cerr << "Test 13 failed: orbital lock expected true after convergence\n";
+      return 1;
+    }
+    if (telem.periodSec <= 0.0) {
+      std::cerr << "Test 13 failed: periodSec expected > 0, got " << telem.periodSec << "\n";
+      return 1;
+    }
+
+    // Test CockpitController integration
+    ctrl.setOrbitalCruiseTelemetry(telem.active, telem.locked,
+                                   static_cast<float>(telem.radius),
+                                   static_cast<float>(telem.altitudeKm),
+                                   static_cast<float>(telem.speed),
+                                   static_cast<float>(telem.periodSec),
+                                   static_cast<float>(telem.trueAnomalyDeg));
+    const CockpitHUDData& hud = ctrl.getHUDData();
+    if (!hud.orbitCruiseActive || !hud.orbitCruiseLocked) {
+      std::cerr << "Test 13 failed: CockpitHUDData cruise flags not set properly\n";
+      return 1;
+    }
+    if (hud.orbitRadius <= 0.0f || hud.orbitPeriodSec <= 0.0f) {
+      std::cerr << "Test 13 failed: CockpitHUDData cruise telemetry values invalid\n";
+      return 1;
+    }
+
+    std::cout << "PASS: Cockpit Test 13 (Orbital Cruise math & telemetry)\n";
+  }
+
   std::cout << "ALL COCKPIT CONTROLLER TESTS PASSED\n";
   return 0;
 }

@@ -292,4 +292,14 @@ void CockpitController::setLandingTelemetry(int gearState, float gearProgress, b
   m_hud.suspensionCompression = suspension;
 }
 
+void CockpitController::setOrbitalCruiseTelemetry(bool active, bool locked, float radius, float altKm, float speed, float periodSec, float anomalyDeg) {
+  m_hud.orbitCruiseActive = active;
+  m_hud.orbitCruiseLocked = locked;
+  m_hud.orbitRadius = radius;
+  m_hud.orbitAltitudeKm = altKm;
+  m_hud.orbitSpeed = speed;
+  m_hud.orbitPeriodSec = periodSec;
+  m_hud.orbitTrueAnomalyDeg = anomalyDeg;
+}
+
 }  // namespace astro

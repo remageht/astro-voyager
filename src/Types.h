@@ -245,6 +245,104 @@ inline bool orbitAssist(const Vec3& pos, const Vec3& gravAcc, Vec3& inputVel,
   return true;
 }
 
+// === v5.3.0 Alpha: Диегетическое орбитальное курсирование (Keplerian Parking Orbit) ===
+struct OrbitalCruiseTelemetry {
+  bool active = false;
+  bool locked = false;
+  double radius = 0.0;           // Расстояние до центра гравитации (мир)
+  double altitudeKm = 0.0;       // Высота над поверхностью (км)
+  double speed = 0.0;            // Текущая орбитальная скорость
+  double circularSpeed = 0.0;    // Первая космическая скорость v = sqrt(a * r)
+  double periodSec = 0.0;        // Период витка в секундах T = 2 * pi * r / v
+  double trueAnomalyDeg = 0.0;   // Фаза витка (0..360 deg)
+  Vec3 orbitalNormal{0.0, 1.0, 0.0}; // Нормаль к плоскости орбиты
+  std::string bodyName = "";     // Имя небесного тела
+};
+
+inline bool stepOrbitalCruise(const Vec3& pos, const Vec3& gravAcc,
+                              Vec3& inputVel, Vec3& driftVel,
+                              double bodyRadius, double dt,
+                              double throttleAdjust, // >0: W (подъём), <0: S (деорбитальный сход)
+                              OrbitalCruiseTelemetry& telem) {
+  if (dt <= 0.0) return false;
+  const double r = std::sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+  if (r < 1e-3) return false;
+  const double a2 = gravAcc.x * gravAcc.x + gravAcc.y * gravAcc.y + gravAcc.z * gravAcc.z;
+  if (a2 < 1e-12) return false;
+  const double a = std::sqrt(a2);
+  const double vCirc = std::sqrt(a * r);
+  if (vCirc < 1e-6) return false;
+
+  const Vec3 er(pos.x / r, pos.y / r, pos.z / r);
+  double vx = inputVel.x + driftVel.x;
+  double vy = inputVel.y + driftVel.y;
+  double vz = inputVel.z + driftVel.z;
+  const double vr = vx * er.x + vy * er.y + vz * er.z;
+
+  Vec3 vtVec(vx - er.x * vr, vy - er.y * vr, vz - er.z * vr);
+  double vt = std::sqrt(vtVec.x * vtVec.x + vtVec.y * vtVec.y + vtVec.z * vtVec.z);
+
+  if (vt < 0.1 * vCirc) {
+    Vec3 refNorm = (std::abs(er.y) < 0.9) ? Vec3(0.0, 1.0, 0.0) : Vec3(1.0, 0.0, 0.0);
+    vtVec = Vec3(refNorm.y * er.z - refNorm.z * er.y,
+                 refNorm.z * er.x - refNorm.x * er.z,
+                 refNorm.x * er.y - refNorm.y * er.x);
+    double l = std::sqrt(vtVec.x * vtVec.x + vtVec.y * vtVec.y + vtVec.z * vtVec.z);
+    if (l > 1e-6) {
+      vtVec.x /= l; vtVec.y /= l; vtVec.z /= l;
+      vt = 0.5 * vCirc;
+    }
+  }
+
+  Vec3 vtDir = (vt > 1e-6) ? Vec3(vtVec.x / vt, vtVec.y / vt, vtVec.z / vt) : Vec3(0.0, 0.0, 1.0);
+
+  Vec3 N(er.y * vtDir.z - er.z * vtDir.y,
+         er.z * vtDir.x - er.x * vtDir.z,
+         er.x * vtDir.y - er.y * vtDir.x);
+  double nLen = std::sqrt(N.x * N.x + N.y * N.y + N.z * N.z);
+  if (nLen > 1e-6) {
+    N.x /= nLen; N.y /= nLen; N.z /= nLen;
+  } else {
+    N = Vec3(0.0, 1.0, 0.0);
+  }
+
+  double desiredRadiusRate = throttleAdjust * (vCirc * 0.35);
+  double targetVr = desiredRadiusRate;
+  double targetVt = vCirc * (1.0 + throttleAdjust * 0.1);
+
+  const double kAdj = 1.0 - std::exp(-dt * 2.5);
+  const double vrNew = vr + (targetVr - vr) * kAdj;
+  const double vtNew = vt + (targetVt - vt) * kAdj;
+
+  const Vec3 vGoal(er.x * vrNew + vtDir.x * vtNew,
+                   er.y * vrNew + vtDir.y * vtNew,
+                   er.z * vrNew + vtDir.z * vtNew);
+
+  driftVel = Vec3(driftVel.x * (1.0 - kAdj),
+                  driftVel.y * (1.0 - kAdj),
+                  driftVel.z * (1.0 - kAdj));
+  inputVel = Vec3(vGoal.x - driftVel.x,
+                  vGoal.y - driftVel.y,
+                  vGoal.z - driftVel.z);
+
+  telem.active = true;
+  telem.radius = r;
+  double alt = r - bodyRadius;
+  if (alt < 0.0) alt = 0.0;
+  telem.altitudeKm = alt * 100.0;
+  telem.speed = vt;
+  telem.circularSpeed = vCirc;
+  telem.periodSec = (vCirc > 1e-4) ? (2.0 * 3.14159265358979323846 * r / vCirc) : 0.0;
+  telem.orbitalNormal = N;
+  telem.locked = (std::abs(vr) < 0.18 * vCirc) && (std::abs(vt - vCirc) < 0.25 * vCirc);
+
+  double angle = std::atan2(pos.z, pos.x) * (180.0 / 3.14159265358979323846);
+  if (angle < 0.0) angle += 360.0;
+  telem.trueAnomalyDeg = angle;
+
+  return true;
+}
+
 // Low-shield screen effect gates (0 when the shield is healthy).
 inline float chromaK(float shield) {
   if (shield >= kLowShieldChroma) return 0.0f;
