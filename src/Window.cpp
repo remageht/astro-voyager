@@ -18,6 +18,61 @@
 #include <stdexcept>
 #include <iostream>
 
+#ifndef __APPLE__
+static void GLAPIENTRY openGlDebugCallback(GLenum source,
+                                           GLenum type,
+                                           GLuint id,
+                                           GLenum severity,
+                                           GLsizei /*length*/,
+                                           const GLchar* message,
+                                           const void* /*userParam*/) {
+  // Ignore harmless non-actionable notifications and vendor-specific buffer messages
+  if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) {
+    return;
+  }
+  // Filter out NVIDIA/AMD driver verbose buffer memory allocation info
+  // 131169: Memory usage info for buffer object
+  // 131185: Buffer object will use video memory as the source for buffer-object operations
+  // 131218: Program/shader state performance warning
+  // 131204: Texture state usage warning
+  if (id == 131169 || id == 131185 || id == 131204 || id == 131218) {
+    return;
+  }
+
+  const char* srcStr = "Other";
+  switch (source) {
+    case GL_DEBUG_SOURCE_API:             srcStr = "API"; break;
+    case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   srcStr = "WindowSystem"; break;
+    case GL_DEBUG_SOURCE_SHADER_COMPILER: srcStr = "ShaderCompiler"; break;
+    case GL_DEBUG_SOURCE_THIRD_PARTY:     srcStr = "ThirdParty"; break;
+    case GL_DEBUG_SOURCE_APPLICATION:     srcStr = "Application"; break;
+    case GL_DEBUG_SOURCE_OTHER:           srcStr = "Other"; break;
+  }
+
+  const char* typeStr = "Other";
+  switch (type) {
+    case GL_DEBUG_TYPE_ERROR:               typeStr = "Error"; break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typeStr = "Deprecated"; break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typeStr = "UndefinedBehavior"; break;
+    case GL_DEBUG_TYPE_PORTABILITY:         typeStr = "Portability"; break;
+    case GL_DEBUG_TYPE_PERFORMANCE:         typeStr = "Performance"; break;
+    case GL_DEBUG_TYPE_MARKER:              typeStr = "Marker"; break;
+    case GL_DEBUG_TYPE_OTHER:               typeStr = "Other"; break;
+  }
+
+  const char* sevStr = "Info";
+  switch (severity) {
+    case GL_DEBUG_SEVERITY_HIGH:         sevStr = "HIGH"; break;
+    case GL_DEBUG_SEVERITY_MEDIUM:       sevStr = "MEDIUM"; break;
+    case GL_DEBUG_SEVERITY_LOW:          sevStr = "LOW"; break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION: sevStr = "NOTIFICATION"; break;
+  }
+
+  std::cerr << "[OpenGL Debug][" << sevStr << "][" << typeStr << "][" << srcStr
+            << "] ID " << id << ": " << message << "\n";
+}
+#endif
+
 namespace astro {
 
 Window::Window(int width, int height, const char* title, bool visible) {
@@ -31,6 +86,7 @@ Window::Window(int width, int height, const char* title, bool visible) {
 #ifdef __APPLE__
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
+  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
   glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
 
   m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
@@ -90,6 +146,23 @@ Window::Window(int width, int height, const char* title, bool visible) {
 
   // Clear any benign GLEW error
   glGetError();
+
+#ifndef __APPLE__
+  GLint flags = 0;
+  glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
+  if ((flags & GL_CONTEXT_FLAG_DEBUG_BIT) && glDebugMessageCallback) {
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(openGlDebugCallback, nullptr);
+    if (glDebugMessageControl) {
+      glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE,
+                            GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr,
+                            GL_FALSE);
+    }
+    m_debugContext = true;
+    std::cout << "[Window] OpenGL KHR_debug context active\n";
+  }
+#endif
 
   glViewport(0, 0, width, height);
 }
