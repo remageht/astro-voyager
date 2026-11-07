@@ -223,6 +223,7 @@ CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float sur
   (void)surfaceGravity;
   CoreDrillTelemetry d;
   d.strata.clear();
+  d.bitTempC = std::max(20.0f, surfaceTempK - 273.15f);
 
   auto addLayer = [&](float mn, float mx, const std::string& ru, const std::string& en,
                       const std::string& compRu, const std::string& compEn, float hard,
@@ -421,10 +422,11 @@ void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput
     drill.depthM += drill.penetrationRate * deltaTime;
     if (drill.depthM > drill.maxDepthM) drill.depthM = drill.maxDepthM;
 
-    float heatRate = drill.rpm * hardness * drill.motorTorque * 0.0008f;
+    float heatRate = drill.rpm * hardness * drill.motorTorque * 0.02f;
+    if (surfaceTempK > 350.0f) heatRate += (surfaceTempK - 350.0f) * 0.05f;
     drill.bitTempC += heatRate * deltaTime;
-    float coolRate = 5.0f + (surfaceTempK - 273.15f) * 0.02f;
-    if (coolRate < 2.0f) coolRate = 2.0f;
+    float coolRate = 6.0f - surfaceTempK / 200.0f;
+    if (coolRate < 1.0f) coolRate = 1.0f;
     drill.bitTempC -= coolRate * deltaTime;
     if (drill.bitTempC < 20.0f) drill.bitTempC = 20.0f;
 
