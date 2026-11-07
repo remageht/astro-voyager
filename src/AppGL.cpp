@@ -12026,6 +12026,9 @@ void AppGL::updateLandingOperations(float deltaTime) {
     if (m_landingTelem.isLanded && !wasLanded) {
       m_ship.landedBodyId = nearestBodyId;
       m_currentSurfaceReport = generateSurfaceReport(nearestBodyId);
+      m_drillTelem = generateCoreDrillProfile(nearestBodyId, m_currentSurfaceReport.tempK, m_currentSurfaceReport.gravityMps2);
+      m_drillInputActive = false;
+      m_drillRetractActive = false;
       m_surfaceReportOpen = true;
 
       Toast lt;
@@ -12050,23 +12053,39 @@ void AppGL::updateLandingOperations(float deltaTime) {
       comm.durationSec = 8.0;
       m_bridgeComms.queueMessage(comm, glfwGetTime());
     }
+
+    // v5.3.0: Update Surface Core Drill simulation and audio
+    if (m_landingTelem.isLanded) {
+      updateCoreDrill(m_drillTelem, deltaTime, m_drillInputActive, m_drillRetractActive,
+                      m_currentSurfaceReport.tempK, m_currentSurfaceReport.gravityMps2);
+      float drillAudioK = (m_drillTelem.state == CoreDrillState::Drilling) ? (m_drillTelem.rpm / 420.0f) :
+                          (m_drillTelem.state == CoreDrillState::Retracting) ? 0.35f : 0.0f;
+      m_audio.setDrillLevel(drillAudioK, m_drillTelem.motorTorque);
+    } else {
+      m_audio.setDrillLevel(0.0f);
+      m_drillInputActive = false;
+      m_drillRetractActive = false;
+    }
   } else {
     m_landingTelem.radarAltM = -1.0f;
     m_landingTelem.surfaceDustK = 0.0f;
     m_landingTelem.isLanded = false;
     m_ship.isLanded = false;
+    m_audio.setDrillLevel(0.0f);
+    m_drillInputActive = false;
+    m_drillRetractActive = false;
   }
 }
 
 void AppGL::drawSurfaceReportModal() {
   if (!m_surfaceReportOpen) return;
 
-  ImGui::SetNextWindowSize(ImVec2(520.0f, 440.0f), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 260.0f,
-                                 ImGui::GetIO().DisplaySize.y * 0.5f - 220.0f),
+  ImGui::SetNextWindowSize(ImVec2(660.0f, 680.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 330.0f,
+                                 ImGui::GetIO().DisplaySize.y * 0.5f - 340.0f),
                           ImGuiCond_FirstUseEver);
 
-  std::string title = std::string(uiRu("⬡ Отчёт об экспедиции на поверхность: ", "⬡ Planetary Surface Expedition Report: ")) +
+  std::string title = std::string(uiRu("⬡ Научная лаборатория поверхности: ", "⬡ Planetary Surface Science Lab: ")) +
                       uiRu(m_currentSurfaceReport.nameRu.c_str(), m_currentSurfaceReport.nameEn.c_str()) + "###SurfaceRep";
   if (ImGui::Begin(title.c_str(), &m_surfaceReportOpen, ImGuiWindowFlags_NoCollapse)) {
     ImGui::TextColored(ImVec4(0.2f, 0.85f, 1.0f, 1.0f), "%s: %s",
@@ -12100,13 +12119,14 @@ void AppGL::drawSurfaceReportModal() {
     ImGui::TextWrapped("%s", uiRu(m_currentSurfaceReport.atmosphereRu.c_str(), m_currentSurfaceReport.atmosphereEn.c_str()));
     ImGui::Separator();
 
+    // 1. Поверхностные экспресс-образцы
     if (m_currentSurfaceReport.samplesCollected) {
       ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "%s",
-                         uiRu("✓ Образцы грунта доставлены в научный блок (+150 RP)",
+                         uiRu("✓ Экспресс-образцы реголита доставлены в научный блок (+150 RP)",
                               "✓ Surface samples collected & analyzed (+150 RP)"));
     } else {
-      if (ImGui::Button(uiRu("✦ Собрать образцы грунта (+150 RP)", "✦ Collect Surface Samples (+150 RP)"),
-                        ImVec2(-1, 36.0f))) {
+      if (ImGui::Button(uiRu("✦ Собрать экспресс-образцы реголита (+150 RP)", "✦ Collect Surface Samples (+150 RP)"),
+                        ImVec2(-1, 32.0f))) {
         m_currentSurfaceReport.samplesCollected = true;
         m_codex.scanObject(m_currentSurfaceReport.bodyId, glfwGetTime());
 
@@ -12131,8 +12151,147 @@ void AppGL::drawSurfaceReportModal() {
       }
     }
 
+    ImGui::Separator();
+
+    // 2. Буровой комплекс глубинного керна реголита (v5.3.0)
+    ImGui::TextColored(ImVec4(0.25f, 0.85f, 1.0f, 1.0f), "%s",
+                       uiRu("⛏ Комплекс глубокого кернового бурения (5.0 м)",
+                            "⛏ Deep Regolith Core Drill & Strata Sampler (5.0 m)"));
+
+    ImGui::Columns(2, "drillLayout", true);
+
+    // Левая колонка: Стратиграфическая колонка
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.6f, 1.0f), "%s",
+                       uiRu("Стратиграфический разрез:", "Stratigraphic Borehole:"));
+    for (size_t li = 0; li < m_drillTelem.strata.size(); ++li) {
+      const auto& layer = m_drillTelem.strata[li];
+      bool activeLayer = (m_drillTelem.depthM >= layer.depthMinM && m_drillTelem.depthM < layer.depthMaxM);
+      ImVec4 col = activeLayer ? ImVec4(0.3f, 0.9f, 1.0f, 1.0f) : ImVec4(0.7f, 0.75f, 0.8f, 1.0f);
+      ImGui::TextColored(col, "[%.1f-%.1f м] %s", layer.depthMinM, layer.depthMaxM,
+                         uiRu(layer.layerNameRu.c_str(), layer.layerNameEn.c_str()));
+      ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "  %s (T:%.2f, D:%.1f)",
+                         uiRu(layer.compositionRu.c_str(), layer.compositionEn.c_str()),
+                         layer.hardness, layer.densityGcm3);
+    }
+    ImGui::NextColumn();
+
+    // Правая колонка: Телеметрия бура и органы управления
+    const char* stateStrRu = "ОЖИДАНИЕ (ГОТОВ)";
+    const char* stateStrEn = "IDLE (READY)";
+    ImVec4 stateCol = ImVec4(0.2f, 0.9f, 0.5f, 1.0f);
+    if (m_drillTelem.state == CoreDrillState::Drilling) {
+      stateStrRu = "БУРЕНИЕ ПОРОДЫ...";
+      stateStrEn = "PENETRATING STRATA...";
+      stateCol = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
+    } else if (m_drillTelem.state == CoreDrillState::Retracting) {
+      stateStrRu = "ПОДЪЁМ ШТАНГИ...";
+      stateStrEn = "RETRACTING SHAFT...";
+      stateCol = ImVec4(0.3f, 0.8f, 1.0f, 1.0f);
+    } else if (m_drillTelem.state == CoreDrillState::Extracted) {
+      stateStrRu = "КЕРН ИЗВЛЕЧЁН В НАУЧНЫЙ БЛОК";
+      stateStrEn = "CORE EXTRACTED & STORED";
+      stateCol = ImVec4(0.3f, 1.0f, 0.6f, 1.0f);
+    } else if (m_drillTelem.state == CoreDrillState::Overheated) {
+      stateStrRu = "⚠ ПЕРЕГРЕВ! ОХЛАЖДЕНИЕ КОРОНКИ...";
+      stateStrEn = "⚠ OVERHEAT LOCK! COOLING BIT...";
+      stateCol = ImVec4(1.0f, 0.25f, 0.15f, 1.0f);
+    }
+
+    ImGui::TextColored(stateCol, "%s: %s", uiRu("Статус", "Status"), uiRu(stateStrRu, stateStrEn));
+
+    // Прогресс глубины
+    char depthBuf[64];
+    std::snprintf(depthBuf, sizeof(depthBuf), "%.2f / 5.00 m", m_drillTelem.depthM);
+    ImGui::ProgressBar(m_drillTelem.depthM / 5.0f, ImVec2(-1, 16.0f), depthBuf);
+
+    // Температура коронки
+    char tempBuf[64];
+    std::snprintf(tempBuf, sizeof(tempBuf), "%.1f °C / 280 °C", m_drillTelem.bitTempC);
+    ImVec4 tempCol = (m_drillTelem.bitTempC >= 250.0f) ? ImVec4(1.0f, 0.2f, 0.1f, 1.0f) :
+                     (m_drillTelem.bitTempC >= 180.0f) ? ImVec4(1.0f, 0.7f, 0.15f, 1.0f) :
+                                                         ImVec4(0.3f, 0.85f, 1.0f, 1.0f);
+    ImGui::TextColored(tempCol, "%s: %s", uiRu("Температура коронки", "Bit Temperature"), tempBuf);
+
+    // RPM & Torque
+    ImGui::Text("%s: %.0f RPM | %s: %.0f%%",
+                uiRu("Обороты", "Speed"), m_drillTelem.rpm,
+                uiRu("Крутящий момент", "Torque"), m_drillTelem.motorTorque * 100.0f);
+
     ImGui::Spacing();
-    if (ImGui::Button(uiRu("Закрыть отчёт", "Close Report"), ImVec2(-1, 28.0f))) {
+
+    // Кнопки управления
+    if (m_drillTelem.state == CoreDrillState::Overheated) {
+      ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.2f, 1.0f), "%s",
+                         uiRu("Блокировка вращения активна до остывания коронки ниже 160°C.",
+                              "Motor lock active until bit cools below 160°C."));
+    } else {
+      if (m_drillTelem.depthM < 5.0f && m_drillTelem.state != CoreDrillState::Extracted) {
+        ImGui::Button(uiRu("⛏ БУРИТЬ (УДЕРЖИВАТЬ)", "⛏ DRILL (HOLD)"), ImVec2(-1, 26.0f));
+        m_drillInputActive = ImGui::IsItemActive();
+      }
+
+      if (m_drillTelem.depthM > 0.0f && m_drillTelem.state != CoreDrillState::Retracting && m_drillTelem.state != CoreDrillState::Extracted) {
+        if (ImGui::Button(uiRu("▲ ПОДНЯТЬ ШТАНГУ", "▲ RETRACT SHAFT"), ImVec2(-1, 24.0f))) {
+          m_drillRetractActive = true;
+        }
+      }
+    }
+
+    ImGui::Columns(1);
+    ImGui::Separator();
+
+    // 3. Масс-спектрометрический комплекс керна
+    if (m_drillTelem.sampleExtracted) {
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.5f, 1.0f), "%s",
+                         uiRu("⬡ Спектрохимический паспорт извлечённого керна:",
+                              "⬡ Mass Spectrometry Core Analysis:"));
+      ImGui::Text("  • %s: %s", uiRu("Первичный минерал", "Primary Mineral"),
+                  uiRu(m_drillTelem.primaryMineralRu.c_str(), m_drillTelem.primaryMineralEn.c_str()));
+      ImGui::Text("  • %s: %s", uiRu("Редкие элементы", "Rare Elements"),
+                  uiRu(m_drillTelem.rareElementsRu.c_str(), m_drillTelem.rareElementsEn.c_str()));
+      ImGui::Text("  • %s: %.1f ppm", uiRu("Концентрация Гелия-3 (^3He)", "Helium-3 (^3He) Ppm"), m_drillTelem.helium3Ppm);
+      ImGui::Text("  • %s: %.1f %%", uiRu("Летучие компоненты (H2O экв.)", "Volatiles (H2O equiv)"), m_drillTelem.volatileWaterPercent);
+
+      ImGui::Spacing();
+      if (m_drillTelem.sampleAnalyzed) {
+        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "%s",
+                           uiRu("✓ Керн спектрально исследован, заметка занесена в Astro-Zettelkasten (+250 RP)",
+                                "✓ Core analyzed, note integrated into Astro-Zettelkasten (+250 RP)"));
+      } else {
+        if (ImGui::Button(uiRu("⬡ Занести керн в Дневник Пилота (+250 RP)", "⬡ Catalog Core Sample to Pilot Journal (+250 RP)"),
+                          ImVec2(-1, 34.0f))) {
+          m_drillTelem.sampleAnalyzed = true;
+          m_codex.addResearchPoints(m_drillTelem.scienceYield);
+          std::string zettelText = formatCoreSampleZettel(m_currentSurfaceReport.bodyId, m_currentSurfaceReport.nameRu, m_drillTelem);
+          m_zettelkasten.addCustomNote("Керн: " + m_currentSurfaceReport.nameRu, zettelText, "#керн");
+          m_audio.playEurekaChime();
+
+          RadioMessage comm;
+          comm.id = "core_" + m_currentSurfaceReport.bodyId;
+          comm.callsignRu = "Егорка-6 [Бортинженер]";
+          comm.callsignEn = "Egorka-6 [Flight Engineer]";
+          comm.textRu = "Спектрометрия керна завершена! Образец из скважины 5.0 м на " + m_currentSurfaceReport.nameRu +
+                        " каталогизирован во Втором Мозге. Концентрация He-3: " + std::to_string(static_cast<int>(m_drillTelem.helium3Ppm)) +
+                        " ppm! Научный отсек ликует (+250 RP).";
+          comm.textEn = "Mass-spectrometry complete! 5.0m core sample from " + m_currentSurfaceReport.nameEn +
+                        " cataloged into Astro-Zettelkasten. He-3 concentration: " + std::to_string(static_cast<int>(m_drillTelem.helium3Ppm)) +
+                        " ppm! Scientific block celebrating (+250 RP).";
+          comm.priority = 2.5f;
+          comm.durationSec = 9.0;
+          m_bridgeComms.queueMessage(comm, glfwGetTime());
+
+          Toast ct;
+          ct.title = uiRu("Керн каталогизирован", "Core Sample Cataloged");
+          ct.desc = std::string(uiRu("+250 RP за керн реголита: ", "+250 RP for regolith core from ")) +
+                    uiRu(m_currentSurfaceReport.nameRu.c_str(), m_currentSurfaceReport.nameEn.c_str());
+          ct.time = static_cast<float>(glfwGetTime());
+          m_toasts.push_back(ct);
+        }
+      }
+    }
+
+    ImGui::Spacing();
+    if (ImGui::Button(uiRu("Закрыть терминал", "Close Terminal"), ImVec2(-1, 28.0f))) {
       m_surfaceReportOpen = false;
     }
   }

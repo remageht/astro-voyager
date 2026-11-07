@@ -375,7 +375,10 @@ class AppGL {
   // === Planetary Landing & Surface Operations === (v4.6.1)
   LandingTelemetry m_landingTelem;
   SurfaceReport m_currentSurfaceReport;
+  CoreDrillTelemetry m_drillTelem;
   bool m_surfaceReportOpen = false;
+  bool m_drillInputActive = false;
+  bool m_drillRetractActive = false;
   bool m_prevGPressed = false;
   // v3.7.0: жизненный счётчик успешных уклонений от обломков (ачивка + GUI).
   int m_asteroidDodges = 0;
