@@ -185,6 +185,12 @@ void AudioEngine::update(float dt) {
   cg += (cgt - cg) * std::clamp(dt * 3.5f, 0.0f, 1.0f);
   m_cassetteGainCurrent.store(cg);
 
+  // v5.3.0: Smooth drill motor and regolith cutting sound
+  float dc = m_drillCurrent.load();
+  float dtarg = m_drillTarget.load();
+  dc += (dtarg - dc) * std::clamp(dt * 8.0f, 0.0f, 1.0f);
+  m_drillCurrent.store(dc);
+
   if (!m_live) {
     // Null-backend: двигаем виртуальное время, чистим голоса по нему.
     uint64_t adv = static_cast<uint64_t>(static_cast<double>(dt) * kSampleRate);
@@ -807,8 +813,19 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
       music *= (1.0f - 0.60f * cassK);
     }
 
-    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar + radioStaticSound + tapeL) * vol;
-    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar + radioStaticSound + tapeR) * vol;
+    // Drill sound (v5.3.0): Motor drone (95-160 Hz) + rock grinding noise modulated by torque/strain
+    const float drillK = m_drillCurrent.load();
+    float drillSound = 0.0f;
+    if (drillK > 0.001f) {
+      const float w = whiteNoise(m_rng);
+      m_drillGrind = (m_drillGrind + 0.12f * w) / 1.12f;
+      float dmotor = static_cast<float>(std::sin(2.0 * kPi * (95.0f + 65.0f * drillK) * tAbs)) +
+                     0.4f * static_cast<float>(std::sin(2.0 * kPi * (190.0f + 130.0f * drillK) * tAbs + 0.5));
+      drillSound = (dmotor * 0.15f + m_drillGrind * 0.22f) * drillK * 0.45f;
+    }
+
+    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar + radioStaticSound + tapeL + drillSound) * vol;
+    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar + radioStaticSound + tapeR + drillSound) * vol;
     mixL = std::tanh(mixL * 1.1f);
     mixR = std::tanh(mixR * 1.1f);
     out[i * 2 + 0] = mixL;
