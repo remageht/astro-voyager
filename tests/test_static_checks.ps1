@@ -479,6 +479,15 @@ Check 'zettelkasten test source exists' (Test-Path (Join-Path $root 'tests/test_
 Check 'cmake lists Zettelkasten.cpp' ((Read-File 'CMakeLists.txt') -match 'src/Zettelkasten\.cpp')
 Check 'cmake lists test_zettelkasten' ((Read-File 'CMakeLists.txt') -match 'test_zettelkasten')
 
+# v5.3.0: Epilogue Cinematic & Chronicle Scroll
+Check 'epilogue header exists' (Test-Path (Join-Path $root 'src/EpilogueSystem.h'))
+Check 'epilogue source exists' (Test-Path (Join-Path $root 'src/EpilogueSystem.cpp'))
+Check 'epilogue test source exists' (Test-Path (Join-Path $root 'tests/test_epilogue.cpp'))
+Check 'cmake lists EpilogueSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/EpilogueSystem\.cpp')
+Check 'cmake lists test_epilogue' ((Read-File 'CMakeLists.txt') -match 'test_epilogue')
+Check 'app has epilogue cinematic overlay' ((Read-File 'src/AppGL.cpp') -match 'drawEpilogueCinematicOverlay')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
+

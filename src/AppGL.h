@@ -18,6 +18,7 @@
 #include "ScienceSystem.h"
 #include "LandingSystem.h"
 #include "Zettelkasten.h"
+#include "EpilogueSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"
@@ -101,6 +102,11 @@ class AppGL {
   // v4.1: финальная развилка Adventure (колония / дальний горизонт).
   void openEndingSlide(int choice);
   void drawFinaleChoice();
+  // === Epilogue System === (v5.3.0): Процедурный синематик и свиток хроники
+  void startEpilogueCinematic(int choice);
+  void stopEpilogueCinematic();
+  void updateEpilogueCinematic(float dt);
+  void drawEpilogueCinematicOverlay();
   // v4.0: "Новая игра" — пролог Егорки + создание слота Adventure.
   void startNewAdventure();
   void saveAdventureSlotNow(bool quiet);
@@ -263,6 +269,15 @@ class AppGL {
   double m_slideShownAt = 0.0;
   static unsigned int uploadRgba(const unsigned char* px, int w, int h);
   void invalidateVideoSlide();
+
+  // === Epilogue System === (v5.3.0): Процедурный синематик и свиток хроники
+  bool m_epilogueActive = false;
+  float m_epilogueTime = 0.0f;
+  float m_epilogueScrollY = 0.0f;
+  float m_epilogueAutoScrollSpeed = 38.0f;
+  EpilogueChronicle m_activeChronicle;
+  int m_totalDrillSamplesCount = 0;
+  int m_totalWarpJumpsCount = 0;
 
   // === MenuSky === (v3.5.0): "живой космос" за главным меню — фуллскрин-
   // шейдерный бэкдроп (туманность + MW-полоса + параллакс-звёзды), ленивая

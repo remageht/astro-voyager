@@ -28,6 +28,7 @@ add_executable(astro-voyager
   src/ScienceSystem.cpp  # === ScienceSystem === (v4.6.0): спектрометрия, кодекс и радиопереговоры
   src/LandingSystem.cpp  # === LandingSystem === (v4.7.0): посадка на планеты, шасси и отчёты
   src/Zettelkasten.cpp  # === Zettelkasten === (v4.8.0): Второй Мозг Егорки, граф мыслей и истинные концовки
+  src/EpilogueSystem.cpp  # === EpilogueSystem === (v5.3.0): синематик и свиток хроники
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -265,6 +266,21 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_zettelkasten.cpp")
   endif()
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_epilogue.cpp")
+  add_executable(test_epilogue
+    tests/test_epilogue.cpp
+    src/EpilogueSystem.cpp
+    src/Expedition.cpp
+    src/Zettelkasten.cpp
+  )
+  target_include_directories(test_epilogue PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_epilogue PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_epilogue PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
 if(ASTROVOYAGER_ENABLE_GL)
   message(STATUS "GL renderer enabled (expects Dependencies/ + src/vendor/ locally)")
   target_compile_definitions(astro-voyager PRIVATE ASTROVOYAGER_ENABLE_GL=1)
@@ -482,6 +498,10 @@ endif()
 
 if(TARGET test_zettelkasten)
   add_test(NAME test_zettelkasten COMMAND test_zettelkasten)
+endif()
+
+if(TARGET test_epilogue)
+  add_test(NAME test_epilogue COMMAND test_epilogue)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):
