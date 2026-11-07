@@ -72,4 +72,52 @@ void updateTouchdownPhysics(LandingTelemetry& telem,
 // Generates canonical surface telemetry and geology report for catalog bodies
 SurfaceReport generateSurfaceReport(const std::string& bodyId);
 
+// === v5.3.0 Surface Science & Core Sampler ===
+enum class CoreDrillState {
+  Idle = 0,
+  Drilling = 1,
+  Retracting = 2,
+  Extracted = 3,
+  Overheated = 4
+};
+
+struct CoreStrataLayer {
+  float depthMinM = 0.0f;
+  float depthMaxM = 0.0f;
+  std::string layerNameRu;
+  std::string layerNameEn;
+  std::string compositionRu;
+  std::string compositionEn;
+  float hardness = 0.5f;
+  float densityGcm3 = 2.0f;
+  float tempK = 300.0f;
+};
+
+struct CoreDrillTelemetry {
+  CoreDrillState state = CoreDrillState::Idle;
+  float depthM = 0.0f;
+  float maxDepthM = 5.0f;
+  float rpm = 0.0f;
+  float bitTempC = 20.0f;
+  float motorTorque = 0.0f;
+  float penetrationRate = 0.0f;
+  bool sampleExtracted = false;
+  bool sampleAnalyzed = false;
+  std::string primaryMineralRu;
+  std::string primaryMineralEn;
+  std::string rareElementsRu;
+  std::string rareElementsEn;
+  float helium3Ppm = 0.0f;
+  float volatileWaterEquivalentPercent = 0.0f;
+  std::vector<CoreStrataLayer> strata;
+  int scienceYield = 250;
+};
+
+void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput, bool retractInput,
+                     float surfaceTempK, float surfaceGravity);
+CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float surfaceTempK,
+                                           float surfaceGravity);
+std::string formatCoreSampleZettel(const std::string& bodyId, const std::string& bodyNameRu,
+                                   const CoreDrillTelemetry& drill);
+
 }  // namespace astro
