@@ -937,6 +937,7 @@ void AppGL::toggleOrbitalCruise() {
     m_toasts.push_back(t);
   } else {
     m_audio.playClick();
+    m_orbitNoticeShown = false;
     m_orbitTelem.active = false;
     m_orbitTelem.locked = false;
     m_shipNotice = uiRu("Орбита: автопилот отключён, ручное управление",
