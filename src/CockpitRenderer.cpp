@@ -105,6 +105,13 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform1f("u_OrbitPeriod", hud.orbitPeriodSec);
   m_shader->setUniform1f("u_OrbitAnomaly", hud.orbitTrueAnomalyDeg);
 
+  // v5.3.0 Surface Science & Core Sampler
+  m_shader->setUniform1f("u_DrillActive", hud.drillActive ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_DrillDepth", hud.drillDepthM);
+  m_shader->setUniform1f("u_DrillTemp", hud.drillBitTempC);
+  m_shader->setUniform1i("u_DrillState", hud.drillState);
+  m_shader->setUniform1f("u_CoreAnalyzed", hud.coreAnalyzed ? 1.0f : 0.0f);
+
   m_quad->draw();
 
   m_shader->unbind();
