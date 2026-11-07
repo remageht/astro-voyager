@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace astro {
 
@@ -219,6 +220,7 @@ SurfaceReport generateSurfaceReport(const std::string& bodyId) {
 // === v5.3.0 Surface Science & Core Sampler ===
 CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float surfaceTempK,
                                            float surfaceGravity) {
+  (void)surfaceGravity;
   CoreDrillTelemetry d;
   d.strata.clear();
 
@@ -242,12 +244,12 @@ CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float sur
   for (char& c : bid) c = (char)std::tolower((unsigned char)c);
 
   if (bid == "mars") {
-    d.primaryMineralRu = "Нанореголит Fe2O3";
-    d.primaryMineralEn = "Nanophase Fe2O3 regolith";
+    d.primaryMineralRu = "Оливиновый базальт и ярозит";
+    d.primaryMineralEn = "Olivine Basalt & Jarosite";
     d.rareElementsRu = "Оливиновые базальты, вечномерзлотный лед";
     d.rareElementsEn = "Olivine basalts, permafrost ice";
     d.helium3Ppm = 14.2f;
-    d.volatileWaterEquivalentPercent = 3.5f;
+    d.volatileWaterEquivalentPercent = 12.8f;
     addLayer(0.0f, 1.2f, "Нанореголит", "Nanoregolith",
              "Fe2O3, пыль", "Fe2O3 dust", 0.25f, 1.4f, surfaceTempK);
     addLayer(1.2f, 3.4f, "Оливиновый базальт", "Olivine basalt",
@@ -255,8 +257,8 @@ CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float sur
     addLayer(3.4f, 5.0f, "Вечномерзлотный лед", "Permafrost ice",
              "H2O ice", "H2O ice", 0.4f, 0.92f, surfaceTempK);
   } else if (bid == "moon" || bid == "luna") {
-    d.primaryMineralRu = "Абразивный микрореголит";
-    d.primaryMineralEn = "Abrasive micrometeorite regolith";
+    d.primaryMineralRu = "Ильменит (FeTiO3) и анортозит";
+    d.primaryMineralEn = "Ilmenite (FeTiO3) & Anorthosite";
     d.rareElementsRu = "Титаномагнетитовые брекчии, анортозит";
     d.rareElementsEn = "Titanomagnetite breccia, anorthosite";
     d.helium3Ppm = 38.5f;
@@ -268,12 +270,12 @@ CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float sur
     addLayer(3.4f, 5.0f, "Анортозитовая кора", "Anorthosite crust",
              "CaAl2Si2O8", "CaAl2Si2O8", 0.65f, 2.7f, surfaceTempK);
   } else if (bid == "titan") {
-    d.primaryMineralRu = "Фотохимические толины";
-    d.primaryMineralEn = "Photochemical tholins";
+    d.primaryMineralRu = "Органические толины и клатраты метана";
+    d.primaryMineralEn = "Organic Tholins & Methane Clathrates";
     d.rareElementsRu = "Клатратные гидраты метана, водяной крио-лед";
     d.rareElementsEn = "Methane clathrates, water cryo-ice";
     d.helium3Ppm = 2.1f;
-    d.volatileWaterEquivalentPercent = 42.0f;
+    d.volatileWaterEquivalentPercent = 64.5f;
     addLayer(0.0f, 1.2f, "Толины", "Tholins",
              "C/H/N polymers", "C/H/N polymers", 0.2f, 1.1f, surfaceTempK);
     addLayer(1.2f, 3.4f, "Клатраты метана", "Methane clathrates",
@@ -318,7 +320,7 @@ CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float sur
     addLayer(1.2f, 3.4f, "Перидотит", "Peridotite",
              "Mg2SiO4", "Mg2SiO4", 0.8f, 3.3f, surfaceTempK);
     addLayer(3.4f, 5.0f, "Углеродно-титановая матрица", "C-Ti matrix",
-             "C, Ti", "C, Ti", 0.95f, 4.5f, surfaceTempK);
+             "C, Ti", "C, Ti", 0.98f, 4.5f, surfaceTempK);
   } else if (bid == "earth") {
     d.primaryMineralRu = "Гумус и кварцевые пески";
     d.primaryMineralEn = "Humus and quartz sands";
@@ -347,20 +349,22 @@ CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float sur
              "Mg2SiO4", "Mg2SiO4", 0.7f, 3.3f, surfaceTempK);
   }
 
+  d.volatileWaterPercent = d.volatileWaterEquivalentPercent;
   return d;
 }
 
 void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput, bool retractInput,
                      float surfaceTempK, float surfaceGravity) {
+  (void)surfaceGravity;
   if (deltaTime <= 0.0f) return;
 
   if (drill.state == CoreDrillState::Overheated) {
     drill.rpm = 0.0f;
     drill.motorTorque = 0.0f;
     drill.penetrationRate = 0.0f;
-    float coolRate = 30.0f;
+    float coolRate = 45.0f;
     drill.bitTempC -= coolRate * deltaTime;
-    if (drill.bitTempC < 180.0f) {
+    if (drill.bitTempC < 160.0f) {
       drill.state = CoreDrillState::Idle;
       if (drill.bitTempC < 20.0f) drill.bitTempC = 20.0f;
     }
@@ -375,13 +379,13 @@ void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput
     drill.rpm = 0.0f;
     drill.motorTorque = 0.0f;
     drill.penetrationRate = 0.0f;
-    drill.depthM -= 0.5f * deltaTime;
+    drill.depthM -= 1.6f * deltaTime;
     if (drill.depthM <= 0.0f) {
       drill.depthM = 0.0f;
       drill.state = CoreDrillState::Extracted;
       drill.sampleExtracted = true;
     }
-    drill.bitTempC -= 15.0f * deltaTime;
+    drill.bitTempC -= 20.0f * deltaTime;
     if (drill.bitTempC < 20.0f) drill.bitTempC = 20.0f;
     return;
   }
@@ -390,7 +394,7 @@ void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput
     drill.rpm = 0.0f;
     drill.motorTorque = 0.0f;
     drill.penetrationRate = 0.0f;
-    drill.bitTempC -= 10.0f * deltaTime;
+    drill.bitTempC -= 15.0f * deltaTime;
     if (drill.bitTempC < 20.0f) drill.bitTempC = 20.0f;
     return;
   }
@@ -411,8 +415,8 @@ void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput
 
     drill.rpm = 420.0f;
     drill.motorTorque = 0.3f + hardness * 0.7f;
-    drill.penetrationRate = (1.0f - hardness * 0.8f) * 0.5f;
-    if (drill.penetrationRate < 0.01f) drill.penetrationRate = 0.01f;
+    drill.penetrationRate = (1.0f - hardness * 0.4f) * 1.0f;
+    if (drill.penetrationRate < 0.1f) drill.penetrationRate = 0.1f;
 
     drill.depthM += drill.penetrationRate * deltaTime;
     if (drill.depthM > drill.maxDepthM) drill.depthM = drill.maxDepthM;
@@ -435,19 +439,25 @@ void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput
     drill.bitTempC -= 10.0f * deltaTime;
     if (drill.bitTempC < 20.0f) drill.bitTempC = 20.0f;
   }
-
-  (void)surfaceGravity;
 }
 
 std::string formatCoreSampleZettel(const std::string& bodyId, const std::string& bodyNameRu,
                                    const CoreDrillTelemetry& drill) {
   std::string s;
-  s += "Керн: " + bodyNameRu + " (" + bodyId + ")\n";
-  s += "Глубина: " + std::to_string(drill.depthM) + " м\n";
-  s += "Минерал: " + drill.primaryMineralRu + "\n";
-  s += "He-3: " + std::to_string(drill.helium3Ppm) + " ppm\n";
-  s += "Летучие: " + std::to_string(drill.volatileWaterEquivalentPercent) + " %\n";
-  s += "Страты: " + std::to_string(drill.strata.size()) + "\n";
+  s += "### Спектрохимический паспорт керна: " + bodyNameRu + " (5.0 м)\n\n";
+  s += "**Идентификатор тела**: `" + bodyId + "`\n";
+  s += "**Первичная минеральная фация**: " + drill.primaryMineralRu + "\n";
+  s += "**Концентрация изотопа Гелий-3 (^3He)**: " + std::to_string(static_cast<int>(drill.helium3Ppm)) + " ppm\n";
+  s += "**Летучие компоненты**: " + std::to_string(static_cast<int>(drill.volatileWaterPercent)) + " %\n";
+  s += "**Редкие элементы / металлы**: " + drill.rareElementsRu + "\n\n";
+  s += "#### Стратиграфический профиль скважины:\n";
+  for (const auto& l : drill.strata) {
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "- **[%.1f - %.1f м] %s**: %s (Твердость: %.2f, Плотность: %.2f г/см³)\n",
+                  l.depthMinM, l.depthMaxM, l.layerNameRu.c_str(), l.compositionRu.c_str(), l.hardness, l.densityGcm3);
+    s += buf;
+  }
+  s += "\n*Образцы реголита запечатаны в герметичные контейнеры научного отсека корабля. Начислено +250 очков исследований.*";
   return s;
 }
 
