@@ -63,6 +63,13 @@ uniform float u_OrbitAlt;
 uniform float u_OrbitPeriod;
 uniform float u_OrbitAnomaly;
 
+// v5.3.0 Surface Science & Core Sampler
+uniform float u_DrillActive;
+uniform float u_DrillDepth;
+uniform float u_DrillTemp;
+uniform int   u_DrillState;
+uniform float u_CoreAnalyzed;
+
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
   p = fract(p * vec2(234.34, 435.345));
