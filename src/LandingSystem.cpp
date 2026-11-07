@@ -357,7 +357,15 @@ CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float sur
 void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput, bool retractInput,
                      float surfaceTempK, float surfaceGravity) {
   (void)surfaceGravity;
+  (void)surfaceTempK;
   if (deltaTime <= 0.0f) return;
+
+  if (drill.bitTempC >= 280.0f) {
+    drill.state = CoreDrillState::Overheated;
+    drill.rpm = 0.0f;
+    drill.motorTorque = 0.0f;
+    drill.penetrationRate = 0.0f;
+  }
 
   if (drill.state == CoreDrillState::Overheated) {
     drill.rpm = 0.0f;
@@ -365,7 +373,7 @@ void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput
     drill.penetrationRate = 0.0f;
     float coolRate = 45.0f;
     drill.bitTempC -= coolRate * deltaTime;
-    if (drill.bitTempC < 160.0f) {
+    if (drill.bitTempC <= 160.0f) {
       drill.state = CoreDrillState::Idle;
       if (drill.bitTempC < 20.0f) drill.bitTempC = 20.0f;
     }
@@ -422,17 +430,17 @@ void updateCoreDrill(CoreDrillTelemetry& drill, float deltaTime, bool drillInput
     drill.depthM += drill.penetrationRate * deltaTime;
     if (drill.depthM > drill.maxDepthM) drill.depthM = drill.maxDepthM;
 
-    float heatRate = drill.rpm * hardness * drill.motorTorque * 0.02f;
-    if (surfaceTempK > 350.0f) heatRate += (surfaceTempK - 350.0f) * 0.05f;
+    float heatRate = drill.rpm * hardness * drill.motorTorque * 0.25f;
     drill.bitTempC += heatRate * deltaTime;
-    float coolRate = 6.0f - surfaceTempK / 200.0f;
-    if (coolRate < 1.0f) coolRate = 1.0f;
+    float coolRate = 2.0f;
     drill.bitTempC -= coolRate * deltaTime;
     if (drill.bitTempC < 20.0f) drill.bitTempC = 20.0f;
 
-    if (drill.bitTempC > 280.0f) {
+    if (drill.bitTempC >= 280.0f) {
       drill.state = CoreDrillState::Overheated;
-      drill.bitTempC = 280.0f;
+      drill.rpm = 0.0f;
+      drill.motorTorque = 0.0f;
+      drill.penetrationRate = 0.0f;
     }
   } else {
     drill.rpm = 0.0f;
