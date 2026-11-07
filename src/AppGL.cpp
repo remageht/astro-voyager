@@ -1,4 +1,4 @@
-﻿#include "AppGL.h"
+#include "AppGL.h"
 
 #include "GLCompat.h"
 #include <GLFW/glfw3.h>
@@ -2320,18 +2320,18 @@ void AppGL::applyModernThemeOnce() {
   st.ScrollbarSize = 10.0f;
   st.GrabMinSize = 10.0f;
 
-  // Фон: глубокое обсидиановое стекло (#070B12).
-  st.Colors[ImGuiCol_WindowBg] = ImVec4(0.027f, 0.043f, 0.068f, 0.94f);
-  st.Colors[ImGuiCol_ChildBg] = ImVec4(0.035f, 0.052f, 0.082f, 0.75f);
-  st.Colors[ImGuiCol_PopupBg] = ImVec4(0.030f, 0.048f, 0.076f, 0.96f);
+  // Фон: глубокое высококонтрастное обсидиановое стекло (#05080E, 96% opacity).
+  st.Colors[ImGuiCol_WindowBg] = ImVec4(0.018f, 0.028f, 0.045f, 0.96f);
+  st.Colors[ImGuiCol_ChildBg] = ImVec4(0.025f, 0.042f, 0.068f, 0.88f);
+  st.Colors[ImGuiCol_PopupBg] = ImVec4(0.020f, 0.035f, 0.055f, 0.98f);
 
-  // Высококонтрастная чистая кромка аэрокосмического циана-стали (#2563EB/#38BDF8 blend).
-  st.Colors[ImGuiCol_Border] = ImVec4(0.22f, 0.48f, 0.72f, 0.55f);
+  // Высококонтрастная чистая кромка аэрокосмического кибер-циана (#38BDF8, 75% alpha).
+  st.Colors[ImGuiCol_Border] = ImVec4(0.24f, 0.58f, 0.88f, 0.75f);
   st.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
 
-  // Текст: чистый холодный белый высокой контрастности + приглушённый графит.
-  st.Colors[ImGuiCol_Text] = ImVec4(0.94f, 0.96f, 0.99f, 1.00f);
-  st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.48f, 0.56f, 0.66f, 1.00f);
+  // Текст: чистый холодный белый высокой контрастности (#F8FAFC) + четкий серебристый слейт (#94A3B8).
+  st.Colors[ImGuiCol_Text] = ImVec4(0.97f, 0.98f, 1.00f, 1.00f);
+  st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.58f, 0.65f, 0.75f, 1.00f);
 
   // Акценты: аэрокосмический кибер-циан (#38BDF8) + тактический янтарь (#F59E0B).
   const ImVec4 cyan(0.22f, 0.74f, 0.97f, 1.00f);
@@ -2339,14 +2339,14 @@ void AppGL::applyModernThemeOnce() {
   const ImVec4 amber(0.96f, 0.62f, 0.07f, 1.00f);
 
   // Поля ввода (Frames)
-  st.Colors[ImGuiCol_FrameBg] = ImVec4(0.08f, 0.13f, 0.20f, 0.85f);
-  st.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.14f, 0.22f, 0.34f, 0.95f);
-  st.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.18f, 0.30f, 0.46f, 1.00f);
+  st.Colors[ImGuiCol_FrameBg] = ImVec4(0.07f, 0.12f, 0.19f, 0.90f);
+  st.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.14f, 0.24f, 0.38f, 0.98f);
+  st.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.20f, 0.34f, 0.52f, 1.00f);
 
   // Кнопки: люминесцентное аэрокосмическое стекло с чётким откликом
-  st.Colors[ImGuiCol_Button] = ImVec4(0.11f, 0.20f, 0.32f, 0.82f);
-  st.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.18f, 0.35f, 0.56f, 0.98f);
-  st.Colors[ImGuiCol_ButtonActive] = ImVec4(0.24f, 0.50f, 0.78f, 1.00f);
+  st.Colors[ImGuiCol_Button] = ImVec4(0.10f, 0.20f, 0.32f, 0.90f);
+  st.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.18f, 0.38f, 0.62f, 0.98f);
+  st.Colors[ImGuiCol_ButtonActive] = ImVec4(0.25f, 0.55f, 0.88f, 1.00f);
 
   // Заголовки (Headers)
   st.Colors[ImGuiCol_Header] = ImVec4(0.13f, 0.24f, 0.38f, 0.75f);
@@ -4671,16 +4671,16 @@ void AppGL::drawFinaleChoice() {
 }
 
 void AppGL::drawModernTransportBar() {
-  // Нижняя транспортная панель по центру (как медиаплеер): пауза, пресеты
-  // времени, фактор варпа, тур, прыжок. Только кнопки-индикаторы: каждый
-  // вызов повторяет соответствующий обработчик из Navigator/хоткеев
-  // (togglePause / setTimeScale / warpRetarget / startCineTour /
-  // stopCineTour / startWarpJump с их же гвардами). Новой логики нет.
+  // Elevated floating command island: anchor at disp.y - 32px (was -12px edge)
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   if (disp.x <= 0.0f || disp.y <= 0.0f) return;
-  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y - 12.0f),
+  ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y - 32.0f),
                           ImGuiCond_Always, ImVec2(0.5f, 1.0f));
-  ImGui::SetNextWindowBgAlpha(0.92f);
+  ImGui::SetNextWindowBgAlpha(0.94f);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.02f, 0.04f, 0.07f, 0.94f));  // #060B12
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 1.00f));  // #38BDF8
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
   const ImGuiWindowFlags flags =
       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
@@ -4797,18 +4797,237 @@ void AppGL::drawModernTransportBar() {
     ImGui::Separator();
     ImGui::SetWindowFontScale(0.85f);
     ImGui::TextColored(
-        ImVec4(0.55f, 0.58f, 0.62f, 1.00f), "%s",
-         uiRu("WASD - полет | мышь - осмотр | T - кинотур | X - варп | "
-              "P - пауза | -/= - темп | / - поиск | F1 - помощь | H - скрыть | "
-              "F8 - фото | O - орбита | ESC - меню",
-              "WASD fly | drag look | T tour | X warp | P pause | -/= pace | "
-              "/ search | F1 help | H hide | F8 photo | O orbit | ESC menu"));
+        ImVec4(0.68f, 0.76f, 0.88f, 1.00f), "%s",
+         uiRu("WASD: полет | Мышь: обзор | E: действие | Space: бурение | J: прыжок | "
+              "P: пауза | -/=: темп | /: поиск | F1: помощь | H: скрыть | F8: фото | ESC: меню",
+              "WASD: fly | Mouse: look | E: action | Space: drill | J: jump | "
+              "P: pause | -/=: pace | /: search | F1: help | H: hide | F8: photo | ESC: menu"));
     ImGui::SetWindowFontScale(1.0f);
   }
   ImGui::End();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(2);
   if (pushed) ImGui::PopFont();
 }
 // === ModernUI === end
+
+// === Center-Focused HUD === (UI/UX Overhaul)
+void AppGL::drawCenterReticleHud() {
+  if (m_inMenu || m_slidesOpen || m_hideUI) return;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+  const ImVec2 ctr(disp.x * 0.5f, disp.y * 0.5f);
+  const ImU32 cyan = IM_COL32(56, 189, 248, 255);       // #38BDF8
+  const ImU32 cyanDim = IM_COL32(56, 189, 248, 140);
+  const ImU32 cyanGlow = IM_COL32(56, 189, 248, 55);
+  const ImU32 white = IM_COL32(255, 255, 255, 255);
+  const ImU32 slate = IM_COL32(148, 163, 184, 255);     // #94A3B8
+  const ImU32 starWhite = IM_COL32(248, 250, 252, 255); // #F8FAFC
+  const ImU32 amber = IM_COL32(245, 158, 11, 240);
+  const ImU32 redAlert = IM_COL32(239, 68, 68, 240);
+
+  ImDrawList* dl = ImGui::GetForegroundDrawList();
+  // Center brackets 1px precision
+  const float br = 14.0f;
+  const float gap = 6.0f;
+  dl->AddLine(ImVec2(ctr.x - br, ctr.y - gap), ImVec2(ctr.x - gap, ctr.y - gap), cyan, 1.0f);
+  dl->AddLine(ImVec2(ctr.x - br, ctr.y + gap), ImVec2(ctr.x - gap, ctr.y + gap), cyan, 1.0f);
+  dl->AddLine(ImVec2(ctr.x - gap, ctr.y - br), ImVec2(ctr.x - gap, ctr.y - gap), cyan, 1.0f);
+  dl->AddLine(ImVec2(ctr.x - gap, ctr.y + gap), ImVec2(ctr.x - gap, ctr.y + br), cyan, 1.0f);
+  dl->AddLine(ImVec2(ctr.x + gap, ctr.y - gap), ImVec2(ctr.x + br, ctr.y - gap), cyan, 1.0f);
+  dl->AddLine(ImVec2(ctr.x + gap, ctr.y + gap), ImVec2(ctr.x + br, ctr.y + gap), cyan, 1.0f);
+  dl->AddLine(ImVec2(ctr.x + gap, ctr.y - br), ImVec2(ctr.x + gap, ctr.y - gap), cyan, 1.0f);
+  dl->AddLine(ImVec2(ctr.x + gap, ctr.y + gap), ImVec2(ctr.x + gap, ctr.y + br), cyan, 1.0f);
+  dl->AddCircleFilled(ctr, 1.5f, white, 8);
+  dl->AddCircle(ctr, 24.0f, cyanGlow, 32, 1.0f);
+
+  // Target header above crosshair
+  const Station* curSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+  if (curSt) {
+    char buf[128];
+    double d = std::sqrt(m_camera.position.x * m_camera.position.x +
+                         m_camera.position.y * m_camera.position.y +
+                         m_camera.position.z * m_camera.position.z);
+    std::snprintf(buf, sizeof(buf), "%s  %.1f Rs", curSt->name.c_str(), d);
+    ImVec2 sz = ImGui::CalcTextSize(buf);
+    dl->AddText(ImVec2(ctr.x - sz.x * 0.5f, ctr.y - 42.0f), cyan, buf);
+  }
+
+  // Left arch: speed + throttle + warp badge
+  float spd = static_cast<float>(std::sqrt(m_shipVel.x * m_shipVel.x + m_shipVel.y * m_shipVel.y +
+                                           m_shipVel.z * m_shipVel.z));
+  char spdBuf[64];
+  if (m_warpOn) {
+    std::snprintf(spdBuf, sizeof(spdBuf), "%.2f AU/s", spd * 0.001f);
+  } else {
+    std::snprintf(spdBuf, sizeof(spdBuf), "%.1f km/s", spd * 5.0f);
+  }
+  dl->AddText(ImVec2(ctr.x - 160.0f, ctr.y - 10.0f), starWhite, spdBuf);
+  char thrBuf[64];
+  std::snprintf(thrBuf, sizeof(thrBuf), "THR %.0f%%", m_camSpeed * 100.0);
+  dl->AddText(ImVec2(ctr.x - 160.0f, ctr.y + 8.0f), slate, thrBuf);
+  if (m_warpOn) {
+    char wfBuf[32];
+    std::snprintf(wfBuf, sizeof(wfBuf), "F%d WARP", m_warpFactor);
+    dl->AddText(ImVec2(ctr.x - 160.0f, ctr.y + 26.0f), amber, wfBuf);
+  }
+
+  // Right arch: shield/fuel segmented bars
+  float sh = std::clamp(m_ship.shield / 100.0f, 0.0f, 1.0f);
+  float fu = std::clamp(m_ship.fuel / 100.0f, 0.0f, 1.0f);
+  auto drawBar = [&](ImVec2 p, float v, ImU32 col, const char* label) {
+    dl->AddRectFilled(p, ImVec2(p.x + 90.0f, p.y + 8.0f), IM_COL32(10, 15, 25, 200));
+    dl->AddRectFilled(p, ImVec2(p.x + 90.0f * v, p.y + 8.0f), col);
+    dl->AddRect(p, ImVec2(p.x + 90.0f, p.y + 8.0f), cyanDim, 0.0f, 0, 1.0f);
+    dl->AddText(ImVec2(p.x, p.y - 12.0f), slate, label);
+  };
+  ImU32 shCol = (sh < 0.2f) ? redAlert : cyan;
+  ImU32 fuCol = (fu < 0.2f) ? redAlert : IM_COL32(251, 191, 36, 240);
+  drawBar(ImVec2(ctr.x + 70.0f, ctr.y - 10.0f), sh, shCol, "SHIELD");
+  drawBar(ImVec2(ctr.x + 70.0f, ctr.y + 12.0f), fu, fuCol, "FUEL");
+  // Emergency pulse
+  if (sh < 0.2f || fu < 0.2f) {
+    float a = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 8.0));
+    ImU32 pulse = IM_COL32(239, 68, 68, static_cast<int>(255 * a));
+    dl->AddRect(ImVec2(ctr.x + 68.0f, ctr.y - 14.0f), ImVec2(ctr.x + 162.0f, ctr.y + 22.0f),
+                pulse, 4.0f, 0, 1.5f);
+  }
+}
+
+void AppGL::drawActionHorizon() {
+  if (m_inMenu || m_slidesOpen || m_hideUI) return;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+  const ImVec2 ctr(disp.x * 0.5f, disp.y * 0.5f);
+  const Station* cur = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+
+  ImGui::SetNextWindowPos(ImVec2(ctr.x, ctr.y + 54.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+  ImGui::SetNextWindowBgAlpha(0.96f);
+
+  const ImGuiWindowFlags fl =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_AlwaysAutoResize;
+
+  const bool pushed = modernPushFont();
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.018f, 0.028f, 0.045f, 0.96f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.24f, 0.58f, 0.88f, 0.85f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 6.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 4.0f));
+
+  if (ImGui::Begin("##ActionHorizon", nullptr, fl)) {
+    // 1px Technical Sci-Fi corner brackets
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 pMin = ImGui::GetWindowPos();
+    const ImVec2 pMax = ImVec2(pMin.x + ImGui::GetWindowWidth(), pMin.y + ImGui::GetWindowHeight());
+    const ImU32 brkCol = IM_COL32(56, 189, 248, 220);
+    const float brkLen = 8.0f;
+    dl->AddLine(pMin, ImVec2(pMin.x + brkLen, pMin.y), brkCol, 1.5f);
+    dl->AddLine(pMin, ImVec2(pMin.x, pMin.y + brkLen), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMax.x - brkLen, pMin.y), ImVec2(pMax.x, pMin.y), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMax.x, pMin.y), ImVec2(pMax.x, pMin.y + brkLen), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMin.x, pMax.y - brkLen), ImVec2(pMin.x, pMax.y), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMin.x, pMax.y), ImVec2(pMin.x + brkLen, pMax.y), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMax.x - brkLen, pMax.y), pMax, brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMax.x, pMax.y - brkLen), pMax, brkCol, 1.5f);
+
+    if (m_landingTelem.isLanded) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.42f, 0.25f, 0.90f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.98f, 0.65f, 1.0f));
+      if (ImGui::Button(uiRu("⛏ БУРЕНИЕ КЕРНА (Space)", "⛏ DRILL CORE (Space)"))) {
+        m_surfaceReportOpen = true;
+      }
+      ImGui::PopStyleColor(2);
+
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("🔬 СПЕКТРОМЕТРИЯ (C)", "🔬 SPECTROMETER (C)"))) {
+        m_spectrometerOpen = !m_spectrometerOpen;
+      }
+
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("🚀 ВЗЛЕТ НА ОРБИТУ (E)", "🚀 LIFTOFF TO ORBIT (E)"))) {
+        m_ship.isLanded = false;
+        m_landingTelem.isLanded = false;
+        m_shipVel.y += 0.8;
+      }
+    } else if (m_landingTelem.altitudeM > 0.0f && m_landingTelem.altitudeM < 80000.0f) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.50f, 0.10f, 0.92f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.08f, 0.12f, 1.0f));
+      char landBtn[64];
+      std::snprintf(landBtn, sizeof(landBtn), "%s %s (E)",
+                    uiRu("🌍 ПОСАДКА НА", "🌍 LAND ON"),
+                    m_landingTelem.targetBodyName.empty() ? (cur ? cur->name.c_str() : "BODY") : m_landingTelem.targetBodyName.c_str());
+      if (ImGui::Button(landBtn)) {
+        m_landingTelem.gearState = GearState::Deployed;
+        m_ship.gearDeployed = true;
+        m_shipVel = Vec3(0.0, -0.25, 0.0);
+      }
+      ImGui::PopStyleColor(2);
+
+      ImGui::SameLine();
+      if (ImGui::Button(m_orbitCruiseActive ? uiRu("ВЫЙТИ ИЗ ОРБИТЫ (R)", "EXIT ORBIT (R)")
+                                           : uiRu("ОРБИТАЛЬНЫЙ КРУИЗ (R)", "ORBIT CRUISE (R)"))) {
+        toggleOrbitalCruise();
+      }
+    } else if (m_orbitCruiseActive) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.35f, 0.55f, 0.90f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.92f, 1.0f, 1.0f));
+      if (ImGui::Button(uiRu("🪐 ВЫЙТИ ИЗ ОРБИТЫ (R)", "🪐 EXIT ORBIT (R)"))) {
+        toggleOrbitalCruise();
+      }
+      ImGui::PopStyleColor(2);
+
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("🔬 СПЕКТРОМЕТРИЯ (C)", "🔬 SPECTROMETER (C)"))) {
+        m_spectrometerOpen = !m_spectrometerOpen;
+      }
+    } else if (m_warpOn && m_warpStatus == 1) {
+      const std::vector<Station>& cat = builtinCatalog();
+      int sel = m_warpSel;
+      if (sel < 0 || sel >= static_cast<int>(cat.size())) sel = 0;
+      const std::string tgtId = cat[static_cast<size_t>(sel)].id;
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.85f, 0.95f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.98f, 1.0f, 1.0f));
+      char jmpBtn[64];
+      std::snprintf(jmpBtn, sizeof(jmpBtn), "%s: %s (J)",
+                    uiRu("🚀 ВАРП-ПРЫЖОК К", "🚀 WARP JUMP TO"), cat[static_cast<size_t>(sel)].name.c_str());
+      if (ImGui::Button(jmpBtn)) {
+        startWarpJump(tgtId);
+      }
+      ImGui::PopStyleColor(2);
+    } else {
+      if (ImGui::Button(uiRu("🌌 ВКЛЮЧИТЬ ВАРП (X)", "🌌 ENGAGE WARP (X)"))) {
+        if (ship::styleCanWarp(m_shipStyle)) {
+          m_warpOn = true;
+          m_warpStatus = 1;
+          m_warpBaseFov = m_sceneManager->getSettings().fovDegrees;
+          m_warpLastFov = m_warpBaseFov;
+          m_warpFovDirty = true;
+          warpRetarget(warpTargetK(m_warpFactor));
+          m_warpFlash = 0.4f;
+        }
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("🎬 КИНОТУР (T)", "🎬 CINETOUR (T)"))) {
+        if (m_tour.active()) stopCineTour();
+        else startCineTour();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("🧠 ВТОРОЙ МОЗГ (B)", "🧠 SECOND BRAIN (B)"))) {
+        m_zettelkastenOpen = !m_zettelkastenOpen;
+        if (m_zettelkastenOpen) {
+          m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
+        }
+      }
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(4);
+  ImGui::PopStyleColor(2);
+  if (pushed) ImGui::PopFont();
+}
 
 void AppGL::drawImGui() {
 // Детерминизм при съёмке: в горнеле FPS-темп всегда 60.
@@ -5571,6 +5790,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
 
   // === ModernUI ===: статус-бар и транспортная панель (только индикаторы
   // поверх существующего состояния; при m_hideUI drawImGui не вызывается).
+  drawCenterReticleHud();
+  drawActionHorizon();
   drawModernStatusBar();
   drawModernTransportBar();
 
@@ -6156,7 +6377,7 @@ void AppGL::drawShipHud() {
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(12.0f, io.DisplaySize.y - 112.0f),
                           ImGuiCond_Always);
-  ImGui::SetNextWindowBgAlpha(0.55f);
+  ImGui::SetNextWindowBgAlpha(0.90f);  // UI/UX: elevated to eliminate starfield bleed
   if (ImGui::Begin("##shipHud", nullptr,
                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                        ImGuiWindowFlags_AlwaysAutoResize |
