@@ -19,6 +19,7 @@
 #include "LandingSystem.h"
 #include "Zettelkasten.h"
 #include "EpilogueSystem.h"
+#include "BenchmarkSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"
@@ -61,6 +62,10 @@ class AppGL {
   static int captureAllScreenshots(const std::string& outDir = "docs/screens", bool diskOn = false);
   static int captureStationCheck(const std::string& outPath);
   static int captureDragonCheck(const std::string& outPath);
+
+  // === Perf Benchmark Harness === (Stage 4, public entry for CLI)
+  void enableBenchmarkMode(float durationSec, const std::string& outPath,
+                           const std::string& comparePath);
 
  private:
   void processInput(float deltaTime);
@@ -137,11 +142,27 @@ class AppGL {
   // Харнесс пинит FPS-текст в 60: иначе gui.png флейкает от wall-clock.
   static inline bool s_harnessPinFps = false;
 
-  // Auto-performance benchmarking
+  // Auto-performance benchmarking (legacy scene-start preset selector)
   bool m_benchmarking = true;
   bool m_userOverrodePreset = false;
   float m_benchmarkTimer = 0.0f;
   int m_benchmarkFrames = 0;
+
+  // === Perf Benchmark Harness === (Stage 4)
+  bool m_benchmarkMode = false;
+  float m_benchmarkDuration = 30.0f;
+  float m_benchmarkElapsed = 0.0f;
+  std::string m_benchmarkOutPath = "benchmark_results.json";
+  std::string m_benchmarkComparePath;
+  int m_benchmarkRouteIndex = 0;
+  float m_benchmarkStationTimer = 0.0f;
+  int m_benchmarkTotalFrames = 0;
+  int m_benchmarkExitCode = 0;
+  bool m_benchmarkDone = false;
+  BenchmarkCollector m_benchmarkCollector;
+  void updateBenchmark(float deltaTime, const std::string& currentStationId);
+  void finalizeBenchmark();
+  void drawBenchmarkOverlay();
 
   // Station fuzzy search
   char m_searchBuf[64] = {};

@@ -65,6 +65,7 @@ class ScienceCodex {
   int getScannedCount() const;
   int getTotalCount() const;
   int getTotalResearchPoints() const { return m_totalPoints; }
+  void addResearchPoints(int points) { m_totalPoints += points; }
 
   std::string serialize() const;
   bool deserialize(const std::string& data);

@@ -1,4 +1,4 @@
-#include "AppGL.h"
+﻿#include "AppGL.h"
 
 #include "GLCompat.h"
 #include <GLFW/glfw3.h>
@@ -205,6 +205,16 @@ int AppGL::run() {
     lastTime = currentTime;
     if (deltaTime > 0.1f) deltaTime = 0.1f;
     if (deltaTime < 0.0f) deltaTime = 0.0f;
+
+    // === Perf Benchmark Harness === (Stage 4): сбор кадров и авто-вылет
+    if (m_benchmarkMode && !m_benchmarkDone) {
+      const Station* benchSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+      std::string benchId = benchSt ? benchSt->id : std::string("sol");
+      updateBenchmark(deltaTime, benchId);
+      if (m_benchmarkDone) {
+        break;
+      }
+    }
 
     // === Audio === begin (агент AU: ленивый старт при первом вводе,
     // update музыки/SFX + polling-триггеры; варп/тур/поиск не трогаем.
@@ -476,6 +486,9 @@ int AppGL::run() {
     if (!m_hideUI) {
       drawImGui();
     }
+    if (m_benchmarkMode) {
+      drawBenchmarkOverlay();
+    }
     if (m_photoMode) {
       drawPhotoPopup();
     }
@@ -500,6 +513,10 @@ int AppGL::run() {
   saveProfileNow(true);
   saveExpeditionFileNow();   // === Expedition === (v3.5.0).
   saveZettelkastenFileNow(); // === Zettelkasten === (v4.8.0).
+
+  if (m_benchmarkMode) {
+    return m_benchmarkExitCode;
+  }
 
   return 0;
 }
@@ -956,39 +973,100 @@ void AppGL::updateOrbitalCruise(float /*deltaTime*/, double /*throttleAdjust*/) 
   // Вызывается из updateShip
 }
 
-void AppGL::startEpilogueCinematic(int choice) {
-  m_epilogueActive = true;
-  m_epilogueTime = 0.0f;
-  m_epilogueScrollY = 0.0f;
-  m_activeChronicle = generateEpilogueChronicle(
-      choice, m_expedition, m_zettelkasten, m_totalDrillSamplesCount,
-      m_codex.getTotalResearchPoints(), 0, m_ship.hull);
+
+// === Perf Benchmark Harness === (Stage 4)
+void AppGL::enableBenchmarkMode(float durationSec, const std::string& outPath,
+                                const std::string& comparePath) {
+  m_benchmarkMode = true;
+  m_benchmarkDuration = (durationSec > 0.0f) ? durationSec : 30.0f;
+  m_benchmarkOutPath = outPath.empty() ? "benchmark_results.json" : outPath;
+  m_benchmarkComparePath = comparePath;
+  m_benchmarkElapsed = 0.0f;
+  m_benchmarkRouteIndex = 0;
+  m_benchmarkStationTimer = 0.0f;
+  m_benchmarkTotalFrames = 0;
+  m_benchmarkExitCode = 0;
+  m_benchmarkDone = false;
+  m_benchmarkCollector.clear();
+  m_inMenu = false;
+  m_hideUI = true;
+  m_benchmarking = false;
+  m_userOverrodePreset = true;
+  static const char* kRoute[] = {"sol", "sgra", "qso-3c273", "m13", "m16"};
+  teleportToStation(kRoute[0]);
 }
 
-void AppGL::stopEpilogueCinematic() {
-  m_epilogueActive = false;
-}
+void AppGL::updateBenchmark(float deltaTime, const std::string& currentStationId) {
+  if (!m_benchmarkMode || m_benchmarkDone) return;
+  m_benchmarkElapsed += deltaTime;
+  m_benchmarkStationTimer += deltaTime;
+  m_benchmarkTotalFrames += 1;
+  m_benchmarkCollector.recordFrame(deltaTime, currentStationId);
 
-void AppGL::updateEpilogueCinematic(float dt) {
-  if (!m_epilogueActive) return;
-  m_epilogueTime += dt;
-  m_epilogueScrollY += m_epilogueAutoScrollSpeed * dt;
-}
-
-void AppGL::drawEpilogueCinematicOverlay() {
-  if (!m_epilogueActive) return;
-  ImGui::SetNextWindowPos(ImVec2(0, 0));
-  ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
-  ImGui::Begin("##Epilogue", nullptr,
-               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_NoResize);
-  ImGui::TextUnformatted(m_activeChronicle.titleRu.c_str());
-  ImGui::TextUnformatted(m_activeChronicle.subtitleRu.c_str());
-  for (const auto& p : m_activeChronicle.narrativeParagraphsRu) {
-    ImGui::TextWrapped("%s", p.c_str());
-    ImGui::Spacing();
+  static const char* kRoute[] = {"sol", "sgra", "qso-3c273", "m13", "m16"};
+  const int kRouteSize = 5;
+  float perStation = m_benchmarkDuration / static_cast<float>(kRouteSize);
+  if (perStation < 1.0f) perStation = 1.0f;
+  if (m_benchmarkStationTimer >= perStation) {
+    m_benchmarkStationTimer = 0.0f;
+    m_benchmarkRouteIndex += 1;
+    if (m_benchmarkRouteIndex < kRouteSize) {
+      teleportToStation(kRoute[m_benchmarkRouteIndex]);
+    }
   }
-  if (ImGui::Button("Esc - закрыть")) stopEpilogueCinematic();
+  if (m_benchmarkElapsed >= m_benchmarkDuration) {
+    finalizeBenchmark();
+  }
+}
+
+void AppGL::finalizeBenchmark() {
+  if (m_benchmarkDone) return;
+  m_benchmarkDone = true;
+  BenchmarkResult res = m_benchmarkCollector.computeResults();
+  std::string json = m_benchmarkCollector.serializeJson(res);
+  {
+    std::ofstream out(m_benchmarkOutPath);
+    out << json;
+  }
+  std::string report = m_benchmarkCollector.formatAsciiReport(res);
+  std::cout << report;
+  int exitCode = 0;
+  if (!m_benchmarkComparePath.empty()) {
+    std::string cmpReport;
+    bool ok = m_benchmarkCollector.compareWithBaseline(
+        res, m_benchmarkComparePath, 10.0f, cmpReport);
+    std::cout << cmpReport << "\n";
+    if (!ok) exitCode = 1;
+  }
+  m_benchmarkExitCode = exitCode;
+}
+
+void AppGL::drawBenchmarkOverlay() {
+  if (!m_benchmarkMode || m_benchmarkDone) return;
+  static const char* kRoute[] = {"sol", "sgra", "qso-3c273", "m13", "m16"};
+  const int kRouteSize = 5;
+  (void)kRoute;
+  (void)kRouteSize;
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  std::string curId = curSt ? curSt->id : std::string("?");
+  float pct = (m_benchmarkDuration > 0.0f)
+                  ? (m_benchmarkElapsed / m_benchmarkDuration * 100.0f)
+                  : 0.0f;
+  if (pct > 100.0f) pct = 100.0f;
+  float liveFps = (m_benchmarkCollector.size() > 0)
+                      ? m_benchmarkCollector.computeResults().avgFps
+                      : 0.0f;
+  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 460.0f,
+                                 ImGui::GetIO().DisplaySize.y - 60.0f));
+  ImGui::SetNextWindowSize(ImVec2(450.0f, 40.0f));
+  ImGui::Begin("##BenchmarkOverlay", nullptr,
+               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
+  char buf[256];
+  std::snprintf(buf, sizeof(buf),
+                "[BENCHMARK IN PROGRESS: %.0f%% | Station: %s | Frame: %d | Live FPS: %.0f]",
+                pct, curId.c_str(), m_benchmarkTotalFrames, liveFps);
+  ImGui::TextUnformatted(buf);
   ImGui::End();
 }
 
@@ -13678,7 +13756,7 @@ void AppGL::startEpilogueCinematic(int choice) {
       m_expedition,
       m_zettelkasten,
       m_totalDrillSamplesCount,
-      m_codex.getTotalPoints(),
+      m_codex.getTotalResearchPoints(),
       m_totalWarpJumpsCount,
       m_ship.hull);
 
@@ -13688,7 +13766,7 @@ void AppGL::startEpilogueCinematic(int choice) {
   Vec3 origin(0.0, 0.0, 0.0);
   computeLookYawPitch(m_camera.position, origin, m_camera.yaw, m_camera.pitch);
 
-  m_audio.setThrusterLevel(0.0f);
+  m_audio.setEngineLevel(0.0f);
   m_audio.setWarpLevel(0.0f);
   m_audio.setDrillLevel(0.0f, 0.0f);
 }
@@ -13735,7 +13813,7 @@ void AppGL::updateEpilogueCinematic(float dt) {
   }
   if (m_epilogueScrollY < 0.0f) m_epilogueScrollY = 0.0f;
 
-  m_audio.setThrusterLevel(0.0f);
+  m_audio.setEngineLevel(0.0f);
   m_audio.setWarpLevel(0.0f);
   m_audio.setDrillLevel(0.0f, 0.0f);
 }
@@ -13743,7 +13821,7 @@ void AppGL::updateEpilogueCinematic(float dt) {
 void AppGL::drawEpilogueCinematicOverlay() {
   ImGuiIO& io = ImGui::GetIO();
   const ImVec2 disp = io.DisplaySize;
-  const bool isRu = (m_lang == 0);
+  const bool isRu = m_cineFont;
 
   // 1. Кинематографические рамки каше (Aspect 2.35:1)
   const float targetAspect = 2.35f;
