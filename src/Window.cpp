@@ -20,6 +20,51 @@
 
 namespace astro {
 
+#ifndef __APPLE__
+static void GLAPIENTRY openGlDebugCallback(GLenum source,
+                                           GLenum type,
+                                           unsigned int id,
+                                           GLenum severity,
+                                           GLsizei /*length*/,
+                                           const char* message,
+                                           const void* /*userParam*/) {
+  // Ignore non-significant or noisy notifications (e.g. driver memory allocation info)
+  if (id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
+  if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) return;
+
+  const char* srcStr = "Other";
+  switch (source) {
+    case GL_DEBUG_SOURCE_API:             srcStr = "API"; break;
+    case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   srcStr = "WindowSystem"; break;
+    case GL_DEBUG_SOURCE_SHADER_COMPILER: srcStr = "ShaderCompiler"; break;
+    case GL_DEBUG_SOURCE_THIRD_PARTY:     srcStr = "ThirdParty"; break;
+    case GL_DEBUG_SOURCE_APPLICATION:     srcStr = "Application"; break;
+    default: break;
+  }
+
+  const char* typeStr = "Other";
+  switch (type) {
+    case GL_DEBUG_TYPE_ERROR:               typeStr = "Error"; break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typeStr = "Deprecated"; break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typeStr = "UndefinedBehavior"; break;
+    case GL_DEBUG_TYPE_PORTABILITY:         typeStr = "Portability"; break;
+    case GL_DEBUG_TYPE_PERFORMANCE:         typeStr = "Performance"; break;
+    default: break;
+  }
+
+  const char* sevStr = "INFO";
+  switch (severity) {
+    case GL_DEBUG_SEVERITY_HIGH:         sevStr = "HIGH"; break;
+    case GL_DEBUG_SEVERITY_MEDIUM:       sevStr = "MEDIUM"; break;
+    case GL_DEBUG_SEVERITY_LOW:          sevStr = "LOW"; break;
+    default: break;
+  }
+
+  std::cerr << "[OpenGL " << sevStr << "] (" << srcStr << ", " << typeStr
+            << ", id=" << id << "): " << message << "\n";
+}
+#endif
+
 Window::Window(int width, int height, const char* title, bool visible) {
   if (!glfwInit()) {
     throw std::runtime_error("Failed to initialize GLFW");
@@ -30,6 +75,9 @@ Window::Window(int width, int height, const char* title, bool visible) {
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 #ifdef __APPLE__
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#else
+  // Enable debug context for KHR_debug / glDebugMessageCallback hardware diagnostics
+  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 #endif
   glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
 
@@ -90,6 +138,27 @@ Window::Window(int width, int height, const char* title, bool visible) {
 
   // Clear any benign GLEW error
   glGetError();
+
+#ifndef __APPLE__
+  GLint contextFlags = 0;
+  glGetIntegerv(GL_CONTEXT_FLAGS, &contextFlags);
+  if (contextFlags & GL_CONTEXT_FLAG_DEBUG_BIT) {
+    if (glDebugMessageCallback != nullptr) {
+      glEnable(GL_DEBUG_OUTPUT);
+      glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+      glDebugMessageCallback(openGlDebugCallback, nullptr);
+      glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+      glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+      m_debugContext = true;
+    } else if (glDebugMessageCallbackARB != nullptr) {
+      glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
+      glDebugMessageCallbackARB(openGlDebugCallback, nullptr);
+      glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+      glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+      m_debugContext = true;
+    }
+  }
+#endif
 
   glViewport(0, 0, width, height);
 }

@@ -168,6 +168,7 @@ class AudioEngine {
   float m_atmoNoise = 0.0f;
   float m_radioBandpass1 = 0.0f;
   float m_radioBandpass2 = 0.0f;
+  float m_drillGrind = 0.0f;
   float m_cassetteRainNoise = 0.0f;
   float m_cassetteLfoPhase = 0.0f;
 
