@@ -462,6 +462,8 @@ class AppGL {
   void applyModernThemeOnce();
   void drawModernStatusBar();
   void drawModernTransportBar();
+  void drawCenterReticleHud();
+  void drawActionHorizon();
   // RU-подпись типа станции для чипа карточки (возврат EN при виде
   // из харнесса не нужен: выбор делает вызывающий через uiRu()).
   static const char* stationTypeRuShort(StationType t);
