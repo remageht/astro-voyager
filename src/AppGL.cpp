@@ -522,9 +522,15 @@ void AppGL::processInput(float deltaTime) {
   // Возврат true = ввод consumed, дальше обычный ввод не идёт.
   if (processCinematicInput(deltaTime)) return;
   // === Cinematic === end
+  // === Epilogue System === begin (v5.3.0): синематик истинного финала
+  if (m_epilogueActive) {
+    updateEpilogueCinematic(deltaTime);
+    return;
+  }
+  // === Epilogue System === end
 
   const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard && !m_slidesOpen) {
+  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard && !m_slidesOpen && !m_epilogueActive) {
     // === Expedition & Zettelkasten ===: Esc сначала закрывает оверлеи.
     if (m_zettelkastenOpen) {
       m_zettelkastenOpen = false;
@@ -948,6 +954,42 @@ void AppGL::toggleOrbitalCruise() {
 
 void AppGL::updateOrbitalCruise(float /*deltaTime*/, double /*throttleAdjust*/) {
   // Вызывается из updateShip
+}
+
+void AppGL::startEpilogueCinematic(int choice) {
+  m_epilogueActive = true;
+  m_epilogueTime = 0.0f;
+  m_epilogueScrollY = 0.0f;
+  m_activeChronicle = generateEpilogueChronicle(
+      choice, m_expedition, m_zettelkasten, m_totalDrillSamplesCount,
+      m_codex.getTotalResearchPoints(), 0, m_ship.hull);
+}
+
+void AppGL::stopEpilogueCinematic() {
+  m_epilogueActive = false;
+}
+
+void AppGL::updateEpilogueCinematic(float dt) {
+  if (!m_epilogueActive) return;
+  m_epilogueTime += dt;
+  m_epilogueScrollY += m_epilogueAutoScrollSpeed * dt;
+}
+
+void AppGL::drawEpilogueCinematicOverlay() {
+  if (!m_epilogueActive) return;
+  ImGui::SetNextWindowPos(ImVec2(0, 0));
+  ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+  ImGui::Begin("##Epilogue", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoResize);
+  ImGui::TextUnformatted(m_activeChronicle.titleRu.c_str());
+  ImGui::TextUnformatted(m_activeChronicle.subtitleRu.c_str());
+  for (const auto& p : m_activeChronicle.narrativeParagraphsRu) {
+    ImGui::TextWrapped("%s", p.c_str());
+    ImGui::Spacing();
+  }
+  if (ImGui::Button("Esc - закрыть")) stopEpilogueCinematic();
+  ImGui::End();
 }
 
 void AppGL::drawPhotoDirectorOverlay() {
@@ -3672,7 +3714,11 @@ void AppGL::drawSlidesOverlay() {
     return;
   }
   if (skip || advance) {
-    // Одиночный done-слайд: любое действие закрывает.
+    if (!skip && m_slidesIdx + 1 < static_cast<int>(m_slidesCurrent.size())) {
+      ++m_slidesIdx;
+      invalidateVideoSlide();
+      return;
+    }
     m_slidesOpen = false;
     m_slidesCurrent.clear();
     invalidateVideoSlide();
@@ -3680,6 +3726,9 @@ void AppGL::drawSlidesOverlay() {
     if (m_pendingFinaleChoice) {
       m_pendingFinaleChoice = false;
       m_finaleChoiceOpen = true;
+    } else if (m_expedition.finished() && m_expedition.finaleChoice != kFinaleUnset) {
+      // === Epilogue System === (v5.3.0): старт синематика и свитка хроники
+      startEpilogueCinematic(m_expedition.finaleChoice);
     }
     return;
   }
@@ -4310,6 +4359,11 @@ void AppGL::drawExpeditionMap() {
           openEndingSlide(fc);
           m_expeditionMapOpen = false;
         }
+        if (ImGui::Button(uiRu("📜 Просмотреть Свиток Хроники (Синематик)", "📜 View Chronicle Scroll (Cinematic)"),
+                          ImVec2(-1, 30.0f))) {
+          m_expeditionMapOpen = false;
+          startEpilogueCinematic(fc);
+        }
       }
       ImGui::Spacing();
     }
@@ -4705,6 +4759,11 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   // они (игровой HUD не засоряет кадр истории).
   if (m_slidesOpen) {
     drawSlidesOverlay();
+    return;
+  }
+  // === Epilogue System === (v5.3.0): синематик и свиток хроники
+  if (m_epilogueActive && !m_inMenu) {
+    drawEpilogueCinematicOverlay();
     return;
   }
   // v4.1: модальная развилка финала — перекрывает игровой HUD.
@@ -9667,6 +9726,7 @@ void AppGL::startWarpJump(const std::string& id) {
     m_shipNoticeT = 3.0f;
     return;
   }
+  ++m_totalWarpJumpsCount;
   // === WarpJump === (агент J): прыжок идёт через кино-контроллер поверх
   // статусов (Charge->Pullback->Burst->Travel->Arrival->Pushin->Cooldown).
   // Старый прямой путь Charging(3с)/Jump(4с) ниже остаётся fallback'ом
@@ -12261,6 +12321,7 @@ void AppGL::drawSurfaceReportModal() {
         if (ImGui::Button(uiRu("⬡ Занести керн в Дневник Пилота (+250 RP)", "⬡ Catalog Core Sample to Pilot Journal (+250 RP)"),
                           ImVec2(-1, 34.0f))) {
           m_drillTelem.sampleAnalyzed = true;
+          ++m_totalDrillSamplesCount;
           m_codex.addResearchPoints(m_drillTelem.scienceYield);
           std::string zettelText = formatCoreSampleZettel(m_currentSurfaceReport.bodyId, m_currentSurfaceReport.nameRu, m_drillTelem);
           m_zettelkasten.addCustomNote("Керн: " + m_currentSurfaceReport.nameRu, zettelText, "#керн");
@@ -13601,5 +13662,284 @@ void AppGL::triggerGrandSynthesisClimax() {
   m_zettelkastenOpen = false;
 }
 
+// === Epilogue System === (v5.3.0): Процедурный синематик и свиток хроники
+
+void AppGL::startEpilogueCinematic(int choice) {
+  m_epilogueActive = true;
+  m_epilogueTime = 0.0f;
+  m_epilogueScrollY = 0.0f;
+  m_slidesOpen = false;
+  m_slidesCurrent.clear();
+  m_finaleChoiceOpen = false;
+  m_expeditionMapOpen = false;
+
+  m_activeChronicle = generateEpilogueChronicle(
+      choice,
+      m_expedition,
+      m_zettelkasten,
+      m_totalDrillSamplesCount,
+      m_codex.getTotalPoints(),
+      m_totalWarpJumpsCount,
+      m_ship.hull);
+
+  std::string anchor = m_activeChronicle.anchorStationId;
+  teleportToStation(anchor, false);
+  m_camera.position = Vec3(0.0, 6.0, 32.0);
+  Vec3 origin(0.0, 0.0, 0.0);
+  computeLookYawPitch(m_camera.position, origin, m_camera.yaw, m_camera.pitch);
+
+  m_audio.setThrusterLevel(0.0f);
+  m_audio.setWarpLevel(0.0f);
+  m_audio.setDrillLevel(0.0f, 0.0f);
+}
+
+void AppGL::stopEpilogueCinematic() {
+  m_epilogueActive = false;
+}
+
+void AppGL::updateEpilogueCinematic(float dt) {
+  GLFWwindow* win = m_window->getNativeWindow();
+  ImGuiIO& io = ImGui::GetIO();
+
+  const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard) {
+    stopEpilogueCinematic();
+  }
+  m_prevEscPressed = escDown;
+
+  const bool rDown = (glfwGetKey(win, GLFW_KEY_R) == GLFW_PRESS);
+  if (rDown && !io.WantCaptureKeyboard) {
+    m_epilogueScrollY = 0.0f;
+    m_epilogueTime = 0.0f;
+  }
+
+  m_epilogueTime += dt;
+
+  // Плавный кеплеровский/лиссажу орбитальный облёт якорного тела
+  const float t = m_epilogueTime;
+  const double baseR = 30.0 + 4.0 * std::sin(static_cast<double>(t) * 0.04);
+  const double baseH = 5.0 + 2.5 * std::sin(static_cast<double>(t) * 0.07);
+  const double ang = static_cast<double>(t) * 0.045;
+  m_camera.position = Vec3(baseR * std::cos(ang), baseH, baseR * std::sin(ang));
+  Vec3 origin(0.0, 0.0, 0.0);
+  computeLookYawPitch(m_camera.position, origin, m_camera.yaw, m_camera.pitch);
+
+  // Автопрокрутка свитка
+  const bool spaceDown = (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS);
+  const bool lmbDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !io.WantCaptureMouse);
+  const float scrollSpeed = (spaceDown || lmbDown) ? 120.0f : m_epilogueAutoScrollSpeed;
+  m_epilogueScrollY += scrollSpeed * dt;
+
+  if (io.MouseWheel != 0.0f) {
+    m_epilogueScrollY -= io.MouseWheel * 50.0f;
+  }
+  if (m_epilogueScrollY < 0.0f) m_epilogueScrollY = 0.0f;
+
+  m_audio.setThrusterLevel(0.0f);
+  m_audio.setWarpLevel(0.0f);
+  m_audio.setDrillLevel(0.0f, 0.0f);
+}
+
+void AppGL::drawEpilogueCinematicOverlay() {
+  ImGuiIO& io = ImGui::GetIO();
+  const ImVec2 disp = io.DisplaySize;
+  const bool isRu = (m_lang == 0);
+
+  // 1. Кинематографические рамки каше (Aspect 2.35:1)
+  const float targetAspect = 2.35f;
+  const float screenAspect = disp.x / (disp.y > 0.0f ? disp.y : 1.0f);
+  float barH = 0.0f;
+  if (screenAspect < targetAspect) {
+    barH = (disp.y - disp.x / targetAspect) * 0.5f;
+  }
+  if (barH > 0.0f) {
+    ImDrawList* fg = ImGui::GetForegroundDrawList();
+    fg->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(disp.x, barH), IM_COL32(0, 0, 0, 255));
+    fg->AddRectFilled(ImVec2(0.0f, disp.y - barH), ImVec2(disp.x, disp.y), IM_COL32(0, 0, 0, 255));
+  }
+
+  // 2. Свиток Хроники из тёмного полупрозрачного стекла
+  const float scrollW = std::min(760.0f, disp.x - 40.0f);
+  const float scrollX = (disp.x - scrollW) * 0.5f;
+  const float scrollY = barH + 16.0f;
+  const float scrollH = disp.y - (barH + 16.0f) * 2.0f;
+
+  ImGui::SetNextWindowPos(ImVec2(scrollX, scrollY), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(scrollW, scrollH), ImGuiCond_Always);
+
+  ImVec4 borderCol = m_activeChronicle.isTrueEnding
+                         ? ImVec4(1.00f, 0.85f, 0.35f, 0.90f)
+                         : ImVec4(0.40f, 0.80f, 1.00f, 0.85f);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.03f, 0.05f, 0.08f, 0.88f));
+  ImGui::PushStyleColor(ImGuiCol_Border, borderCol);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
+
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                           ImGuiWindowFlags_NoSavedSettings;
+  if (ImGui::Begin("##EpilogueChronicleWindow", nullptr, flags)) {
+    // Внутренняя область скролла
+    if (ImGui::BeginChild("##EpilogueScrollChild", ImVec2(0.0f, -48.0f), false, ImGuiWindowFlags_None)) {
+      if (std::abs(ImGui::GetScrollY() - m_epilogueScrollY) > 8.0f) {
+        ImGui::SetScrollY(m_epilogueScrollY);
+      } else {
+        m_epilogueScrollY = ImGui::GetScrollY();
+      }
+
+      ImGui::Spacing();
+      // Звёздный орнамент
+      ImGui::TextColored(borderCol, "✦ ══════════════════════════════════════════════════════════════════ ✦");
+      ImGui::Spacing();
+
+      // Заголовок финала
+      const char* titleTxt = isRu ? m_activeChronicle.titleRu.c_str() : m_activeChronicle.titleEn.c_str();
+      ImGui::TextColored(borderCol, "%s", titleTxt);
+
+      const char* subTxt = isRu ? m_activeChronicle.subtitleRu.c_str() : m_activeChronicle.subtitleEn.c_str();
+      ImGui::TextColored(ImVec4(0.70f, 0.80f, 0.95f, 1.0f), "%s", subTxt);
+
+      if (m_activeChronicle.isTrueEnding) {
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(1.0f, 0.90f, 0.40f, 1.0f),
+                           "★ %s ★",
+                           uiRu("ИСТИННЫЙ ФИНАЛ: РЕЗОНАНС АСТРО-ЦЕТТЕЛЬКАСТЕН",
+                                "TRUE ENDING: ASTRO-ZETTELKASTEN RESONANCE"));
+      }
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // Главы нарратива
+      const auto& paragraphs = isRu ? m_activeChronicle.narrativeParagraphsRu
+                                    : m_activeChronicle.narrativeParagraphsEn;
+      for (const auto& p : paragraphs) {
+        ImGui::PushTextWrapPos(scrollW - 40.0f);
+        ImGui::TextColored(ImVec4(0.88f, 0.90f, 0.94f, 1.0f), "%s", p.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+        ImGui::Spacing();
+      }
+
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // Судьбы экипажа
+      ImGui::TextColored(borderCol, "✦ %s ✦",
+                         uiRu("СУДЬБЫ ЭКИПАЖА И НАСЛЕДИЕ", "CREW CHRONICLES & LEGACY"));
+      ImGui::Spacing();
+
+      for (const auto& fate : m_activeChronicle.crewFates) {
+        const char* name = isRu ? fate.nameRu.c_str() : fate.nameEn.c_str();
+        const char* role = isRu ? fate.roleRu.c_str() : fate.roleEn.c_str();
+        const char* fateDesc = isRu ? fate.fateRu.c_str() : fate.fateEn.c_str();
+        const char* quote = isRu ? fate.finalQuoteRu.c_str() : fate.finalQuoteEn.c_str();
+
+        ImGui::TextColored(ImVec4(0.98f, 0.82f, 0.38f, 1.0f), "● %s (%s)", name, role);
+        ImGui::PushTextWrapPos(scrollW - 45.0f);
+        ImGui::TextColored(ImVec4(0.80f, 0.85f, 0.92f, 1.0f), "   %s", fateDesc);
+        if (quote && quote[0] != '\0') {
+          ImGui::TextColored(ImVec4(0.55f, 0.85f, 1.00f, 0.90f), "   %s", quote);
+        }
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+      }
+
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // Летопись Экспедиции (Статистика)
+      ImGui::TextColored(borderCol, "✦ %s ✦",
+                         uiRu("ЛЕТОПИСЬ И ДОСТИЖЕНИЯ ЭКСПЕДИЦИИ", "EXPEDITION METRICS & ACHIEVEMENTS"));
+      ImGui::Spacing();
+
+      const auto& st = m_activeChronicle.stats;
+      ImGui::Columns(2, "epilogueStatsCol", false);
+      ImGui::Text("• %s:", uiRu("Исследовано звездных систем", "Systems / Stations Charted"));
+      ImGui::NextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.6f, 1.0f), "%d / %d", st.visitedStationsCount, st.totalStationsCount);
+      ImGui::NextColumn();
+
+      ImGui::Text("• %s:", uiRu("Извлечено кернов реголита", "Regolith Core Samples Drilled"));
+      ImGui::NextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.6f, 1.0f), "%d", st.coreDrillSamplesCount);
+      ImGui::NextColumn();
+
+      ImGui::Text("• %s:", uiRu("Узлов Zettelkasten открыто", "Zettelkasten Thoughts Linked"));
+      ImGui::NextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.6f, 1.0f), "%d (%s: %d)",
+                         st.synthesizedZettelsCount, uiRu("Мастер-узлов", "Master nodes"), st.masterNodesCount);
+      ImGui::NextColumn();
+
+      ImGui::Text("• %s:", uiRu("Научный потенциал (RP)", "Research Points Earned (RP)"));
+      ImGui::NextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.6f, 1.0f), "%d RP", st.researchPoints);
+      ImGui::NextColumn();
+
+      ImGui::Text("• %s:", uiRu("Совершено варп-прыжков", "Warp Jumps Executed"));
+      ImGui::NextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.6f, 1.0f), "%d", st.warpJumpsCount);
+      ImGui::NextColumn();
+
+      ImGui::Text("• %s:", uiRu("Налёт часов в экспедиции", "Expedition Flight Hours"));
+      ImGui::NextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.6f, 1.0f), "%.1f %s", st.flightHours, uiRu("ч", "hrs"));
+      ImGui::NextColumn();
+
+      ImGui::Text("• %s:", uiRu("Целостность корпуса", "Final Hull Integrity"));
+      ImGui::NextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.6f, 1.0f), "%.1f %%", st.hullIntegrityPercent);
+      ImGui::NextColumn();
+
+      ImGui::Text("• %s:", uiRu("Индекс открытия галактики", "Galaxy Discovery Index"));
+      ImGui::NextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.95f, 0.6f, 1.0f), "%.1f %%", st.discoveryPercent);
+      ImGui::NextColumn();
+      ImGui::Columns(1);
+
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // Финальная цитата
+      const char* closing = isRu ? m_activeChronicle.closingQuoteRu.c_str() : m_activeChronicle.closingQuoteEn.c_str();
+      ImGui::PushTextWrapPos(scrollW - 40.0f);
+      ImGui::TextColored(borderCol, "%s", closing);
+      ImGui::PopTextWrapPos();
+
+      ImGui::Spacing();
+      ImGui::TextColored(borderCol, "✦ ══════════════════════════════════════════════════════════════════ ✦");
+      ImGui::Spacing();
+      ImGui::Spacing();
+    }
+    ImGui::EndChild();
+
+    // 3. Закреплённая нижняя панель управления
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::Button(uiRu("📜 Скопировать логбук в буфер", "📜 Copy Logbook to Clipboard"), ImVec2(220.0f, 28.0f))) {
+      std::string logTxt = formatChronicleLogbook(m_activeChronicle, isRu);
+      ImGui::SetClipboardText(logTxt.c_str());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(uiRu("↺ С начала (R)", "↺ Rewind (R)"), ImVec2(130.0f, 28.0f))) {
+      m_epilogueScrollY = 0.0f;
+      m_epilogueTime = 0.0f;
+    }
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 0.9f), "%s",
+                       uiRu("[Пробел/ЛКМ: быстрее]", "[Space/LMB: speed up]"));
+    ImGui::SameLine(scrollW - 170.0f);
+    if (ImGui::Button(uiRu("✕ Завершить (Esc)", "✕ Close (Esc)"), ImVec2(150.0f, 28.0f))) {
+      stopEpilogueCinematic();
+    }
+  }
+  ImGui::End();
+
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(2);
+}
+
 }  // namespace astro
+
 
