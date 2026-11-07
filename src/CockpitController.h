@@ -60,6 +60,15 @@ struct CockpitHUDData {
   // v5.2.0 Cosmic Ambient Cassette Deck
   int   tapeIndex = 0;                // 0 Off, 1 Paris Rain, 2 Pulsar Beat, 3 Deep Space Void
   bool  tapePlaying = false;          // true when tape reel is rotating
+
+  // v5.3.0 Orbital Cruise & Keplerian Parking Orbit
+  bool  orbitCruiseActive = false;
+  bool  orbitCruiseLocked = false;
+  float orbitRadius = 0.0f;
+  float orbitAltitudeKm = 0.0f;
+  float orbitSpeed = 0.0f;
+  float orbitPeriodSec = 0.0f;
+  float orbitTrueAnomalyDeg = 0.0f;
 };
 
 class CockpitController {
@@ -104,6 +113,9 @@ class CockpitController {
 
   // v4.6.1 Planetary Landing & Surface Operations telemetry
   void setLandingTelemetry(int gearState, float gearProgress, bool isLanded, float surfaceDustK, float suspension);
+
+  // v5.3.0 Orbital Cruise & Keplerian Parking Orbit telemetry
+  void setOrbitalCruiseTelemetry(bool active, bool locked, float radius, float altKm, float speed, float periodSec, float anomalyDeg);
 
  private:
   glm::vec3 m_prevPos{0.0f};

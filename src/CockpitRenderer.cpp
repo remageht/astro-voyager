@@ -97,6 +97,14 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform1f("u_TapePlaying", hud.tapePlaying ? 1.0f : 0.0f);
   m_shader->setUniform1i("u_TapeIndex", hud.tapeIndex);
 
+  // v5.3.0 Orbital Cruise & Keplerian Parking Orbit
+  m_shader->setUniform1f("u_OrbitActive", hud.orbitCruiseActive ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_OrbitLocked", hud.orbitCruiseLocked ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_OrbitSpeed", hud.orbitSpeed);
+  m_shader->setUniform1f("u_OrbitAlt", hud.orbitAltitudeKm);
+  m_shader->setUniform1f("u_OrbitPeriod", hud.orbitPeriodSec);
+  m_shader->setUniform1f("u_OrbitAnomaly", hud.orbitTrueAnomalyDeg);
+
   m_quad->draw();
 
   m_shader->unbind();

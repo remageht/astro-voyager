@@ -602,6 +602,14 @@ class AppGL {
   float m_orbitAngle = 0.0f;  // rad, накапливается каждый кадр
   void updateOrbit(float deltaTime);  // вызывать в processInput до WASD
   void drawPhotoPopup();              // вызывать в drawImGui при m_photoMode
+
+  // === Orbital Cruise (v5.3.0 Alpha): кеплерово курсирование по орбите планет и звёзд (клавиша R)
+  bool m_orbitCruiseActive = false;
+  bool m_prevRPressed = false;
+  ship::OrbitalCruiseTelemetry m_orbitTelem;
+  void toggleOrbitalCruise();
+  void updateOrbitalCruise(float deltaTime, double throttleAdjust);
+
   // === Cinematography Director & Scientific GW Instrument === (v4.4.0)
   int m_photoGrid = 0;              // 0=Off, 1=Rule of Thirds, 2=Golden Ratio, 3=Crosshair
   bool m_showGwDetector = false;     // Gravitational Wave Interferometer instrument HUD
