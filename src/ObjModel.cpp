@@ -187,10 +187,12 @@ ObjModel::~ObjModel() {
   if (m_vbo != 0) glDeleteBuffers(1, &m_vbo);
   if (m_ebo != 0) glDeleteBuffers(1, &m_ebo);
   if (m_vao != 0) glDeleteVertexArrays(1, &m_vao);
-  unsigned int tex[5] = {m_texAlbedo, m_texNormal, m_texRough, m_texMetal,
-                         m_texEmissive};
-  for (unsigned int t : tex) {
-    if (t != 0) glDeleteTextures(1, &t);
+  if (!m_sharedTex) {
+    unsigned int tex[5] = {m_texAlbedo, m_texNormal, m_texRough, m_texMetal,
+                           m_texEmissive};
+    for (unsigned int t : tex) {
+      if (t != 0) glDeleteTextures(1, &t);
+    }
   }
 }
 
@@ -405,6 +407,7 @@ bool ObjModel::loadTextures(const std::string& base) {
     }
     return false;
   }
+  if (m_sharedTex) return true;
   if (m_texAlbedo != 0) glDeleteTextures(1, &m_texAlbedo);
   if (m_texNormal != 0) glDeleteTextures(1, &m_texNormal);
   if (m_texRough != 0) glDeleteTextures(1, &m_texRough);
@@ -416,6 +419,15 @@ bool ObjModel::loadTextures(const std::string& base) {
   m_texMetal = m;
   m_texEmissive = e;
   return true;
+}
+
+void ObjModel::shareTexturesFrom(const ObjModel& other) {
+  m_texAlbedo = other.m_texAlbedo;
+  m_texNormal = other.m_texNormal;
+  m_texRough = other.m_texRough;
+  m_texMetal = other.m_texMetal;
+  m_texEmissive = other.m_texEmissive;
+  m_sharedTex = true;
 }
 
 void ObjModel::bindTextures(int firstUnit) const {
