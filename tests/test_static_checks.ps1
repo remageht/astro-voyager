@@ -487,7 +487,16 @@ Check 'cmake lists EpilogueSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src
 Check 'cmake lists test_epilogue' ((Read-File 'CMakeLists.txt') -match 'test_epilogue')
 Check 'app has epilogue cinematic overlay' ((Read-File 'src/AppGL.cpp') -match 'drawEpilogueCinematicOverlay')
 
+
+# Stage 4: Perf Benchmark Harness
+Check 'benchmark header exists' (Test-Path (Join-Path $root 'src/BenchmarkSystem.h'))
+Check 'benchmark source exists' (Test-Path (Join-Path $root 'src/BenchmarkSystem.cpp'))
+Check 'benchmark test source exists' (Test-Path (Join-Path $root 'tests/test_benchmark.cpp'))
+Check 'cmake lists BenchmarkSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/BenchmarkSystem\.cpp')
+Check 'cmake lists test_benchmark' ((Read-File 'CMakeLists.txt') -match 'test_benchmark')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
+
 

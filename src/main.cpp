@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <cstdlib>
 #include "Catalog.h"
 #include "Camera.h"
 #include "Geodesic.h"
@@ -44,7 +45,9 @@ void printUsage() {
                "--demo-geodesic | --demo-binet | --demo-rkf45 | --demo-kerr | --demo-warp | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --screenshot-all [--disk]"
-               " | --capture-station <png> | --capture-dragon <png>";
+               " | --capture-station <png> | --capture-dragon <png>"
+               " | --benchmark [--benchmark-duration <sec>]"
+               " [--benchmark-out <path>] [--benchmark-compare <baseline.json>]";
 #endif
   std::cout << "]\n";
 }
@@ -773,6 +776,29 @@ int main(int argc, char** argv) {
   if (arg == "--capture-dragon") {
     std::string outPng = (argc > 2) ? argv[2] : "docs/screens/spacex_dragon_ingame.png";
     return astro::AppGL::captureDragonCheck(outPng);
+  }
+  if (arg == "--benchmark") {
+    float durationSec = 30.0f;
+    std::string outPath = "benchmark_results.json";
+    std::string comparePath;
+    for (int i = 2; i < argc; ++i) {
+      std::string a = argv[i];
+      if (a == "--benchmark-duration" && i + 1 < argc) {
+        durationSec = static_cast<float>(std::atof(argv[++i]));
+      } else if (a == "--benchmark-out" && i + 1 < argc) {
+        outPath = argv[++i];
+      } else if (a == "--benchmark-compare" && i + 1 < argc) {
+        comparePath = argv[++i];
+      }
+    }
+    try {
+      astro::AppGL app;
+      app.enableBenchmarkMode(durationSec, outPath, comparePath);
+      return app.run();
+    } catch (const std::exception& e) {
+      std::cerr << "GL Error: " << e.what() << "\n";
+      return 1;
+    }
   }
   if (arg == "--gl" || arg.empty()) {
     try {
