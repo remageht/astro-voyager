@@ -302,6 +302,25 @@ void main() {
             pfdBg += orbRingCol * topBanner * pulse * 1.5;
           }
 
+          // Surface Science Core Sampler on Center PFD MFD (v5.3.0)
+          if (u_IsLanded > 0.5) {
+            // Core strata column gauge on right side of PFD
+            float drillBarH = -0.06 + 0.12 * clamp(u_DrillDepth / 5.0, 0.0, 1.0);
+            float dBox = step(0.12, centerP.x) * step(centerP.x, 0.14) *
+                         step(-0.06, centerP.y) * step(centerP.y, 0.06);
+            pfdBg += vec3(0.15, 0.25, 0.35) * dBox;
+            float dBar = step(0.12, centerP.x) * step(centerP.x, 0.14) *
+                         step(-0.06, centerP.y) * step(centerP.y, drillBarH);
+            vec3 dCol = (u_DrillTemp > 250.0) ? vec3(1.0, 0.25, 0.1) : vec3(0.2, 0.85, 1.0);
+            pfdBg += dCol * dBar * 1.8;
+
+            // Surface Lab status banner at bottom
+            float btmBanner = step(-0.07, centerP.x) * step(centerP.x, 0.07) *
+                              step(-0.076, centerP.y) * step(centerP.y, -0.062);
+            vec3 btmCol = (u_CoreAnalyzed > 0.5) ? vec3(0.2, 1.0, 0.4) : (u_DrillActive > 0.5 ? vec3(1.0, 0.75, 0.1) : vec3(0.3, 0.7, 0.9));
+            pfdBg += btmCol * btmBanner * 1.3;
+          }
+
           float edgeDark = 1.0 - smoothstep(-0.012, 0.0, centerBox);
           frameBase = pfdBg * (0.65 + 0.35 * edgeDark);
         }
@@ -766,6 +785,21 @@ void main() {
         float centerTick = sdSegment(orbHudP, vec2(-0.08, 0.0), vec2(0.08, 0.0));
         col.rgb += orbCol * (1.0 - smoothstep(0.0008, 0.0022, centerTick)) * 0.8;
         col.a = max(col.a, 0.90);
+      }
+    }
+
+    // P. Surface Science Drill HUD Annunciator (v5.3.0)
+    if (u_IsLanded > 0.5 && (u_DrillActive > 0.5 || u_DrillDepth > 0.05)) {
+      vec2 drillHudP = hudP - vec2(0.0, 0.22);
+      if (abs(drillHudP.x) < 0.15 && abs(drillHudP.y) < 0.03) {
+        float dBoxD = abs(sdBox(drillHudP, vec2(0.13, 0.02)));
+        float dBox = 1.0 - smoothstep(0.001, 0.0025, dBoxD);
+        vec3 dHudCol = (u_DrillState == 4) ? vec3(1.0, 0.2, 0.1) : (u_DrillDepth >= 4.95 ? vec3(0.2, 1.0, 0.5) : vec3(0.2, 0.8, 1.0));
+        float dPulse = (u_DrillState == 4) ? (0.5 + 0.5 * sin(u_Time * 15.0)) : 1.0;
+        col.rgb += dHudCol * dBox * dPulse * 1.5;
+        float dProgress = sdSegment(drillHudP, vec2(-0.09, 0.0), vec2(-0.09 + 0.18 * clamp(u_DrillDepth / 5.0, 0.0, 1.0), 0.0));
+        col.rgb += dHudCol * (1.0 - smoothstep(0.001, 0.003, dProgress)) * 1.6;
+        col.a = max(col.a, 0.88);
       }
     }
 
