@@ -402,6 +402,10 @@ int main() {
     g.session.custom.engineUpgrade = 2;
     g.session.custom.shieldUpgrade = 1;
     g.session.custom.warpUpgrade = 3;
+    g.session.custom.warpCapacitorLevel = 2;
+    g.session.custom.shieldMatrixLevel = 1;
+    g.session.custom.sensorArrayLevel = 3;
+    g.session.custom.rcsGimbalLevel = 2;
 
     const std::string text = astro::saveSerialize(g);
     astro::SaveGame out;
@@ -418,7 +422,11 @@ int main() {
         !close(out.session.custom.warpGlowIntensity, 2.2f) ||
         out.session.custom.engineUpgrade != 2 ||
         out.session.custom.shieldUpgrade != 1 ||
-        out.session.custom.warpUpgrade != 3) {
+        out.session.custom.warpUpgrade != 3 ||
+        out.session.custom.warpCapacitorLevel != 2 ||
+        out.session.custom.shieldMatrixLevel != 1 ||
+        out.session.custom.sensorArrayLevel != 3 ||
+        out.session.custom.rcsGimbalLevel != 2) {
       std::cerr << "Test 14 failed: customization round-trip mismatch\n";
       return 1;
     }
