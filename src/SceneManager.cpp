@@ -2426,6 +2426,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         // Decoupled from shipVisible(): rendered in 1st-person cockpit view, 2nd & 3rd-person views!
         if (warpdrive::dockSitesVisible()) {
           static ObjModel s_stationModel;
+          static ObjModel s_stationCoreModel;
+          static ObjModel s_stationRingModel;
+          static ObjModel s_stationPanelsModel;
           static ObjModel s_telescopeModel;
           static ObjModel s_warpCoreModel;
           static ObjModel s_probeModel;
@@ -2439,6 +2442,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_spaceAssetsTried = true;
             s_stationModel.load("res/models/station.obj");
             s_stationModel.loadTextures("res/models/station");
+            s_stationCoreModel.load("res/models/station_core.obj");
+            s_stationCoreModel.shareTexturesFrom(s_stationModel);
+            s_stationRingModel.load("res/models/station_ring.obj");
+            s_stationRingModel.shareTexturesFrom(s_stationModel);
+            s_stationPanelsModel.load("res/models/station_panels.obj");
+            s_stationPanelsModel.shareTexturesFrom(s_stationModel);
 
             s_telescopeModel.load("res/models/telescope.obj");
             s_telescopeModel.loadTextures("res/models/telescope");
@@ -2633,13 +2642,30 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customMetal = 0.80f;
               customRough = 0.28f;
             } else {
-              // Standard orbital space station (ISS)
-              siteModel = &s_stationModel;
+              // Standard orbital space station (ISS): modular hierarchy when
+              // available (core + spinning centrifuge ring + SARJ solar wings),
+              // seamless fallback to the monolithic mesh.
               stScale = 0.38f;
               const float effScale = stScale * lodScale;
               stModel = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.08f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
                         glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              if (s_stationCoreModel.ready() && s_stationRingModel.ready() &&
+                  s_stationPanelsModel.ready() && s_shipShader) {
+                const glm::mat4 mCore = stModel;
+                const glm::mat4 mRing = stModel *
+                    glm::rotate(glm::mat4(1.0f), 0.30f * time, glm::vec3(0.0f, 0.0f, 1.0f));
+                // Smooth orbital sun-tracking (small SARJ slew, no per-frame sun lookup)
+                const float panelSunAngle = 0.06f * std::sin(0.05f * time);
+                const glm::mat4 mPanels = stModel *
+                    glm::rotate(glm::mat4(1.0f), panelSunAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+                drawStationObjModel(&s_stationCoreModel, mCore, customMetal, customRough, emOverride);
+                drawStationObjModel(&s_stationRingModel, mRing, customMetal, customRough, emOverride);
+                drawStationObjModel(&s_stationPanelsModel, mPanels, customMetal, customRough, emOverride);
+                siteModel = nullptr;  // already rendered
+              } else {
+                siteModel = &s_stationModel;
+              }
             }
 
             if (siteModel && siteModel->ready() && s_shipShader) {
