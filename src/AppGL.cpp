@@ -1,4 +1,4 @@
-#include "AppGL.h"
+﻿#include "AppGL.h"
 
 #include "GLCompat.h"
 #include <GLFW/glfw3.h>
@@ -2321,7 +2321,7 @@ void AppGL::applyModernThemeOnce() {
   st.GrabMinSize = 10.0f;
 
   // Фон: глубокое высококонтрастное обсидиановое стекло (#05080E, 96% opacity).
-  st.Colors[ImGuiCol_WindowBg] = ImVec4(0.018f, 0.028f, 0.045f, 0.96f);
+  st.Colors[ImGuiCol_WindowBg] = ImVec4(0.0196f, 0.0314f, 0.0549f, 0.96f);
   st.Colors[ImGuiCol_ChildBg] = ImVec4(0.025f, 0.042f, 0.068f, 0.88f);
   st.Colors[ImGuiCol_PopupBg] = ImVec4(0.020f, 0.035f, 0.055f, 0.98f);
 
@@ -4676,8 +4676,8 @@ void AppGL::drawModernTransportBar() {
   if (disp.x <= 0.0f || disp.y <= 0.0f) return;
   ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y - 32.0f),
                           ImGuiCond_Always, ImVec2(0.5f, 1.0f));
-  ImGui::SetNextWindowBgAlpha(0.94f);
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.02f, 0.04f, 0.07f, 0.94f));  // #060B12
+  ImGui::SetNextWindowBgAlpha(0.95f);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0196f, 0.0314f, 0.0549f, 0.95f));  // #060B12
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 1.00f));  // #38BDF8
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
@@ -4817,7 +4817,7 @@ void AppGL::drawCenterReticleHud() {
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   if (disp.x <= 0.0f || disp.y <= 0.0f) return;
   const ImVec2 ctr(disp.x * 0.5f, disp.y * 0.5f);
-  const ImU32 cyan = IM_COL32(56, 189, 248, 255);       // #38BDF8
+  const ImU32 cyan = IM_COL32(56, 189, 248, 160);       // #38BDF8
   const ImU32 cyanDim = IM_COL32(56, 189, 248, 140);
   const ImU32 cyanGlow = IM_COL32(56, 189, 248, 55);
   const ImU32 white = IM_COL32(255, 255, 255, 255);
@@ -4910,7 +4910,7 @@ void AppGL::drawActionHorizon() {
       ImGuiWindowFlags_AlwaysAutoResize;
 
   const bool pushed = modernPushFont();
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.018f, 0.028f, 0.045f, 0.96f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0196f, 0.0314f, 0.0549f, 0.96f));
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.24f, 0.58f, 0.88f, 0.85f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
@@ -4936,7 +4936,7 @@ void AppGL::drawActionHorizon() {
     if (m_landingTelem.isLanded) {
       ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.42f, 0.25f, 0.90f));
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.98f, 0.65f, 1.0f));
-      if (ImGui::Button(uiRu("⛏ БУРЕНИЕ КЕРНА (Space)", "⛏ DRILL CORE (Space)"))) {
+      if (ImGui::Button(uiRu("⛏ БУРЕНИЕ КЕРНА (F)", "⛏ DRILL CORE (F)"))) {
         m_surfaceReportOpen = true;
       }
       ImGui::PopStyleColor(2);
@@ -4998,7 +4998,7 @@ void AppGL::drawActionHorizon() {
       }
       ImGui::PopStyleColor(2);
     } else {
-      if (ImGui::Button(uiRu("🌌 ВКЛЮЧИТЬ ВАРП (X)", "🌌 ENGAGE WARP (X)"))) {
+      if (ImGui::Button(uiRu("🌌 ВАРП-ПРЫЖОК (Space)", "🌌 WARP JUMP (Space)"))) {
         if (ship::styleCanWarp(m_shipStyle)) {
           m_warpOn = true;
           m_warpStatus = 1;
@@ -5015,11 +5015,8 @@ void AppGL::drawActionHorizon() {
         else startCineTour();
       }
       ImGui::SameLine();
-      if (ImGui::Button(uiRu("🧠 ВТОРОЙ МОЗГ (B)", "🧠 SECOND BRAIN (B)"))) {
-        m_zettelkastenOpen = !m_zettelkastenOpen;
-        if (m_zettelkastenOpen) {
-          m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
-        }
+      if (ImGui::Button(uiRu("🗺 КАРТА (M)", "🗺 MAP (M)"))) {
+        m_expeditionMapOpen = !m_expeditionMapOpen;
       }
     }
   }
@@ -6377,7 +6374,7 @@ void AppGL::drawShipHud() {
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(12.0f, io.DisplaySize.y - 112.0f),
                           ImGuiCond_Always);
-  ImGui::SetNextWindowBgAlpha(0.90f);  // UI/UX: elevated to eliminate starfield bleed
+  ImGui::SetNextWindowBgAlpha(0.95f);  // UI/UX: elevated WCAG AAA #05080E 95pct
   if (ImGui::Begin("##shipHud", nullptr,
                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                        ImGuiWindowFlags_AlwaysAutoResize |
