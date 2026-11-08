@@ -48,6 +48,11 @@ struct ShipCustomization {
   int engineUpgrade = 0;                       // 0..3: +15% boost speed & fuel efficiency per level
   int shieldUpgrade = 0;                       // 0..3: +20% hazard / radiation resistance per level
   int warpUpgrade = 0;                         // 0..3: -12% jump fuel cost per level
+  // === Station Hub v4.7: RP Engineering Matrix (0..3 each) ===
+  int warpCapacitorLevel = 0;   // L1 +25% spool/-10% cost, L2 +50%/-20%, L3 +100%/-35%
+  int shieldMatrixLevel = 0;    // shield capacity +25%/+50%/+100%, regen scaling
+  int sensorArrayLevel = 0;     // target capture range +15%/+30%/+50%
+  int rcsGimbalLevel = 0;       // angular maneuverability +15%/+30%/+50%
 };
 
 namespace ship {
@@ -134,6 +139,49 @@ inline float upgradeShieldDamageFactor(int lvl) {
 inline float upgradeJumpCostFactor(int lvl) {
   int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
   return 1.0f - 0.12f * static_cast<float>(l);
+}
+
+// === Station Hub v4.7: RP Engineering Matrix helpers ===
+inline int upgradeCostRP(int lvl) {  // next level cost for generic branch
+  // Warp: 150/300/500, others scale similarly
+  if (lvl <= 0) return 150;
+  if (lvl == 1) return 300;
+  return 500;
+}
+inline int warpCapacitorCostRP(int lvl) {
+  if (lvl <= 0) return 150;
+  if (lvl == 1) return 300;
+  return 500;
+}
+inline float warpCapacitorSpeedMult(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  static constexpr float kT[4] = {1.0f, 1.25f, 1.5f, 2.0f};
+  return kT[l];
+}
+inline float warpCapacitorCostFactor(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  static constexpr float kT[4] = {1.0f, 0.90f, 0.80f, 0.65f};
+  return kT[l];
+}
+inline float shieldMatrixCapacityMult(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  static constexpr float kT[4] = {1.0f, 1.25f, 1.5f, 2.0f};
+  return kT[l];
+}
+inline float shieldMatrixRegenMult(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  static constexpr float kT[4] = {1.0f, 1.25f, 1.5f, 2.0f};
+  return kT[l];
+}
+inline float sensorArrayRangeMult(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  static constexpr float kT[4] = {1.0f, 1.15f, 1.30f, 1.50f};
+  return kT[l];
+}
+inline float rcsGimbalMult(int lvl) {
+  int l = lvl > 3 ? 3 : (lvl < 0 ? 0 : lvl);
+  static constexpr float kT[4] = {1.0f, 1.15f, 1.30f, 1.50f};
+  return kT[l];
 }
 
 inline bool spendJumpFuel(ShipState& s, float costK = 1.0f) {

@@ -510,7 +510,11 @@ std::string saveSerialize(const SaveGame& g) {
   out += ind(2) + "\"warpGlow\": " + numToJson(g.session.custom.warpGlowIntensity) + ",\n";
   out += ind(2) + "\"engineUpgrade\": " + std::to_string(g.session.custom.engineUpgrade) + ",\n";
   out += ind(2) + "\"shieldUpgrade\": " + std::to_string(g.session.custom.shieldUpgrade) + ",\n";
-  out += ind(2) + "\"warpUpgrade\": " + std::to_string(g.session.custom.warpUpgrade) + "\n";
+  out += ind(2) + "\"warpUpgrade\": " + std::to_string(g.session.custom.warpUpgrade) + ",\n";
+  out += ind(2) + "\"warpCapacitorLevel\": " + std::to_string(g.session.custom.warpCapacitorLevel) + ",\n";
+  out += ind(2) + "\"shieldMatrixLevel\": " + std::to_string(g.session.custom.shieldMatrixLevel) + ",\n";
+  out += ind(2) + "\"sensorArrayLevel\": " + std::to_string(g.session.custom.sensorArrayLevel) + ",\n";
+  out += ind(2) + "\"rcsGimbalLevel\": " + std::to_string(g.session.custom.rcsGimbalLevel) + "\n";
   out += ind(1) + "}\n";
 
   out += "}\n";
@@ -601,6 +605,10 @@ bool saveDeserialize(const std::string& text, SaveGame& out, std::string& err) {
     out.session.custom.engineUpgrade = readInt(*se, "engineUpgrade", out.session.custom.engineUpgrade);
     out.session.custom.shieldUpgrade = readInt(*se, "shieldUpgrade", out.session.custom.shieldUpgrade);
     out.session.custom.warpUpgrade = readInt(*se, "warpUpgrade", out.session.custom.warpUpgrade);
+    out.session.custom.warpCapacitorLevel = readInt(*se, "warpCapacitorLevel", out.session.custom.warpCapacitorLevel);
+    out.session.custom.shieldMatrixLevel = readInt(*se, "shieldMatrixLevel", out.session.custom.shieldMatrixLevel);
+    out.session.custom.sensorArrayLevel = readInt(*se, "sensorArrayLevel", out.session.custom.sensorArrayLevel);
+    out.session.custom.rcsGimbalLevel = readInt(*se, "rcsGimbalLevel", out.session.custom.rcsGimbalLevel);
   }
   return true;
 }

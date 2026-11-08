@@ -605,6 +605,17 @@ void AppGL::processInput(float deltaTime) {
   }
   m_prevJPressed = jDown;
 
+  // === Station Docking === (v4.7): E — contextual dock action near station
+  const bool eDown = (glfwGetKey(win, GLFW_KEY_E) == GLFW_PRESS);
+  if (eDown && !m_prevEPressed && !io.WantCaptureKeyboard && !m_ship.isDocked &&
+      !m_slidesCurrent.empty()) {
+    // gauge flight zero, cinematic vista handled by startDockSequence
+    m_shipVel = Vec3();
+    m_ship.gravVel = Vec3();
+    if (!m_dockHintId.empty()) startDockSequence(m_dockHintId);
+  }
+  m_prevEPressed = eDown;
+
   // === Astro-Zettelkasten === (v4.8.0): B — ментальный граф мыслей Егорки (Second Brain)
   const bool bDown = (glfwGetKey(win, GLFW_KEY_B) == GLFW_PRESS);
   if (bDown && !m_prevBPressed && !io.WantCaptureKeyboard && !m_inMenu && m_slidesCurrent.empty()) {
@@ -1867,7 +1878,9 @@ void AppGL::processMouse() {
   m_lastMouseY = static_cast<float>(mouseY);
 
   // v3.6.0: чувствительность и инверсия вертикали из настроек (Controls).
-  const float sensitivity = 0.003f * m_mouseSensitivity;
+  // v4.7: RCS Gimbal multiplier (angular maneuverability)
+  const float sensitivity = 0.003f * m_mouseSensitivity *
+                            ship::rcsGimbalMult(m_shipCustomization.rcsGimbalLevel);
   m_camera.yaw += xoffset * sensitivity;
   m_camera.pitch += yoffset * sensitivity * (m_invertY ? -1.0f : 1.0f);
 
@@ -4933,7 +4946,26 @@ void AppGL::drawActionHorizon() {
     dl->AddLine(ImVec2(pMax.x - brkLen, pMax.y), pMax, brkCol, 1.5f);
     dl->AddLine(ImVec2(pMax.x, pMax.y - brkLen), pMax, brkCol, 1.5f);
 
-    if (m_landingTelem.isLanded) {
+    // === Station Docking proximity (< 500m / 4.5u) - priority ===
+    bool nearDock = false;
+    std::string nearDockId;
+    if (m_sceneManager && !m_ship.isDocked) {
+      for (const auto& dock : m_sceneManager->dockSites()) {
+        double dx = m_camera.position.x - dock.pos.x;
+        double dy = m_camera.position.y - dock.pos.y;
+        double dz = m_camera.position.z - dock.pos.z;
+        double d = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < 4.5) { nearDock = true; nearDockId = dock.id; m_dockHint = dock.name; m_dockHintId = dock.id; break; }
+      }
+    }
+    if (nearDock) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.45f, 0.65f, 0.95f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.0f, 1.0f));
+      if (ImGui::Button("[E] DOCKING")) {
+        startDockSequence(nearDockId);
+      }
+      ImGui::PopStyleColor(2);
+    } else if (m_landingTelem.isLanded) {
       ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.42f, 0.25f, 0.90f));
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.98f, 0.65f, 1.0f));
       if (ImGui::Button(uiRu("⛏ БУРЕНИЕ КЕРНА (F)", "⛏ DRILL CORE (F)"))) {
@@ -10010,9 +10042,11 @@ void AppGL::startWarpJump(const std::string& id) {
   // === Ship survival === (v3.3.0): без пяти единиц топлива прыжок не летит.
   // v3.6.0: цена зависит от сложности (Hard x1.6, Easy x0.6).
   // v4.2: Асимметричный резонатор Казимира (Орион) — скидка 50% на прыжки.
+  // v4.7: Warp Coil Capacitors (spool speed + fuel economy)
   const DifficultyTuning jtune = difficultyTuning(m_difficulty);
   const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
-  if (!ship::canJump(m_ship, jtune.jumpCostK * casimirK)) {
+  const float capK = ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel);
+  if (!ship::canJump(m_ship, jtune.jumpCostK * casimirK * capK)) {
     char need[64];
     std::snprintf(need, sizeof(need),
                   uiRu("Недостаточно топлива (нужно %.0f)",
@@ -10131,7 +10165,7 @@ bool AppGL::updateWarp(float deltaTime) {
         m_warpJumpTarget.clear();
         teleportToStation(tgt);  // штатный телепорт под вспышкой
         const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
-        ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK * casimirK);
+        ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK * casimirK * ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel));
         m_warpStatus = 4;        // Cooldown
         m_warpStateT = 0.0f;
         m_warpFlash = 0.5f;  // v3.6.0: мягкая вспышка прибытия (комфорт для глаз)
@@ -10395,7 +10429,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
     m_warpStatus = 3;
     teleportToStation(m_jumpTarget, false);  // v3.8.0: свой телепорт внутри катсцены
     const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
-    ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK * casimirK);
+    ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK * casimirK * ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel));
     m_jumpShipPos = m_camera.position;
     m_jumpShipDir = m_camera.forward();
     m_jumpFpPos = m_camera.position;
@@ -11994,6 +12028,10 @@ void AppGL::drawShipyard() {
 
   bool open = m_shipyardOpen;
   if (ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoCollapse)) {
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "%s: %d RP",
+                       uiRu("Доступно RP", "Available RP"),
+                       m_codex.getTotalResearchPoints());
+    ImGui::Separator();
     if (ImGui::BeginTabBar("##shipyardTabs")) {
       
       // === TAB 1: HANGAR / SWITCH SHIP ===
@@ -12154,6 +12192,66 @@ void AppGL::drawShipyard() {
         ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  -> %s -%.0f%%",
                            uiRu("Экономия топлива при варп-прыжке:", "Warp jump fuel savings:"),
                            (1.0f - ship::upgradeJumpCostFactor(m_shipCustomization.warpUpgrade)) * 100.0f);
+
+        // === RP Engineering Matrix (v4.7 Station Hub) ===
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s: %d RP",
+                           uiRu("Доступно RP", "Available RP"), m_codex.getTotalResearchPoints());
+        // Warp Coil Capacitors
+        ImGui::Spacing();
+        ImGui::Text("%s [Lv %d/3]:", "Warp Coil Capacitors", m_shipCustomization.warpCapacitorLevel);
+        ImGui::SameLine();
+        if (m_shipCustomization.warpCapacitorLevel < 3) {
+          int cost = ship::warpCapacitorCostRP(m_shipCustomization.warpCapacitorLevel);
+          char lbl[64]; std::snprintf(lbl, sizeof(lbl), "Buy %d RP##wcap", cost);
+          if (ImGui::Button(lbl)) {
+            if (m_codex.spendResearchPoints(cost)) { m_shipCustomization.warpCapacitorLevel++; upgraded = true; }
+          }
+        } else { ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "MAX"); }
+        ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  Spool x%.2f  Cost x%.2f",
+                           ship::warpCapacitorSpeedMult(m_shipCustomization.warpCapacitorLevel),
+                           ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel));
+        // Shield Matrix
+        ImGui::Spacing();
+        ImGui::Text("%s [Lv %d/3]:", "Shield Matrix", m_shipCustomization.shieldMatrixLevel);
+        ImGui::SameLine();
+        if (m_shipCustomization.shieldMatrixLevel < 3) {
+          int cost = ship::upgradeCostRP(m_shipCustomization.shieldMatrixLevel);
+          char lbl[64]; std::snprintf(lbl, sizeof(lbl), "Buy %d RP##smat", cost);
+          if (ImGui::Button(lbl)) {
+            if (m_codex.spendResearchPoints(cost)) { m_shipCustomization.shieldMatrixLevel++; upgraded = true; }
+          }
+        } else { ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "MAX"); }
+        ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  Cap x%.2f  Regen x%.2f",
+                           ship::shieldMatrixCapacityMult(m_shipCustomization.shieldMatrixLevel),
+                           ship::shieldMatrixRegenMult(m_shipCustomization.shieldMatrixLevel));
+        // Sensor Array
+        ImGui::Spacing();
+        ImGui::Text("%s [Lv %d/3]:", "Sensor Array", m_shipCustomization.sensorArrayLevel);
+        ImGui::SameLine();
+        if (m_shipCustomization.sensorArrayLevel < 3) {
+          int cost = ship::upgradeCostRP(m_shipCustomization.sensorArrayLevel);
+          char lbl[64]; std::snprintf(lbl, sizeof(lbl), "Buy %d RP##sens", cost);
+          if (ImGui::Button(lbl)) {
+            if (m_codex.spendResearchPoints(cost)) { m_shipCustomization.sensorArrayLevel++; upgraded = true; }
+          }
+        } else { ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "MAX"); }
+        ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  Range x%.2f",
+                           ship::sensorArrayRangeMult(m_shipCustomization.sensorArrayLevel));
+        // RCS Gimbal
+        ImGui::Spacing();
+        ImGui::Text("%s [Lv %d/3]:", "RCS Gimbal", m_shipCustomization.rcsGimbalLevel);
+        ImGui::SameLine();
+        if (m_shipCustomization.rcsGimbalLevel < 3) {
+          int cost = ship::upgradeCostRP(m_shipCustomization.rcsGimbalLevel);
+          char lbl[64]; std::snprintf(lbl, sizeof(lbl), "Buy %d RP##rcs", cost);
+          if (ImGui::Button(lbl)) {
+            if (m_codex.spendResearchPoints(cost)) { m_shipCustomization.rcsGimbalLevel++; upgraded = true; }
+          }
+        } else { ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "MAX"); }
+        ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  Maneuver x%.2f",
+                           ship::rcsGimbalMult(m_shipCustomization.rcsGimbalLevel));
 
         // 4. Fifth Universe Relic Technologies (Pendant)
         ImGui::Spacing();

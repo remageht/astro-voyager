@@ -66,6 +66,11 @@ class ScienceCodex {
   int getTotalCount() const;
   int getTotalResearchPoints() const { return m_totalPoints; }
   void addResearchPoints(int points) { m_totalPoints += points; }
+  bool spendResearchPoints(int cost) {
+    if (cost <= 0 || m_totalPoints < cost) return false;
+    m_totalPoints -= cost;
+    return true;
+  }
 
   std::string serialize() const;
   bool deserialize(const std::string& data);

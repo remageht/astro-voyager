@@ -506,6 +506,15 @@ Check 'zettel backlinks' ((Read-File 'src/Zettelkasten.h') -match 'getIncomingLi
 Check 'zettel hypotheses' ((Read-File 'src/Zettelkasten.h') -match 'ZettelHypothesis')
 Check 'zettel resolve' ((Read-File 'src/Zettelkasten.cpp') -match 'resolveHypothesis')
 
+
+# Stage 6 Station Hub RP economy
+Check 'station hub warpCapacitor' ((Read-File 'src/Types.h') -match 'warpCapacitorLevel')
+Check 'station hub shieldMatrix' ((Read-File 'src/Types.h') -match 'shieldMatrixLevel')
+Check 'station hub rcs' ((Read-File 'src/Types.h') -match 'rcsGimbalLevel')
+Check 'station hub dock button' ((Read-File 'src/AppGL.cpp') -match 'DOCKING')
+Check 'station hub RP spend' ((Read-File 'src/AppGL.cpp') -match 'spendResearchPoints')
+Check 'station hub save warpCap' ((Read-File 'src/SaveGame.cpp') -match 'warpCapacitorLevel')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

@@ -203,6 +203,7 @@ class AppGL {
   StoryJournal m_story;
   bool m_storyOpen = false;
   bool m_prevJPressed = false;
+  bool m_prevEPressed = false;  // E: docking context action
   // === Constellation Alignment Minigame ===
   bool m_constellationAlignOpen = false;
   std::string m_alignConstellationId = "ori";
@@ -498,6 +499,7 @@ class AppGL {
   int m_shipStyle = 0;  // корпус корабля: 0 Dart, 1 Ring Ship v2, 2 Shuttle, 3 Model (OBJ)
   // === Orbital Shipyard & Station Docking (v3.11.0) ===
   bool m_shipyardOpen = false;
+  int m_hubTab = 0;  // Station Hub tab: 0 Service, 1 Upgrades, 2 Hangar
   bool m_prevKPressed = false;
   std::string m_dockHint;
   std::string m_dockHintId;
