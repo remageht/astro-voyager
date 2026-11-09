@@ -1,5 +1,6 @@
 #include "../src/SaveGame.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
