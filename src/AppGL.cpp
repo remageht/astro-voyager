@@ -14740,7 +14740,7 @@ void AppGL::updateEpilogueCinematic(float dt) {
 
   // Gamepad analog right stick and D-pad scrolling
   if (m_gamepad.isConnected()) {
-    float stickY = m_gamepad.state().rightStick.y;
+    float stickY = m_gamepad.getFlightControl().lookPitch;
     if (std::abs(stickY) > 0.05f) {
       m_epilogueScrollY -= stickY * 260.0f * dt;
     }
@@ -14754,7 +14754,7 @@ void AppGL::updateEpilogueCinematic(float dt) {
 
   // Scroll speed-up
   const bool padSpeed = m_gamepad.isConnected() &&
-                        (m_gamepad.state().rightTrigger > 0.3f || m_gamepad.isDown(GamepadButton::A));
+                        (m_gamepad.getFlightControl().throttle > 0.3f || m_gamepad.isDown(GamepadButton::A));
   const bool spaceDown = (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS);
   const bool lmbDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !io.WantCaptureMouse);
   const float scrollSpeed = (spaceDown || lmbDown || padSpeed) ? 120.0f : m_epilogueAutoScrollSpeed;

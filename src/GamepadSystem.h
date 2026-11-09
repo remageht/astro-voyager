@@ -108,6 +108,8 @@ public:
   // Glyphs & Adaptive Prompts
   static const char* getButtonGlyph(GamepadButton btn, GamepadStyle style = GamepadStyle::Xbox);
   std::string getAdaptivePrompt(const std::string& kbPrompt, GamepadButton btn, const std::string& action) const;
+  std::string formatPrompt(const std::string& token) const;
+  std::string formatPrompt(GamepadButton btn) const;
 
 private:
   float m_stickDeadzone = 0.15f;

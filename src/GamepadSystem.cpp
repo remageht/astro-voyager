@@ -200,4 +200,22 @@ std::string GamepadSystem::getAdaptivePrompt(
   return kbPrompt;
 }
 
+std::string GamepadSystem::formatPrompt(const std::string& token) const {
+  if (token == "[A]") return getButtonGlyph(GamepadButton::A, m_style);
+  if (token == "[B]") return getButtonGlyph(GamepadButton::B, m_style);
+  if (token == "[X]") return getButtonGlyph(GamepadButton::X, m_style);
+  if (token == "[Y]") return getButtonGlyph(GamepadButton::Y, m_style);
+  if (token == "[LB]") return getButtonGlyph(GamepadButton::LB, m_style);
+  if (token == "[RB]") return getButtonGlyph(GamepadButton::RB, m_style);
+  if (token == "[RT/A]") {
+    if (m_style == GamepadStyle::PlayStation) return "[R2/(X)]";
+    return "[RT/A]";
+  }
+  return token;
+}
+
+std::string GamepadSystem::formatPrompt(GamepadButton btn) const {
+  return getButtonGlyph(btn, m_style);
+}
+
 }  // namespace astro
