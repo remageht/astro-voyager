@@ -530,6 +530,16 @@ Check 'accessibility settings tab in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -ma
 Check 'accessibility font scaling in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'FontGlobalScale')
 Check 'accessibility audio cue in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'm_audioProximityCue')
 
+
+# Roadmap Item #5: Procedural Mission Generator (Issue #114)
+Check 'mission header exists' (Test-Path (Join-Path $root 'src/MissionSystem.h'))
+Check 'mission source exists' (Test-Path (Join-Path $root 'src/MissionSystem.cpp'))
+Check 'mission test source exists' (Test-Path (Join-Path $root 'tests/test_mission.cpp'))
+Check 'cmake lists MissionSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/MissionSystem\.cpp')
+Check 'cmake lists test_mission' ((Read-File 'CMakeLists.txt') -match 'test_mission')
+Check 'mission contracts board in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'Contracts & Missions')
+Check 'mission hud widget in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'drawMissionHud')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

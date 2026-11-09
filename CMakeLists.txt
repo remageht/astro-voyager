@@ -31,6 +31,7 @@ add_executable(astro-voyager
   src/EpilogueSystem.cpp  # === EpilogueSystem === (v5.3.0): синематик и свиток хроники
   src/BenchmarkSystem.cpp  # === BenchmarkSystem === (Stage 4): перф-бенчмарк
   src/AtmosphereSystem.cpp  # === AtmosphereSystem === (Stage 5): вход в атмосферу
+  src/MissionSystem.cpp  # === MissionSystem === (Stage 7 / Roadmap #5): процедурный генератор миссий
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -538,6 +539,25 @@ endif()
 
 if(TARGET test_atmosphere)
   add_test(NAME test_atmosphere COMMAND test_atmosphere)
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_mission.cpp")
+  add_executable(test_mission
+    tests/test_mission.cpp
+    src/MissionSystem.cpp
+    src/ScienceSystem.cpp
+    src/Zettelkasten.cpp
+  )
+  target_include_directories(test_mission PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_mission PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_mission PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_mission)
+  add_test(NAME test_mission COMMAND test_mission)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):

@@ -195,6 +195,7 @@ int AppGL::run() {
   loadProfileNow(true);
   loadExpeditionFileNow();  // === Expedition === (v3.5.0): свой сейв арки.
   loadZettelkastenFileNow(); // === Zettelkasten === (v4.8.0): Второй мозг Егорки.
+  loadMissionsFileNow(); // === MissionSystem === (Stage 7 / Roadmap #5)
   m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
   float lastTime = static_cast<float>(glfwGetTime());
   static float menuAngle = 0.0f;
@@ -396,6 +397,23 @@ int AppGL::run() {
     updateShip(simDt);
     // === Planetary Landing & Surface Operations === (v4.6.1)
     updateLandingOperations(simDt);
+    // === MissionSystem === (Stage 7 / Roadmap #5)
+    {
+      const std::string curStation = (m_sceneManager && m_sceneManager->getCurrentStation()) ?
+                                     m_sceneManager->getCurrentStation()->id : "sol";
+      const float shipSpeed = static_cast<float>(std::sqrt(m_shipVel.x * m_shipVel.x + m_shipVel.y * m_shipVel.y + m_shipVel.z * m_shipVel.z));
+      m_missions.update(simDt, curStation, 0.0, m_ship.isDocked, shipSpeed);
+      const double camDist = std::sqrt(m_camera.position.x * m_camera.position.x +
+                                       m_camera.position.y * m_camera.position.y +
+                                       m_camera.position.z * m_camera.position.z);
+      m_missions.onDeepSpacePosition(camDist);
+      if (m_sceneManager && m_sceneManager->getCurrentStation()) {
+        const Station* st = m_sceneManager->getCurrentStation();
+        if (st->type == StationType::BlackHole || st->type == StationType::Pulsar) {
+          m_missions.onProximityObservation(st->id, camDist);
+        }
+      }
+    }
     // v4.0.0: износ корпуса -> шейдер OBJ-корпуса (побитый/восстановленный).
     warpdrive::setShipHull(m_ship.hull / 100.0f);
 
@@ -513,6 +531,7 @@ int AppGL::run() {
   saveProfileNow(true);
   saveExpeditionFileNow();   // === Expedition === (v3.5.0).
   saveZettelkastenFileNow(); // === Zettelkasten === (v4.8.0).
+  saveMissionsFileNow();     // === MissionSystem === (Stage 7 / Roadmap #5).
 
   if (m_benchmarkMode) {
     return m_benchmarkExitCode;
@@ -1236,6 +1255,7 @@ void AppGL::drawGwDetectorHud() {
 void AppGL::drawSpectrometer() {
   const Station* curSt = m_sceneManager->getCurrentStation();
   std::string stId = curSt ? curSt->id : "sol";
+  m_missions.onSpectroscopyScan(stId);
 
   // Compute beta from speedK
   const double beta = static_cast<double>(m_speedK) * 0.40;
@@ -3535,6 +3555,25 @@ void AppGL::loadZettelkastenFileNow() {
   m_zettelkasten.deserialize(buf.str());
 }
 
+void AppGL::saveMissionsFileNow() {
+  const std::string dir = saveProfileDir();
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  std::ofstream f(dir + "/missions.json", std::ios::binary | std::ios::trunc);
+  if (!f.is_open()) return;
+  const std::string text = m_missions.serialize();
+  f.write(text.c_str(), static_cast<std::streamsize>(text.size()));
+}
+
+void AppGL::loadMissionsFileNow() {
+  const std::string dir = saveProfileDir();
+  std::ifstream f(dir + "/missions.json", std::ios::binary);
+  if (!f.is_open()) return;
+  std::ostringstream buf;
+  buf << f.rdbuf();
+  m_missions.deserialize(buf.str());
+}
+
 namespace {
 
 constexpr double kSlideCharsPerSec = 42.0;
@@ -4282,6 +4321,78 @@ void AppGL::drawExpeditionHud() {
     }
   }
   if (ch) ImGui::End();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(2);
+  if (fontPushed) ImGui::PopFont();
+}
+
+void AppGL::drawMissionHud() {
+  const MissionContract* primary = m_missions.getPrimaryActiveContract();
+  if (!primary || m_inMenu || m_slidesOpen || m_hideUI) return;
+
+  const bool fontPushed = modernPushFont();
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 20.0f, 60.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+  ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_Always);
+
+  AccessiblePalette pal = getAccessiblePalette(m_colorblindMode);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(static_cast<float>(pal.background.x),
+                                                  static_cast<float>(pal.background.y),
+                                                  static_cast<float>(pal.background.z), 0.88f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(static_cast<float>(pal.primary.x),
+                                                static_cast<float>(pal.primary.y),
+                                                static_cast<float>(pal.primary.z), 0.70f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 6.0f));
+
+  ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+  if (ImGui::Begin("##activeMissionHud", nullptr, fl)) {
+    // Technical Sci-Fi corner brackets
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 pMin = ImGui::GetWindowPos();
+    const ImVec2 pMax = ImVec2(pMin.x + ImGui::GetWindowWidth(), pMin.y + ImGui::GetWindowHeight());
+    const ImU32 brkCol = IM_COL32(
+        static_cast<int>(pal.primary.x * 255.0f),
+        static_cast<int>(pal.primary.y * 255.0f),
+        static_cast<int>(pal.primary.z * 255.0f), 200);
+    const float brkLen = 8.0f;
+    dl->AddLine(pMin, ImVec2(pMin.x + brkLen, pMin.y), brkCol, 1.5f);
+    dl->AddLine(pMin, ImVec2(pMin.x, pMin.y + brkLen), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMax.x - brkLen, pMin.y), ImVec2(pMax.x, pMin.y), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMax.x, pMin.y), ImVec2(pMax.x, pMin.y + brkLen), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMin.x, pMax.y - brkLen), ImVec2(pMin.x, pMax.y), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMin.x, pMax.y), ImVec2(pMin.x + brkLen, pMax.y), brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMax.x - brkLen, pMax.y), pMax, brkCol, 1.5f);
+    dl->AddLine(ImVec2(pMax.x, pMax.y - brkLen), pMax, brkCol, 1.5f);
+
+    ImGui::TextColored(ImVec4(static_cast<float>(pal.warning.x),
+                              static_cast<float>(pal.warning.y),
+                              static_cast<float>(pal.warning.z), 1.0f),
+                       "[%s]", uiRu("АКТИВНЫЙ КОНТРАКТ", "MISSION DIRECTIVE"));
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "+%d RP", primary->rewardRP);
+
+    ImGui::TextUnformatted(uiRu(primary->titleRu.c_str(), primary->titleEn.c_str()));
+
+    if (primary->status == MissionStatus::Completed) {
+      ImGui::TextColored(ImVec4(static_cast<float>(pal.success.x),
+                                static_cast<float>(pal.success.y),
+                                static_cast<float>(pal.success.z), 1.0f),
+                         "%s", uiRu("ЦЕЛЬ ДОСТИГНУТА! Сдайте в Доке [E]", "OBJECTIVE MET! Claim at Dock [E]"));
+    } else {
+      float progress = (primary->targetValue > 0.0f) ? (primary->currentValue / primary->targetValue) : 0.0f;
+      progress = std::clamp(progress, 0.0f, 1.0f);
+      char pBuf[32];
+      snprintf(pBuf, sizeof(pBuf), "%.0f%%", progress * 100.0f);
+      ImGui::ProgressBar(progress, ImVec2(-1.0f, 12.0f), pBuf);
+      if (primary->timeLimitSec > 0.0) {
+        ImGui::TextColored(ImVec4(0.85f, 0.65f, 0.25f, 1.0f), "%s: %.0fs",
+                           uiRu("Время", "Timer"), primary->timeRemainingSec);
+      }
+    }
+  }
+  ImGui::End();
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor(2);
   if (fontPushed) ImGui::PopFont();
@@ -5129,6 +5240,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   // === Expedition === (v3.5.0): HUD-карточка главы над сценой.
   if (!m_inMenu) {
     drawExpeditionHud();
+    drawMissionHud();
     if (m_expeditionMapOpen) drawExpeditionMap();
   }
   // === Scientific GW Instrument === (v4.4.0): детектор гравитационных волн
@@ -7101,6 +7213,7 @@ void AppGL::saveProfileNow(bool quiet) {
 
   if (saveOk && settingsOk) {
     saveZettelkastenFileNow();
+    saveMissionsFileNow();
     m_saveStatus = uiRu("Профиль сохранён", "Profile saved");
     if (!quiet) {
       m_audio.playClick();
@@ -7152,6 +7265,7 @@ void AppGL::loadProfileNow(bool quiet) {
   }
   applySaveGame(g);
   loadZettelkastenFileNow();
+  loadMissionsFileNow();
   m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
   m_saveStatus = std::string(uiRu("Профиль загружен", "Profile loaded")) +
                  ": " + g.session.station;
@@ -12111,6 +12225,10 @@ void AppGL::dockAtStation(const std::string& dockId) {
   const int expBefore = m_expedition.chapterIndex;
   advanceExpedition(dockId);
   if (m_expedition.chapterIndex > expBefore) m_shipyardOpen = false;
+  m_missions.onStationDocked(dockId);
+  if (m_missions.getAvailableContracts().empty()) {
+    m_missions.generateBoard(dockId);
+  }
   saveProfileNow(false);
 }
 
@@ -12518,6 +12636,109 @@ void AppGL::drawShipyard() {
         }
       }
 
+      // === TAB: CONTRACTS & MISSIONS (Roadmap #5) ===
+      if (ImGui::BeginTabItem(uiRu("Контракты & Миссии", "Contracts & Missions"))) {
+        ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "%s",
+                           uiRu("Терминал Научно-Исследовательских Контрактов",
+                                "Scientific Directives & Contracts Board"));
+        ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 1.0f), "%s: %zu / %d",
+                           uiRu("Принятые контракты", "Active Directives"),
+                           m_missions.getActiveContracts().size(),
+                           m_missions.getMaxActiveContracts());
+        ImGui::SameLine();
+        if (ImGui::Button(uiRu("Обновить пул", "Refresh Board"))) {
+          std::string curId = m_ship.dockedStationId.empty() ? "sol" : m_ship.dockedStationId;
+          m_missions.generateBoard(curId, 4);
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // 1. Секция активных контрактов
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s:",
+                           uiRu("Активные задания в бортовом журнале", "Active Missions in Flight Log"));
+        const auto& active = m_missions.getActiveContracts();
+        if (active.empty()) {
+          ImGui::TextDisabled("%s", uiRu("Нет активных контрактов. Выберите задание из списка ниже.",
+                                         "No active contracts. Select a directive from available list below."));
+        } else {
+          for (size_t mi = 0; mi < active.size(); ++mi) {
+            const auto& c = active[mi];
+            ImGui::PushID(static_cast<int>(mi + 100));
+            ImGui::BulletText("%s", uiRu(c.titleRu.c_str(), c.titleEn.c_str()));
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.5f, 1.0f), "[+%d RP]", c.rewardRP);
+
+            ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "  %s: %s",
+                               uiRu("Заказчик", "Client"),
+                               uiRu(c.clientRu.c_str(), c.clientEn.c_str()));
+
+            if (c.status == MissionStatus::Completed) {
+              ImGui::SameLine();
+              ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.65f, 0.35f, 1.0f));
+              if (ImGui::Button(uiRu("СДАТЬ И ПОЛУЧИТЬ НАГРАДУ", "CLAIM REWARD"))) {
+                m_missions.claimReward(c.id, m_codex, &m_bridgeComms, &m_zettelkasten);
+                saveMissionsFileNow();
+                saveProfileNow(true);
+              }
+              ImGui::PopStyleColor();
+            } else {
+              float prog = (c.targetValue > 0.0f) ? (c.currentValue / c.targetValue) : 0.0f;
+              prog = std::clamp(prog, 0.0f, 1.0f);
+              char pBuf[32];
+              snprintf(pBuf, sizeof(pBuf), "%.0f%%", prog * 100.0f);
+              ImGui::ProgressBar(prog, ImVec2(180.0f, 14.0f), pBuf);
+              ImGui::SameLine();
+              if (ImGui::SmallButton(uiRu("Отказаться", "Abandon"))) {
+                m_missions.abandonContract(c.id);
+                saveMissionsFileNow();
+              }
+            }
+            ImGui::PopID();
+          }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // 2. Секция доступных контрактов станции
+        ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "%s:",
+                           uiRu("Доступные контракты орбитального сектора", "Available Sector Directives"));
+        const auto& avail = m_missions.getAvailableContracts();
+        if (avail.empty()) {
+          ImGui::TextDisabled("%s", uiRu("Все доступные контракты сектора уже приняты.",
+                                         "All sector contracts already claimed."));
+        } else {
+          for (size_t ai = 0; ai < avail.size(); ++ai) {
+            const auto& ac = avail[ai];
+            ImGui::PushID(static_cast<int>(ai + 200));
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "%s",
+                               uiRu(ac.titleRu.c_str(), ac.titleEn.c_str()));
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.5f, 1.0f), "+%d RP", ac.rewardRP);
+
+            ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "%s: %s",
+                               uiRu("Заказчик", "Client"),
+                               uiRu(ac.clientRu.c_str(), ac.clientEn.c_str()));
+            ImGui::TextWrapped("%s", uiRu(ac.descRu.c_str(), ac.descEn.c_str()));
+
+            if (m_missions.getActiveContracts().size() < static_cast<size_t>(m_missions.getMaxActiveContracts())) {
+              if (ImGui::Button(uiRu("Принять контракт", "Accept Directive"))) {
+                m_missions.acceptContract(ac.id);
+                saveMissionsFileNow();
+              }
+            } else {
+              ImGui::TextDisabled("%s", uiRu("Лимит контрактов (макс. 3)", "Contract limit reached (max 3)"));
+            }
+            ImGui::PopID();
+          }
+        }
+
+        ImGui::EndTabItem();
+      }
+
       ImGui::EndTabBar();
     }
   }
@@ -12632,6 +12853,9 @@ void AppGL::updateLandingOperations(float deltaTime) {
     if (m_landingTelem.isLanded) {
       updateCoreDrill(m_drillTelem, deltaTime, m_drillInputActive, m_drillRetractActive,
                       m_currentSurfaceReport.tempK, m_currentSurfaceReport.gravityMps2);
+      if (m_drillTelem.depthM > 0.0f) {
+        m_missions.onSurfaceSample(m_currentSurfaceReport.bodyId, m_drillTelem.depthM * 100.0f);
+      }
       float drillAudioK = (m_drillTelem.state == CoreDrillState::Drilling) ? (m_drillTelem.rpm / 420.0f) :
                           (m_drillTelem.state == CoreDrillState::Retracting) ? 0.35f : 0.0f;
       m_audio.setDrillLevel(drillAudioK, m_drillTelem.motorTorque);
@@ -12703,6 +12927,7 @@ void AppGL::drawSurfaceReportModal() {
                         ImVec2(-1, 32.0f))) {
         m_currentSurfaceReport.samplesCollected = true;
         m_codex.scanObject(m_currentSurfaceReport.bodyId, glfwGetTime());
+        m_missions.onSurfaceSample(m_currentSurfaceReport.bodyId, 30.0f);
 
         RadioMessage comm;
         comm.id = "sample_" + m_currentSurfaceReport.bodyId;
