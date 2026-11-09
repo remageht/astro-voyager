@@ -141,6 +141,11 @@ int main() {
     s.keyMap = 87;      // W
     s.keyJournal = 81;  // Q
     s.keyTour = 90;     // Z
+    // v5.4.0: доступность и эргономика
+    s.uiScale = 1.35f;
+    s.colorblindMode = 2;
+    s.audioProximityCue = true;
+    s.highContrastReticle = true;
     const std::string text = astro::saveSerializeSettings(s);
     astro::SaveSettings out;
     std::string err;
@@ -160,7 +165,11 @@ int main() {
         !close(out.mouseSensitivity, s.mouseSensitivity, 1e-5) ||
         out.invertY != s.invertY || out.keyColony != s.keyColony ||
         out.keyView != s.keyView || out.keyMap != s.keyMap ||
-        out.keyJournal != s.keyJournal || out.keyTour != s.keyTour) {
+        out.keyJournal != s.keyJournal || out.keyTour != s.keyTour ||
+        !close(out.uiScale, s.uiScale, 1e-5) ||
+        out.colorblindMode != s.colorblindMode ||
+        out.audioProximityCue != s.audioProximityCue ||
+        out.highContrastReticle != s.highContrastReticle) {
       std::cerr << "Test 2 failed: settings mismatch\n";
       return 1;
     }
@@ -431,6 +440,27 @@ int main() {
       return 1;
     }
   }
+
+  // Test 15: Accessibility settings boundary clamping (v5.4.0)
+  {
+    std::string malformed = R"({
+      "schema": 1,
+      "uiScale": 99.5,
+      "colorblindMode": -3
+    })";
+    astro::SaveSettings out;
+    std::string err;
+    if (!astro::saveDeserializeSettings(malformed, out, err)) {
+      std::cerr << "Test 15 failed: " << err << '\n';
+      return 1;
+    }
+    if (!close(out.uiScale, 2.0f, 1e-4) || out.colorblindMode != 0) {
+      std::cerr << "Test 15 failed: expected clamping (uiScale=2.0, colorblind=0), got ("
+                << out.uiScale << ", " << out.colorblindMode << ")\n";
+      return 1;
+    }
+  }
+
   std::cout << "save tests: ALL PASS\n";
   return 0;
   } catch (const std::exception& e) {

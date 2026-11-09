@@ -521,8 +521,18 @@ Check 'solar rebirth camera' ((Read-File 'src/EpilogueSystem.h') -match 'SolarRe
 Check 'solar rebirth impl' ((Read-File 'src/EpilogueSystem.cpp') -match 'solarRebirthCamera')
 Check 'solar rebirth app' ((Read-File 'src/AppGL.cpp') -match 'solarRebirthCamera')
 
+# v5.4.0: Accessibility & UI Ergonomics (Issue #110)
+Check 'accessibility uiScale in SaveGame.h' ((Read-File 'src/SaveGame.h') -match 'uiScale')
+Check 'accessibility colorblindMode in SaveGame.h' ((Read-File 'src/SaveGame.h') -match 'colorblindMode')
+Check 'accessibility AccessiblePalette in Types.h' ((Read-File 'src/Types.h') -match 'AccessiblePalette')
+Check 'accessibility getAccessiblePalette in Types.h' ((Read-File 'src/Types.h') -match 'getAccessiblePalette')
+Check 'accessibility settings tab in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'Accessibility')
+Check 'accessibility font scaling in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'FontGlobalScale')
+Check 'accessibility audio cue in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'm_audioProximityCue')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
+
 
 

@@ -1,4 +1,4 @@
-﻿#include "AppGL.h"
+#include "AppGL.h"
 
 #include "GLCompat.h"
 #include <GLFW/glfw3.h>
@@ -4923,19 +4923,27 @@ void AppGL::drawActionHorizon() {
       ImGuiWindowFlags_AlwaysAutoResize;
 
   const bool pushed = modernPushFont();
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0196f, 0.0314f, 0.0549f, 0.96f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.24f, 0.58f, 0.88f, 0.85f));
+  AccessiblePalette pal = getAccessiblePalette(m_colorblindMode);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+      ImVec4(static_cast<float>(pal.background.x), static_cast<float>(pal.background.y),
+             static_cast<float>(pal.background.z), 0.96f));
+  ImGui::PushStyleColor(ImGuiCol_Border,
+      ImVec4(static_cast<float>(pal.primary.x), static_cast<float>(pal.primary.y),
+             static_cast<float>(pal.primary.z), 0.85f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 6.0f));
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 4.0f));
 
   if (ImGui::Begin("##ActionHorizon", nullptr, fl)) {
-    // 1px Technical Sci-Fi corner brackets
+    // 1px Technical Sci-Fi corner brackets in accessible palette
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImVec2 pMin = ImGui::GetWindowPos();
     const ImVec2 pMax = ImVec2(pMin.x + ImGui::GetWindowWidth(), pMin.y + ImGui::GetWindowHeight());
-    const ImU32 brkCol = IM_COL32(56, 189, 248, 220);
+    const ImU32 brkCol = IM_COL32(
+        static_cast<int>(pal.primary.x * 255.0f),
+        static_cast<int>(pal.primary.y * 255.0f),
+        static_cast<int>(pal.primary.z * 255.0f), 220);
     const float brkLen = 8.0f;
     dl->AddLine(pMin, ImVec2(pMin.x + brkLen, pMin.y), brkCol, 1.5f);
     dl->AddLine(pMin, ImVec2(pMin.x, pMin.y + brkLen), brkCol, 1.5f);
@@ -4948,6 +4956,7 @@ void AppGL::drawActionHorizon() {
 
     // === Station Docking proximity (< 500m / 4.5u) - priority ===
     bool nearDock = false;
+    double minDockDist = 9999.0;
     std::string nearDockId;
     if (m_sceneManager && !m_ship.isDocked) {
       for (const auto& dock : m_sceneManager->dockSites()) {
@@ -4955,12 +4964,24 @@ void AppGL::drawActionHorizon() {
         double dy = m_camera.position.y - dock.pos.y;
         double dz = m_camera.position.z - dock.pos.z;
         double d = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < minDockDist) minDockDist = d;
         if (d < 4.5) { nearDock = true; nearDockId = dock.id; m_dockHint = dock.name; m_dockHintId = dock.id; break; }
       }
     }
+    if (minDockDist > 5.5) {
+      m_dockChimePlayed = false;
+    }
     if (nearDock) {
-      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.45f, 0.65f, 0.95f));
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.0f, 1.0f));
+      if (!m_dockChimePlayed && m_audioProximityCue) {
+        m_audio.playTargetLockPing();
+        m_dockChimePlayed = true;
+      }
+      const float pulse = 0.80f + 0.20f * std::sin(static_cast<float>(ImGui::GetTime()) * 4.0f);
+      ImVec4 btnBg(static_cast<float>(pal.primary.x) * 0.40f,
+                   static_cast<float>(pal.primary.y) * 0.40f,
+                   static_cast<float>(pal.primary.z) * 0.40f, 0.95f * pulse);
+      ImGui::PushStyleColor(ImGuiCol_Button, btnBg);
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
       if (ImGui::Button("[E] DOCKING")) {
         startDockSequence(nearDockId);
       }
@@ -6928,6 +6949,12 @@ void AppGL::applySaveSettings(const SaveSettings& s) {
   m_keyMap = keyOk(s.keyMap) ? s.keyMap : 78;
   m_keyJournal = keyOk(s.keyJournal) ? s.keyJournal : 74;
   m_keyTour = keyOk(s.keyTour) ? s.keyTour : 84;
+  // v5.4.0: доступность (UI Scale, палитры дальтонизма, сигналы)
+  m_uiScale = std::min(std::max(s.uiScale, 1.0f), 2.0f);
+  m_colorblindMode = std::min(std::max(s.colorblindMode, 0), 4);
+  m_audioProximityCue = s.audioProximityCue;
+  m_highContrastReticle = s.highContrastReticle;
+  ImGui::GetIO().FontGlobalScale = m_uiScale;
   m_renderCamValid = false;
 }
 
@@ -7028,6 +7055,11 @@ void AppGL::saveProfileNow(bool quiet) {
   st.keyMap = m_keyMap;
   st.keyJournal = m_keyJournal;
   st.keyTour = m_keyTour;
+  // v5.4.0: доступность
+  st.uiScale = m_uiScale;
+  st.colorblindMode = m_colorblindMode;
+  st.audioProximityCue = m_audioProximityCue;
+  st.highContrastReticle = m_highContrastReticle;
   const bool settingsOk =
       saveWriteFile(saveSettingsFilePath(), saveSerializeSettings(st), err);
 
@@ -8135,6 +8167,61 @@ void AppGL::drawMenu() {
           ImGui::SeparatorText(uiRu("Камера и FOV", "Camera"));
           menuChanged |= ImGui::SliderFloat("FOV", &menuSettings.fovDegrees, 30.0f,
                                             110.0f, "%.1f deg");
+          ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem(uiRu("Доступность", "Accessibility"))) {
+          ImGui::Spacing();
+          ImGui::SeparatorText(uiRu("Масштабирование интерфейса", "UI Scaling"));
+          ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.95f, 1.0f), "%s",
+                             uiRu("Адаптация для экранов 2K/4K и комфортного чтения",
+                                  "Adaptation for 2K/4K displays and readability"));
+          if (ImGui::SliderFloat("UI Scale", &m_uiScale, 1.0f, 2.0f, "%.2fx")) {
+            ImGui::GetIO().FontGlobalScale = m_uiScale;
+          }
+          if (ImGui::Button("100% (1.0x)")) { m_uiScale = 1.0f; ImGui::GetIO().FontGlobalScale = 1.0f; }
+          ImGui::SameLine();
+          if (ImGui::Button("125% (1.25x)")) { m_uiScale = 1.25f; ImGui::GetIO().FontGlobalScale = 1.25f; }
+          ImGui::SameLine();
+          if (ImGui::Button("150% (1.5x)")) { m_uiScale = 1.5f; ImGui::GetIO().FontGlobalScale = 1.5f; }
+          ImGui::SameLine();
+          if (ImGui::Button("175% (1.75x)")) { m_uiScale = 1.75f; ImGui::GetIO().FontGlobalScale = 1.75f; }
+          ImGui::SameLine();
+          if (ImGui::Button("200% (2.0x)")) { m_uiScale = 2.0f; ImGui::GetIO().FontGlobalScale = 2.0f; }
+
+          ImGui::Spacing();
+          ImGui::SeparatorText(uiRu("Цветовые палитры (Дальтонизм)", "Color Palettes (Colorblind)"));
+          const char* palNames[] = {
+            "Default (Cyan / Amber)",
+            "Protanopia (Blue / Yellow - Red-blind)",
+            "Deuteranopia (Cyan / Orange - Green-blind)",
+            "Tritanopia (Teal / Rose - Blue-blind)",
+            "High Contrast (Monochrome / Yellow - WCAG AAA)"
+          };
+          ImGui::Combo(uiRu("Режим палитры", "Palette Mode"), &m_colorblindMode, palNames, 5);
+
+          AccessiblePalette curPal = getAccessiblePalette(m_colorblindMode);
+          ImGui::TextUnformatted(uiRu("Образцы цветов палитры:", "Palette Color Swatches:"));
+          auto drawSwatch = [](const char* name, const Vec3& col) {
+            ImGui::ColorButton(name, ImVec4(static_cast<float>(col.x), static_cast<float>(col.y), static_cast<float>(col.z), 1.0f),
+                               ImGuiColorEditFlags_NoTooltip, ImVec2(24, 24));
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", name);
+            ImGui::SameLine();
+          };
+          drawSwatch("Primary", curPal.primary);
+          drawSwatch("Secondary", curPal.secondary);
+          drawSwatch("Warning", curPal.warning);
+          drawSwatch("Hazard", curPal.hazard);
+          drawSwatch("Success", curPal.success);
+          ImGui::NewLine();
+
+          ImGui::Spacing();
+          ImGui::SeparatorText(uiRu("Аудио-визуальные сигналы", "Audio-Visual Cues"));
+          ImGui::Checkbox(uiRu("Звуковой сигнал авионики при сближении со станцией",
+                               "Avionics audio cue on docking proximity"), &m_audioProximityCue);
+          ImGui::Checkbox(uiRu("Высококонтрастный прицел (увеличенная толщина)",
+                               "High contrast reticle (thicker crosshair)"), &m_highContrastReticle);
+
           ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -11713,23 +11800,51 @@ void AppGL::drawDockingHud(int fbWidth, int fbHeight) {
     aimSy = ((1.0f - clipAim.y / clipAim.w) * 0.5f) * dispSize.y;
   }
 
-  ImU32 reticleCol = IM_COL32(56, 189, 248, 220);
-  ImU32 badgeCol = IM_COL32(56, 189, 248, 255);
+  AccessiblePalette pal = getAccessiblePalette(m_colorblindMode);
+  ImU32 reticleCol = IM_COL32(
+      static_cast<int>(pal.primary.x * 255.0f),
+      static_cast<int>(pal.primary.y * 255.0f),
+      static_cast<int>(pal.primary.z * 255.0f), 220);
+  ImU32 badgeCol = IM_COL32(
+      static_cast<int>(pal.primary.x * 255.0f),
+      static_cast<int>(pal.primary.y * 255.0f),
+      static_cast<int>(pal.primary.z * 255.0f), 255);
   const char* statusText = "[ ALIGNING CORRIDOR ]";
 
   if (m_ship.isDocked) {
-    reticleCol = IM_COL32(34, 197, 94, 240);
-    badgeCol = IM_COL32(34, 197, 94, 255);
+    reticleCol = IM_COL32(
+        static_cast<int>(pal.success.x * 255.0f),
+        static_cast<int>(pal.success.y * 255.0f),
+        static_cast<int>(pal.success.z * 255.0f), 240);
+    badgeCol = IM_COL32(
+        static_cast<int>(pal.success.x * 255.0f),
+        static_cast<int>(pal.success.y * 255.0f),
+        static_cast<int>(pal.success.z * 255.0f), 255);
     statusText = "[ HARD CAPTURE LATCHED ]";
   } else if (telem.axisAligned) {
-    reticleCol = IM_COL32(74, 222, 128, 240);
-    badgeCol = IM_COL32(74, 222, 128, 255);
+    reticleCol = IM_COL32(
+        static_cast<int>(pal.success.x * 255.0f),
+        static_cast<int>(pal.success.y * 255.0f),
+        static_cast<int>(pal.success.z * 255.0f), 240);
+    badgeCol = IM_COL32(
+        static_cast<int>(pal.success.x * 255.0f),
+        static_cast<int>(pal.success.y * 255.0f),
+        static_cast<int>(pal.success.z * 255.0f), 255);
     statusText = telem.captureReady ? "[ CAPTURE READY · LATCH ENGAGED ]" : "[ AXIS ALIGNED · LATCH READY ]";
   } else if (!telem.inCorridor) {
-    reticleCol = IM_COL32(251, 191, 36, 220);
-    badgeCol = IM_COL32(251, 191, 36, 255);
+    reticleCol = IM_COL32(
+        static_cast<int>(pal.warning.x * 255.0f),
+        static_cast<int>(pal.warning.y * 255.0f),
+        static_cast<int>(pal.warning.z * 255.0f), 220);
+    badgeCol = IM_COL32(
+        static_cast<int>(pal.warning.x * 255.0f),
+        static_cast<int>(pal.warning.y * 255.0f),
+        static_cast<int>(pal.warning.z * 255.0f), 255);
     statusText = "[ OUTSIDE CORRIDOR ]";
   }
+
+  const float bracketThick = m_highContrastReticle ? 3.5f : 2.0f;
+  const float crossThick = m_highContrastReticle ? 2.5f : 1.5f;
 
   if (portInFront) {
     const float bracketDist = std::clamp(static_cast<float>(75.0 / (distWorld + 0.2)), 22.0f, 120.0f);
@@ -11737,32 +11852,32 @@ void AppGL::drawDockingHud(int fbWidth, int fbHeight) {
 
     // Corner brackets [ + ]
     drawList->AddLine(ImVec2(portSx - bracketDist, portSy - bracketDist),
-                      ImVec2(portSx - bracketDist + arm, portSy - bracketDist), reticleCol, 2.0f);
+                      ImVec2(portSx - bracketDist + arm, portSy - bracketDist), reticleCol, bracketThick);
     drawList->AddLine(ImVec2(portSx - bracketDist, portSy - bracketDist),
-                      ImVec2(portSx - bracketDist, portSy - bracketDist + arm), reticleCol, 2.0f);
+                      ImVec2(portSx - bracketDist, portSy - bracketDist + arm), reticleCol, bracketThick);
 
     drawList->AddLine(ImVec2(portSx + bracketDist, portSy - bracketDist),
-                      ImVec2(portSx + bracketDist - arm, portSy - bracketDist), reticleCol, 2.0f);
+                      ImVec2(portSx + bracketDist - arm, portSy - bracketDist), reticleCol, bracketThick);
     drawList->AddLine(ImVec2(portSx + bracketDist, portSy - bracketDist),
-                      ImVec2(portSx + bracketDist, portSy - bracketDist + arm), reticleCol, 2.0f);
+                      ImVec2(portSx + bracketDist, portSy - bracketDist + arm), reticleCol, bracketThick);
 
     drawList->AddLine(ImVec2(portSx - bracketDist, portSy + bracketDist),
-                      ImVec2(portSx - bracketDist + arm, portSy + bracketDist), reticleCol, 2.0f);
+                      ImVec2(portSx - bracketDist + arm, portSy + bracketDist), reticleCol, bracketThick);
     drawList->AddLine(ImVec2(portSx - bracketDist, portSy + bracketDist),
-                      ImVec2(portSx - bracketDist, portSy + bracketDist - arm), reticleCol, 2.0f);
+                      ImVec2(portSx - bracketDist, portSy + bracketDist - arm), reticleCol, bracketThick);
 
     drawList->AddLine(ImVec2(portSx + bracketDist, portSy + bracketDist),
-                      ImVec2(portSx + bracketDist - arm, portSy + bracketDist), reticleCol, 2.0f);
+                      ImVec2(portSx + bracketDist - arm, portSy + bracketDist), reticleCol, bracketThick);
     drawList->AddLine(ImVec2(portSx + bracketDist, portSy + bracketDist),
-                      ImVec2(portSx + bracketDist, portSy + bracketDist - arm), reticleCol, 2.0f);
+                      ImVec2(portSx + bracketDist, portSy + bracketDist - arm), reticleCol, bracketThick);
 
     // Crosshair
     const float crossArm = 18.0f;
     const float crossGap = 5.0f;
-    drawList->AddLine(ImVec2(portSx - crossArm, portSy), ImVec2(portSx - crossGap, portSy), reticleCol, 1.5f);
-    drawList->AddLine(ImVec2(portSx + crossGap, portSy), ImVec2(portSx + crossArm, portSy), reticleCol, 1.5f);
-    drawList->AddLine(ImVec2(portSx, portSy - crossArm), ImVec2(portSx, portSy - crossGap), reticleCol, 1.5f);
-    drawList->AddLine(ImVec2(portSx, portSy + crossGap), ImVec2(portSx, portSy + crossArm), reticleCol, 1.5f);
+    drawList->AddLine(ImVec2(portSx - crossArm, portSy), ImVec2(portSx - crossGap, portSy), reticleCol, crossThick);
+    drawList->AddLine(ImVec2(portSx + crossGap, portSy), ImVec2(portSx + crossArm, portSy), reticleCol, crossThick);
+    drawList->AddLine(ImVec2(portSx, portSy - crossArm), ImVec2(portSx, portSy - crossGap), reticleCol, crossThick);
+    drawList->AddLine(ImVec2(portSx, portSy + crossGap), ImVec2(portSx, portSy + crossArm), reticleCol, crossThick);
 
     // COAS Alignment Diamond
     if (aimInFront) {

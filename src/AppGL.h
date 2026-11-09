@@ -702,6 +702,13 @@ class AppGL {
   CockpitRenderer   m_cockpitRenderer;
   void drawCockpit(int fbWidth, int fbHeight, float deltaTime, float currentTime);
 
+  // === Accessibility & Ergonomics (v5.4.0) ===
+  float m_uiScale = 1.0f;              // 1.0f .. 2.0f
+  int m_colorblindMode = 0;            // 0 Default, 1 Protanopia, 2 Deuteranopia, 3 Tritanopia, 4 HighContrast
+  bool m_audioProximityCue = true;     // звуковой сигнал при сближении со станцией/посадке
+  bool m_highContrastReticle = false;  // утолщённый высококонтрастный прицел
+  bool m_dockChimePlayed = false;      // предотвращает спам звукового сигнала при нахождении в створе
+
   // === SaveGame === (v3.4.0) begin.
   // JSON-профиль: settings.json (глобально: пресет/звук/вид) +
   // save-sandbox.json (прогресс, объекты редактора, сессия; слот adventure

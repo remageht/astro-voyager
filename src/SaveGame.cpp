@@ -1,5 +1,6 @@
 #include "SaveGame.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -636,7 +637,13 @@ std::string saveSerializeSettings(const SaveSettings& s) {
   out += ind(1) + "\"keyView\": " + std::to_string(s.keyView) + ",\n";
   out += ind(1) + "\"keyMap\": " + std::to_string(s.keyMap) + ",\n";
   out += ind(1) + "\"keyJournal\": " + std::to_string(s.keyJournal) + ",\n";
-  out += ind(1) + "\"keyTour\": " + std::to_string(s.keyTour) + "\n";
+  out += ind(1) + "\"keyTour\": " + std::to_string(s.keyTour) + ",\n";
+  out += ind(1) + "\"uiScale\": " + numToJson(s.uiScale) + ",\n";
+  out += ind(1) + "\"colorblindMode\": " + std::to_string(s.colorblindMode) + ",\n";
+  out += ind(1) + std::string("\"audioProximityCue\": ") +
+         (s.audioProximityCue ? "true" : "false") + ",\n";
+  out += ind(1) + std::string("\"highContrastReticle\": ") +
+         (s.highContrastReticle ? "true" : "false") + "\n";
   out += "}\n";
   return out;
 }
@@ -676,6 +683,10 @@ bool saveDeserializeSettings(const std::string& text, SaveSettings& out,
   out.keyMap = readInt(root, "keyMap", out.keyMap);
   out.keyJournal = readInt(root, "keyJournal", out.keyJournal);
   out.keyTour = readInt(root, "keyTour", out.keyTour);
+  out.uiScale = std::clamp(readFloat(root, "uiScale", out.uiScale), 1.0f, 2.0f);
+  out.colorblindMode = std::clamp(readInt(root, "colorblindMode", out.colorblindMode), 0, 4);
+  out.audioProximityCue = readBool(root, "audioProximityCue", out.audioProximityCue);
+  out.highContrastReticle = readBool(root, "highContrastReticle", out.highContrastReticle);
   return true;
 }
 
