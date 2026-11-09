@@ -515,6 +515,12 @@ Check 'station hub dock button' ((Read-File 'src/AppGL.cpp') -match 'DOCKING')
 Check 'station hub RP spend' ((Read-File 'src/AppGL.cpp') -match 'spendResearchPoints')
 Check 'station hub save warpCap' ((Read-File 'src/SaveGame.cpp') -match 'warpCapacitorLevel')
 
+
+# Solar Rebirth cinematic
+Check 'solar rebirth camera' ((Read-File 'src/EpilogueSystem.h') -match 'SolarRebirthCamera')
+Check 'solar rebirth impl' ((Read-File 'src/EpilogueSystem.cpp') -match 'solarRebirthCamera')
+Check 'solar rebirth app' ((Read-File 'src/AppGL.cpp') -match 'solarRebirthCamera')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

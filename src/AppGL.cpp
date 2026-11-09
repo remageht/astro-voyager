@@ -14109,14 +14109,26 @@ void AppGL::updateEpilogueCinematic(float dt) {
 
   m_epilogueTime += dt;
 
-  // Плавный кеплеровский/лиссажу орбитальный облёт якорного тела
-  const float t = m_epilogueTime;
-  const double baseR = 30.0 + 4.0 * std::sin(static_cast<double>(t) * 0.04);
-  const double baseH = 5.0 + 2.5 * std::sin(static_cast<double>(t) * 0.07);
-  const double ang = static_cast<double>(t) * 0.045;
-  m_camera.position = Vec3(baseR * std::cos(ang), baseH, baseR * std::sin(ang));
-  Vec3 origin(0.0, 0.0, 0.0);
-  computeLookYawPitch(m_camera.position, origin, m_camera.yaw, m_camera.pitch);
+  // Solar Rebirth procedural: spiral approach to Sun for true ending
+  if (m_activeChronicle.isTrueEnding && m_activeChronicle.clusterKey == "solar") {
+    SolarRebirthCamera sc = solarRebirthCamera(m_epilogueTime, m_activeChronicle.stats);
+    m_camera.position = Vec3(
+        static_cast<double>(sc.radius) * std::cos(static_cast<double>(sc.angle)),
+        static_cast<double>(sc.height),
+        static_cast<double>(sc.radius) * std::sin(static_cast<double>(sc.angle)));
+    Vec3 origin(0.0, 0.0, 0.0);
+    computeLookYawPitch(m_camera.position, origin, m_camera.yaw, m_camera.pitch);
+    // FOV breathing is visual only via radius; solarGlow affects overlay text
+  } else {
+    // Generic Lissajou orbit for other endings
+    const float t2 = m_epilogueTime;
+    const double baseR = 30.0 + 4.0 * std::sin(static_cast<double>(t2) * 0.04);
+    const double baseH = 5.0 + 2.5 * std::sin(static_cast<double>(t2) * 0.07);
+    const double ang = static_cast<double>(t2) * 0.045;
+    m_camera.position = Vec3(baseR * std::cos(ang), baseH, baseR * std::sin(ang));
+    Vec3 origin(0.0, 0.0, 0.0);
+    computeLookYawPitch(m_camera.position, origin, m_camera.yaw, m_camera.pitch);
+  }
 
   // Автопрокрутка свитка
   const bool spaceDown = (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS);
