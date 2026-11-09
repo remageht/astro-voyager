@@ -21,6 +21,7 @@
 #include "EpilogueSystem.h"
 #include "BenchmarkSystem.h"
 #include "AtmosphereSystem.h"
+#include "MissionSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"
@@ -94,6 +95,10 @@ class AppGL {
   void triggerGrandSynthesisClimax();
   void saveZettelkastenFileNow();
   void loadZettelkastenFileNow();
+  // === Procedural Mission System === (Stage 7 / Roadmap #5)
+  void drawMissionHud();
+  void saveMissionsFileNow();
+  void loadMissionsFileNow();
   // v3.8.0: stopJumpCine=false — только для телепорта Бурста в jump-катсцене
   // (внутренний вызов не должен убивать собственный прыжок).
   void teleportToStation(const std::string& id, bool stopJumpCine = true);
@@ -408,6 +413,7 @@ class AppGL {
   // === Science & Radio Chatter === (v4.6.0)
   ScienceCodex m_codex;
   BridgeComms m_bridgeComms;
+  MissionManager m_missions;
   bool m_spectrometerOpen = false;
   bool m_codexOpen = false;
   // === Planetary Landing & Surface Operations === (v4.6.1)
