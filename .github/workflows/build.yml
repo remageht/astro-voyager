@@ -5,6 +5,12 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create/publish (e.g. v5.4.0)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -100,14 +106,6 @@ jobs:
           path: dist/astro-voyager-macos-arm64.tar.gz
           if-no-files-found: error
           retention-days: 14
-      - name: Attach macOS archive to the GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh release upload "${GITHUB_REF_NAME}" dist/astro-voyager-macos-arm64.tar.gz --clobber
-          gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name'
 
   # === Windows portable (v3.6.0) ===: полноценная GL-сборка на MSVC. Шейдеры
   # вшиты в exe (packaging/embed_shaders.cmake), каталог и созвездия — код,
@@ -228,17 +226,6 @@ jobs:
             dist/AstroVoyager-v*-setup.exe
           if-no-files-found: error
           retention-days: 14
-      - name: Attach Windows assets to the GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $zip = (Get-Item dist/astro-voyager-v*-windows-x86_64.zip).FullName
-          $setup = (Get-Item dist/AstroVoyager-v*-setup.exe).FullName
-          gh release upload "${env:GITHUB_REF_NAME}" $zip dist/astro-voyager.exe $setup --clobber
-          gh release view "${env:GITHUB_REF_NAME}" --json assets --jq '.assets[].name'
 
   # Linux AppImage distribution: full OpenGL build (GLFW/ImGui/GLM/stb fetched
   # from upstream releases because Dependencies/ and src/vendor/ are gitignored),
@@ -309,12 +296,66 @@ jobs:
           path: dist/astro-voyager-v*-x86_64.AppImage
           if-no-files-found: error
           retention-days: 14
-      - name: Attach AppImage to the GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
+
+  # =========================================================================
+  # Unified Release Pipeline (v5.4.0)
+  # Waits for all platform builds to complete, aggregates their artifacts,
+  # generates SHA256SUMS.txt, validates the payload integrity, and publishes
+  # an atomic release to GitHub Releases with verified checksums.
+  # =========================================================================
+  release:
+    name: Create & Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    needs: [build, docker, build-macos-gl, build-windows-gl, build-appimage]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Create release directory
+        run: mkdir -p release-dist
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: astro-voyager-windows-x86_64
+          path: release-dist
+      - name: Download AppImage artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: astro-voyager-appimage-x86_64
+          path: release-dist
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: astro-voyager-macos-arm64
+          path: release-dist
+      - name: Verify release payload and generate SHA256 checksums
         run: |
           set -euo pipefail
-          appimage="$(ls dist/astro-voyager-v*-x86_64.AppImage)"
-          gh release upload "${GITHUB_REF_NAME}" "${appimage}" --clobber
-          gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name'
+          cd release-dist
+          echo "== Staged Release Files =="
+          ls -lh
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cd ..
+          python3 packaging/verify_release_assets.py release-dist
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          TAG="${TAG_INPUT}"
+          if [ -z "${TAG}" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "Target tag: ${TAG}"
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Creating new release for ${TAG}..."
+            gh release create "${TAG}" --title "Astro Voyager ${TAG}" --generate-notes --draft=false
+          fi
+          echo "Uploading release assets..."
+          gh release upload "${TAG}" release-dist/* --clobber
+          echo "Published assets:"
+          gh release view "${TAG}" --json assets --jq '.assets[].name'
+
