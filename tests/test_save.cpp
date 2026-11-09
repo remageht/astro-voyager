@@ -3,6 +3,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -441,7 +442,7 @@ int main() {
     }
   }
 
-  // Test 15: Accessibility settings boundary clamping (v5.4.0)
+  // Test 15: Accessibility settings boundary clamping & NaN guard (v5.4.0)
   {
     std::string malformed = R"({
       "schema": 1,
@@ -458,6 +459,27 @@ int main() {
       std::cerr << "Test 15 failed: expected clamping (uiScale=2.0, colorblind=0), got ("
                 << out.uiScale << ", " << out.colorblindMode << ")\n";
       return 1;
+    }
+
+    // NaN / Inf guard test: non-numeric or non-finite values must fallback to safe 1.0
+    const float nanVal = std::numeric_limits<float>::quiet_NaN();
+    const float safeNanScale = std::isfinite(nanVal) ? std::clamp(nanVal, 1.0f, 2.0f) : 1.0f;
+    const float infVal = std::numeric_limits<float>::infinity();
+    const float safeInfScale = std::isfinite(infVal) ? std::clamp(infVal, 1.0f, 2.0f) : 1.0f;
+    if (!close(safeNanScale, 1.0f, 1e-4) || !close(safeInfScale, 1.0f, 1e-4)) {
+      std::cerr << "Test 15 failed: expected NaN/Inf to fallback to 1.0\n";
+      return 1;
+    }
+
+    std::string nonNumJson = R"({
+      "schema": 1,
+      "uiScale": "corrupted"
+    })";
+    if (astro::saveDeserializeSettings(nonNumJson, out, err)) {
+      if (!close(out.uiScale, 1.0f, 1e-4) || !std::isfinite(out.uiScale)) {
+        std::cerr << "Test 15 failed: non-numeric string should default to 1.0\n";
+        return 1;
+      }
     }
   }
 

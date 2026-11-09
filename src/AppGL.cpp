@@ -5870,6 +5870,7 @@ void AppGL::teleportToStation(const std::string& id, bool stopJumpCine) {
   // v3.6.0: телепорт обнуляет накопленный ход и напоминание об орбите.
   m_shipVel = Vec3();
   m_orbitNoticeShown = false;
+  m_dockChimePlayed = false;
   if (m_route.empty() || m_route.back() != id) {
     m_route.push_back(id);
   }
@@ -6950,8 +6951,8 @@ void AppGL::applySaveSettings(const SaveSettings& s) {
   m_keyJournal = keyOk(s.keyJournal) ? s.keyJournal : 74;
   m_keyTour = keyOk(s.keyTour) ? s.keyTour : 84;
   // v5.4.0: доступность (UI Scale, палитры дальтонизма, сигналы)
-  m_uiScale = std::min(std::max(s.uiScale, 1.0f), 2.0f);
-  m_colorblindMode = std::min(std::max(s.colorblindMode, 0), 4);
+  m_uiScale = std::isfinite(s.uiScale) ? std::clamp(s.uiScale, 1.0f, 2.0f) : 1.0f;
+  m_colorblindMode = std::clamp(s.colorblindMode, 0, 4);
   m_audioProximityCue = s.audioProximityCue;
   m_highContrastReticle = s.highContrastReticle;
   ImGui::GetIO().FontGlobalScale = m_uiScale;
@@ -8179,15 +8180,18 @@ void AppGL::drawMenu() {
           if (ImGui::SliderFloat("UI Scale", &m_uiScale, 1.0f, 2.0f, "%.2fx")) {
             ImGui::GetIO().FontGlobalScale = m_uiScale;
           }
-          if (ImGui::Button("100% (1.0x)")) { m_uiScale = 1.0f; ImGui::GetIO().FontGlobalScale = 1.0f; }
+          const float btnW = 95.0f;
+          if (ImGui::Button("100% (1.0x)", ImVec2(btnW, 0.0f))) { m_uiScale = 1.0f; ImGui::GetIO().FontGlobalScale = 1.0f; }
           ImGui::SameLine();
-          if (ImGui::Button("125% (1.25x)")) { m_uiScale = 1.25f; ImGui::GetIO().FontGlobalScale = 1.25f; }
+          if (ImGui::Button("125% (1.25x)", ImVec2(btnW, 0.0f))) { m_uiScale = 1.25f; ImGui::GetIO().FontGlobalScale = 1.25f; }
           ImGui::SameLine();
-          if (ImGui::Button("150% (1.5x)")) { m_uiScale = 1.5f; ImGui::GetIO().FontGlobalScale = 1.5f; }
+          if (ImGui::Button("150% (1.5x)", ImVec2(btnW, 0.0f))) { m_uiScale = 1.5f; ImGui::GetIO().FontGlobalScale = 1.5f; }
+
+          if (ImGui::Button("175% (1.75x)", ImVec2(btnW, 0.0f))) { m_uiScale = 1.75f; ImGui::GetIO().FontGlobalScale = 1.75f; }
           ImGui::SameLine();
-          if (ImGui::Button("175% (1.75x)")) { m_uiScale = 1.75f; ImGui::GetIO().FontGlobalScale = 1.75f; }
+          if (ImGui::Button("200% (2.0x)", ImVec2(btnW, 0.0f))) { m_uiScale = 2.0f; ImGui::GetIO().FontGlobalScale = 2.0f; }
           ImGui::SameLine();
-          if (ImGui::Button("200% (2.0x)")) { m_uiScale = 2.0f; ImGui::GetIO().FontGlobalScale = 2.0f; }
+          if (ImGui::Button(uiRu("Сброс", "Reset"), ImVec2(btnW, 0.0f))) { m_uiScale = 1.0f; ImGui::GetIO().FontGlobalScale = 1.0f; }
 
           ImGui::Spacing();
           ImGui::SeparatorText(uiRu("Цветовые палитры (Дальтонизм)", "Color Palettes (Colorblind)"));
@@ -8202,17 +8206,17 @@ void AppGL::drawMenu() {
 
           AccessiblePalette curPal = getAccessiblePalette(m_colorblindMode);
           ImGui::TextUnformatted(uiRu("Образцы цветов палитры:", "Palette Color Swatches:"));
-          auto drawSwatch = [](const char* name, const Vec3& col) {
+          auto drawSwatch = [](const char* name, const Vec3& col, bool last = false) {
             ImGui::ColorButton(name, ImVec4(static_cast<float>(col.x), static_cast<float>(col.y), static_cast<float>(col.z), 1.0f),
                                ImGuiColorEditFlags_NoTooltip, ImVec2(24, 24));
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", name);
-            ImGui::SameLine();
+            if (!last) ImGui::SameLine();
           };
           drawSwatch("Primary", curPal.primary);
           drawSwatch("Secondary", curPal.secondary);
           drawSwatch("Warning", curPal.warning);
           drawSwatch("Hazard", curPal.hazard);
-          drawSwatch("Success", curPal.success);
+          drawSwatch("Success", curPal.success, true);
           ImGui::NewLine();
 
           ImGui::Spacing();
@@ -11982,6 +11986,7 @@ void AppGL::startUndockSequence() {
   if (m_dockAnimState != DockAnimState::None || !m_ship.isDocked) return;
   m_shipyardOpen = false;
   m_ship.isDocked = false;
+  m_dockChimePlayed = false;
   m_dockAnimState = DockAnimState::Undock_Release;
   m_dockAnimTimer = 1.4f;
   m_rcsTimer = 0.8f;

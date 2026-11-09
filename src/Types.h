@@ -511,11 +511,11 @@ struct AccessiblePalette {
 inline AccessiblePalette getAccessiblePalette(int mode) {
   AccessiblePalette p;
   switch (mode) {
-    case 1:  // Protanopia (Red-blind: use rich Blue, Bright Yellow/Gold)
+    case 1:  // Protanopia (Red-blind: rich Blue, Amber warning, Pure White hazard)
       p.primary = Vec3{0.20f, 0.55f, 1.0f};
       p.secondary = Vec3{0.45f, 0.75f, 1.0f};
       p.warning = Vec3{1.0f, 0.85f, 0.10f};
-      p.hazard = Vec3{1.0f, 0.95f, 0.20f};
+      p.hazard = Vec3{1.0f, 1.0f, 1.0f};
       p.success = Vec3{0.30f, 0.85f, 0.95f};
       p.background = Vec3{0.02f, 0.031f, 0.055f};
       break;
@@ -527,20 +527,20 @@ inline AccessiblePalette getAccessiblePalette(int mode) {
       p.success = Vec3{0.20f, 0.75f, 1.0f};
       p.background = Vec3{0.02f, 0.031f, 0.055f};
       break;
-    case 3:  // Tritanopia (Blue-blind: Vibrant Aqua/Teal, Coral/Magenta)
+    case 3:  // Tritanopia (Blue-blind: Vibrant Aqua/Teal, Warm Orange, Deep Magenta)
       p.primary = Vec3{0.0f, 0.85f, 0.75f};
       p.secondary = Vec3{0.30f, 0.90f, 0.70f};
-      p.warning = Vec3{1.0f, 0.50f, 0.55f};
-      p.hazard = Vec3{1.0f, 0.10f, 0.40f};
+      p.warning = Vec3{1.0f, 0.55f, 0.10f};
+      p.hazard = Vec3{0.95f, 0.10f, 0.35f};
       p.success = Vec3{0.15f, 0.95f, 0.65f};
       p.background = Vec3{0.02f, 0.031f, 0.055f};
       break;
-    case 4:  // High Contrast (WCAG AAA: 100% luminance separation)
+    case 4:  // High Contrast (WCAG AAA: 100% luminance separation, Neon Green success)
       p.primary = Vec3{1.0f, 1.0f, 1.0f};
       p.secondary = Vec3{0.85f, 0.95f, 1.0f};
       p.warning = Vec3{1.0f, 1.0f, 0.0f};
-      p.hazard = Vec3{1.0f, 0.0f, 0.50f};
-      p.success = Vec3{1.0f, 1.0f, 0.20f};
+      p.hazard = Vec3{1.0f, 0.0f, 0.45f};
+      p.success = Vec3{0.0f, 1.0f, 0.25f};
       p.background = Vec3{0.0f, 0.0f, 0.0f};
       break;
     case 0:  // Default Sci-Fi (Cyan & Amber)
