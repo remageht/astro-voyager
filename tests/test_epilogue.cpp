@@ -221,6 +221,73 @@ int main() {
     assert(c1.solarGlow > c0.solarGlow);
     std::cout << "[Test 9] Solar Rebirth camera spiral... PASSED\n";
   }
-  std::cout << "=== All 9 test_epilogue checks passed successfully! ===\n";
+  // Blossoming Eden camera (procedural descent)
+  {
+    EpilogueStats st; st.hullIntegrityPercent = 85.0f;
+    EdenDescentCamera c0 = edenDescentCamera(0.0f, st);
+    EdenDescentCamera c1 = edenDescentCamera(80.0f, st);
+    assert(c0.radius > c1.radius);
+    assert(c1.radius >= 6.0f && c1.radius <= 8.5f);
+    assert(c1.atmoShimmer >= c0.atmoShimmer);
+    assert(std::abs(c0.rollBank) <= 0.1f);
+    std::cout << "[Test 10] Blossoming Eden camera descent... PASSED\n";
+  }
+  // Multiverse Singularity camera (procedural Kerr plunge)
+  {
+    EpilogueStats st; st.hullIntegrityPercent = 95.0f;
+    MultiverseSingularityCamera c0 = multiverseSingularityCamera(0.0f, st);
+    MultiverseSingularityCamera c1 = multiverseSingularityCamera(75.0f, st);
+    assert(c0.radius > c1.radius);
+    assert(c1.radius >= 5.0f && c1.radius <= 7.0f);
+    assert(c1.horizonDistortion >= c0.horizonDistortion);
+    assert(c1.quantumAberration >= c0.quantumAberration);
+    std::cout << "[Test 11] Multiverse Singularity ergosphere plunge... PASSED\n";
+  }
+  // Brotherhood of Five Realities camera (procedural M13 relic Lissajous)
+  {
+    EpilogueStats st; st.hullIntegrityPercent = 100.0f;
+    AllianceRelicCamera c0 = allianceRelicCamera(0.0f, st);
+    AllianceRelicCamera c1 = allianceRelicCamera(45.0f, st);
+    assert(c0.radius >= 8.5f && c0.radius <= 18.5f);
+    assert(c1.radius >= 8.5f && c1.radius <= 18.5f);
+    assert(c0.stasisShieldPulse >= 0.04f && c0.stasisShieldPulse <= 0.20f);
+    std::cout << "[Test 12] Brotherhood of Five Realities relic Lissajous... PASSED\n";
+  }
+  // Unified Epilogue Cinematic Frame Evaluator
+  {
+    EpilogueStats st; st.hullIntegrityPercent = 92.0f;
+    // Solar Rebirth frame
+    EpilogueCinematicFrame fSolar = evaluateEpilogueCinematic(kFinaleSolarRebirth, kClusterSolar, true, 45.0f, st);
+    assert(fSolar.colorGrade == 1);
+    assert(fSolar.badgeRu.find("ВЕЧНЫЙ РАССВЕТ") != std::string::npos);
+    assert(fSolar.auraColor.x > 0.8f);
+
+    // Eden frame
+    EpilogueCinematicFrame fEden = evaluateEpilogueCinematic(kFinaleColony, kClusterEden, true, 40.0f, st);
+    assert(fEden.colorGrade == 4);
+    assert(fEden.badgeRu.find("ЦВЕТУЩИЙ ЭДЕМ") != std::string::npos);
+    assert(fEden.auraColor.y > 0.8f);
+
+    // Multiverse frame
+    EpilogueCinematicFrame fMulti = evaluateEpilogueCinematic(kFinaleLoopTranscendence, kClusterMultiverse, true, 50.0f, st);
+    assert(fMulti.colorGrade == 2);
+    assert(fMulti.chromaK > 0.0f);
+    assert(fMulti.horizonK > 0.0f);
+    assert(fMulti.badgeRu.find("АРХИТЕКТОРЫ БЕСКОНЕЧНОСТИ") != std::string::npos);
+
+    // Stasis frame
+    EpilogueCinematicFrame fStasis = evaluateEpilogueCinematic(kFinaleFifthAlliance, kClusterStasis, true, 30.0f, st);
+    assert(fStasis.colorGrade == 1);
+    assert(fStasis.shieldK > 0.0f);
+    assert(fStasis.badgeRu.find("БРАТСТВО ПЯТИ МИРОВ") != std::string::npos);
+
+    // Non-true ending fallback frame
+    EpilogueCinematicFrame fFallback = evaluateEpilogueCinematic(kFinaleHorizon, "", false, 20.0f, st);
+    assert(fFallback.colorGrade == 0);
+    assert(fFallback.badgeRu.find("ЗАВЕРШЕНИЕ МИССИИ") != std::string::npos);
+
+    std::cout << "[Test 13] evaluateEpilogueCinematic across all ending modes... PASSED\n";
+  }
+  std::cout << "=== All 13 test_epilogue checks passed successfully! ===\n";
   return 0;
 }

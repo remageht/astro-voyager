@@ -569,6 +569,18 @@ Check 'gamepad deadzone in GamepadSystem.h' ((Read-File 'src/GamepadSystem.h') -
 Check 'gamepad glyphs in GamepadSystem.h' ((Read-File 'src/GamepadSystem.h') -match 'getButtonGlyph')
 Check 'gamepad adaptive prompt in AppGL.h' ((Read-File 'src/AppGL.h') -match 'getPrompt')
 
+# Stage 5 / Release 1.0: True Endings Visual & Cinematic Expansion (Issue #122)
+Check 'eden descent camera in EpilogueSystem.h' ((Read-File 'src/EpilogueSystem.h') -match 'EdenDescentCamera')
+Check 'multiverse singularity camera in EpilogueSystem.h' ((Read-File 'src/EpilogueSystem.h') -match 'MultiverseSingularityCamera')
+Check 'alliance relic camera in EpilogueSystem.h' ((Read-File 'src/EpilogueSystem.h') -match 'AllianceRelicCamera')
+Check 'evaluateEpilogueCinematic in EpilogueSystem.h' ((Read-File 'src/EpilogueSystem.h') -match 'evaluateEpilogueCinematic')
+Check 'eden descent impl in EpilogueSystem.cpp' ((Read-File 'src/EpilogueSystem.cpp') -match 'edenDescentCamera')
+Check 'multiverse singularity impl in EpilogueSystem.cpp' ((Read-File 'src/EpilogueSystem.cpp') -match 'multiverseSingularityCamera')
+Check 'alliance relic impl in EpilogueSystem.cpp' ((Read-File 'src/EpilogueSystem.cpp') -match 'allianceRelicCamera')
+Check 'evaluateEpilogueCinematic in EpilogueSystem.cpp' ((Read-File 'src/EpilogueSystem.cpp') -match 'evaluateEpilogueCinematic')
+Check 'evaluateEpilogueCinematic in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'evaluateEpilogueCinematic')
+Check 'true ending resonator badge in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'True Ending Resonator Badge')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

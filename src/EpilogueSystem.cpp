@@ -495,14 +495,165 @@ SolarRebirthCamera solarRebirthCamera(float t, const EpilogueStats& stats) {
   if (hullK < 0.3f) hullK = 0.3f;
   if (hullK > 1.0f) hullK = 1.0f;
   cam.radius = baseR * (0.9f + 0.2f * hullK);
-  cam.height = 5.0f + 2.5f * std::sin(static_cast<double>(t) * 0.07);
-  cam.angle = static_cast<double>(t) * 0.045;
+  cam.height = 5.0f + 2.5f * static_cast<float>(std::sin(static_cast<double>(t) * 0.07));
+  cam.angle = t * 0.045f;
   // FOV kick near perihelion (k ~1) with breathing
-  cam.fovKick = 2.0f * std::sin(static_cast<double>(t) * 0.12) + 3.0f * k;
+  cam.fovKick = 2.0f * static_cast<float>(std::sin(static_cast<double>(t) * 0.12)) + 3.0f * k;
   cam.solarGlow = std::clamp(0.3f + 0.7f * k, 0.0f, 1.0f);
   (void)stats;
   if (!std::isfinite(cam.radius) || cam.radius < 8.0f) cam.radius = 8.0f;
   return cam;
+}
+
+EdenDescentCamera edenDescentCamera(float t, const EpilogueStats& stats) {
+  EdenDescentCamera cam;
+  float k = std::clamp(t / 80.0f, 0.0f, 1.0f);
+  // Quadratic smooth descent 24 -> 6.5
+  float ease = k * (2.0f - k);
+  float hullK = std::clamp(stats.hullIntegrityPercent / 100.0f, 0.5f, 1.0f);
+  cam.radius = (24.0f - 17.5f * ease) * (0.95f + 0.05f * hullK);
+  cam.height = 8.0f - 6.2f * k + 0.6f * static_cast<float>(std::sin(static_cast<double>(t) * 0.08));
+  cam.angle = t * 0.038f;
+  cam.rollBank = 0.06f * static_cast<float>(std::sin(static_cast<double>(t) * 0.075)) * (1.0f - 0.5f * k);
+  cam.fovKick = 3.5f * (1.0f - k) + 1.5f * static_cast<float>(std::sin(static_cast<double>(t) * 0.10));
+  cam.atmoShimmer = std::clamp(0.25f + 0.75f * k + 0.10f * static_cast<float>(std::sin(static_cast<double>(t) * 0.15)), 0.0f, 1.0f);
+  if (!std::isfinite(cam.radius) || cam.radius < 6.0f) cam.radius = 6.0f;
+  return cam;
+}
+
+MultiverseSingularityCamera multiverseSingularityCamera(float t, const EpilogueStats& stats) {
+  MultiverseSingularityCamera cam;
+  float k = std::clamp(t / 75.0f, 0.0f, 1.0f);
+  // Smooth cubic ease-in-out towards Cauchy horizon / ergosphere 28 -> 5.2
+  float ease = k * k * (3.0f - 2.0f * k);
+  cam.radius = 28.0f - 22.8f * ease;
+  // Relativistic frame-dragging acceleration: faster angular speed as radius shrinks
+  cam.angle = t * (0.035f + 0.038f * k);
+  cam.height = 3.8f * (1.0f - 0.6f * k) * static_cast<float>(std::cos(static_cast<double>(t) * 0.065)) + 1.2f;
+  cam.horizonDistortion = std::clamp(0.05f + 0.18f * k + 0.04f * static_cast<float>(std::sin(static_cast<double>(t) * 0.25)), 0.0f, 0.35f);
+  cam.quantumAberration = std::clamp(0.08f + 0.25f * k + 0.06f * static_cast<float>(std::sin(static_cast<double>(t) * 0.35)), 0.0f, 0.40f);
+  cam.fovKick = -2.0f * k + 2.0f * static_cast<float>(std::sin(static_cast<double>(t) * 0.18));
+  (void)stats;
+  if (!std::isfinite(cam.radius) || cam.radius < 5.0f) cam.radius = 5.0f;
+  return cam;
+}
+
+AllianceRelicCamera allianceRelicCamera(float t, const EpilogueStats& stats) {
+  AllianceRelicCamera cam;
+  // Multi-frequency 3D Lissajous & lemniscate sweep through M13 core
+  cam.radius = 13.5f + 4.5f * static_cast<float>(std::cos(static_cast<double>(t) * 0.032));
+  cam.height = 3.5f * static_cast<float>(std::sin(static_cast<double>(t) * 0.058)) +
+               1.2f * static_cast<float>(std::cos(static_cast<double>(t) * 0.116));
+  cam.angle = t * 0.042f;
+  float pulse = 0.5f + 0.5f * static_cast<float>(std::sin(static_cast<double>(t) * 0.8));
+  cam.stasisShieldPulse = std::clamp(0.04f + 0.10f * pulse, 0.0f, 0.20f);
+  cam.fovKick = 1.8f * static_cast<float>(std::sin(static_cast<double>(t) * 0.09));
+  (void)stats;
+  if (!std::isfinite(cam.radius) || cam.radius < 8.5f) cam.radius = 8.5f;
+  return cam;
+}
+
+EpilogueCinematicFrame evaluateEpilogueCinematic(
+    int endingChoice,
+    const std::string& clusterKey,
+    bool isTrueEnding,
+    float t,
+    const EpilogueStats& stats) {
+  EpilogueCinematicFrame frame;
+  frame.lookTarget = Vec3(0.0, 0.0, 0.0);
+
+  if (isTrueEnding && clusterKey == kClusterSolar) {
+    SolarRebirthCamera sc = solarRebirthCamera(t, stats);
+    frame.cameraPosition = Vec3(
+        static_cast<double>(sc.radius) * std::cos(static_cast<double>(sc.angle)),
+        static_cast<double>(sc.height),
+        static_cast<double>(sc.radius) * std::sin(static_cast<double>(sc.angle)));
+    frame.fovOffset = sc.fovKick;
+    frame.cameraRoll = 0.0f;
+    frame.colorGrade = 1;  // Interstellar Amber
+    frame.filmicVignette = 0.42f;
+    frame.chromaK = 0.0f;
+    frame.horizonK = 0.0f;
+    frame.shieldK = 0.0f;
+    frame.auraIntensity = sc.solarGlow;
+    frame.auraColor = Vec3(1.0, 0.85, 0.35);
+    frame.badgeRu = "✦ ИСТИННЫЙ ФИНАЛ: ВЕЧНЫЙ РАССВЕТ · РЕЗОНАНС СОЛНЦА 100% ✦";
+    frame.badgeEn = "✦ TRUE ENDING: ETERNAL DAWN · SOLAR RESONANCE 100% ✦";
+
+  } else if (isTrueEnding && clusterKey == kClusterEden) {
+    EdenDescentCamera ec = edenDescentCamera(t, stats);
+    frame.cameraPosition = Vec3(
+        static_cast<double>(ec.radius) * std::cos(static_cast<double>(ec.angle)),
+        static_cast<double>(ec.height),
+        static_cast<double>(ec.radius) * std::sin(static_cast<double>(ec.angle)));
+    frame.fovOffset = ec.fovKick;
+    frame.cameraRoll = ec.rollBank;
+    frame.colorGrade = 4;  // Technicolor Vintage (lush organic greens and blue oceans)
+    frame.filmicVignette = 0.35f;
+    frame.chromaK = 0.0f;
+    frame.horizonK = 0.0f;
+    frame.shieldK = 0.04f * ec.atmoShimmer;
+    frame.auraIntensity = ec.atmoShimmer;
+    frame.auraColor = Vec3(0.25, 0.98, 0.65);
+    frame.badgeRu = "✦ ИСТИННЫЙ ФИНАЛ: ЦВЕТУЩИЙ ЭДЕМ · БИОСФЕРА M13 АКТИВНА ✦";
+    frame.badgeEn = "✦ TRUE ENDING: BLOSSOMING EDEN · M13 ECOSPHERE ACTIVE ✦";
+
+  } else if (isTrueEnding && clusterKey == kClusterMultiverse) {
+    MultiverseSingularityCamera mc = multiverseSingularityCamera(t, stats);
+    frame.cameraPosition = Vec3(
+        static_cast<double>(mc.radius) * std::cos(static_cast<double>(mc.angle)),
+        static_cast<double>(mc.height),
+        static_cast<double>(mc.radius) * std::sin(static_cast<double>(mc.angle)));
+    frame.fovOffset = mc.fovKick;
+    frame.cameraRoll = 0.0f;
+    frame.colorGrade = 2;  // Cyberpunk Neon (violet/cyan quantum hues)
+    frame.filmicVignette = 0.52f;
+    frame.chromaK = mc.quantumAberration;
+    frame.horizonK = mc.horizonDistortion;
+    frame.shieldK = 0.0f;
+    frame.auraIntensity = std::clamp(0.4f + mc.horizonDistortion * 2.0f, 0.0f, 1.0f);
+    frame.auraColor = Vec3(0.80, 0.40, 1.0);
+    frame.badgeRu = "✦ ИСТИННЫЙ ФИНАЛ: АРХИТЕКТОРЫ БЕСКОНЕЧНОСТИ · ГОРИЗОНТ КОШИ ✦";
+    frame.badgeEn = "✦ TRUE ENDING: ARCHITECTS OF INFINITY · CAUCHY HORIZON ✦";
+
+  } else if (isTrueEnding && clusterKey == kClusterStasis) {
+    AllianceRelicCamera ac = allianceRelicCamera(t, stats);
+    frame.cameraPosition = Vec3(
+        static_cast<double>(ac.radius) * std::cos(static_cast<double>(ac.angle)),
+        static_cast<double>(ac.height),
+        static_cast<double>(ac.radius) * std::sin(static_cast<double>(ac.angle)));
+    frame.fovOffset = ac.fovKick;
+    frame.cameraRoll = 0.0f;
+    frame.colorGrade = 1;  // Interstellar Amber
+    frame.filmicVignette = 0.38f;
+    frame.chromaK = 0.0f;
+    frame.horizonK = 0.0f;
+    frame.shieldK = ac.stasisShieldPulse;
+    frame.auraIntensity = std::clamp(ac.stasisShieldPulse * 5.0f, 0.0f, 1.0f);
+    frame.auraColor = Vec3(0.35, 0.85, 1.0);
+    frame.badgeRu = "✦ ИСТИННЫЙ ФИНАЛ: БРАТСТВО ПЯТИ МИРОВ · ПАКТ ПЯТОЙ ВСЕЛЕННОЙ ✦";
+    frame.badgeEn = "✦ TRUE ENDING: BROTHERHOOD OF FIVE REALITIES · FIFTH ACCORD ✦";
+
+  } else {
+    // Generic Lissajous orbit for other endings
+    (void)endingChoice;
+    const float t2 = t;
+    const double baseR = 30.0 + 4.0 * std::sin(static_cast<double>(t2) * 0.04);
+    const double baseH = 5.0 + 2.5 * std::sin(static_cast<double>(t2) * 0.07);
+    const double ang = static_cast<double>(t2) * 0.045;
+    frame.cameraPosition = Vec3(baseR * std::cos(ang), baseH, baseR * std::sin(ang));
+    frame.colorGrade = 0;
+    frame.filmicVignette = 0.25f;
+    frame.chromaK = 0.0f;
+    frame.horizonK = 0.0f;
+    frame.shieldK = 0.0f;
+    frame.auraIntensity = 0.6f;
+    frame.auraColor = Vec3(0.40, 0.80, 1.0);
+    frame.badgeRu = "✦ ЭКСПЕДИЦИЯ ASTRO-VOYAGER: ЗАВЕРШЕНИЕ МИССИИ ✦";
+    frame.badgeEn = "✦ ASTRO-VOYAGER EXPEDITION: MISSION COMPLETE ✦";
+  }
+
+  return frame;
 }
 
 }  // namespace astro
