@@ -683,7 +683,8 @@ bool saveDeserializeSettings(const std::string& text, SaveSettings& out,
   out.keyMap = readInt(root, "keyMap", out.keyMap);
   out.keyJournal = readInt(root, "keyJournal", out.keyJournal);
   out.keyTour = readInt(root, "keyTour", out.keyTour);
-  out.uiScale = std::clamp(readFloat(root, "uiScale", out.uiScale), 1.0f, 2.0f);
+  const float rawScale = readFloat(root, "uiScale", out.uiScale);
+  out.uiScale = std::isfinite(rawScale) ? std::clamp(rawScale, 1.0f, 2.0f) : 1.0f;
   out.colorblindMode = std::clamp(readInt(root, "colorblindMode", out.colorblindMode), 0, 4);
   out.audioProximityCue = readBool(root, "audioProximityCue", out.audioProximityCue);
   out.highContrastReticle = readBool(root, "highContrastReticle", out.highContrastReticle);
