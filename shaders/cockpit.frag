@@ -70,6 +70,22 @@ uniform float u_DrillTemp;
 uniform int   u_DrillState;
 uniform float u_CoreAnalyzed;
 
+// v5.4.0 Dynamic Planetary Weather & Atmospheric Re-entry Corridor
+uniform int   u_WeatherType;
+uniform float u_WeatherIntensity;
+uniform float u_LightningFlash;
+uniform float u_WindSpeed;
+uniform float u_WeatherVisibility;
+uniform float u_HeatShieldTemp;
+uniform float u_ShieldIntegrity;
+uniform float u_AoADeg;
+uniform float u_MinAoADeg;
+uniform float u_MaxAoADeg;
+uniform float u_CorridorSafe;
+uniform float u_SkipOutWarning;
+uniform float u_OverheatWarning;
+uniform float u_BlackoutActive;
+
 // Hash functions for procedural carbon fiber and glass scratches
 float hash21(vec2 p) {
   p = fract(p * vec2(234.34, 435.345));
@@ -504,6 +520,12 @@ void main() {
       frameBase += radiantGlow;
     }
 
+    // Lightning discharge illumination on cockpit structural frame (v5.4.0)
+    if (u_LightningFlash > 0.01) {
+      vec3 lightningGlow = vec3(0.75, 0.88, 1.0) * u_LightningFlash * 0.95;
+      frameBase += lightningGlow;
+    }
+
     col = vec4(frameBase, 1.0);
   } else {
     // -------------------------------------------------------------
@@ -553,6 +575,64 @@ void main() {
       float plasmaAlpha = clamp((streak * 0.65 + shockFront * 0.35 + shockBand * 0.25) * u_EntryPlasma, 0.0, 0.92);
       glassRgb += (plasmaCol * plasmaAlpha * 2.5) + sparkCol;
       glassAlpha = max(glassAlpha, plasmaAlpha * 0.85);
+    }
+
+    // Planetary dynamic weather visual effects on glass (v5.4.0)
+    if (u_WeatherIntensity > 0.01) {
+      float windFlow = u_WindSpeed * 50.0;
+      // Rain & Thunderstorm droplet streaks
+      if (u_WeatherType == 1 || u_WeatherType == 2) {
+        vec2 dropP = headP * vec2(14.0, 3.5) + vec2(windFlow * 0.15, u_Time * (14.0 + u_Speed * 0.6));
+        float dropN = noise2D(dropP);
+        float dropStreak = pow(dropN, 6.0) * 1.8 * u_WeatherIntensity;
+        vec3 dropCol = vec3(0.55, 0.78, 0.95);
+        glassRgb += dropCol * dropStreak * 0.50;
+        glassAlpha = max(glassAlpha, dropStreak * 0.42);
+      }
+      // Sandstorm dust scour & ochre grit
+      else if (u_WeatherType == 3) {
+        vec2 sandP = headP * vec2(22.0, 16.0) + vec2(u_Time * (22.0 + windFlow), u_Time * 10.0);
+        float sandN = noise2D(sandP);
+        float sandGrit = pow(sandN, 5.0) * 2.0 * u_WeatherIntensity;
+        vec3 sandCol = vec3(0.85, 0.48, 0.20);
+        glassRgb += sandCol * sandGrit * 0.60;
+        glassAlpha = max(glassAlpha, sandGrit * 0.52);
+      }
+      // Acid rain corrosive yellow-green rivulets
+      else if (u_WeatherType == 4) {
+        vec2 acidP = headP * vec2(12.0, 4.5) + vec2(sin(u_Time * 3.5) * 0.25, u_Time * 7.5);
+        float acidN = noise2D(acidP);
+        float acidStreak = pow(acidN, 6.0) * 2.2 * u_WeatherIntensity;
+        vec3 acidCol = vec3(0.68, 0.92, 0.22);
+        glassRgb += acidCol * acidStreak * 0.55;
+        glassAlpha = max(glassAlpha, acidStreak * 0.48);
+      }
+      // Cryo-snow & creeping frost
+      else if (u_WeatherType == 5) {
+        float edgeDist = length(headP * vec2(0.8, 1.2));
+        float frostMask = smoothstep(0.40, 0.82, edgeDist) * u_WeatherIntensity;
+        float frostN = noise2D(headP * 32.0);
+        float frost = pow(frostN, 3.0) * frostMask * 1.6;
+        vec3 frostCol = vec3(0.82, 0.94, 1.0);
+        glassRgb += frostCol * frost * 0.72;
+        glassAlpha = max(glassAlpha, frost * 0.65);
+      }
+      // Cyclone swirling condensation mist
+      else if (u_WeatherType == 6) {
+        vec2 cycP = headP * vec2(8.0, 8.0) + vec2(u_Time * windFlow * 0.4, u_Time * 16.0);
+        float cycN = noise2D(cycP);
+        float cycStreak = pow(cycN, 4.0) * 1.5 * u_WeatherIntensity;
+        vec3 cycCol = vec3(0.70, 0.76, 0.86);
+        glassRgb += cycCol * cycStreak * 0.45;
+        glassAlpha = max(glassAlpha, cycStreak * 0.45);
+      }
+
+      // Lightning canopy flash
+      if (u_LightningFlash > 0.01) {
+        vec3 flashCol = vec3(0.72, 0.86, 1.0) * u_LightningFlash * 0.85;
+        glassRgb += flashCol;
+        glassAlpha = max(glassAlpha, u_LightningFlash * 0.38);
+      }
     }
 
     col = vec4(glassRgb, glassAlpha);
@@ -800,6 +880,54 @@ void main() {
         float dProgress = sdSegment(drillHudP, vec2(-0.09, 0.0), vec2(-0.09 + 0.18 * clamp(u_DrillDepth / 5.0, 0.0, 1.0), 0.0));
         col.rgb += dHudCol * (1.0 - smoothstep(0.001, 0.003, dProgress)) * 1.6;
         col.a = max(col.a, 0.88);
+      }
+    }
+
+    // Q. Atmospheric Re-entry Corridor & Thermal Shield Gauge (v5.4.0)
+    if (u_AtmoDensity > 0.005 && (u_Speed > 2.0 || u_EntryPlasma > 0.01)) {
+      vec2 reHudP = hudP - vec2(0.25, 0.0);
+      if (abs(reHudP.x) < 0.12 && abs(reHudP.y) < 0.22) {
+        // AoA ladder bar
+        float ladderD = sdSegment(reHudP, vec2(0.0, -0.18), vec2(0.0, 0.18));
+        col.rgb += vec3(0.4, 0.7, 0.9) * (1.0 - smoothstep(0.001, 0.0025, ladderD)) * 0.7;
+
+        // Safe corridor bracket [12..26 deg -> mapped to y in [-0.08, 0.06]]
+        float safeBracketD = sdSegment(reHudP, vec2(-0.02, -0.06), vec2(-0.02, 0.08));
+        vec3 corCol = (u_CorridorSafe > 0.5) ? vec3(0.2, 1.0, 0.4) : ((u_OverheatWarning > 0.5) ? vec3(1.0, 0.2, 0.1) : vec3(1.0, 0.75, 0.1));
+        float corPulse = (u_CorridorSafe > 0.5) ? 1.0 : (0.5 + 0.5 * sin(u_Time * 18.0));
+        col.rgb += corCol * (1.0 - smoothstep(0.001, 0.003, safeBracketD)) * corPulse * 1.5;
+
+        // AoA chevron pointer
+        float aoaNorm = clamp((u_AoADeg - 19.0) * 0.012, -0.16, 0.16);
+        float chevronD = sdSegment(reHudP, vec2(0.01, aoaNorm), vec2(0.05, aoaNorm));
+        col.rgb += corCol * (1.0 - smoothstep(0.001, 0.003, chevronD)) * 1.8;
+
+        // Thermal shield TPS bar
+        float tpsBarNorm = clamp(u_ShieldIntegrity / 100.0, 0.0, 1.0) * 0.14;
+        vec2 tpsP = reHudP - vec2(0.08, 0.0);
+        float tpsD = sdSegment(tpsP, vec2(0.0, -0.07), vec2(0.0, -0.07 + tpsBarNorm));
+        vec3 tpsCol = (u_ShieldIntegrity > 50.0) ? vec3(0.3, 0.9, 1.0) : vec3(1.0, 0.3, 0.1);
+        col.rgb += tpsCol * (1.0 - smoothstep(0.0015, 0.0035, tpsD)) * 1.6;
+        col.a = max(col.a, 0.85);
+      }
+    }
+
+    // R. Plasma Ionization Blackout HUD Scanline Interference (v5.4.0)
+    if (u_BlackoutActive > 0.5) {
+      float scanGlitch = step(0.975, sin(hudP.y * 140.0 + u_Time * 75.0)) * 0.65;
+      float ripGlitch = step(0.98, sin(hudP.x * 30.0 + u_Time * 120.0)) * 0.35;
+      col.rgb += vec3(0.9, 0.5, 0.15) * (scanGlitch + ripGlitch);
+      col.a = max(col.a, scanGlitch * 0.7);
+    }
+
+    // S. Planetary Dynamic Weather HUD Annunciator (v5.4.0)
+    if (u_WeatherIntensity > 0.12 && u_AtmoDensity > 0.02) {
+      vec2 weaHudP = hudP - vec2(-0.25, -0.18);
+      if (abs(weaHudP.x) < 0.12 && abs(weaHudP.y) < 0.025) {
+        float weaBoxD = abs(sdBox(weaHudP, vec2(0.10, 0.018)));
+        vec3 weaCol = (u_WeatherType == 3) ? vec3(1.0, 0.65, 0.2) : ((u_WeatherType == 4) ? vec3(0.65, 1.0, 0.2) : vec3(0.35, 0.85, 1.0));
+        col.rgb += weaCol * (1.0 - smoothstep(0.001, 0.0025, weaBoxD)) * 1.2;
+        col.a = max(col.a, 0.85);
       }
     }
 

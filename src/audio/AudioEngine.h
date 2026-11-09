@@ -95,6 +95,10 @@ class AudioEngine {
   void setCassetteVolume(float v);
   float cassetteVolume() const { return m_cassetteVolume.load(); }
 
+  // v5.4.0: Динамическая погода планет и гром
+  void setWeatherAmbience(int weatherType, float intensity, float windKps);
+  void playThunderCrack(float pan = 0.0f);
+
   // v4.0: файл-голос для катсцен (wav, декодируется miniaudio в float
   // моно kSampleRate синхронно при запуске; каталог с аудио рядом).
   void playFile(const std::string& path, float db);
@@ -109,7 +113,7 @@ class AudioEngine {
   enum class VoiceType : int {
     Click, Whoosh, Jump, Chime, Blip, Capture, Tick, File,
     RadioBeep, RadioEnd, WarpReady, Hazard, TargetLock,
-    LiquidDrop, Eureka
+    LiquidDrop, Eureka, Thunder
   };
   struct Voice {
     VoiceType type = VoiceType::Click;
@@ -157,6 +161,11 @@ class AudioEngine {
   std::atomic<float> m_cassetteVolume{0.7f};
   std::atomic<float> m_cassetteGainTarget{0.0f};
   std::atomic<float> m_cassetteGainCurrent{0.0f};
+  std::atomic<int> m_weatherType{0};
+  std::atomic<float> m_weatherIntensityTarget{0.0f};
+  std::atomic<float> m_weatherIntensityCurrent{0.0f};
+  std::atomic<float> m_weatherWindTarget{0.0f};
+  std::atomic<float> m_weatherWindCurrent{0.0f};
   std::atomic<uint64_t> m_samples{0};  // счётчик сэмплов (live: колбэк)
 
   std::mutex m_mutex;
@@ -171,6 +180,8 @@ class AudioEngine {
   float m_drillGrind = 0.0f;
   float m_cassetteRainNoise = 0.0f;
   float m_cassetteLfoPhase = 0.0f;
+  float m_weatherWindNoise = 0.0f;
+  float m_weatherPatterNoise = 0.0f;
 
   friend struct AudioCallbackBridge;
 };

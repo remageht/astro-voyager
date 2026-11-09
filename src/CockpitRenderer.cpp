@@ -112,6 +112,22 @@ void CockpitRenderer::render(int fbWidth,
   m_shader->setUniform1i("u_DrillState", hud.drillState);
   m_shader->setUniform1f("u_CoreAnalyzed", hud.coreAnalyzed ? 1.0f : 0.0f);
 
+  // v5.4.0 Dynamic Planetary Weather & Atmospheric Re-entry Corridor
+  m_shader->setUniform1i("u_WeatherType", hud.weatherType);
+  m_shader->setUniform1f("u_WeatherIntensity", hud.weatherIntensity);
+  m_shader->setUniform1f("u_LightningFlash", hud.weatherLightning);
+  m_shader->setUniform1f("u_WindSpeed", hud.weatherWindSpeedKps);
+  m_shader->setUniform1f("u_WeatherVisibility", hud.weatherVisibility);
+  m_shader->setUniform1f("u_HeatShieldTemp", hud.heatShieldTempK);
+  m_shader->setUniform1f("u_ShieldIntegrity", hud.heatShieldIntegrity);
+  m_shader->setUniform1f("u_AoADeg", hud.currentAoADeg);
+  m_shader->setUniform1f("u_MinAoADeg", hud.minAoADeg);
+  m_shader->setUniform1f("u_MaxAoADeg", hud.maxAoADeg);
+  m_shader->setUniform1f("u_CorridorSafe", hud.reentryCorridorSafe ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_SkipOutWarning", hud.skipOutWarning ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_OverheatWarning", hud.overheatWarning ? 1.0f : 0.0f);
+  m_shader->setUniform1f("u_BlackoutActive", hud.plasmaBlackout ? 1.0f : 0.0f);
+
   m_quad->draw();
 
   m_shader->unbind();

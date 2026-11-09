@@ -76,6 +76,24 @@ struct CockpitHUDData {
   float drillBitTempC = 20.0f;
   int   drillState = 0;
   bool  coreAnalyzed = false;
+
+  // v5.4.0 Dynamic Planetary Weather & Atmospheric Re-entry Corridor
+  float heatShieldTempK = 300.0f;
+  float heatShieldIntegrity = 100.0f;
+  float currentAoADeg = 18.0f;
+  float minAoADeg = 12.0f;
+  float maxAoADeg = 26.0f;
+  bool  reentryCorridorSafe = true;
+  bool  skipOutWarning = false;
+  bool  overheatWarning = false;
+  bool  plasmaBlackout = false;
+  int   weatherType = 0;
+  float weatherIntensity = 0.0f;
+  float weatherWindSpeedKps = 0.0f;
+  float weatherVisibility = 1.0f;
+  float weatherLightning = 0.0f;
+  char  weatherNameRu[32] = {0};
+  char  weatherNameEn[32] = {0};
 };
 
 class CockpitController {
@@ -126,6 +144,15 @@ class CockpitController {
 
   // v5.3.0 Surface Science & Core Sampler telemetry
   void setSurfaceDrillTelemetry(bool active, float depthM, float bitTempC, int state, bool analyzed);
+
+  // v5.4.0 Dynamic Planetary Weather & Atmospheric Re-entry telemetry
+  void setReentryTelemetry(float shieldTempK, float shieldIntegrity,
+                           float aoaDeg, float minAoA, float maxAoA,
+                           bool corridorSafe, bool skipOut, bool overheat,
+                           bool blackout);
+  void setWeatherTelemetry(int type, float intensity, float windSpeedKps,
+                           float visibility, float lightning,
+                           const char* nameRu, const char* nameEn);
 
  private:
   glm::vec3 m_prevPos{0.0f};

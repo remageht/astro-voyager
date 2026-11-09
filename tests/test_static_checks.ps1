@@ -540,6 +540,18 @@ Check 'cmake lists test_mission' ((Read-File 'CMakeLists.txt') -match 'test_miss
 Check 'mission contracts board in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'Contracts & Missions')
 Check 'mission hud widget in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'drawMissionHud')
 
+# Roadmap Item #3: Dynamic Weather & Atmospheric Re-entry (Issue #116)
+Check 'weather type enum in AtmosphereSystem.h' ((Read-File 'src/AtmosphereSystem.h') -match 'enum class WeatherType')
+Check 'weather condition in AtmosphereSystem.h' ((Read-File 'src/AtmosphereSystem.h') -match 'struct WeatherCondition')
+Check 'updatePlanetaryWeather in AtmosphereSystem.cpp' ((Read-File 'src/AtmosphereSystem.cpp') -match 'updatePlanetaryWeather')
+Check 'computeAngleOfAttackDeg in AtmosphereSystem.cpp' ((Read-File 'src/AtmosphereSystem.cpp') -match 'computeAngleOfAttackDeg')
+Check 'weather uniforms in cockpit.frag' ((Read-File 'shaders/cockpit.frag') -match 'uniform int   u_WeatherType')
+Check 'lightning flash in cockpit.frag' ((Read-File 'shaders/cockpit.frag') -match 'u_LightningFlash')
+Check 'weather ambience in AudioEngine.h' ((Read-File 'src/audio/AudioEngine.h') -match 'setWeatherAmbience')
+Check 'thunder crack in AudioEngine.cpp' ((Read-File 'src/audio/AudioEngine.cpp') -match 'VoiceType::Thunder')
+Check 'reentry telemetry in CockpitController.h' ((Read-File 'src/CockpitController.h') -match 'setReentryTelemetry')
+Check 'flight atmospheric entry in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'updatePlanetaryWeather')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

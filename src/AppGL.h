@@ -715,6 +715,13 @@ class AppGL {
   bool m_highContrastReticle = false;  // утолщённый высококонтрастный прицел
   bool m_dockChimePlayed = false;      // предотвращает спам звукового сигнала при нахождении в створе
 
+  // === Dynamic Planetary Weather & Atmospheric Re-entry (v5.4.0) ===
+  AtmosphericBodyProfile m_atmoProfile;
+  ReentryTelemetry       m_reentryTelem;
+  WeatherCondition       m_planetaryWeather;
+  std::string            m_currentAtmoBodyId;
+  float                  m_prevLightningFlash = 0.0f;
+
   // === SaveGame === (v3.4.0) begin.
   // JSON-профиль: settings.json (глобально: пресет/звук/вид) +
   // save-sandbox.json (прогресс, объекты редактора, сессия; слот adventure
