@@ -558,6 +558,17 @@ Check 'build.yml has unified release job' ((Read-File '.github/workflows/build.y
 Check 'build.yml generates sha256sums' ((Read-File '.github/workflows/build.yml') -match 'sha256sum \* > SHA256SUMS\.txt')
 Check 'build.yml validates release assets' ((Read-File '.github/workflows/build.yml') -match 'verify_release_assets\.py')
 
+# Stage 5 / Release 1.0: Gamepad & Steam Deck Integration (Issue #120)
+Check 'gamepad header exists' (Test-Path (Join-Path $root 'src/GamepadSystem.h'))
+Check 'gamepad source exists' (Test-Path (Join-Path $root 'src/GamepadSystem.cpp'))
+Check 'gamepad test source exists' (Test-Path (Join-Path $root 'tests/test_gamepad.cpp'))
+Check 'cmake lists GamepadSystem.cpp' ((Read-File 'CMakeLists.txt') -match 'src/GamepadSystem\.cpp')
+Check 'cmake lists test_gamepad' ((Read-File 'CMakeLists.txt') -match 'test_gamepad')
+Check 'gamepad nav enabled in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'ImGuiConfigFlags_NavEnableGamepad')
+Check 'gamepad deadzone in GamepadSystem.h' ((Read-File 'src/GamepadSystem.h') -match 'applyRadialDeadzone')
+Check 'gamepad glyphs in GamepadSystem.h' ((Read-File 'src/GamepadSystem.h') -match 'getButtonGlyph')
+Check 'gamepad adaptive prompt in AppGL.h' ((Read-File 'src/AppGL.h') -match 'getPrompt')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
