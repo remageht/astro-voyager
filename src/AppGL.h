@@ -66,6 +66,8 @@ class AppGL {
   static int captureStationCheck(const std::string& outPath);
   static int captureDragonCheck(const std::string& outPath);
   static int captureZettelCheck(const std::string& outPath);
+  static int captureHudCheck(const std::string& outPath);
+  static int captureTerminalCheck(const std::string& outPath);
 
   // === Perf Benchmark Harness === (Stage 4, public entry for CLI)
   void enableBenchmarkMode(float durationSec, const std::string& outPath,
@@ -488,6 +490,20 @@ class AppGL {
   // (дефолтный шрифт ImGui кириллицы не имеет — были бы "?").
   const char* uiRu(const char* ru, const char* en) const;
   bool modernPushFont() const;
+  // === Zero-UI & Contextual Flight HUD & Unified Ship Terminal === (Issue #131)
+  bool m_zeroUiMode = true;
+  bool m_shipTerminalOpen = false;
+  int m_shipTerminalTab = 0;
+  bool m_prevTabPressed = false;
+  float m_hudShieldAlpha = 0.0f;
+  float m_hudThrottleAlpha = 0.0f;
+  float m_hudActionAlpha = 0.0f;
+  float m_lastCamSpeed = 0.0f;
+  float m_lastShieldVal = 100.0f;
+  float m_throttleDecayTimer = 0.0f;
+  void updateDynamicHudAlphas(float dt);
+  void drawContextualFlightHud();
+  void drawUnifiedShipTerminal();
   // === ModernUI === end
 
   // === WarpDrive === (агент W: отдельный режим путешествий на варпе).
