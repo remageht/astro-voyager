@@ -868,9 +868,9 @@ void AppGL::processInput(float deltaTime) {
     m_shipVel = Vec3();
   }
 
-  // v4.6.0 Realism: Atmospheric aerodynamic drag in planetary atmospheres
-  if (m_sceneManager && m_sceneManager->getCurrentStation() &&
-      m_sceneManager->getCurrentStation()->type == StationType::SolarSystem) {
+  // v4.6.0 / v5.4.0 Realism: Physical atmospheric re-entry dynamics and weather simulation
+  bool inAnyAtmosphere = false;
+  if (m_sceneManager) {
     const std::vector<BodyState>& bodies = m_sceneManager->getBodies();
     for (const auto& b : bodies) {
       if (!b.def || b.def->radius <= 0.01f) continue;
@@ -884,14 +884,72 @@ void AppGL::processInput(float deltaTime) {
       const double alt = dist - static_cast<double>(b.def->radius);
       const double atmThick = static_cast<double>(b.def->radius) * 0.22;
       if (alt >= 0.0 && alt < atmThick) {
+        inAnyAtmosphere = true;
+        std::string bodyId = b.def->id;
+        if (bodyId.empty()) bodyId = b.def->name;
+        const double simTime = glfwGetTime();
+        if (m_currentAtmoBodyId != bodyId) {
+          m_currentAtmoBodyId = bodyId;
+          m_atmoProfile = getAtmosphericProfile(bodyId);
+          m_planetaryWeather = generateInitialWeather(bodyId, simTime);
+        }
+
+        const float altKm = static_cast<float>(alt * 100.0);
+        const float spdKps = m_camSpeed * 0.45f;
+        const Vec3 camF = m_camera.forward();
+        const float aoa = computeAngleOfAttackDeg(static_cast<float>(camF.x),
+                                                 static_cast<float>(camF.y),
+                                                 static_cast<float>(camF.z),
+                                                 static_cast<float>(m_shipVel.x),
+                                                 static_cast<float>(m_shipVel.y),
+                                                 static_cast<float>(m_shipVel.z));
+
+        updateReentryTelemetry(m_reentryTelem, m_atmoProfile, aoa, spdKps, altKm, deltaTime);
+        updatePlanetaryWeather(m_planetaryWeather, m_atmoProfile, altKm, 45.0f, 10.0f, simTime, deltaTime);
+
+        // Thunder crack trigger on lightning flash rise
+        if (m_planetaryWeather.lightningFlash > 0.85f && m_prevLightningFlash < 0.2f) {
+          float rndPan = static_cast<float>(std::sin(simTime * 12.0)) * 0.7f;
+          m_audio.playThunderCrack(rndPan);
+        }
+        m_prevLightningFlash = m_planetaryWeather.lightningFlash;
+
+        // Apply physical drag deceleration and crosswind drift
         const double rho = std::exp(-(alt / atmThick) * 3.5);
         const double dragK = 1.0 - std::exp(-static_cast<double>(deltaTime) * 0.75 * rho);
         m_shipVel.x *= (1.0 - dragK);
         m_shipVel.y *= (1.0 - dragK);
         m_shipVel.z *= (1.0 - dragK);
+
+        // Wind drift
+        if (m_planetaryWeather.windSpeedKps > 0.001f) {
+          double windDrift = static_cast<double>(m_planetaryWeather.windSpeedKps) * 0.12 * static_cast<double>(deltaTime);
+          m_shipVel.x += std::cos(static_cast<double>(m_planetaryWeather.windAngleRad)) * windDrift;
+          m_shipVel.z += std::sin(static_cast<double>(m_planetaryWeather.windAngleRad)) * windDrift;
+        }
+
+        // Plasma blackout: radio carrier static
+        if (m_reentryTelem.isBlackout) {
+          m_audio.setRadioStatic(0.85f);
+        }
+
+        // Heat shield damage if overheating severely
+        if (m_reentryTelem.heatShieldTempK > 2600.0f) {
+          float dmg = (m_reentryTelem.heatShieldTempK - 2600.0f) * 0.05f * deltaTime;
+          m_ship.shield = std::max(0.0f, m_ship.shield - dmg);
+        }
         break;
       }
     }
+  }
+  if (!inAnyAtmosphere) {
+    // Clear out when in deep space
+    if (m_planetaryWeather.intensity > 0.001f) {
+      m_planetaryWeather.intensity *= std::exp(-deltaTime * 3.0f);
+      m_planetaryWeather.type = WeatherType::Clear;
+    }
+    m_reentryTelem.isBlackout = false;
+    m_reentryTelem.entryPlasma *= std::exp(-deltaTime * 3.0f);
   }
 
   m_camera.position = Vec3(m_camera.position.x + m_shipVel.x * deltaTime,
@@ -6819,6 +6877,33 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
       static_cast<float>(m_orbitTelem.speed),
       static_cast<float>(m_orbitTelem.periodSec),
       static_cast<float>(m_orbitTelem.trueAnomalyDeg));
+
+  // v5.4.0: Pass dynamic planetary weather & atmospheric re-entry telemetry to cockpit HUD
+  m_cockpitController.setReentryTelemetry(
+      m_reentryTelem.heatShieldTempK,
+      m_reentryTelem.shieldIntegrityPercent,
+      m_reentryTelem.currentAoADeg,
+      m_atmoProfile.entryCorridorMinAoADeg,
+      m_atmoProfile.entryCorridorMaxAoADeg,
+      m_reentryTelem.corridorSafe,
+      m_reentryTelem.skipOutWarning,
+      m_reentryTelem.overheatWarning,
+      m_reentryTelem.isBlackout);
+
+  m_cockpitController.setWeatherTelemetry(
+      static_cast<int>(m_planetaryWeather.type),
+      m_planetaryWeather.intensity,
+      m_planetaryWeather.windSpeedKps,
+      m_planetaryWeather.visibilityNorm,
+      m_planetaryWeather.lightningFlash,
+      m_planetaryWeather.nameRu.c_str(),
+      m_planetaryWeather.nameEn.c_str());
+
+  // v5.4.0: Drive dynamic weather ambient audio
+  m_audio.setWeatherAmbience(
+      static_cast<int>(m_planetaryWeather.type),
+      m_planetaryWeather.intensity,
+      m_planetaryWeather.windSpeedKps);
 
   CockpitHUDData hudData = m_cockpitController.getHUDData();
   // v5.0.0: Bridge Comms & Radio Avionics

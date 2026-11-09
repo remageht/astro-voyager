@@ -1,5 +1,7 @@
 #include "CockpitController.h"
 
+#include <cstring>
+
 namespace astro {
 
 CockpitController::CockpitController() {
@@ -252,6 +254,10 @@ void CockpitController::update(float deltaTime,
     float atmoShake = m_hud.entryPlasma * 0.85f;
     m_rumble = std::max(m_rumble, atmoShake);
   }
+  if (m_hud.weatherIntensity > 0.05f) {
+    float weatherShake = m_hud.weatherIntensity * (m_hud.weatherWindSpeedKps / 0.035f) * 0.45f;
+    m_rumble = std::max(m_rumble, weatherShake);
+  }
 
   // Target relative direction, distance, and 2D radar disk projection
   m_hud.targetName = targetName;
@@ -308,6 +314,45 @@ void CockpitController::setSurfaceDrillTelemetry(bool active, float depthM, floa
   m_hud.drillBitTempC = bitTempC;
   m_hud.drillState = state;
   m_hud.coreAnalyzed = analyzed;
+}
+
+void CockpitController::setReentryTelemetry(float shieldTempK, float shieldIntegrity,
+                                           float aoaDeg, float minAoA, float maxAoA,
+                                           bool corridorSafe, bool skipOut, bool overheat,
+                                           bool blackout) {
+  m_hud.heatShieldTempK = shieldTempK;
+  m_hud.heatShieldIntegrity = shieldIntegrity;
+  m_hud.currentAoADeg = aoaDeg;
+  m_hud.minAoADeg = minAoA;
+  m_hud.maxAoADeg = maxAoA;
+  m_hud.reentryCorridorSafe = corridorSafe;
+  m_hud.skipOutWarning = skipOut;
+  m_hud.overheatWarning = overheat;
+  m_hud.plasmaBlackout = blackout;
+}
+
+void CockpitController::setWeatherTelemetry(int type, float intensity, float windSpeedKps,
+                                           float visibility, float lightning,
+                                           const char* nameRu, const char* nameEn) {
+  m_hud.weatherType = type;
+  m_hud.weatherIntensity = intensity;
+  m_hud.weatherWindSpeedKps = windSpeedKps;
+  m_hud.weatherVisibility = visibility;
+  m_hud.weatherLightning = lightning;
+  if (nameRu) {
+    size_t i = 0;
+    for (; i < sizeof(m_hud.weatherNameRu) - 1 && nameRu[i] != '\0'; ++i) {
+      m_hud.weatherNameRu[i] = nameRu[i];
+    }
+    m_hud.weatherNameRu[i] = '\0';
+  }
+  if (nameEn) {
+    size_t i = 0;
+    for (; i < sizeof(m_hud.weatherNameEn) - 1 && nameEn[i] != '\0'; ++i) {
+      m_hud.weatherNameEn[i] = nameEn[i];
+    }
+    m_hud.weatherNameEn[i] = '\0';
+  }
 }
 
 }  // namespace astro

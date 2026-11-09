@@ -191,6 +191,17 @@ void AudioEngine::update(float dt) {
   dc += (dtarg - dc) * std::clamp(dt * 8.0f, 0.0f, 1.0f);
   m_drillCurrent.store(dc);
 
+  // v5.4.0: Smooth planetary weather intensity and wind speed
+  float wi = m_weatherIntensityCurrent.load();
+  float wit = m_weatherIntensityTarget.load();
+  wi += (wit - wi) * std::clamp(dt * 3.0f, 0.0f, 1.0f);
+  m_weatherIntensityCurrent.store(wi);
+
+  float ww = m_weatherWindCurrent.load();
+  float wwt = m_weatherWindTarget.load();
+  ww += (wwt - ww) * std::clamp(dt * 4.0f, 0.0f, 1.0f);
+  m_weatherWindCurrent.store(ww);
+
   if (!m_live) {
     // Null-backend: двигаем виртуальное время, чистим голоса по нему.
     uint64_t adv = static_cast<uint64_t>(static_cast<double>(dt) * kSampleRate);
@@ -217,6 +228,9 @@ void AudioEngine::update(float dt) {
       case VoiceType::WarpReady: dur = 0.55; break;
       case VoiceType::Hazard: dur = 0.45; break;
       case VoiceType::TargetLock: dur = 0.22; break;
+      case VoiceType::Thunder: dur = 3.5; break;
+      case VoiceType::LiquidDrop: dur = 0.35; break;
+      case VoiceType::Eureka: dur = 3.2; break;
       case VoiceType::File:
         dur = m_voices[i].pcm ? static_cast<double>(m_voices[i].pcm->size()) /
                                     kSampleRate
@@ -643,6 +657,18 @@ float AudioEngine::renderVoice(const Voice& v, double age,
       }
       return sum * 0.30f;
     }
+    case VoiceType::Thunder: {
+      if (age > 3.5) return 0.0f;
+      // Initial crack: crisp high-energy burst within first 0.06s
+      const float w = whiteNoise(rng);
+      float crack = (age < 0.06) ? w * (1.0f - static_cast<float>(age / 0.06)) * 0.75f : 0.0f;
+      // Low rolling thunder resonant bass (36-52 Hz)
+      float rollFreq = 48.0f - 14.0f * static_cast<float>(age / 3.5);
+      float sub1 = static_cast<float>(std::sin(2.0 * kPi * rollFreq * age)) * 0.45f;
+      float sub2 = static_cast<float>(std::sin(2.0 * kPi * (rollFreq * 1.6f) * age + 0.4)) * 0.28f;
+      float decay = static_cast<float>(std::exp(-age * 1.15));
+      return (crack + (sub1 + sub2 + w * 0.20f) * decay) * 0.85f;
+    }
     case VoiceType::File: {
       // Р¤Р°Р№Р»-РіРѕР»РѕСЃ: Р»РёРЅРµР№РЅС‹Р№ Р»РµСЂРї РїРѕ РіРѕС‚РѕРІРѕРјСѓ float-Р±СѓС„РµСЂСѓ (РјРѕРЅРѕ,
       // kSampleRate, Р·РЅР°С‡РёС‚ С€Р°Рі 1 СЃСЌРјРїР» РЅР° СЃСЌРјРїР»; Р»РµСЂРї СЃС‚СЂР°С…РѕРІРєР°).
@@ -824,14 +850,53 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
       drillSound = (dmotor * 0.15f + m_drillGrind * 0.22f) * drillK * 0.45f;
     }
 
-    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar + radioStaticSound + tapeL + drillSound) * vol;
-    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar + radioStaticSound + tapeR + drillSound) * vol;
+    // Dynamic planetary weather audio (v5.4.0): howling wind + rain/grit patter
+    const float weaIntensity = m_weatherIntensityCurrent.load();
+    const float weaWind = m_weatherWindCurrent.load();
+    const int weaType = m_weatherType.load();
+    float weatherSoundL = 0.0f;
+    float weatherSoundR = 0.0f;
+    if (weaIntensity > 0.001f && weaType > 0) {
+      const float w = whiteNoise(m_rng);
+      m_weatherWindNoise = (m_weatherWindNoise + 0.035f * w) / 1.035f;
+      float gustMod = 1.0f + 0.35f * static_cast<float>(std::sin(2.0 * kPi * 0.25 * tAbs));
+      float windSound = m_weatherWindNoise * (weaWind / 0.025f) * gustMod * 0.32f;
+
+      float patterSound = 0.0f;
+      if (weaType == 1 || weaType == 2 || weaType == 3 || weaType == 4) {
+        m_weatherPatterNoise = (m_weatherPatterNoise + 0.12f * w) / 1.12f;
+        float patterFlutter = 1.0f + 0.4f * static_cast<float>(std::sin(2.0 * kPi * 18.0 * tAbs));
+        patterSound = m_weatherPatterNoise * patterFlutter * weaIntensity * 0.22f;
+      }
+      weatherSoundL = (windSound + patterSound * 0.9f) * weaIntensity;
+      weatherSoundR = (windSound * 0.95f + patterSound * 1.05f) * weaIntensity;
+    }
+
+    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar + radioStaticSound + tapeL + drillSound + weatherSoundL) * vol;
+    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar + radioStaticSound + tapeR + drillSound + weatherSoundR) * vol;
     mixL = std::tanh(mixL * 1.1f);
     mixR = std::tanh(mixR * 1.1f);
     out[i * 2 + 0] = mixL;
     out[i * 2 + 1] = mixR;
   }
   m_samples.fetch_add(frames);
+}
+
+void AudioEngine::setWeatherAmbience(int weatherType, float intensity, float windKps) {
+  m_weatherType.store(weatherType);
+  m_weatherIntensityTarget.store(std::clamp(intensity, 0.0f, 1.0f));
+  m_weatherWindTarget.store(std::clamp(windKps, 0.0f, 0.2f));
+}
+
+void AudioEngine::playThunderCrack(float pan) {
+  if (!m_tried) return;
+  Voice v;
+  v.type = VoiceType::Thunder;
+  v.startSample = m_samples.load();
+  v.gainDb = 0.0f;
+  v.pan = std::clamp(pan, -1.0f, 1.0f);
+  std::lock_guard<std::mutex> lock(m_mutex);
+  m_voices.push_back(v);
 }
 
 }  // namespace astro
