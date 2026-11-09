@@ -5158,32 +5158,38 @@ void AppGL::drawModernTransportBar() {
 }
 // === ModernUI === end
 
-// === Zero-UI & Contextual Flight HUD & Unified Ship Terminal === (Issue #131)
+// === Zero-UI & Contextual Flight HUD & Unified Ship Terminal === (Issue #131, #133)
 void AppGL::updateDynamicHudAlphas(float dt) {
   if (dt <= 0.0f) return;
 
-  // 1. Shield & Damage Alpha: rises instantly on damage / hazard / low shield (< 99.5f) / low fuel (< 20.0f)
+  // Baseline minimum alpha so core vitals (Shield, Hull, Fuel, Speed) remain cleanly visible during cruise
+  const float baseVitalsAlpha = 0.45f;
+  const float baseThrottleAlpha = 0.40f;
+
+  // 1. Shield, Hull & Fuel Alpha:
+  // Flares to 1.0f on damage, hazard, low shield (<99.5%), damaged hull (<99.5%), or low fuel (<25%)
   const bool takingDamage = (m_ship.shield < m_lastShieldVal - 0.01f);
-  const bool lowHealth = (m_ship.shield < 99.5f || m_ship.hull < 99.5f || m_ship.fuel < 20.0f);
+  const bool lowHealth = (m_ship.shield < 99.5f || m_ship.hull < 99.5f || m_ship.fuel < 25.0f);
   const bool inHazard = (m_shieldFlashK > 0.05f);
 
   if (takingDamage || lowHealth || inHazard) {
     m_hudShieldAlpha = std::min(1.0f, m_hudShieldAlpha + dt * 4.0f);
   } else {
-    m_hudShieldAlpha = std::max(0.0f, m_hudShieldAlpha - dt * 1.5f);
+    m_hudShieldAlpha = std::max(baseVitalsAlpha, m_hudShieldAlpha - dt * 1.5f);
   }
   m_lastShieldVal = m_ship.shield;
 
-  // 2. Throttle / Speed Alpha: rises on speed changes or manual thrust input, stays 2s, then decays
+  // 2. Throttle / Speed Alpha:
+  // Flares to 1.0f on speed changes, manual thrust, conventional boost, or warp
   const bool speedChanging = (std::abs(m_camSpeed - m_lastCamSpeed) > 0.05f);
-  if (speedChanging || m_moveInputActive || m_warpOn) {
+  if (speedChanging || m_moveInputActive || m_warpOn || m_ship.boostActive) {
     m_throttleDecayTimer = 2.0f;
   }
   if (m_throttleDecayTimer > 0.0f) {
     m_throttleDecayTimer -= dt;
     m_hudThrottleAlpha = std::min(1.0f, m_hudThrottleAlpha + dt * 5.0f);
   } else {
-    m_hudThrottleAlpha = std::max(0.0f, m_hudThrottleAlpha - dt * 2.0f);
+    m_hudThrottleAlpha = std::max(baseThrottleAlpha, m_hudThrottleAlpha - dt * 2.0f);
   }
   m_lastCamSpeed = m_camSpeed;
 
@@ -5233,20 +5239,25 @@ void AppGL::drawContextualFlightHud() {
   dl->AddLine(ImVec2(ctr.x + gap, ctr.y + gap), ImVec2(ctr.x + gap, ctr.y + br), retCol, 1.0f);
   dl->AddCircleFilled(ctr, 1.2f, IM_COL32(255, 255, 255, 120), 8);
 
+  // Target / Navigation Range Header above reticle
   const Station* curSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
   if (curSt) {
     double d = std::sqrt(m_camera.position.x * m_camera.position.x +
                          m_camera.position.y * m_camera.position.y +
                          m_camera.position.z * m_camera.position.z);
-    if (d < 50.0) {
-      char tBuf[128];
-      std::snprintf(tBuf, sizeof(tBuf), "%s  %.1f Rs", curSt->name.c_str(), d);
-      ImVec2 sz = ImGui::CalcTextSize(tBuf);
-      dl->AddText(ImVec2(ctr.x - sz.x * 0.5f, ctr.y - 36.0f), IM_COL32(56, 189, 248, 140), tBuf);
+    char tBuf[128];
+    if (d < 100.0) {
+      std::snprintf(tBuf, sizeof(tBuf), "[ %s  %.1f Rs ]", curSt->name.c_str(), d);
+    } else {
+      std::snprintf(tBuf, sizeof(tBuf), "[ %s  %s ]", curSt->name.c_str(),
+                    astro::formatDistanceLy(curSt->distanceLy).c_str());
     }
+    ImVec2 sz = ImGui::CalcTextSize(tBuf);
+    int aNav = static_cast<int>(200.0f * m_hudShieldAlpha);
+    dl->AddText(ImVec2(ctr.x - sz.x * 0.5f, ctr.y - 38.0f), IM_COL32(56, 189, 248, aNav), tBuf);
   }
 
-  // 2. Left Holo-Arc: Speed & Throttle (Visible only when changing throttle or warp)
+  // 2. Left Holo-Arc: Speed & Throttle (Visible with subtle baseline in cruise, flaring on maneuvers)
   if (m_hudThrottleAlpha > 0.01f) {
     const float a = m_hudThrottleAlpha;
     const int a255 = static_cast<int>(255.0f * a);
@@ -5274,25 +5285,34 @@ void AppGL::drawContextualFlightHud() {
     }
     dl->AddText(ImVec2(ctr.x - 170.0f, ctr.y - 14.0f), IM_COL32(248, 250, 252, a255), spdBuf);
     char thrBuf[64];
-    std::snprintf(thrBuf, sizeof(thrBuf), "THR %.0f%%", m_camSpeed * 100.0f);
-    dl->AddText(ImVec2(ctr.x - 170.0f, ctr.y + 4.0f), IM_COL32(148, 163, 184, a200), thrBuf);
+    if (m_ship.boostActive) {
+      std::snprintf(thrBuf, sizeof(thrBuf), "THR %.0f%% [BOOST]", m_camSpeed * 100.0f);
+    } else {
+      std::snprintf(thrBuf, sizeof(thrBuf), "THR %.0f%%", m_camSpeed * 100.0f);
+    }
+    dl->AddText(ImVec2(ctr.x - 170.0f, ctr.y + 4.0f),
+                m_ship.boostActive ? IM_COL32(56, 189, 248, a255) : IM_COL32(148, 163, 184, a200),
+                thrBuf);
     if (m_warpOn) {
       char wfBuf[32];
       std::snprintf(wfBuf, sizeof(wfBuf), "WARP F%d", m_warpFactor);
       dl->AddText(ImVec2(ctr.x - 170.0f, ctr.y + 22.0f), IM_COL32(245, 158, 11, a255), wfBuf);
+    } else if (m_orbitCruiseActive) {
+      dl->AddText(ImVec2(ctr.x - 170.0f, ctr.y + 22.0f), IM_COL32(52, 211, 153, a200), "ORBIT HOLD");
     }
   }
 
-  // 3. Right Holo-Arc: Defense Matrix & Fuel (Visible only on damage / hazard / low values)
+  // 3. Right Holo-Matrix: Tri-Arc Core Vitals (Shield, Hull, Fuel)
   if (m_hudShieldAlpha > 0.01f) {
     const float a = m_hudShieldAlpha;
     const int a255 = static_cast<int>(255.0f * a);
-    const int a200 = static_cast<int>(200.0f * a);
     const int a120 = static_cast<int>(120.0f * a);
 
-    const float arcR = 150.0f;
     const float minAng = -0.61f; // -35 deg
     const float maxAng = 0.61f;  // +35 deg
+
+    // 3.1 Outer Arc: SHIELD
+    const float arcR = 150.0f;
     dl->PathArcTo(ctr, arcR, minAng, maxAng, 16);
     dl->PathStroke(IM_COL32(15, 25, 45, a120), 0, 3.0f);
 
@@ -5302,16 +5322,29 @@ void AppGL::drawContextualFlightHud() {
     dl->PathArcTo(ctr, arcR, minAng, shAng, 16);
     dl->PathStroke(shCol, 0, 3.0f);
 
-    const float innerR = 142.0f;
-    dl->PathArcTo(ctr, innerR, minAng, maxAng, 16);
+    // 3.2 Middle Arc: HULL
+    const float midR = 142.0f;
+    dl->PathArcTo(ctr, midR, minAng, maxAng, 16);
     dl->PathStroke(IM_COL32(15, 25, 45, a120), 0, 2.5f);
 
     float hu = std::clamp(m_ship.hull / 100.0f, 0.0f, 1.0f);
     float huAng = minAng + (maxAng - minAng) * hu;
     ImU32 huCol = (hu < 0.30f) ? IM_COL32(239, 68, 68, a255) : IM_COL32(52, 211, 153, a255);
-    dl->PathArcTo(ctr, innerR, minAng, huAng, 16);
+    dl->PathArcTo(ctr, midR, minAng, huAng, 16);
     dl->PathStroke(huCol, 0, 2.5f);
 
+    // 3.3 Inner Arc: FUEL (Dedicated physical gauge)
+    const float inR = 134.0f;
+    dl->PathArcTo(ctr, inR, minAng, maxAng, 16);
+    dl->PathStroke(IM_COL32(15, 25, 45, a120), 0, 2.5f);
+
+    float fu = std::clamp(m_ship.fuel / 100.0f, 0.0f, 1.0f);
+    float fuAng = minAng + (maxAng - minAng) * fu;
+    ImU32 fuCol = (fu < 0.25f) ? IM_COL32(239, 68, 68, a255) : IM_COL32(245, 158, 11, a255);
+    dl->PathArcTo(ctr, inR, minAng, fuAng, 16);
+    dl->PathStroke(fuCol, 0, 2.5f);
+
+    // Numeric readouts
     char shBuf[64];
     std::snprintf(shBuf, sizeof(shBuf), "SHD  %.0f%%", m_ship.shield);
     dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y - 18.0f), shCol, shBuf);
@@ -5320,8 +5353,14 @@ void AppGL::drawContextualFlightHud() {
     dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y), huCol, huBuf);
     char fuBuf[64];
     std::snprintf(fuBuf, sizeof(fuBuf), "FUEL %.0f%%", m_ship.fuel);
-    dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 18.0f), IM_COL32(251, 191, 36, a200), fuBuf);
+    dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 18.0f), fuCol, fuBuf);
 
+    // Warnings and alert pulses
+    if (fu < 0.25f) {
+      float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 10.0));
+      ImU32 fuWarnCol = IM_COL32(239, 68, 68, static_cast<int>(a255 * pulse));
+      dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 36.0f), fuWarnCol, uiRu("! ТОПЛИВО НА ИСХОДЕ !", "! LOW FUEL !"));
+    }
     if (sh < 0.25f || hu < 0.30f) {
       float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 8.0));
       ImU32 redPulse = IM_COL32(239, 68, 68, static_cast<int>(a255 * pulse));
@@ -10543,7 +10582,11 @@ int AppGL::captureHudCheck(const std::string& outPath) {
   std::unique_ptr<AppGL> appPtr;
   try {
     appPtr = std::make_unique<AppGL>(1280, 720, false);
+  } catch (const std::exception& ex) {
+    std::cerr << "captureHudCheck exception: " << ex.what() << "\n";
+    return 1;
   } catch (...) {
+    std::cerr << "captureHudCheck unknown exception\n";
     return 1;
   }
   AppGL& app = *appPtr;
@@ -10580,6 +10623,9 @@ int AppGL::captureHudCheck(const std::string& outPath) {
   }
 
   bool ok = app.saveScreenshot(outPath);
+  if (!ok) {
+    std::cerr << "captureHudCheck saveScreenshot failed for: " << outPath << "\n";
+  }
   app.m_window->swapBuffers();
   app.m_window->pollEvents();
   return ok ? 0 : 1;

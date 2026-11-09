@@ -593,6 +593,7 @@ Check 'test_planet_lod has GGX & culling tests' ((Read-File 'tests/test_planet_l
 Check 'test_benchmark has telemetry test' ((Read-File 'tests/test_benchmark.cpp') -match 'Test 4 extended telemetry metrics')
 # Stage 5 / Release 1.0: Zero-UI Contextual HUD & Unified Terminal (Issue #131)
 Check 'zero ui contextual flight hud and terminal' (((Read-File 'src/AppGL.h') -match 'm_zeroUiMode') -and ((Read-File 'src/AppGL.h') -match 'drawContextualFlightHud') -and ((Read-File 'src/AppGL.h') -match 'drawUnifiedShipTerminal') -and ($appCpp -match 'updateDynamicHudAlphas'))
+Check 'minimalist core vitals flight hud tri-arc' (($appCpp -match 'baseVitalsAlpha') -and ($appCpp -match 'float fu = std::clamp') -and ($appCpp -match 'float fuAng = minAng'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
