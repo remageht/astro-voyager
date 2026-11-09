@@ -9859,6 +9859,57 @@ int AppGL::captureDragonCheck(const std::string& outPath) {
   return ok ? 0 : 1;
 }
 
+int AppGL::captureZettelCheck(const std::string& outPath) {
+  s_harnessPinFps = true;
+  try {
+    std::filesystem::create_directories(std::filesystem::path(outPath).parent_path());
+  } catch (...) {}
+
+  std::unique_ptr<AppGL> appPtr;
+  try {
+    appPtr = std::make_unique<AppGL>(1280, 720, false);
+  } catch (...) {
+    return 1;
+  }
+  AppGL& app = *appPtr;
+
+  app.m_sceneManager->teleportTo("sgra", app.m_camera);
+  app.m_inMenu = false;
+  app.m_zettelkastenOpen = true;
+
+  ImGui::GetIO().IniFilename = nullptr;
+
+  for (auto& note : app.m_zettelkasten.getNotes()) {
+    note.seedDiscovered = true;
+  }
+  for (const auto& recipe : app.m_zettelkasten.getRecipes()) {
+    app.m_zettelkasten.triggerSynthesisRecipe(recipe.id);
+  }
+
+  int fbWidth = 1280, fbHeight = 720;
+  app.m_window->getFramebufferSize(fbWidth, fbHeight);
+  glViewport(0, 0, fbWidth, fbHeight);
+
+  for (int frame = 0; frame < 5; ++frame) {
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(365.0f, 15.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(900.0f, 650.0f), ImGuiCond_Always);
+    app.drawImGui();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    app.m_window->swapBuffers();
+    app.m_window->pollEvents();
+  }
+
+  bool ok = app.saveScreenshot(outPath);
+  app.m_window->swapBuffers();
+  app.m_window->pollEvents();
+  return ok ? 0 : 1;
+}
+
 int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   s_harnessPinFps = true;
   warpdrive::setDockSitesVisible(false);
@@ -13582,7 +13633,8 @@ void AppGL::renderTextWithWikilinks(const std::string& text) {
 
 void AppGL::drawZettelkasten() {
   ImGuiIO& io = ImGui::GetIO();
-  ImGui::SetNextWindowSize(ImVec2(980.0f, 640.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(360.0f, 15.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(905.0f, 650.0f), ImGuiCond_FirstUseEver);
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.022f, 0.038f, 0.96f));
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.35f, 0.65f, 0.95f, 0.50f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);

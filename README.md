@@ -96,6 +96,42 @@
 
 *v5.6.0 (Release 1.0 Candidate) brings photorealistic atmospheric Rayleigh-Mie scattering, Cook-Torrance GGX microfacet ocean glints, far-field geodesic step acceleration, full Gamepad and Steam Deck navigation, and 6 True Endings with cinematic letterbox chronicles.*
 
+### Новые механики: Ментальный граф мыслей, Созвездия и Анимации
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/screens/zettelkasten_mind_map.png" alt="Astro-Zettelkasten Mind Map" width="100%"><br>
+      <b>Второй Мозг Егорки и Сеть Мыслей (Astro-Zettelkasten)</b><br>
+      <sub>Ассоциативный ментальный граф воспоминаний и озарений (<code>[B]</code>), синтез физических моделей Эврики, резонансные кластеры концовок и Великий Синтез</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/screens/ori_close.png" alt="Orion Constellation Hipparcos" width="100%"><br>
+      <b>Астрономические созвездия и каталог Hipparcos</b><br>
+      <sub>Реальные звёзды пояса Ориона (Минтака, Альнилам, Альнитак, Бетельгейзе, Ригель), звёздные величины, дистанции и калибровка кулоном</sub>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="33%" align="center">
+      <img src="docs/screens/prologue_video.png" alt="Animated Prologue Cutscene" width="100%"><br>
+      <b>Анимированная катсцена пролога</b><br>
+      <sub>Покадровая кинематографичная анимация в 3D-кокпите: захват метрики Казимира, субтитры диалогов и телеметрия $T-4.20s$</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="res/story/09_warp_jump_cinema.jpg" alt="Cinematic Warp Jump" width="100%"><br>
+      <b>Кинематографический варп-прорыв</b><br>
+      <sub>Сверхсветовой скачок сквозь искривление пространства-времени с релятивистскими кольцами гравитационного фокуса</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="docs/screens/uma.png" alt="Ursa Major Asterism" width="100%"><br>
+      <b>Созвездие Большая Медведица</b><br>
+      <sub>Геометрический астеризм Большого Ковша, астрометрическая сетка и навигация по звёздному атласу Deep Star Maps 2020</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
