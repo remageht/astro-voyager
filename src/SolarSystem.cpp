@@ -9,12 +9,6 @@ namespace {
 // Pi constant (ASCII only).
 constexpr float kPi = 3.14159265358979323846f;
 
-// Vec3 arithmetic for parent-relative composition (local to this file;
-// Camera.h keeps the minimal core vector without operators).
-inline Vec3 operator+(const Vec3& a, const Vec3& b) {
-  return Vec3(a.x + b.x, a.y + b.y, a.z + b.z);
-}
-
 PlanetDef makeDef(const char* id, const char* name, float radius, float orbitRadius,
                   float angleSpeed, float angle0, int type, float seed,
                   Vec3 colA, Vec3 colB) {

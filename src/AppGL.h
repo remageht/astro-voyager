@@ -22,6 +22,7 @@
 #include "BenchmarkSystem.h"
 #include "AtmosphereSystem.h"
 #include "MissionSystem.h"
+#include "GamepadSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"
@@ -414,6 +415,10 @@ class AppGL {
   ScienceCodex m_codex;
   BridgeComms m_bridgeComms;
   MissionManager m_missions;
+  // === Gamepad & Steam Deck === (Stage 5 / Release 1.0)
+  GamepadSystem m_gamepad;
+  void processGamepadInput(double dt);
+  std::string getPrompt(const std::string& kbPrompt, GamepadButton btn, const std::string& action) const;
   bool m_spectrometerOpen = false;
   bool m_codexOpen = false;
   // === Planetary Landing & Surface Operations === (v4.6.1)

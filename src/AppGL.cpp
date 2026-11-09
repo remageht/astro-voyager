@@ -154,6 +154,9 @@ AppGL::AppGL(int width, int height, bool visible) {
   // Setup Dear ImGui
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
   ImGui::StyleColorsDark();
   // === Cinematic === begin (агент C): шрифт с кириллицей для русских строк.
   // Дефолтный шрифт не заменяем (иначе поплывут эталонные скриншоты):
@@ -550,6 +553,15 @@ void AppGL::processInput(float deltaTime) {
   audioEnsureOnFirstInput();
   audioProcessKey();
   // === Audio === end
+  if (io.WantCaptureKeyboard || io.WantCaptureMouse ||
+      glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS ||
+      glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS ||
+      glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS ||
+      glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS) {
+    m_gamepad.notifyKeyboardMouseUsed();
+  }
+  // === Gamepad & Steam Deck === (Stage 5 / Release 1.0)
+  processGamepadInput(deltaTime);
   // === WarpDrive === begin (агент W): ключи W/[ ], таймеры прыжка,
   // FOV +10deg*K, дрейф, тряска. Возврат true = катсцена прыжка.
   if (updateWarp(deltaTime)) return;
@@ -956,6 +968,132 @@ void AppGL::processInput(float deltaTime) {
                            m_camera.position.y + m_shipVel.y * deltaTime,
                            m_camera.position.z + m_shipVel.z * deltaTime);
   m_camera.moveSpeed = savedSpeed;
+}
+
+// === Gamepad & Steam Deck === (Stage 5 / Release 1.0)
+void AppGL::processGamepadInput(double dt) {
+  GLFWwindow* win = m_window ? m_window->getNativeWindow() : nullptr;
+  if (!win) return;
+
+  m_gamepad.pollGlfw(0);
+  if (!m_gamepad.isGamepadActive()) return;
+
+  const auto& ctrl = m_gamepad.getFlightControl();
+
+  // 1. Right analog stick: Camera view rotation (Yaw / Pitch)
+  if (std::abs(ctrl.lookYaw) > 0.01f || std::abs(ctrl.lookPitch) > 0.01f) {
+    const float lookSpeed = 2.4f * m_mouseSensitivity * ship::rcsGimbalMult(m_shipCustomization.rcsGimbalLevel);
+    m_camera.yaw += ctrl.lookYaw * lookSpeed * dt;
+    m_camera.pitch += ctrl.lookPitch * lookSpeed * dt * (m_invertY ? -1.0f : 1.0f);
+    const float maxPitch = 1.55f;
+    if (m_camera.pitch > maxPitch) m_camera.pitch = maxPitch;
+    if (m_camera.pitch < -maxPitch) m_camera.pitch = -maxPitch;
+  }
+
+  // 2. Triggers: Throttle (RT) and Reverse/Brake (LT)
+  if (ctrl.throttle > 0.02f) {
+    const double speed = m_camera.moveSpeed * (m_ship.boostActive ? 2.0 : 1.0);
+    m_shipVel = m_shipVel + m_camera.forward() * (ctrl.throttle * speed * 2.0 * dt);
+    m_moveInputActive = true;
+  }
+  if (ctrl.reverse > 0.02f) {
+    const double speed = m_camera.moveSpeed;
+    m_shipVel = m_shipVel - m_camera.forward() * (ctrl.reverse * speed * 1.5 * dt);
+    m_moveInputActive = true;
+  }
+
+  // 3. Left analog stick: Pitch and Roll / Strafe
+  if (std::abs(ctrl.pitch) > 0.02f) {
+    const double speed = m_camera.moveSpeed;
+    m_shipVel = m_shipVel + m_camera.up() * (ctrl.pitch * speed * 1.5 * dt);
+    m_moveInputActive = true;
+  }
+  if (std::abs(ctrl.roll) > 0.02f) {
+    const double speed = m_camera.moveSpeed;
+    m_shipVel = m_shipVel + m_camera.right() * (ctrl.roll * speed * 1.5 * dt);
+    m_moveInputActive = true;
+  }
+
+  // 4. Face buttons & D-Pad shortcuts
+  // Start button: Menu / Pause
+  if (m_gamepad.isJustPressed(GamepadButton::Start)) {
+    if (m_zettelkastenOpen) m_zettelkastenOpen = false;
+    else if (m_expeditionMapOpen) m_expeditionMapOpen = false;
+    else m_inMenu = !m_inMenu;
+  }
+
+  // Button A: Dock / Confirm / Scan
+  if (m_gamepad.isJustPressed(GamepadButton::A) && !m_ship.isDocked) {
+    if (!m_dockHintId.empty()) {
+      startDockSequence(m_dockHintId);
+    }
+  }
+
+  // Button B: Back / Close / Expedition map
+  if (m_gamepad.isJustPressed(GamepadButton::B)) {
+    if (m_zettelkastenOpen) m_zettelkastenOpen = false;
+    else if (m_expeditionMapOpen) m_expeditionMapOpen = false;
+    else if (m_storyOpen) m_storyOpen = false;
+    else m_expeditionMapOpen = true;
+  }
+
+  // Button X: Shipyard / Undock
+  if (m_gamepad.isJustPressed(GamepadButton::X)) {
+    if (m_ship.isDocked) {
+      m_ship.isDocked = false;
+      m_shipNotice = uiRu("Отстыковка произведена.", "Ship undocked.");
+      m_shipNoticeT = 2.0f;
+    } else if (!m_dockHintId.empty()) {
+      startDockSequence(m_dockHintId);
+    }
+  }
+
+  // Button Y: Second Brain (Zettelkasten) / Ship Codex
+  if (m_gamepad.isJustPressed(GamepadButton::Y)) {
+    m_zettelkastenOpen = !m_zettelkastenOpen;
+    if (m_zettelkastenOpen) {
+      m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
+    }
+  }
+
+  // DpadUp: Toggle Landing Gear (G)
+  if (m_gamepad.isJustPressed(GamepadButton::DpadUp)) {
+    updateLandingGear(m_landingTelem, 0.0f, true);
+    m_ship.gearDeployed = (m_landingTelem.gearState == GearState::Deployed);
+    m_ship.gearProgress = m_landingTelem.gearProgress;
+    m_audio.playClick();
+  }
+
+  // DpadDown: Toggle Orbit Assist (R)
+  if (m_gamepad.isJustPressed(GamepadButton::DpadDown)) {
+    m_orbitCruiseActive = !m_orbitCruiseActive;
+    m_audio.playClick();
+  }
+
+  // DpadLeft: Bridge radio chatter
+  if (m_gamepad.isJustPressed(GamepadButton::DpadLeft)) {
+    m_audio.playRadioBeep();
+  }
+
+  // Bumpers LB / RB: Warp factor adjustment in warp, or View mode toggle
+  if (m_warpOn && m_warpStatus != 3) {
+    if (m_gamepad.isJustPressed(GamepadButton::LB) && m_warpFactor > 1) {
+      --m_warpFactor;
+      warpRetarget(warpTargetK(m_warpFactor));
+    }
+    if (m_gamepad.isJustPressed(GamepadButton::RB) && m_warpFactor < 9) {
+      ++m_warpFactor;
+      warpRetarget(warpTargetK(m_warpFactor));
+    }
+  } else {
+    if (m_gamepad.isJustPressed(GamepadButton::RB) || m_gamepad.isJustPressed(GamepadButton::LB)) {
+      m_viewMode = view::nextView(m_viewMode);
+    }
+  }
+}
+
+std::string AppGL::getPrompt(const std::string& kbPrompt, GamepadButton btn, const std::string& action) const {
+  return m_gamepad.getAdaptivePrompt(kbPrompt, btn, action);
 }
 
 void AppGL::stepTimePace(int dir) {
@@ -8351,6 +8489,28 @@ void AppGL::drawMenu() {
                 m_captureKeyFor = capturing ? -1 : i;
               }
             }
+          }
+
+          ImGui::Spacing();
+          ImGui::SeparatorText(uiRu("Геймпад / Контроллер (Steam Deck)", "Gamepad / Controller (Steam Deck)"));
+          const bool padConn = m_gamepad.isConnected();
+          ImGui::TextColored(padConn ? ImVec4(0.2f, 1.0f, 0.4f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+                             "%s: %s", uiRu("Статус контроллера", "Controller Status"),
+                             padConn ? (m_gamepad.isGamepadActive() ? uiRu("Активен", "Active") : uiRu("Подключен (в режиме ожидания)", "Connected (Standby)"))
+                                     : uiRu("Не обнаружен (используется клавиатура/мышь)", "Not detected (using Mouse/KB)"));
+
+          float stickDz = m_gamepad.getStickDeadzone();
+          if (ImGui::SliderFloat(uiRu("Мертвая зона стиков", "Stick Deadzone"), &stickDz, 0.05f, 0.40f, "%.2f")) {
+            m_gamepad.setStickDeadzone(stickDz);
+          }
+          float trigDz = m_gamepad.getTriggerDeadzone();
+          if (ImGui::SliderFloat(uiRu("Мертвая зона триггеров", "Trigger Deadzone"), &trigDz, 0.02f, 0.30f, "%.2f")) {
+            m_gamepad.setTriggerDeadzone(trigDz);
+          }
+          int styleIdx = static_cast<int>(m_gamepad.getGamepadStyle());
+          const char* styleNames[] = {"Xbox [A/B/X/Y]", "PlayStation (X/O/Square/Triangle)", "Steam Deck ([A/B], [View]/[Menu])", "Generic"};
+          if (ImGui::Combo(uiRu("Стиль глифов", "Button Glyphs"), &styleIdx, styleNames, 4)) {
+            m_gamepad.setGamepadStyle(static_cast<GamepadStyle>(styleIdx));
           }
 
           ImGui::Spacing();

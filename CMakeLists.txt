@@ -32,6 +32,7 @@ add_executable(astro-voyager
   src/BenchmarkSystem.cpp  # === BenchmarkSystem === (Stage 4): перф-бенчмарк
   src/AtmosphereSystem.cpp  # === AtmosphereSystem === (Stage 5): вход в атмосферу
   src/MissionSystem.cpp  # === MissionSystem === (Stage 7 / Roadmap #5): процедурный генератор миссий
+  src/GamepadSystem.cpp  # === GamepadSystem === (Stage 5 / Release 1.0): интеграция геймпадов и Steam Deck
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -558,6 +559,23 @@ endif()
 
 if(TARGET test_mission)
   add_test(NAME test_mission COMMAND test_mission)
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_gamepad.cpp")
+  add_executable(test_gamepad
+    tests/test_gamepad.cpp
+    src/GamepadSystem.cpp
+  )
+  target_include_directories(test_gamepad PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_gamepad PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_gamepad PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_gamepad)
+  add_test(NAME test_gamepad COMMAND test_gamepad)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):
