@@ -25,6 +25,8 @@ std::string getAnchorStationForEnding(int endingChoice, bool isTrueEnding) {
       return "sgra";
     case kFinaleArkCitadel:
       return "sol";
+    case kFinaleDignity:
+      return "sol";
     default:
       return "m13";
   }
@@ -146,6 +148,40 @@ EpilogueChronicle generateEpilogueChronicle(
 
     chronicle.closingQuoteRu = "«Пока светит Солнце — человечество не угаснет во тьме».";
     chronicle.closingQuoteEn = "\"As long as the Sun shines, humanity will never fade into the dark.\"";
+
+  } else if (endingChoice == kFinaleDignity) {
+    chronicle.isTrueEnding = true;
+    chronicle.clusterKey = "dignity";
+    chronicle.anchorStationId = "sol";
+    chronicle.titleRu = "★ ИСТИННЫЙ ФИНАЛ: ВОСХОЖДЕНИЕ ДОСТОИНСТВА";
+    chronicle.titleEn = "★ TRUE ENDING: ASCENT OF DIGNITY";
+    chronicle.subtitleRu = "Егорка · Инженер челнока";
+    chronicle.subtitleEn = "Egorka · Shuttle Engineer";
+    int stance = expedition.egorkaStance;
+    if (stance == 0) {
+      chronicle.narrativeParagraphsRu = {
+          "Егорка:"};
+      chronicle.narrativeParagraphsEn = {
+          "Egorka:"};
+    } else if (stance == 2) {
+      chronicle.narrativeParagraphsRu = {
+          "Егорка не мстил за кожу — за имя."};
+      chronicle.narrativeParagraphsEn = {
+          "Egorka did not avenge skin — he avenged his name."};
+    } else {
+      chronicle.narrativeParagraphsRu = {
+          "Моё имя — Егорка. Не потому что похоже на что-то ещё, а потому что это имя."};
+      chronicle.narrativeParagraphsEn = {
+          "My name is Egorka. Not because it sounds like something else, but because it is my name."};
+    }
+    chronicle.crewFates = {
+        {"Егорка", "Egorka", "Инженер челнока", "Shuttle Engineer",
+         "После извинений экипажа продолжил службу чинарем-пинарем на орбите.",
+         "After crew apology he continued shuttle duty.",
+         "«Имя — это не шутка».",
+         "\"A name is not a joke.\""}};
+    chronicle.closingQuoteRu = "«Моё имя — Егорка»." ;
+    chronicle.closingQuoteEn = "\"My name is Egorka.\"";
 
   } else if (endingChoice == kFinaleColony &&
              zettelkasten.isClusterTrueEndingUnlocked(kClusterEden)) {
