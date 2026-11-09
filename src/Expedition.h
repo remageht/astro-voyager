@@ -36,6 +36,7 @@ constexpr int kFinaleLoopTranscendence = 4;  // EgorKa: Sgr A* Singular Time Loo
 constexpr int kFinaleArkCitadel = 5;        // Cmdr. Mark Hale: Orbital Ark Citadel
 constexpr int kFinaleHyperBreakthrough = 6; // EgorKa-6: Shattered Temporal Loop & Multiverse Overclock
 constexpr int kFinaleFifthAlliance = 7;     // Arseny «Executioner of False Hopes»: Fifth Universe Alliance
+constexpr int kFinaleDignity = 8;           // EgorKa: Ascent of Dignity
 
 std::string finaleTitleRu(int choice);
 std::string finaleTitleEn(int choice);
@@ -54,6 +55,7 @@ class ExpeditionState {
   bool introSeen = false;
   // 0 until the player picks an ending at the M13 finale.
   int finaleChoice = kFinaleUnset;
+  int egorkaStance = 1;  // Dignity route stance: 0 supported, 1 ignored, 2 laughed
 
   void markVisited(const std::string& stationId);  // advances chapters
   void setChapter(int index);                      // jump to unlocked chapter

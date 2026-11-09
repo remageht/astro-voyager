@@ -81,6 +81,7 @@ std::string finaleTitleRu(int choice) {
   if (choice == kFinaleArkCitadel) return "Финал · Ковчег Человечества";
   if (choice == kFinaleHyperBreakthrough) return "Финал · Гиперпрорыв Шестой Вселенной";
   if (choice == kFinaleFifthAlliance) return "Финал · Пакт Палача Ложных Надежд";
+  if (choice == kFinaleDignity) return "Финал · Восхождение Достоинства";
   return "Глава 6 · Выбор";
 }
 
@@ -92,6 +93,7 @@ std::string finaleTitleEn(int choice) {
   if (choice == kFinaleArkCitadel) return "Finale · Ark Citadel";
   if (choice == kFinaleHyperBreakthrough) return "Finale · Sixth Universe Hyper-Breakthrough";
   if (choice == kFinaleFifthAlliance) return "Finale · Pact of the Executioner of False Hopes";
+  if (choice == kFinaleDignity) return "Finale · Ascent of Dignity";
   return "Chapter 6 · The Choice";
 }
 
@@ -110,6 +112,8 @@ std::string finaleGoalRu(int choice) {
     return "Варп разогнан до 135%. Петля времени разорвана, открыт путь в Мультивселенную!";
   if (choice == kFinaleFifthAlliance)
     return "Арсений и Егорка объединили варп-ядро и стазис-щит. Цивилизации спасены вопреки энтропии!";
+  if (choice == kFinaleDignity)
+    return "Егорка не мстил за кожу — за имя. Экипаж понял цену шутки.";
   return "Решить судьбу экспедиции: колония или дальний горизонт.";
 }
 
@@ -128,6 +132,8 @@ std::string finaleGoalEn(int choice) {
     return "Warp overclocked to 135%. The temporal loop is shattered into the Multiverse!";
   if (choice == kFinaleFifthAlliance)
     return "Arseny and Egorka merged the warp core and stasis shield. Civilizations saved against entropy!";
+  if (choice == kFinaleDignity)
+    return "Egorka did not avenge skin — he avenged his name. The crew learned the cost of a joke.";
   return "Decide the fate of the expedition: colony or the far horizon.";
 }
 
@@ -144,6 +150,8 @@ std::string finaleSpeakerRu(int choice) {
     return "Егорка-6 (Оверклокер варпа)";
   if (choice == kFinaleFifthAlliance)
     return "Арсений «Палач Ложных Надежд» («Матрас из 5»)";
+  if (choice == kFinaleDignity)
+    return "Егорка (Инженер челнока)";
   return "";
 }
 
@@ -160,6 +168,8 @@ std::string finaleSpeakerEn(int choice) {
     return "EgorKa-6 (Warp Overclocker)";
   if (choice == kFinaleFifthAlliance)
     return "Arseny «Executioner of False Hopes» («The Mattress»)";
+  if (choice == kFinaleDignity)
+    return "Egorka (Shuttle Engineer)";
   return "";
 }
 
@@ -240,6 +250,7 @@ std::string serializeExpedition(const ExpeditionState& st) {
   os << "maxUnlockedChapter=" << std::max(st.maxUnlockedChapter, st.chapterIndex) << "\n";
   os << "introSeen=" << (st.introSeen ? 1 : 0) << "\n";
   os << "finaleChoice=" << st.finaleChoice << "\n";
+  os << "egorkaStance=" << st.egorkaStance << "\n";
   return os.str();
 }
 
@@ -280,9 +291,13 @@ bool deserializeExpedition(const std::string& text, ExpeditionState& out) {
     } else if (key == "finaleChoice") {
       probe.finaleChoice = std::atoi(val.c_str());
       if (probe.finaleChoice < kFinaleUnset ||
-          probe.finaleChoice > kFinaleFifthAlliance) {
+          probe.finaleChoice > kFinaleDignity) {
         probe.finaleChoice = kFinaleUnset;
       }
+      any = true;
+    } else if (key == "egorkaStance") {
+      probe.egorkaStance = std::atoi(val.c_str());
+      if (probe.egorkaStance < 0 || probe.egorkaStance > 2) probe.egorkaStance = 1;
       any = true;
     }
   }
