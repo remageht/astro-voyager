@@ -14657,6 +14657,12 @@ void AppGL::startEpilogueCinematic(int choice) {
   m_finaleChoiceOpen = false;
   m_expeditionMapOpen = false;
 
+  // Save active post-processing cinematics settings to restore on exit
+  if (m_sceneManager) {
+    m_epilogueSavedColorGrade = m_sceneManager->getSettings().colorGrade;
+    m_epilogueSavedFilmicVignette = m_sceneManager->getSettings().filmicVignette;
+  }
+
   m_activeChronicle = generateEpilogueChronicle(
       choice,
       m_expedition,
@@ -14679,6 +14685,12 @@ void AppGL::startEpilogueCinematic(int choice) {
 
 void AppGL::stopEpilogueCinematic() {
   m_epilogueActive = false;
+  if (m_sceneManager) {
+    m_sceneManager->getSettings().colorGrade = m_epilogueSavedColorGrade;
+    m_sceneManager->getSettings().filmicVignette = m_epilogueSavedFilmicVignette;
+    m_sceneManager->setShipFx(0.0f, 0.0f, 0.0f);
+    m_sceneManager->setHorizonFx(0.0f, 0.0f);
+  }
 }
 
 void AppGL::updateEpilogueCinematic(float dt) {
@@ -14686,44 +14698,66 @@ void AppGL::updateEpilogueCinematic(float dt) {
   ImGuiIO& io = ImGui::GetIO();
 
   const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard) {
+  const bool padB = m_gamepad.isConnected() &&
+                    (m_gamepad.isJustPressed(GamepadButton::B) || m_gamepad.isJustPressed(GamepadButton::Start));
+  if ((escDown && !m_prevEscPressed && !io.WantCaptureKeyboard) || padB) {
     stopEpilogueCinematic();
   }
   m_prevEscPressed = escDown;
 
   const bool rDown = (glfwGetKey(win, GLFW_KEY_R) == GLFW_PRESS);
-  if (rDown && !io.WantCaptureKeyboard) {
+  const bool padX = m_gamepad.isConnected() && m_gamepad.isJustPressed(GamepadButton::X);
+  if ((rDown && !io.WantCaptureKeyboard) || padX) {
     m_epilogueScrollY = 0.0f;
     m_epilogueTime = 0.0f;
   }
 
-  m_epilogueTime += dt;
-
-  // Solar Rebirth procedural: spiral approach to Sun for true ending
-  if (m_activeChronicle.isTrueEnding && m_activeChronicle.clusterKey == "solar") {
-    SolarRebirthCamera sc = solarRebirthCamera(m_epilogueTime, m_activeChronicle.stats);
-    m_camera.position = Vec3(
-        static_cast<double>(sc.radius) * std::cos(static_cast<double>(sc.angle)),
-        static_cast<double>(sc.height),
-        static_cast<double>(sc.radius) * std::sin(static_cast<double>(sc.angle)));
-    Vec3 origin(0.0, 0.0, 0.0);
-    computeLookYawPitch(m_camera.position, origin, m_camera.yaw, m_camera.pitch);
-    // FOV breathing is visual only via radius; solarGlow affects overlay text
-  } else {
-    // Generic Lissajou orbit for other endings
-    const float t2 = m_epilogueTime;
-    const double baseR = 30.0 + 4.0 * std::sin(static_cast<double>(t2) * 0.04);
-    const double baseH = 5.0 + 2.5 * std::sin(static_cast<double>(t2) * 0.07);
-    const double ang = static_cast<double>(t2) * 0.045;
-    m_camera.position = Vec3(baseR * std::cos(ang), baseH, baseR * std::sin(ang));
-    Vec3 origin(0.0, 0.0, 0.0);
-    computeLookYawPitch(m_camera.position, origin, m_camera.yaw, m_camera.pitch);
+  const bool padY = m_gamepad.isConnected() && m_gamepad.isJustPressed(GamepadButton::Y);
+  if (padY) {
+    std::string logTxt = formatChronicleLogbook(m_activeChronicle, m_cineFont);
+    ImGui::SetClipboardText(logTxt.c_str());
   }
 
-  // Автопрокрутка свитка
+  m_epilogueTime += dt;
+
+  // Evaluate procedural cinematic camera trajectory (solarRebirthCamera, edenDescentCamera, multiverseSingularityCamera, allianceRelicCamera) and post-processing FX for all 4 True Endings
+  m_epilogueActiveFrame = evaluateEpilogueCinematic(
+      m_activeChronicle.endingChoice,
+      m_activeChronicle.clusterKey,
+      m_activeChronicle.isTrueEnding,
+      m_epilogueTime,
+      m_activeChronicle.stats);
+
+  m_camera.position = m_epilogueActiveFrame.cameraPosition;
+  computeLookYawPitch(m_camera.position, m_epilogueActiveFrame.lookTarget, m_camera.yaw, m_camera.pitch);
+
+  if (m_sceneManager) {
+    m_sceneManager->getSettings().colorGrade = m_epilogueActiveFrame.colorGrade;
+    m_sceneManager->getSettings().filmicVignette = m_epilogueActiveFrame.filmicVignette;
+    m_sceneManager->setShipFx(m_epilogueActiveFrame.chromaK, 0.0f, m_epilogueActiveFrame.shieldK);
+    m_sceneManager->setHorizonFx(m_epilogueActiveFrame.horizonK, 0.0f);
+  }
+
+  // Gamepad analog right stick and D-pad scrolling
+  if (m_gamepad.isConnected()) {
+    float stickY = m_gamepad.getFlightControl().lookPitch;
+    if (std::abs(stickY) > 0.05f) {
+      m_epilogueScrollY -= stickY * 260.0f * dt;
+    }
+    if (m_gamepad.isDown(GamepadButton::DpadUp)) {
+      m_epilogueScrollY -= 150.0f * dt;
+    }
+    if (m_gamepad.isDown(GamepadButton::DpadDown)) {
+      m_epilogueScrollY += 150.0f * dt;
+    }
+  }
+
+  // Scroll speed-up
+  const bool padSpeed = m_gamepad.isConnected() &&
+                        (m_gamepad.getFlightControl().throttle > 0.3f || m_gamepad.isDown(GamepadButton::A));
   const bool spaceDown = (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS);
   const bool lmbDown = (glfwGetMouseButton(win, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !io.WantCaptureMouse);
-  const float scrollSpeed = (spaceDown || lmbDown) ? 120.0f : m_epilogueAutoScrollSpeed;
+  const float scrollSpeed = (spaceDown || lmbDown || padSpeed) ? 120.0f : m_epilogueAutoScrollSpeed;
   m_epilogueScrollY += scrollSpeed * dt;
 
   if (io.MouseWheel != 0.0f) {
@@ -14752,6 +14786,27 @@ void AppGL::drawEpilogueCinematicOverlay() {
     ImDrawList* fg = ImGui::GetForegroundDrawList();
     fg->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(disp.x, barH), IM_COL32(0, 0, 0, 255));
     fg->AddRectFilled(ImVec2(0.0f, disp.y - barH), ImVec2(disp.x, disp.y), IM_COL32(0, 0, 0, 255));
+
+    // True Ending Resonator Badge in the top cinematic letterbox bar
+    const char* badgeTxt = isRu ? m_epilogueActiveFrame.badgeRu.c_str() : m_epilogueActiveFrame.badgeEn.c_str();
+    if (badgeTxt && badgeTxt[0] != '\0') {
+      ImVec2 textSize = ImGui::CalcTextSize(badgeTxt);
+      float badgeX = (disp.x - textSize.x) * 0.5f;
+      float badgeY = (barH - textSize.y) * 0.5f;
+      if (badgeY >= 4.0f) {
+        float pulse = 0.8f + 0.2f * static_cast<float>(std::sin(m_epilogueTime * 3.5));
+        float alpha = std::clamp(m_epilogueActiveFrame.auraIntensity * pulse, 0.4f, 1.0f);
+        ImU32 auraCol = IM_COL32(
+            static_cast<int>(m_epilogueActiveFrame.auraColor.x * 255.0f),
+            static_cast<int>(m_epilogueActiveFrame.auraColor.y * 255.0f),
+            static_cast<int>(m_epilogueActiveFrame.auraColor.z * 255.0f),
+            static_cast<int>(alpha * 255.0f));
+        fg->AddLine(ImVec2(badgeX - 30.0f, badgeY + textSize.y + 4.0f),
+                    ImVec2(badgeX + textSize.x + 30.0f, badgeY + textSize.y + 4.0f),
+                    auraCol, 1.5f);
+        fg->AddText(ImVec2(badgeX, badgeY), auraCol, badgeTxt);
+      }
+    }
   }
 
   // 2. Свиток Хроники из тёмного полупрозрачного стекла
@@ -14913,20 +14968,30 @@ void AppGL::drawEpilogueCinematicOverlay() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (ImGui::Button(uiRu("📜 Скопировать логбук в буфер", "📜 Copy Logbook to Clipboard"), ImVec2(220.0f, 28.0f))) {
+    const bool hasPad = m_gamepad.isConnected();
+
+    std::string copyPrompt = hasPad ? (m_gamepad.formatPrompt("[Y]") + " " + uiRu("Логбук", "Logbook"))
+                                    : uiRu("📜 Скопировать логбук в буфер", "📜 Copy Logbook to Clipboard");
+    if (ImGui::Button(copyPrompt.c_str(), ImVec2(hasPad ? 170.0f : 220.0f, 28.0f))) {
       std::string logTxt = formatChronicleLogbook(m_activeChronicle, isRu);
       ImGui::SetClipboardText(logTxt.c_str());
     }
     ImGui::SameLine();
-    if (ImGui::Button(uiRu("↺ С начала (R)", "↺ Rewind (R)"), ImVec2(130.0f, 28.0f))) {
+    std::string rewindPrompt = hasPad ? (m_gamepad.formatPrompt("[X]") + " " + uiRu("С начала", "Rewind"))
+                                      : uiRu("↺ С начала (R)", "↺ Rewind (R)");
+    if (ImGui::Button(rewindPrompt.c_str(), ImVec2(hasPad ? 130.0f : 130.0f, 28.0f))) {
       m_epilogueScrollY = 0.0f;
       m_epilogueTime = 0.0f;
     }
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 0.9f), "%s",
-                       uiRu("[Пробел/ЛКМ: быстрее]", "[Space/LMB: speed up]"));
-    ImGui::SameLine(scrollW - 170.0f);
-    if (ImGui::Button(uiRu("✕ Завершить (Esc)", "✕ Close (Esc)"), ImVec2(150.0f, 28.0f))) {
+    std::string speedPrompt = hasPad ? (m_gamepad.formatPrompt("[RT/A]") + " " + uiRu("Быстрее", "Speed up"))
+                                     : uiRu("[Пробел/ЛКМ: быстрее]", "[Space/LMB: speed up]");
+    ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 0.9f), "%s", speedPrompt.c_str());
+
+    ImGui::SameLine(scrollW - (hasPad ? 160.0f : 170.0f));
+    std::string closePrompt = hasPad ? (m_gamepad.formatPrompt("[B]") + " " + uiRu("Завершить", "Close"))
+                                     : uiRu("✕ Завершить (Esc)", "✕ Close (Esc)");
+    if (ImGui::Button(closePrompt.c_str(), ImVec2(hasPad ? 140.0f : 150.0f, 28.0f))) {
       stopEpilogueCinematic();
     }
   }

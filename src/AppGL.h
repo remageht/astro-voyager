@@ -299,11 +299,14 @@ class AppGL {
   static unsigned int uploadRgba(const unsigned char* px, int w, int h);
   void invalidateVideoSlide();
 
-  // === Epilogue System === (v5.3.0): Процедурный синематик и свиток хроники
+  // === Epilogue System === (v5.3.0 / v5.5.0): Процедурный синематик и свиток хроники
   bool m_epilogueActive = false;
   float m_epilogueTime = 0.0f;
   float m_epilogueScrollY = 0.0f;
   float m_epilogueAutoScrollSpeed = 38.0f;
+  int m_epilogueSavedColorGrade = 0;
+  float m_epilogueSavedFilmicVignette = 0.0f;
+  EpilogueCinematicFrame m_epilogueActiveFrame;
   EpilogueChronicle m_activeChronicle;
   int m_totalDrillSamplesCount = 0;
   int m_totalWarpJumpsCount = 0;
