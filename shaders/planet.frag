@@ -435,6 +435,20 @@ void main() {
       float continents = fbm4(sp * 3.0 + u_Seed) * 0.9677 + 0.0323 * vnoise3((sp * 3.0 + u_Seed) * 16.9818);
       land = smoothstep(0.48, 0.56, continents);
       albedo = mix(u_ColA, u_ColB, land);
+      // Directional cloud shadow projected on exoplanet terrain
+      if (u_Clouds > 0.05) {
+        vec3 sunDirLocal = sunDir;
+        if (u_SpinAngle != 0.0) {
+          float spinC = cos(u_SpinAngle);
+          float spinS = sin(u_SpinAngle);
+          sunDirLocal = vec3(spinC * sunDir.x + spinS * sunDir.z, sunDir.y,
+                             -spinS * sunDir.x + spinC * sunDir.z);
+        }
+        vec3 shadowSp = sp - sunDirLocal * 0.026;
+        float shadowVal = fbm3(shadowSp * 4.2 + u_Seed);
+        float cloudShadowExo = smoothstep(0.52, 0.74, shadowVal) * u_Clouds * 0.38;
+        albedo *= 1.0 - cloudShadowExo * (0.2 + 0.8 * diff);
+      }
       // Shallow coastal shelf tint around continent edges.
       float shelf = smoothstep(0.42, 0.48, continents) * (1.0 - land);
       albedo = mix(albedo, vec3(0.25, 0.55, 0.75), shelf * 0.5);
@@ -513,10 +527,24 @@ void main() {
     float spec = pow(max(dot(rdir, viewDir), 0.0), 24.0);
     float season = 0.5 + 0.5 * sin(u_Time * 0.1);
     dayCol += vec3(0.9, 0.95, 1.0) * spec * capM * (0.4 + 0.6 * season) * day;
-    // v3.2.0 ocean sun glint: tight specular on water only (land keeps its
-    // matte look), gated to the day side and away from the ice caps.
+    // v3.2.0 / v4.5.0: PBR Cook-Torrance GGX ocean sun glint on water surfaces (F0=0.02)
+    vec3 H = normalize(sunDir + viewDir);
+    float NdotH = max(dot(n, H), 0.0);
+    float NdotV = max(dot(n, viewDir), 0.001);
+    float NdotL = max(dot(n, sunDir), 0.001);
+    float alpha = 0.14 * 0.14;
+    float alpha2 = alpha * alpha;
+    float denom = NdotH * NdotH * (alpha2 - 1.0) + 1.0;
+    float D = alpha2 / (3.14159265 * denom * denom);
+    float F0 = 0.02;
+    float VdotH = max(dot(viewDir, H), 0.0);
+    float F = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
+    float k = (0.14 + 1.0);
+    k = (k * k) / 8.0;
+    float G = (NdotL / (NdotL * (1.0 - k) + k)) * (NdotV / (NdotV * (1.0 - k) + k));
+    float ggx = (D * F * G) / max(4.0 * NdotV * NdotL, 0.001);
     float glint = pow(max(dot(rdir, viewDir), 0.0), 90.0);
-    dayCol += vec3(0.85, 0.92, 1.0) * glint * (1.0 - land) * (1.0 - capM) * day * 1.7;
+    dayCol += vec3(0.85, 0.94, 1.0) * (ggx * 2.2 + glint * 0.5) * (1.0 - land) * (1.0 - capM) * day;
     // v3.2.0 night city lights: static warm speckles on the land of the
     // night side (deterministic pattern, no time dependence).
     float cityN = fbm4(sp * 26.0 + u_Seed * 2.0);
@@ -534,6 +562,22 @@ void main() {
     float cc = fbm3(sp * 14.0 + u_Seed);
     float cities = smoothstep(0.62, 0.8, cc) * land;
     col += vec3(1.0, 0.75, 0.42) * cities * night * u_Clouds * 2.2;
+    // Exoplanet ocean GGX glint
+    if (u_Clouds > 0.05) {
+      vec3 H = normalize(sunDir + viewDir);
+      float NdotH = max(dot(n, H), 0.0);
+      float NdotV = max(dot(n, viewDir), 0.001);
+      float NdotL = max(dot(n, sunDir), 0.001);
+      float alpha = 0.16 * 0.16;
+      float alpha2 = alpha * alpha;
+      float denom = NdotH * NdotH * (alpha2 - 1.0) + 1.0;
+      float D = alpha2 / (3.14159265 * denom * denom);
+      float F = 0.02 + 0.98 * pow(1.0 - max(dot(viewDir, H), 0.0), 5.0);
+      float k = 0.18;
+      float G = (NdotL / (NdotL * (1.0 - k) + k)) * (NdotV / (NdotV * (1.0 - k) + k));
+      float ggx = (D * F * G) / max(4.0 * NdotV * NdotL, 0.001);
+      col += vec3(0.85, 0.92, 1.0) * ggx * 1.8 * (1.0 - land) * diff;
+    }
   }
   if (u_Type == 3) {
     float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 2.0);
@@ -559,18 +603,18 @@ void main() {
       rimColor = vec3(0.22, 0.58, 1.15);
       rimGain = 1.45;
     }
-    // v4.3.0: Physical Rayleigh & Mie Atmospheric Scattering
+    // v4.3.0 / v4.5.0: Physical Rayleigh & Mie Atmospheric Scattering
     if (u_PlanetAtmosphere == 1) {
       float cosTheta = dot(-viewDir, sunDir);
       float rayleighPhase = 0.75 * (1.0 + cosTheta * cosTheta);
-      float g = 0.76;
-      float miePhase = (1.0 - g * g) / pow(max(1.0 + g * g - 2.0 * g * cosTheta, 0.001), 1.5);
+      float g = 0.80;
+      float miePhase = (1.0 - g * g) / (4.0 * 3.14159265 * pow(max(1.0 + g * g - 2.0 * g * cosTheta, 0.0001), 1.5));
       float opticalDepth = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
-      float termTwi = smoothstep(-0.15, 0.10, dot(n, sunDir)) * (1.0 - smoothstep(0.10, 0.35, dot(n, sunDir)));
-      vec3 sunsetColor = (u_Body == 6) ? vec3(0.35, 0.65, 0.95) : vec3(1.0, 0.45, 0.15); // Mars blue sunsets, Earth golden
+      float termTwi = smoothstep(-0.16, 0.08, dot(n, sunDir)) * (1.0 - smoothstep(0.08, 0.32, dot(n, sunDir)));
+      vec3 sunsetColor = (u_Body == 6) ? vec3(0.35, 0.65, 0.95) : vec3(1.0, 0.46, 0.16); // Mars blue sunsets, Earth golden
       vec3 rayleighScatt = rimColor * opticalDepth * rayleighPhase * (0.2 + diff);
-      vec3 mieScatt = vec3(1.0, 0.95, 0.85) * opticalDepth * miePhase * 0.15 * diff;
-      vec3 sunsetScatt = sunsetColor * opticalDepth * termTwi * 0.8;
+      vec3 mieScatt = vec3(1.0, 0.96, 0.88) * opticalDepth * (miePhase * 12.5) * 0.18 * diff;
+      vec3 sunsetScatt = sunsetColor * opticalDepth * termTwi * 0.85;
       col += (rayleighScatt + mieScatt + sunsetScatt) * rimGain;
     } else {
       float atmRim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);

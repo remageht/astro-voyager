@@ -22,12 +22,19 @@ struct BenchmarkResult {
   float onePercentLowFps = 0.0f;
   float pointOnePercentLowFps = 0.0f;
   float frameTimeStdDevMs = 0.0f;
+  // v4.5.0: Enhanced frame-time telemetry & culling metrics
+  float avgFrameTimeMs = 0.0f;
+  float p99FrameTimeMs = 0.0f;
+  float p95FrameTimeMs = 0.0f;
+  int totalDrawCalls = 0;
+  int culledDrawCalls = 0;
   std::unordered_map<std::string, float> perStationAvgFps;
 };
 
 class BenchmarkCollector {
  public:
   void recordFrame(float dtSec, const std::string& currentStationId);
+  void recordTelemetry(int drawCalls, int culledDrawCalls);
   void clear();
   std::size_t size() const { return m_samples.size(); }
   BenchmarkResult computeResults() const;
@@ -41,9 +48,13 @@ class BenchmarkCollector {
  private:
   std::vector<BenchmarkSample> m_samples;
   double m_elapsedSec = 0.0;
+  int m_totalDrawCalls = 0;
+  int m_culledDrawCalls = 0;
 };
 
 inline float percentileFps(const std::vector<float>& frameMsSorted,
                            float percentile01);  // e.g. 99.0f, 99.9f
+inline float percentileMs(const std::vector<float>& frameMsSorted,
+                          float percentile01);
 
 }  // namespace astro

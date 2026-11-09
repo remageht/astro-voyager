@@ -90,6 +90,33 @@ int main() {
     std::cout << "PASS: Test 3 JSON serialize + baseline compare\n";
   }
 
+  // Test 4: Extended telemetry metrics (avgFrameTimeMs, p95, p99, draw calls, culling)
+  {
+    BenchmarkCollector cc;
+    for (int i = 0; i < 95; ++i) cc.recordFrame(0.016f, "sol");   // 16 ms (62.5 FPS)
+    for (int i = 0; i < 4; ++i)  cc.recordFrame(0.033f, "sol");   // 33 ms (~30 FPS)
+    cc.recordFrame(0.050f, "sol");                                 // 50 ms spike (20 FPS)
+    cc.recordTelemetry(120, 45);
+
+    BenchmarkResult r = cc.computeResults();
+    if (r.totalFrames != 100) { std::cerr << "PASS_FAIL: Test 4 totalFrames\n"; return 1; }
+    if (!near(r.avgFrameTimeMs, 17.0f, 1.0f)) { std::cerr << "PASS_FAIL: Test 4 avgFrameTimeMs " << r.avgFrameTimeMs << "\n"; return 1; }
+    if (r.p99FrameTimeMs < r.p95FrameTimeMs) { std::cerr << "PASS_FAIL: Test 4 p99 should be >= p95\n"; return 1; }
+    if (!near(r.p95FrameTimeMs, 16.0f, 0.5f)) { std::cerr << "PASS_FAIL: Test 4 p95 should be ~16ms\n"; return 1; }
+    if (!near(r.p99FrameTimeMs, 33.0f, 0.5f)) { std::cerr << "PASS_FAIL: Test 4 p99 should be ~33ms\n"; return 1; }
+    if (r.totalDrawCalls != 120) { std::cerr << "PASS_FAIL: Test 4 totalDrawCalls\n"; return 1; }
+    if (r.culledDrawCalls != 45) { std::cerr << "PASS_FAIL: Test 4 culledDrawCalls\n"; return 1; }
+
+    std::string json = cc.serializeJson(r);
+    if (json.find("\"p99FrameTimeMs\"") == std::string::npos) { std::cerr << "PASS_FAIL: Test 4 json p99FrameTimeMs\n"; return 1; }
+    if (json.find("\"culledDrawCalls\": 45") == std::string::npos) { std::cerr << "PASS_FAIL: Test 4 json culledDrawCalls\n"; return 1; }
+
+    std::string rep = cc.formatAsciiReport(r);
+    if (rep.find("Culled: 45") == std::string::npos) { std::cerr << "PASS_FAIL: Test 4 rep culled\n"; return 1; }
+
+    std::cout << "PASS: Test 4 extended telemetry metrics (p95/p99 frame time & draw culling)\n";
+  }
+
   std::cout << "ALL BENCHMARK TESTS PASSED\n";
   return 0;
 }

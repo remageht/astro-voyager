@@ -581,6 +581,17 @@ Check 'evaluateEpilogueCinematic in EpilogueSystem.cpp' ((Read-File 'src/Epilogu
 Check 'evaluateEpilogueCinematic in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'evaluateEpilogueCinematic')
 Check 'true ending resonator badge in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'True Ending Resonator Badge')
 
+# Stage 5 / Release 1.0: Realism, Visual Quality & Performance Optimization (Issue #124)
+Check 'planet shader GGX ocean glint' ((Read-File 'shaders/planet.frag') -match 'Cook-Torrance GGX ocean sun glint')
+Check 'planet shader exoplanet cloud shadows' ((Read-File 'shaders/planet.frag') -match 'cloudShadowExo')
+Check 'planet shader Mie aerosol phase' ((Read-File 'shaders/planet.frag') -match 'miePhase \* 12\.5')
+Check 'bh shader far-field raymarch acceleration' ((Read-File 'shaders/bh.frag') -match 'farFactor = 1\.0 \+ 0\.38')
+Check 'SceneManager FrameStats in SceneManager.h' ((Read-File 'src/SceneManager.h') -match 'getLastFrameStats')
+Check 'SceneManager frustum culling in SceneManager.cpp' ((Read-File 'src/SceneManager.cpp') -match 'm_frameStats\.culledBodies\+\+')
+Check 'BenchmarkSystem p99 telemetry in BenchmarkSystem.h' ((Read-File 'src/BenchmarkSystem.h') -match 'p99FrameTimeMs')
+Check 'test_planet_lod has GGX & culling tests' ((Read-File 'tests/test_planet_lod.cpp') -match 'Cook-Torrance GGX & Schlick Fresnel conservation')
+Check 'test_benchmark has telemetry test' ((Read-File 'tests/test_benchmark.cpp') -match 'Test 4 extended telemetry metrics')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
