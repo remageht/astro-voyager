@@ -46,6 +46,7 @@ void printUsage() {
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --screenshot-all [--disk]"
                " | --capture-station <png> | --capture-dragon <png> | --capture-zettel <png>"
+               " | --capture-hud <png> | --capture-terminal <png>"
                " | --benchmark [--benchmark-duration <sec>]"
                " [--benchmark-out <path>] [--benchmark-compare <baseline.json>]";
 #endif
@@ -780,6 +781,14 @@ int main(int argc, char** argv) {
   if (arg == "--capture-zettel") {
     std::string outPng = (argc > 2) ? argv[2] : "docs/screens/zettelkasten_mind_map.png";
     return astro::AppGL::captureZettelCheck(outPng);
+  }
+  if (arg == "--capture-hud") {
+    std::string outPng = (argc > 2) ? argv[2] : "docs/screens/holo_flight_hud.png";
+    return astro::AppGL::captureHudCheck(outPng);
+  }
+  if (arg == "--capture-terminal") {
+    std::string outPng = (argc > 2) ? argv[2] : "docs/screens/unified_terminal.png";
+    return astro::AppGL::captureTerminalCheck(outPng);
   }
   if (arg == "--benchmark") {
     float durationSec = 30.0f;
