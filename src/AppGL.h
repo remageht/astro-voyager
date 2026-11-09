@@ -65,6 +65,7 @@ class AppGL {
   static int captureAllScreenshots(const std::string& outDir = "docs/screens", bool diskOn = false);
   static int captureStationCheck(const std::string& outPath);
   static int captureDragonCheck(const std::string& outPath);
+  static int captureZettelCheck(const std::string& outPath);
 
   // === Perf Benchmark Harness === (Stage 4, public entry for CLI)
   void enableBenchmarkMode(float durationSec, const std::string& outPath,

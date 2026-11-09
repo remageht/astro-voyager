@@ -17,17 +17,21 @@ class PROCESS_INFORMATION(ctypes.Structure):
         ('dwProcessId', wintypes.DWORD), ('dwThreadId', wintypes.DWORD),
     ]
 
+import sys
 si = STARTUPINFOW()
 si.cb = ctypes.sizeof(STARTUPINFOW)
 si.lpDesktop = 'winsta0\\default'
 pi = PROCESS_INFORMATION()
 
-target_file = os.path.abspath('blender/out/ingame_station_check.png')
+flag = sys.argv[1] if len(sys.argv) > 1 else '--capture-station'
+out_arg = sys.argv[2] if len(sys.argv) > 2 else 'blender/out/ingame_station_check.png'
+target_file = os.path.abspath(out_arg)
 if os.path.exists(target_file):
     os.remove(target_file)
 
 cwd = os.path.abspath('.')
-cmd = f'cmd.exe /c "{os.path.abspath("build-gl/Release/astro-voyager.exe")}" --capture-station blender/out/ingame_station_check.png > capture.log 2>&1'
+exe_path = os.path.abspath("build-gl/Release/astro-voyager.exe")
+cmd = f'"{exe_path}" {flag} "{target_file}"'
 print("Spawning:", cmd)
 res = ctypes.windll.kernel32.CreateProcessW(None, cmd, None, None, False, 0, None, cwd, ctypes.byref(si), ctypes.byref(pi))
 if res:
