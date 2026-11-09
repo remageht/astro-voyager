@@ -3,6 +3,7 @@
 #include "Zettelkasten.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 
@@ -482,6 +483,26 @@ std::string formatChronicleLogbook(const EpilogueChronicle& chronicle, bool russ
     ss << "╚═══════════════════════════════════════════════════════════════════╝\n";
   }
   return ss.str();
+}
+
+SolarRebirthCamera solarRebirthCamera(float t, const EpilogueStats& stats) {
+  SolarRebirthCamera cam;
+  // Spiral decay 30 -> 8 over 90s, breathing FOV
+  float k = t / 90.0f;
+  if (k > 1.0f) k = 1.0f;
+  float baseR = 30.0f - 22.0f * k;
+  float hullK = stats.hullIntegrityPercent / 100.0f;
+  if (hullK < 0.3f) hullK = 0.3f;
+  if (hullK > 1.0f) hullK = 1.0f;
+  cam.radius = baseR * (0.9f + 0.2f * hullK);
+  cam.height = 5.0f + 2.5f * std::sin(static_cast<double>(t) * 0.07);
+  cam.angle = static_cast<double>(t) * 0.045;
+  // FOV kick near perihelion (k ~1) with breathing
+  cam.fovKick = 2.0f * std::sin(static_cast<double>(t) * 0.12) + 3.0f * k;
+  cam.solarGlow = std::clamp(0.3f + 0.7f * k, 0.0f, 1.0f);
+  (void)stats;
+  if (!std::isfinite(cam.radius) || cam.radius < 8.0f) cam.radius = 8.0f;
+  return cam;
 }
 
 }  // namespace astro

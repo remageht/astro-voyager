@@ -211,6 +211,16 @@ int main() {
   testChronicleLogbookFormatting();
   testAnchorStationResolution();
   testClampingAndBoundaries();
-  std::cout << "=== All 8 test_epilogue checks passed successfully! ===\n";
+  // Solar Rebirth camera (procedural)
+  {
+    EpilogueStats st; st.hullIntegrityPercent = 90.0f;
+    SolarRebirthCamera c0 = solarRebirthCamera(0.0f, st);
+    SolarRebirthCamera c1 = solarRebirthCamera(90.0f, st);
+    assert(c0.radius > c1.radius);
+    assert(c1.radius >= 8.0f && c1.radius <= 12.0f);
+    assert(c1.solarGlow > c0.solarGlow);
+    std::cout << "[Test 9] Solar Rebirth camera spiral... PASSED\n";
+  }
+  std::cout << "=== All 9 test_epilogue checks passed successfully! ===\n";
   return 0;
 }

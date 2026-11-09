@@ -68,4 +68,16 @@ std::string formatChronicleLogbook(const EpilogueChronicle& chronicle, bool russ
 // Resolves the primary celestial focal station for the procedural orbital camera flight.
 std::string getAnchorStationForEnding(int endingChoice, bool isTrueEnding);
 
+// === Solar Rebirth cinematic (procedural) ===
+// Spiral approach to Sun: radius decays 30 -> 8 Rs, FOV kick on perihelion,
+// solar glow pulse. Stats modulate depth (hull, warp jumps).
+struct SolarRebirthCamera {
+  float radius = 30.0f;
+  float height = 6.0f;
+  float angle = 0.0f;
+  float fovKick = 0.0f;     // +deg on perihelion
+  float solarGlow = 0.0f;   // 0..1 flare intensity
+};
+SolarRebirthCamera solarRebirthCamera(float t, const EpilogueStats& stats);
+
 }  // namespace astro
