@@ -44,6 +44,11 @@ struct SaveSettings {
   int keyMap = 78;                // GLFW: N — карта/навигация
   int keyJournal = 74;            // GLFW: J — журнал
   int keyTour = 84;               // GLFW: T — кинематографический тур
+  // === v5.4.0: доступность и эргономика (UI scale, дальтонизм, сигналы) ===
+  float uiScale = 1.0f;              // 1.0f .. 2.0f (100%..200%)
+  int colorblindMode = 0;            // 0 Default, 1 Protanopia, 2 Deuteranopia, 3 Tritanopia, 4 HighContrast
+  bool audioProximityCue = true;     // звуковой сигнал при сближении со станцией/посадке
+  bool highContrastReticle = false;  // утолщённый высококонтрастный прицел
 };
 
 struct SaveCustom {

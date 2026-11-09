@@ -490,6 +490,72 @@ inline double normalizeAngleSigned(double angle) {
 
 using math::normalizeAngleSigned;
 
+// === Accessibility & Ergonomics (v5.4.0) ===
+enum class ColorblindPalette : int {
+  Default = 0,      // Cyan (#00E5FF) & Amber (#FFB300)
+  Protanopia = 1,   // Blue (#3388FF) & Yellow (#FFE600) - Red-blind
+  Deuteranopia = 2, // Cyan (#00B4D8) & Orange (#F77F00) - Green-blind
+  Tritanopia = 3,   // Teal (#00F5D4) & Magenta/Rose (#FF007F) - Blue-blind
+  HighContrast = 4  // Pure White (#FFFFFF) & Pure Yellow (#FFFF00) - WCAG AAA
+};
+
+struct AccessiblePalette {
+  Vec3 primary;     // reticle, active borders, main HUD
+  Vec3 secondary;   // secondary readouts, speed, distance
+  Vec3 warning;     // cautions, fuel warning
+  Vec3 hazard;      // critical warnings, blackout, overheat
+  Vec3 success;     // dock ready, sample collected
+  Vec3 background;  // HUD panel backing
+};
+
+inline AccessiblePalette getAccessiblePalette(int mode) {
+  AccessiblePalette p;
+  switch (mode) {
+    case 1:  // Protanopia (Red-blind: use rich Blue, Bright Yellow/Gold)
+      p.primary = Vec3{0.20f, 0.55f, 1.0f};
+      p.secondary = Vec3{0.45f, 0.75f, 1.0f};
+      p.warning = Vec3{1.0f, 0.85f, 0.10f};
+      p.hazard = Vec3{1.0f, 0.95f, 0.20f};
+      p.success = Vec3{0.30f, 0.85f, 0.95f};
+      p.background = Vec3{0.02f, 0.031f, 0.055f};
+      break;
+    case 2:  // Deuteranopia (Green-blind: Vivid Cyan, High-contrast Amber/Orange)
+      p.primary = Vec3{0.0f, 0.75f, 0.95f};
+      p.secondary = Vec3{0.35f, 0.65f, 0.95f};
+      p.warning = Vec3{1.0f, 0.60f, 0.0f};
+      p.hazard = Vec3{1.0f, 0.35f, 0.05f};
+      p.success = Vec3{0.20f, 0.75f, 1.0f};
+      p.background = Vec3{0.02f, 0.031f, 0.055f};
+      break;
+    case 3:  // Tritanopia (Blue-blind: Vibrant Aqua/Teal, Coral/Magenta)
+      p.primary = Vec3{0.0f, 0.85f, 0.75f};
+      p.secondary = Vec3{0.30f, 0.90f, 0.70f};
+      p.warning = Vec3{1.0f, 0.50f, 0.55f};
+      p.hazard = Vec3{1.0f, 0.10f, 0.40f};
+      p.success = Vec3{0.15f, 0.95f, 0.65f};
+      p.background = Vec3{0.02f, 0.031f, 0.055f};
+      break;
+    case 4:  // High Contrast (WCAG AAA: 100% luminance separation)
+      p.primary = Vec3{1.0f, 1.0f, 1.0f};
+      p.secondary = Vec3{0.85f, 0.95f, 1.0f};
+      p.warning = Vec3{1.0f, 1.0f, 0.0f};
+      p.hazard = Vec3{1.0f, 0.0f, 0.50f};
+      p.success = Vec3{1.0f, 1.0f, 0.20f};
+      p.background = Vec3{0.0f, 0.0f, 0.0f};
+      break;
+    case 0:  // Default Sci-Fi (Cyan & Amber)
+    default:
+      p.primary = Vec3{0.0f, 0.898f, 1.0f};
+      p.secondary = Vec3{0.22f, 0.74f, 0.97f};
+      p.warning = Vec3{1.0f, 0.75f, 0.0f};
+      p.hazard = Vec3{1.0f, 0.25f, 0.25f};
+      p.success = Vec3{0.20f, 0.95f, 0.50f};
+      p.background = Vec3{0.02f, 0.031f, 0.055f};
+      break;
+  }
+  return p;
+}
+
 // === Docking Realism: Telemetry, 3D Corridor & RCS (Issue #65) ===
 namespace docking {
 
