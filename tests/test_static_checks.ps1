@@ -552,6 +552,12 @@ Check 'thunder crack in AudioEngine.cpp' ((Read-File 'src/audio/AudioEngine.cpp'
 Check 'reentry telemetry in CockpitController.h' ((Read-File 'src/CockpitController.h') -match 'setReentryTelemetry')
 Check 'flight atmospheric entry in AppGL.cpp' ((Read-File 'src/AppGL.cpp') -match 'updatePlanetaryWeather')
 
+# Roadmap Item #8: Automated Release Packaging & CI (Issue #118)
+Check 'verify_release_assets script exists' (Test-Path (Join-Path $root 'packaging/verify_release_assets.py'))
+Check 'build.yml has unified release job' ((Read-File '.github/workflows/build.yml') -match 'release:\s+name: Create & Publish GitHub Release')
+Check 'build.yml generates sha256sums' ((Read-File '.github/workflows/build.yml') -match 'sha256sum \* > SHA256SUMS\.txt')
+Check 'build.yml validates release assets' ((Read-File '.github/workflows/build.yml') -match 'verify_release_assets\.py')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
