@@ -43,9 +43,28 @@ inline float percentileFps(const std::vector<float>& frameMsSorted,
   return 1000.0f / ms;
 }
 
+inline float percentileMs(const std::vector<float>& frameMsSorted,
+                          float percentile01) {
+  if (frameMsSorted.empty()) return 0.0f;
+  if (percentile01 <= 0.0f) percentile01 = 0.0f;
+  if (percentile01 >= 100.0f) percentile01 = 100.0f;
+  std::size_t idx = static_cast<std::size_t>(
+      std::ceil((percentile01 / 100.0f) * static_cast<float>(frameMsSorted.size())));
+  if (idx == 0) idx = 1;
+  if (idx > frameMsSorted.size()) idx = frameMsSorted.size();
+  return frameMsSorted[idx - 1];
+}
+
 void BenchmarkCollector::clear() {
   m_samples.clear();
   m_elapsedSec = 0.0;
+  m_totalDrawCalls = 0;
+  m_culledDrawCalls = 0;
+}
+
+void BenchmarkCollector::recordTelemetry(int drawCalls, int culledDrawCalls) {
+  m_totalDrawCalls += drawCalls;
+  m_culledDrawCalls += culledDrawCalls;
 }
 
 void BenchmarkCollector::recordFrame(float dtSec,
@@ -63,6 +82,8 @@ BenchmarkResult BenchmarkCollector::computeResults() const {
   BenchmarkResult res;
   res.totalFrames = static_cast<int>(m_samples.size());
   res.totalDurationSec = m_elapsedSec;
+  res.totalDrawCalls = m_totalDrawCalls;
+  res.culledDrawCalls = m_culledDrawCalls;
   if (m_samples.empty()) return res;
 
   std::vector<float> ms;
@@ -75,10 +96,13 @@ BenchmarkResult BenchmarkCollector::computeResults() const {
   for (float v : ms) sum += static_cast<double>(v);
   double avgMs = sum / static_cast<double>(ms.size());
   res.avgFps = (avgMs > 0.0) ? static_cast<float>(1000.0 / avgMs) : 0.0f;
+  res.avgFrameTimeMs = static_cast<float>(avgMs);
   res.minFps = percentileFps(sorted, 100.0f);
   res.maxFps = percentileFps(sorted, 0.0f);
   res.onePercentLowFps = percentileFps(sorted, 99.0f);
   res.pointOnePercentLowFps = percentileFps(sorted, 99.9f);
+  res.p99FrameTimeMs = percentileMs(sorted, 99.0f);
+  res.p95FrameTimeMs = percentileMs(sorted, 95.0f);
 
   double varSum = 0.0;
   for (float v : ms) varSum += (static_cast<double>(v) - avgMs) *
@@ -111,6 +135,11 @@ std::string BenchmarkCollector::serializeJson(const BenchmarkResult& r) const {
   os << "  \"maxFps\": " << r.maxFps << ",\n";
   os << "  \"onePercentLowFps\": " << r.onePercentLowFps << ",\n";
   os << "  \"pointOnePercentLowFps\": " << r.pointOnePercentLowFps << ",\n";
+  os << "  \"avgFrameTimeMs\": " << r.avgFrameTimeMs << ",\n";
+  os << "  \"p99FrameTimeMs\": " << r.p99FrameTimeMs << ",\n";
+  os << "  \"p95FrameTimeMs\": " << r.p95FrameTimeMs << ",\n";
+  os << "  \"totalDrawCalls\": " << r.totalDrawCalls << ",\n";
+  os << "  \"culledDrawCalls\": " << r.culledDrawCalls << ",\n";
   os << "  \"frameTimeStdDevMs\": " << r.frameTimeStdDevMs << ",\n";
   os << "  \"perStationAvgFps\": {";
   std::vector<std::string> keys;
@@ -137,6 +166,8 @@ std::string BenchmarkCollector::formatAsciiReport(const BenchmarkResult& r) cons
   os << "Max FPS: " << r.maxFps << "\n";
   os << "1% Low FPS: " << r.onePercentLowFps << "\n";
   os << "0.1% Low FPS: " << r.pointOnePercentLowFps << "\n";
+  os << "Avg Frame Time: " << r.avgFrameTimeMs << " ms  (P95: " << r.p95FrameTimeMs << " ms, P99: " << r.p99FrameTimeMs << " ms)\n";
+  os << "Draw calls: " << r.totalDrawCalls << " (Culled: " << r.culledDrawCalls << ")\n";
   os << "Frame time stddev: " << r.frameTimeStdDevMs << " ms\n";
   if (!r.perStationAvgFps.empty()) {
     os << "Per-station Avg FPS:\n";

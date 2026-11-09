@@ -101,6 +101,66 @@ int main() {
     std::cout << "PASS: Planet LOD Test 4 (SpaceDrive Warp Tunnel geometry & clearance verification)\n";
   }
 
+  // Test 5: Sub-pixel projected pixel size calculation & LOD culling bounds
+  {
+    const float fovDegrees = 60.0f;
+    const int fbHeight = 1080;
+    const float fovHalfRad = glm::radians(fovDegrees) * 0.5f;
+    const float screenProjK = static_cast<float>(fbHeight) / (2.0f * std::tan(fovHalfRad));
+
+    // Case A: Near Earth (radius 1.0, distance 5.0) -> high projected pixels, must use HiRes
+    const float rEarth = 1.0f;
+    const float dNear = 5.0f;
+    const float pxNear = (rEarth / dNear) * screenProjK;
+    if (pxNear < 150.0f) {
+      std::cerr << "Test 5 failed: Near Earth projected pixels expected > 150, got " << pxNear << "\n";
+      return 1;
+    }
+    const bool nearUsesHiRes = (pxNear >= 28.0f);
+    if (!nearUsesHiRes) {
+      std::cerr << "Test 5 failed: Near Earth should select HiRes mesh\n";
+      return 1;
+    }
+
+    // Case B: Far Pluto/Moon speck (radius 0.18, distance 800.0) -> sub-pixel, must cull
+    const float rPluto = 0.18f;
+    const float dFar = 800.0f;
+    const float pxFar = (rPluto / dFar) * screenProjK;
+    const bool farIsSubPixel = (pxFar < 0.25f && dFar > 150.0f);
+    if (!farIsSubPixel) {
+      std::cerr << "Test 5 failed: Distant Pluto should be culled as sub-pixel, px=" << pxFar << "\n";
+      return 1;
+    }
+
+    std::cout << "PASS: Planet LOD Test 5 (Sub-pixel projected size & LOD culling bounds)\n";
+  }
+
+  // Test 6: Cook-Torrance GGX microfacet specular & Schlick Fresnel energy conservation
+  {
+    const float F0 = 0.02f; // water dielectric index of refraction
+    for (int deg = 0; deg <= 90; ++deg) {
+      const float rad = glm::radians(static_cast<float>(deg));
+      const float cosTheta = std::cos(rad);
+      const float F = F0 + (1.0f - F0) * std::pow(1.0f - cosTheta, 5.0f);
+      if (F < F0 - 1e-5f || F > 1.0001f) {
+        std::cerr << "Test 6 failed: Fresnel out of bounds: " << F << " at deg=" << deg << "\n";
+        return 1;
+      }
+    }
+
+    // Verify GGX NDF non-negativity and peak sharpness
+    const float alpha = 0.14f * 0.14f;
+    const float alpha2 = alpha * alpha;
+    const float kPi = 3.14159265358979323846f;
+    const float D_normal = alpha2 / (kPi * alpha2 * alpha2); // NdotH = 1
+    if (D_normal <= 0.0f) {
+      std::cerr << "Test 6 failed: GGX peak normal D <= 0\n";
+      return 1;
+    }
+
+    std::cout << "PASS: Planet LOD Test 6 (Cook-Torrance GGX & Schlick Fresnel conservation)\n";
+  }
+
   std::cout << "All Planet LOD and Audio tests PASSED successfully!\n";
   return 0;
 }

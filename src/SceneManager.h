@@ -134,6 +134,15 @@ class SceneManager {
   RenderSettings& getSettings() { return m_settings; }
   const RenderSettings& getSettings() const { return m_settings; }
 
+  // v4.5.0: Telemetry & culling metrics for frame diagnostics
+  struct FrameStats {
+    int drawnBodies = 0;
+    int culledBodies = 0;
+    int hiResBodies = 0;
+    int standardBodies = 0;
+  };
+  const FrameStats& getLastFrameStats() const { return m_frameStats; }
+
   PerfPreset getPreset() const { return m_preset; }
   void applyPreset(PerfPreset preset);
   void setPreset(PerfPreset preset) { m_preset = preset; }
@@ -329,6 +338,7 @@ class SceneManager {
   // v3.6.0: варпность для линз-эффекта пространства у корабля (0 = выкл).
   float m_warpFx = 0.0f;
   Vec3 m_speedDir{0.0, 0.0, 1.0};
+  FrameStats m_frameStats;
 
   // === Colonies === (v3.6.0): заселённые сайты.
   public:

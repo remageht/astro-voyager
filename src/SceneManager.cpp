@@ -1464,20 +1464,45 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_linesShader->unbind();
 
     if (m_showPlanets) {
+    m_frameStats = FrameStats{};
     m_planetShader->bind();
     m_planetShader->setUniformMat4f("u_MVP", mvp);
     m_planetShader->setUniform1f("u_Time", time);
     m_planetShader->setUniform1f("u_Exposure", m_exposure);
     m_planetShader->setUniform3f("u_CamPos", static_cast<float>(cp.x),
                                  static_cast<float>(cp.y), static_cast<float>(cp.z));
-    m_planetShader->setUniform1i("u_PlanetRelief", m_settings.planetRelief ? 1 : 0);
     m_planetShader->setUniform1i("u_PlanetAtmosphere", m_settings.planetAtmosphere ? 1 : 0);
+    const float fovHalfRad = glm::radians(m_settings.fovDegrees) * 0.5f;
+    const float tanFovHalf = std::max(std::tan(fovHalfRad), 1e-4f);
+    const float screenProjK = static_cast<float>(fbHeight) / (2.0f * tanFovHalf);
+
     for (const auto& body : m_lastBodies) {
       const PlanetDef* def = body.def;
       if (!def) continue;
       glm::vec3 bpos(static_cast<float>(body.pos.x),
                      static_cast<float>(body.pos.y),
                      static_cast<float>(body.pos.z));
+      glm::vec3 toBody = bpos - eye;
+      float dist = glm::length(toBody);
+      float forwardDist = glm::dot(toBody, fwd);
+
+      // Frustum culling: sphere strictly behind the camera near plane
+      if (forwardDist < -def->radius - 0.1f) {
+        m_frameStats.culledBodies++;
+        continue;
+      }
+
+      // Projected screen size in pixels
+      float projPixels = (def->radius / std::max(dist, 0.01f)) * screenProjK;
+
+      // Sub-pixel culling: if diameter is under 0.25 pixels and distant, cull drawing
+      if (projPixels < 0.25f && dist > 150.0f) {
+        m_frameStats.culledBodies++;
+        continue;
+      }
+
+      m_frameStats.drawnBodies++;
+
       glm::mat4 model = glm::translate(glm::mat4(1.0f), bpos) *
                         glm::scale(glm::mat4(1.0f), glm::vec3(def->radius));
       m_planetShader->setUniformMat4f("u_Model", model);
@@ -1493,6 +1518,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_planetShader->setUniform1i("u_Spot", (def->id == "jupiter" ? 1 : 0));
       m_planetShader->setUniform1i("u_Clouds", (def->id == "earth" ? 1 : 0));
       m_planetShader->setUniform1f("u_SpinAngle", def->spinRate * m_simTime);
+      // Relief bump mapping LOD: skip multi-tap procedural noise when body is small on screen
+      bool enableRelief = m_settings.planetRelief && (projPixels >= 32.0f);
+      m_planetShader->setUniform1i("u_PlanetRelief", enableRelief ? 1 : 0);
       // v3.2.0 ring-shadow set (only Saturn has u_RingOn == 1).
       m_planetShader->setUniform1f("u_Radius", def->radius);
       m_planetShader->setUniform1i("u_RingOn", def->hasRing ? 1 : 0);
@@ -1516,9 +1544,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         ++occN;
       }
       m_planetShader->setUniform1i("u_MoonOccN", occN);
-      if (m_settings.planetHiResMesh && m_sphereHiRes.ready() && def->type != 0) {
+      if (m_settings.planetHiResMesh && m_sphereHiRes.ready() && def->type != 0 && (projPixels >= 28.0f)) {
+        m_frameStats.hiResBodies++;
         m_sphereHiRes.draw();
       } else {
+        m_frameStats.standardBodies++;
         m_sphere.draw();
       }
       if (def->hasRing) {
@@ -1561,6 +1591,20 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       glm::vec3 cpos(static_cast<float>(custom.pos.x),
                      static_cast<float>(custom.pos.y),
                      static_cast<float>(custom.pos.z));
+      glm::vec3 toCustom = cpos - eye;
+      float dist = glm::length(toCustom);
+      float forwardDist = glm::dot(toCustom, fwd);
+      if (forwardDist < -custom.radius - 0.1f) {
+        m_frameStats.culledBodies++;
+        continue;
+      }
+      float projPixels = (custom.radius / std::max(dist, 0.01f)) * screenProjK;
+      if (projPixels < 0.25f && dist > 150.0f) {
+        m_frameStats.culledBodies++;
+        continue;
+      }
+      m_frameStats.drawnBodies++;
+
       glm::mat4 model = glm::translate(glm::mat4(1.0f), cpos) *
                         glm::scale(glm::mat4(1.0f), glm::vec3(custom.radius));
       m_planetShader->setUniformMat4f("u_Model", model);
@@ -1580,6 +1624,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_planetShader->setUniform1i("u_Clouds", 0);
       m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
       m_planetShader->setUniform1i("u_MoonOccN", 0);
+      bool enableRelief = m_settings.planetRelief && (projPixels >= 32.0f);
+      m_planetShader->setUniform1i("u_PlanetRelief", enableRelief ? 1 : 0);
       bool customRing = custom.ringOuter > 0.0f;
       m_planetShader->setUniform1i("u_RingOn", customRing ? 1 : 0);
       if (customRing) {
@@ -1588,9 +1634,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_planetShader->setUniform1f("u_RingOuter", custom.ringOuter);
         m_planetShader->setUniform1f("u_RingTilt", 0.45f);
       }
-      if (m_settings.planetHiResMesh && m_sphereHiRes.ready() && custom.type != 0) {
+      if (m_settings.planetHiResMesh && m_sphereHiRes.ready() && custom.type != 0 && (projPixels >= 28.0f)) {
+        m_frameStats.hiResBodies++;
         m_sphereHiRes.draw();
       } else {
+        m_frameStats.standardBodies++;
         m_sphere.draw();
       }
       if (customRing) {
