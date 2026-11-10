@@ -468,6 +468,12 @@ static const char* egorkaCueFilename(AudioEngine::EgorkaVoiceCue cue) {
     case AudioEngine::EgorkaVoiceCue::TerrainWarn: return "terrain_warn.wav";
     case AudioEngine::EgorkaVoiceCue::OrbitOk: return "orbit_ok.wav";
     case AudioEngine::EgorkaVoiceCue::SysOnline: return "sys_online.wav";
+    case AudioEngine::EgorkaVoiceCue::DialOj287: return "dial_oj287.wav";
+    case AudioEngine::EgorkaVoiceCue::DialHyperdisk: return "dial_hyperdisk.wav";
+    case AudioEngine::EgorkaVoiceCue::DialGw170817: return "dial_gw170817.wav";
+    case AudioEngine::EgorkaVoiceCue::DialSn1987a: return "dial_sn1987a.wav";
+    case AudioEngine::EgorkaVoiceCue::DialHardLanding: return "dial_hard_landing.wav";
+    case AudioEngine::EgorkaVoiceCue::DialDrillEureka: return "dial_drill_eureka.wav";
   }
   return nullptr;
 }
