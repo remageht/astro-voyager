@@ -5544,6 +5544,125 @@ void AppGL::drawContextualFlightHud() {
     ImGui::End();
   }
 
+  // 4. Planetary Landing Avionics Suite (Variometer, Radar Wireframe & Slope Angle)
+  if (m_landingTelem.variometerAlpha > 0.01f) {
+    const float lAlpha = m_landingTelem.variometerAlpha;
+    const int l255 = static_cast<int>(255.0f * lAlpha);
+    const int l200 = static_cast<int>(200.0f * lAlpha);
+    const int l140 = static_cast<int>(140.0f * lAlpha);
+    const int l80  = static_cast<int>(80.0f * lAlpha);
+
+    // --- 4.1 Variometer Descent Rate Vertical Ladder ---
+    const float varioX = ctr.x - 240.0f;
+    const float varioYTop = ctr.y - 90.0f;
+    const float varioYBot = ctr.y + 90.0f;
+    const float varioYZero = ctr.y; // zero vertical velocity line
+
+    // Vertical backbone
+    dl->AddLine(ImVec2(varioX, varioYTop), ImVec2(varioX, varioYBot), IM_COL32(30, 41, 59, l140), 2.0f);
+    // Zero line tick
+    dl->AddLine(ImVec2(varioX - 8.0f, varioYZero), ImVec2(varioX + 8.0f, varioYZero), IM_COL32(248, 250, 252, l255), 2.0f);
+    dl->AddText(ImVec2(varioX - 32.0f, varioYZero - 7.0f), IM_COL32(148, 163, 184, l200), "0");
+
+    const float pps = 8.0f; // pixels per m/s
+    dl->AddLine(ImVec2(varioX - 4.0f, varioYZero - 5.0f * pps), ImVec2(varioX + 4.0f, varioYZero - 5.0f * pps), IM_COL32(100, 116, 139, l140), 1.0f);
+    dl->AddLine(ImVec2(varioX - 4.0f, varioYZero - 10.0f * pps), ImVec2(varioX + 4.0f, varioYZero - 10.0f * pps), IM_COL32(100, 116, 139, l140), 1.0f);
+    dl->AddText(ImVec2(varioX - 36.0f, varioYZero - 10.0f * pps - 7.0f), IM_COL32(100, 116, 139, l140), "+10");
+
+    // Safe touchdown bracket: 0 to -2.0 m/s (Green zone)
+    const float safeTop = varioYZero;
+    const float safeBot = varioYZero + 2.0f * pps;
+    dl->AddRectFilled(ImVec2(varioX - 3.0f, safeTop), ImVec2(varioX + 3.0f, safeBot), IM_COL32(34, 197, 94, l140));
+
+    // Caution bracket: -2.0 to -5.0 m/s (Yellow zone)
+    const float cautBot = varioYZero + 5.0f * pps;
+    dl->AddRectFilled(ImVec2(varioX - 3.0f, safeBot), ImVec2(varioX + 3.0f, cautBot), IM_COL32(245, 158, 11, l140));
+
+    // Danger zone: > -5.0 m/s (Red zone)
+    const float dangBot = std::min(varioYBot, varioYZero + 11.0f * pps);
+    dl->AddRectFilled(ImVec2(varioX - 3.0f, cautBot), ImVec2(varioX + 3.0f, dangBot), IM_COL32(239, 68, 68, l80));
+
+    // Current vertical speed cursor & pointer
+    const float curVV = m_landingTelem.verticalSpeedMs;
+    const float cursorY = std::clamp(varioYZero - curVV * pps, varioYTop, varioYBot);
+    ImU32 ptrCol = (std::abs(curVV) <= 2.0f) ? IM_COL32(34, 197, 94, l255)
+                 : (std::abs(curVV) <= 5.0f) ? IM_COL32(245, 158, 11, l255)
+                                             : IM_COL32(239, 68, 68, l255);
+
+    // Chevron pointer
+    dl->AddTriangleFilled(ImVec2(varioX + 2.0f, cursorY),
+                          ImVec2(varioX + 12.0f, cursorY - 5.0f),
+                          ImVec2(varioX + 12.0f, cursorY + 5.0f), ptrCol);
+
+    // Digital readout above variometer
+    char vvBuf[32];
+    std::snprintf(vvBuf, sizeof(vvBuf), "VV %+.1f m/s", curVV);
+    dl->AddText(ImVec2(varioX - 40.0f, varioYTop - 20.0f), ptrCol, vvBuf);
+
+    // --- 4.2 Perspective Terrain Wireframe Contour Grid ---
+    const float gridCenterY = ctr.y + 115.0f;
+    const float gridW = 200.0f;
+    const float gridDepth = 65.0f;
+    const int cols = 8;
+    const int rows = 5;
+
+    const float slopeK = m_landingTelem.surfaceSlopeDeg;
+    ImU32 gridCol = m_landingTelem.slopeHazard ? IM_COL32(239, 68, 68, l140)
+                                               : IM_COL32(56, 189, 248, l80);
+
+    for (int r = 0; r <= rows; ++r) {
+      float zRatio = static_cast<float>(r) / static_cast<float>(rows);
+      float yP = gridCenterY - gridDepth * 0.5f + zRatio * gridDepth;
+      float wP = gridW * (0.65f + 0.35f * zRatio);
+      float leftX = ctr.x - wP * 0.5f;
+      float rightX = ctr.x + wP * 0.5f;
+
+      float elevDisp = (zRatio - 0.5f) * (slopeK * 1.2f);
+      dl->AddLine(ImVec2(leftX, yP + elevDisp), ImVec2(rightX, yP - elevDisp * 0.5f), gridCol, 1.0f);
+    }
+    for (int c = 0; c <= cols; ++c) {
+      float cRatio = static_cast<float>(c) / static_cast<float>(cols) - 0.5f;
+      float topX = ctr.x + cRatio * (gridW * 0.65f);
+      float topY = gridCenterY - gridDepth * 0.5f;
+      float botX = ctr.x + cRatio * gridW;
+      float botY = gridCenterY + gridDepth * 0.5f;
+
+      float elevDisp = cRatio * (slopeK * 1.5f);
+      dl->AddLine(ImVec2(topX, topY), ImVec2(botX, botY + elevDisp), gridCol, 1.0f);
+    }
+
+    // Touchdown footprint target ring on the terrain grid
+    dl->AddCircle(ImVec2(ctr.x, gridCenterY), 12.0f, ptrCol, 16, 1.5f);
+    dl->AddLine(ImVec2(ctr.x - 16.0f, gridCenterY), ImVec2(ctr.x + 16.0f, gridCenterY), ptrCol, 1.0f);
+    dl->AddLine(ImVec2(ctr.x, gridCenterY - 16.0f), ImVec2(ctr.x, gridCenterY + 16.0f), ptrCol, 1.0f);
+
+    // --- 4.3 Radar Altimeter & Slope Telemetry Banner ---
+    char altBanner[128];
+    std::snprintf(altBanner, sizeof(altBanner), "R-ALT: %.0f m  |  SLOPE: %.1f deg  |  %s",
+                  m_landingTelem.radarAltM,
+                  m_landingTelem.surfaceSlopeDeg,
+                  (m_landingTelem.gearState == GearState::Deployed) ? "GEAR LOCKED" : "GEAR UP [G]");
+    ImVec2 bSz = ImGui::CalcTextSize(altBanner);
+    dl->AddRectFilled(ImVec2(ctr.x - bSz.x * 0.5f - 8.0f, gridCenterY + gridDepth * 0.5f + 8.0f),
+                      ImVec2(ctr.x + bSz.x * 0.5f + 8.0f, gridCenterY + gridDepth * 0.5f + 26.0f),
+                      IM_COL32(15, 23, 42, l200), 4.0f);
+    dl->AddText(ImVec2(ctr.x - bSz.x * 0.5f, gridCenterY + gridDepth * 0.5f + 9.0f),
+                m_landingTelem.slopeHazard ? IM_COL32(239, 68, 68, l255) : IM_COL32(248, 250, 252, l255),
+                altBanner);
+
+    // Flashing Slope Hazard Alert if slope > 15 deg
+    if (m_landingTelem.slopeHazard) {
+      const float flash = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime()) * 8.0f);
+      const ImU32 warnCol = IM_COL32(239, 68, 68, static_cast<int>(255.0f * flash * lAlpha));
+      const char* warnText = uiRu("ОПАСНЫЙ РЕЛЬЕФ > 15°: РИСК ОПРОКИДЫВАНИЯ", "SLOPE DANGER > 15°: TIP-OVER RISK");
+      ImVec2 wSz = ImGui::CalcTextSize(warnText);
+      dl->AddRectFilled(ImVec2(ctr.x - wSz.x * 0.5f - 10.0f, gridCenterY + gridDepth * 0.5f + 32.0f),
+                        ImVec2(ctr.x + wSz.x * 0.5f + 10.0f, gridCenterY + gridDepth * 0.5f + 50.0f),
+                        IM_COL32(127, 29, 29, static_cast<int>(220.0f * lAlpha)), 4.0f);
+      dl->AddText(ImVec2(ctr.x - wSz.x * 0.5f, gridCenterY + gridDepth * 0.5f + 33.0f), warnCol, warnText);
+    }
+  }
+
   // 5. Minimalist Micro-Hint for Unified Terminal in Top-Right
   char termPrompt[64];
   std::snprintf(termPrompt, sizeof(termPrompt), "%s [Tab]", uiRu("ТЕРМИНАЛ", "TERMINAL"));
@@ -13987,6 +14106,17 @@ void AppGL::updateLandingOperations(float deltaTime) {
     glm::vec3 upRad = (minBodyDist > 1e-4f) ? ((camPos - nearestBodyPos) / minBodyDist) : glm::vec3(0.0f, 1.0f, 0.0f);
     float vRad = glm::dot(worldVel, upRad) * 50.0f;
 
+    // v5.5.0: Planetary Landing Avionics — evaluate slope and variometer alpha
+    float slopeDeg = computePlanetarySurfaceSlope(nearestBodyId, camPos.x, camPos.z);
+    m_landingTelem.surfaceSlopeDeg = slopeDeg;
+    m_landingTelem.slopeHazard = (slopeDeg > 15.0f);
+
+    if (altM < 5000.0f) {
+      m_landingTelem.variometerAlpha = std::min(1.0f, m_landingTelem.variometerAlpha + deltaTime * 2.5f);
+    } else {
+      m_landingTelem.variometerAlpha = std::max(0.0f, m_landingTelem.variometerAlpha - deltaTime * 2.0f);
+    }
+
     float thrust = m_speedK + (warpdrive::fuelAccel() > 0.0f ? 0.35f : 0.0f);
     float hullDmg = 0.0f, shieldDmg = 0.0f;
 
@@ -14055,6 +14185,9 @@ void AppGL::updateLandingOperations(float deltaTime) {
     m_landingTelem.radarAltM = -1.0f;
     m_landingTelem.surfaceDustK = 0.0f;
     m_landingTelem.isLanded = false;
+    m_landingTelem.variometerAlpha = std::max(0.0f, m_landingTelem.variometerAlpha - deltaTime * 2.0f);
+    m_landingTelem.surfaceSlopeDeg = 0.0f;
+    m_landingTelem.slopeHazard = false;
     m_ship.isLanded = false;
     m_audio.setDrillLevel(0.0f);
     m_drillInputActive = false;

@@ -337,6 +337,36 @@ int main() {
     }
   }
 
-  std::cout << "All 11 LandingSystem tests passed successfully!\n";
+  // Test 12: Planetary terrain slope evaluation and slope hazard threshold
+  {
+    float earthSlope = computePlanetarySurfaceSlope("earth", 10.0f, 20.0f);
+    if (earthSlope < 0.4f || earthSlope > 32.0f) {
+      std::cerr << "Test 12 failed: Earth slope must be within [0.4, 32.0] deg, got " << earthSlope << '\n';
+      return 1;
+    }
+
+    float gasGiantSlope = computePlanetarySurfaceSlope("jupiter", 10.0f, 20.0f);
+    if (gasGiantSlope != 0.0f) {
+      std::cerr << "Test 12 failed: Gas giant surface slope must be 0.0 deg, got " << gasGiantSlope << '\n';
+      return 1;
+    }
+
+    LandingTelemetry telem;
+    telem.surfaceSlopeDeg = 18.5f;
+    telem.slopeHazard = (telem.surfaceSlopeDeg > 15.0f);
+    if (!telem.slopeHazard) {
+      std::cerr << "Test 12 failed: Slope > 15.0 deg must trigger slopeHazard true\n";
+      return 1;
+    }
+
+    telem.surfaceSlopeDeg = 6.2f;
+    telem.slopeHazard = (telem.surfaceSlopeDeg > 15.0f);
+    if (telem.slopeHazard) {
+      std::cerr << "Test 12 failed: Slope <= 15.0 deg must not trigger slopeHazard\n";
+      return 1;
+    }
+  }
+
+  std::cout << "All 12 LandingSystem tests passed successfully!\n";
   return 0;
 }

@@ -37,6 +37,9 @@ struct LandingTelemetry {
   float surfaceGravity = 9.81f;     // m/s^2
   float surfacePressureBar = 1.013f;// bar
   float surfaceTempK = 288.15f;     // Kelvin
+  float surfaceSlopeDeg = 0.0f;     // v5.5.0: Terrain surface inclination angle (degrees)
+  bool slopeHazard = false;         // v5.5.0: true if surfaceSlopeDeg > 15.0f
+  float variometerAlpha = 0.0f;     // v5.5.0: HUD variometer & wireframe dynamic alpha (0..1)
 };
 
 // Surface expedition science report
@@ -68,6 +71,9 @@ void updateTouchdownPhysics(LandingTelemetry& telem,
                            float thrustK,
                            float& outHullDamage,
                            float& outShieldDamage);
+
+// Evaluates procedural terrain slope angle in degrees
+float computePlanetarySurfaceSlope(const std::string& bodyId, float x, float z);
 
 // Generates canonical surface telemetry and geology report for catalog bodies
 SurfaceReport generateSurfaceReport(const std::string& bodyId);

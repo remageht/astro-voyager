@@ -110,6 +110,25 @@ void updateTouchdownPhysics(LandingTelemetry& telem,
   }
 }
 
+float computePlanetarySurfaceSlope(const std::string& bodyId, float x, float z) {
+  // Multi-scale procedural terrain gradient modeling craters, dunes and basalt ridges
+  const float n1 = std::sin(x * 0.045f) * std::cos(z * 0.038f);
+  const float n2 = std::sin(x * 0.120f + 1.2f) * std::cos(z * 0.145f + 0.8f);
+  const float n3 = std::sin((x + z) * 0.35f);
+
+  float slope = std::abs(n1 * 9.5f + n2 * 6.0f + n3 * 2.5f);
+
+  // Body-specific terrain relief modifiers
+  if (bodyId == "moon" || bodyId == "mercury") {
+    slope *= 1.35f;
+  } else if (bodyId == "mars") {
+    slope *= 1.20f;
+  } else if (bodyId == "jupiter" || bodyId == "saturn" || bodyId == "uranus" || bodyId == "neptune") {
+    return 0.0f;
+  }
+  return std::clamp(slope, 0.4f, 32.0f);
+}
+
 SurfaceReport generateSurfaceReport(const std::string& bodyId) {
   SurfaceReport rep;
   rep.bodyId = bodyId;
