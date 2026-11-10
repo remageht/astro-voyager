@@ -624,6 +624,13 @@ Check 'AppGL flight HUD has Terrain Wireframe Grid' ($appCpp -match 'Perspective
 Check 'AppGL flight HUD has Slope Danger warning' ($appCpp -match 'SLOPE DANGER > 15')
 Check 'test_landing tests terrain slope and hazard threshold' ((Read-File 'tests/test_landing.cpp') -match 'Test 12: Planetary terrain slope evaluation')
 
+# Stage 5 / Release 1.0: 3D Holographic Star Map / Orrery (Issue #141)
+Check 'AppGL has m_orreryMapOpen and drawOrreryMap declaration' (((Read-File 'src/AppGL.h') -match 'm_orreryMapOpen') -and ((Read-File 'src/AppGL.h') -match 'void drawOrreryMap\(\)'))
+Check 'AppGL implements drawOrreryMap with Keplerian elliptical orbits' (($appCpp -match 'void AppGL::drawOrreryMap\(\)') -and ($appCpp -match 'Keplerian elliptical points'))
+Check 'AppGL processInput wires M key to Orrery map toggle' ($appCpp -match 'M: 3D Holographic Star Map / Orrery toggle')
+Check 'Unified Ship Terminal wires 3D Orrery Map launch button' ($appCpp -match 'OPEN INTERACTIVE 3D SYSTEM MAP \(ORRERY\) \[M\]')
+Check 'drawImGui gates modal render on m_orreryMapOpen' ($appCpp -match 'if \(m_orreryMapOpen && !m_inMenu\)')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
