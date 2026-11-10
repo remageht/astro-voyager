@@ -1087,9 +1087,7 @@ void AppGL::processGamepadInput(double dt) {
 
   // DpadUp: Toggle Landing Gear (G)
   if (m_gamepad.isJustPressed(GamepadButton::DpadUp)) {
-    updateLandingGear(m_landingTelem, 0.0f, true);
-    m_ship.gearDeployed = (m_landingTelem.gearState == GearState::Deployed);
-    m_ship.gearProgress = m_landingTelem.gearProgress;
+    toggleLandingGear();
     m_audio.playClick();
   }
 
@@ -1181,6 +1179,7 @@ void AppGL::toggleOrbitalCruise() {
   m_orbitCruiseActive = !m_orbitCruiseActive;
   if (m_orbitCruiseActive) {
     m_audio.playBlip();
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::OrbitOk);
     glm::vec3 cPos(static_cast<float>(m_camera.position.x),
                    static_cast<float>(m_camera.position.y),
                    static_cast<float>(m_camera.position.z));
@@ -5179,6 +5178,25 @@ void AppGL::tryEngageWarp() {
   m_warpFovDirty = true;
   warpRetarget(warpTargetK(m_warpFactor));
   m_warpFlash = 0.4f;  // v3.6.0: мягкая вспышка входа (комфорт для глаз)
+  m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::WarpOn);
+}
+
+void AppGL::toggleLandingGear() {
+  if (m_inMenu || m_slidesOpen || m_jumpCine) return;
+  const GearState oldState = m_landingTelem.gearState;
+  updateLandingGear(m_landingTelem, 0.0f, true);
+  m_ship.gearDeployed = (m_landingTelem.gearState == GearState::Deployed);
+  m_ship.gearProgress = m_landingTelem.gearProgress;
+
+  if (m_landingTelem.gearState == GearState::Deploying || m_landingTelem.gearState == GearState::Deployed) {
+    if (oldState != GearState::Deploying && oldState != GearState::Deployed) {
+      m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::GearDown);
+    }
+  } else if (m_landingTelem.gearState == GearState::Retracting || m_landingTelem.gearState == GearState::Retracted) {
+    if (oldState != GearState::Retracting && oldState != GearState::Retracted) {
+      m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::GearUp);
+    }
+  }
 }
 
 void AppGL::updateDynamicHudAlphas(float dt) {
@@ -5199,6 +5217,38 @@ void AppGL::updateDynamicHudAlphas(float dt) {
   } else {
     m_hudShieldAlpha = std::max(baseVitalsAlpha, m_hudShieldAlpha - dt * 1.5f);
   }
+
+  // === Egorka Voice Announcer Telemetry Triggers === (v5.5.0)
+  const float nowSec = static_cast<float>(glfwGetTime());
+
+  // 1. System online welcome cue (2.0s after startup)
+  if (!m_sysOnlinePlayed && m_sessionT > 2.0f && !m_inMenu && !m_slidesOpen && !m_jumpCine) {
+    m_sysOnlinePlayed = true;
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::SysOnline);
+  }
+
+  // 2. Low fuel warning (< 20.0%)
+  if (m_ship.fuel < 20.0f && (m_prevFuelVal >= 20.0f || (nowSec - m_lastFuelWarnT > 60.0f))) {
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::FuelLow);
+    m_lastFuelWarnT = nowSec;
+  }
+  m_prevFuelVal = m_ship.fuel;
+
+  // 3. Critical shield depletion warning (< 25.0%)
+  if (takingDamage && m_ship.shield < 25.0f && (m_lastShieldVal >= 25.0f || (nowSec - m_lastShieldWarnT > 30.0f))) {
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::ShieldLow);
+    m_lastShieldWarnT = nowSec;
+  }
+
+  // 4. Ground proximity terrain danger warning
+  if (m_landingTelem.radarAltM > 0.0f && m_landingTelem.radarAltM < 1200.0f &&
+      m_landingTelem.verticalSpeedMs < -35.0f && !m_landingTelem.isLanded) {
+    if (nowSec - m_lastTerrainWarnT > 20.0f) {
+      m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::TerrainWarn);
+      m_lastTerrainWarnT = nowSec;
+    }
+  }
+
   m_lastShieldVal = m_ship.shield;
 
   // 2. Throttle / Speed Alpha:
@@ -5773,6 +5823,24 @@ void AppGL::drawUnifiedShipTerminal() {
 
       if (ImGui::Button(uiRu("🛠 ОТКРЫТЬ ВЕРФЬ И МОДЕРНИЗАЦИИ (X)", "🛠 OPEN SHIPYARD & UPGRADES (X)"), ImVec2(320.0f, 32.0f))) {
         m_shipyardOpen = true;
+      }
+
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "%s",
+                         uiRu("ГОЛОСОВОЙ ИИ «ЕГОРКА-6»:", "SHIP AI VOICE «EGORKA-6»:"));
+      bool termVoiceEnabled = m_audio.isEgorkaVoiceEnabled();
+      if (ImGui::Checkbox(uiRu("Включить голосовой аннонсер мостика", "Enable Bridge Voice Announcer"), &termVoiceEnabled)) {
+        m_audio.setEgorkaVoiceEnabled(termVoiceEnabled);
+      }
+      float termVoiceVol = m_audio.egorkaVoiceVolume();
+      if (ImGui::SliderFloat(uiRu("Громкость ИИ##term", "AI Voice Volume##term"), &termVoiceVol, 0.0f, 1.0f, "%.2f")) {
+        m_audio.setEgorkaVoiceVolume(termVoiceVol);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(uiRu("Тест##termVoice", "Test Voice##termVoice"))) {
+        m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::SysOnline);
       }
 
     } else if (m_shipTerminalTab == 4) {
@@ -7447,11 +7515,7 @@ void AppGL::updateShip(float deltaTime) {
   // === v4.6.1: Planetary Landing Gear (G) ===
   const bool gDown = (glfwGetKey(m_window->getNativeWindow(), GLFW_KEY_G) == GLFW_PRESS);
   if (gDown && !m_prevGPressed && !colonyIo.WantCaptureKeyboard) {
-    if (!m_inMenu && !m_slidesOpen && !m_jumpCine) {
-      updateLandingGear(m_landingTelem, 0.0f, true);
-      m_ship.gearDeployed = (m_landingTelem.gearState == GearState::Deployed);
-      m_ship.gearProgress = m_landingTelem.gearProgress;
-    }
+    toggleLandingGear();
   }
   m_prevGPressed = gDown;
 }
@@ -9246,6 +9310,14 @@ void AppGL::drawMenu() {
           bool menuMuted = m_audio.isMuted();
           if (ImGui::Checkbox("Mute", &menuMuted)) {
             m_audio.toggleMute();
+          }
+          bool voiceEnabled = m_audio.isEgorkaVoiceEnabled();
+          if (ImGui::Checkbox(uiRu("Голос бортового ИИ (Егорка-6)", "Ship AI Voice (Egorka-6)"), &voiceEnabled)) {
+            m_audio.setEgorkaVoiceEnabled(voiceEnabled);
+          }
+          float voiceVol = m_audio.egorkaVoiceVolume();
+          if (ImGui::SliderFloat(uiRu("Громкость голоса ИИ", "AI Voice Volume"), &voiceVol, 0.0f, 1.0f, "%.2f")) {
+            m_audio.setEgorkaVoiceVolume(voiceVol);
           }
 
           ImGui::Spacing();
@@ -11331,12 +11403,16 @@ void AppGL::warpRetarget(float to) {
 }
 
 void AppGL::disengageWarp() {
+  const bool wasOn = m_warpOn;
   m_warpOn = false;
   m_warpStatus = 0;
   m_warpJumpTarget.clear();
   warpRetarget(0.0f);
   warpdrive::setWarpTravelActive(false);
   m_warpFlash = 0.35f;  // v3.6.0: мягкая вспышка выхода (комфорт для глаз)
+  if (wasOn) {
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::WarpOff);
+  }
 }
 
 void AppGL::setShipStyleNow(int style) {
@@ -13229,6 +13305,7 @@ void AppGL::startUndockSequence() {
                       "Undocking sequence: clamps released, separation impulse...");
   m_shipNoticeT = 2.0f;
   m_audio.playClick();
+  m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::UndockOk);
 }
 
 void AppGL::dockToHistoricShip(const std::string& dockId) {
@@ -13318,6 +13395,7 @@ void AppGL::dockAtStation(const std::string& dockId) {
   m_shipVel = Vec3();
   m_ship.gravVel = Vec3();
   m_shipyardOpen = true;
+  m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::DockOk);
 
   Toast dt;
   dt.title = uiRu("Стыковка выполнена", "Docking successful");

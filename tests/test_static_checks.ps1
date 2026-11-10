@@ -603,6 +603,16 @@ Check 'warp engage helper shared by hotkey and HUD' ($appCpp -match 'void AppGL:
 Check 'zero-ui warp control plate' ($appCpp -match '#135 Zero-UI warp plate')
 Check 'mission HUD visible in Zero-UI' ($appCpp -match '#135 mission HUD visible in Zero-UI too')
 
+# Stage 5 / Release 1.0: Ship AI Egorka Voice Announcer (Issue #137)
+$audioH = Read-File 'src/audio/AudioEngine.h'
+$audioCpp = Read-File 'src/audio/AudioEngine.cpp'
+Check 'AudioEngine has EgorkaVoiceCue enum' ($audioH -match 'enum class EgorkaVoiceCue')
+Check 'AudioEngine has playEgorkaVoice method' ($audioH -match 'playEgorkaVoice\(EgorkaVoiceCue cue')
+Check 'AudioEngine has Egorka voice enable and volume control' (($audioH -match 'setEgorkaVoiceEnabled') -and ($audioH -match 'setEgorkaVoiceVolume'))
+Check 'AudioEngine implements playEgorkaVoice with PCM cache' (($audioCpp -match 'void AudioEngine::playEgorkaVoice') -and ($audioCpp -match 'm_egorkaCache'))
+Check 'AppGL triggers Egorka voice on warp, gear, docking, and telemetry' (($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::WarpOn\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::DockOk\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::GearDown\)'))
+Check 'res/audio/egorka contains generated voice cues' ((Test-Path 'res/audio/egorka/warp_on.wav') -and (Test-Path 'res/audio/egorka/dock_ok.wav') -and (Test-Path 'res/audio/egorka/sys_online.wav'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
