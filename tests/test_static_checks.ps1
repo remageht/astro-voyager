@@ -613,6 +613,17 @@ Check 'AudioEngine implements playEgorkaVoice with PCM cache' (($audioCpp -match
 Check 'AppGL triggers Egorka voice on warp, gear, docking, and telemetry' (($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::WarpOn\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::DockOk\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::GearDown\)'))
 Check 'res/audio/egorka contains generated voice cues' ((Test-Path 'res/audio/egorka/warp_on.wav') -and (Test-Path 'res/audio/egorka/dock_ok.wav') -and (Test-Path 'res/audio/egorka/sys_online.wav'))
 
+# Stage 5 / Release 1.0: Planetary Landing Avionics (Issue #139)
+$landingH = Read-File 'src/LandingSystem.h'
+$landingCpp = Read-File 'src/LandingSystem.cpp'
+Check 'LandingTelemetry has surfaceSlopeDeg and slopeHazard' (($landingH -match 'surfaceSlopeDeg') -and ($landingH -match 'slopeHazard'))
+Check 'LandingSystem declares computePlanetarySurfaceSlope' ($landingH -match 'computePlanetarySurfaceSlope')
+Check 'LandingSystem implements computePlanetarySurfaceSlope' ($landingCpp -match 'float computePlanetarySurfaceSlope')
+Check 'AppGL flight HUD has Variometer Ladder' ($appCpp -match 'Variometer Descent Rate Vertical Ladder')
+Check 'AppGL flight HUD has Terrain Wireframe Grid' ($appCpp -match 'Perspective Terrain Wireframe Contour Grid')
+Check 'AppGL flight HUD has Slope Danger warning' ($appCpp -match 'SLOPE DANGER > 15')
+Check 'test_landing tests terrain slope and hazard threshold' ((Read-File 'tests/test_landing.cpp') -match 'Test 12: Planetary terrain slope evaluation')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
