@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace astro {
@@ -99,6 +101,28 @@ class AudioEngine {
   void setWeatherAmbience(int weatherType, float intensity, float windKps);
   void playThunderCrack(float pan = 0.0f);
 
+  // v5.5.0: Голосовой аннонсер бортового ИИ (Егорка-6)
+  enum class EgorkaVoiceCue : int {
+    WarpOn = 0,
+    WarpOff = 1,
+    GearDown = 2,
+    GearUp = 3,
+    DockOk = 4,
+    UndockOk = 5,
+    FuelLow = 6,
+    ShieldLow = 7,
+    TerrainWarn = 8,
+    OrbitOk = 9,
+    SysOnline = 10
+  };
+
+  void playEgorkaVoice(EgorkaVoiceCue cue, float gainDb = 0.0f);
+  void stopCurrentVoiceCue();
+  void setEgorkaVoiceEnabled(bool enabled) { m_egorkaVoiceEnabled.store(enabled); }
+  bool isEgorkaVoiceEnabled() const { return m_egorkaVoiceEnabled.load(); }
+  void setEgorkaVoiceVolume(float v) { m_egorkaVoiceVolume.store(v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v)); }
+  float egorkaVoiceVolume() const { return m_egorkaVoiceVolume.load(); }
+
   // v4.0: файл-голос для катсцен (wav, декодируется miniaudio в float
   // моно kSampleRate синхронно при запуске; каталог с аудио рядом).
   void playFile(const std::string& path, float db);
@@ -113,7 +137,7 @@ class AudioEngine {
   enum class VoiceType : int {
     Click, Whoosh, Jump, Chime, Blip, Capture, Tick, File,
     RadioBeep, RadioEnd, WarpReady, Hazard, TargetLock,
-    LiquidDrop, Eureka, Thunder
+    LiquidDrop, Eureka, Thunder, EgorkaVoice
   };
   struct Voice {
     VoiceType type = VoiceType::Click;
@@ -167,6 +191,12 @@ class AudioEngine {
   std::atomic<float> m_weatherWindTarget{0.0f};
   std::atomic<float> m_weatherWindCurrent{0.0f};
   std::atomic<uint64_t> m_samples{0};  // счётчик сэмплов (live: колбэк)
+
+  std::atomic<bool> m_egorkaVoiceEnabled{true};
+  std::atomic<float> m_egorkaVoiceVolume{1.0f};
+  std::unordered_map<int, std::shared_ptr<std::vector<float>>> m_egorkaCache;
+  uint64_t m_lastEgorkaSample = 0;
+  int m_lastEgorkaCue = -1;
 
   std::mutex m_mutex;
   std::vector<Voice> m_voices;

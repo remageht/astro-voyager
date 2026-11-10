@@ -454,6 +454,114 @@ void AudioEngine::playFile(const std::string& path, float db) {
   m_voices.push_back(std::move(v));
 }
 
+// v5.5.0: Голосовой аннонсер бортового ИИ (Егорка-6)
+static const char* egorkaCueFilename(AudioEngine::EgorkaVoiceCue cue) {
+  switch (cue) {
+    case AudioEngine::EgorkaVoiceCue::WarpOn: return "warp_on.wav";
+    case AudioEngine::EgorkaVoiceCue::WarpOff: return "warp_off.wav";
+    case AudioEngine::EgorkaVoiceCue::GearDown: return "gear_down.wav";
+    case AudioEngine::EgorkaVoiceCue::GearUp: return "gear_up.wav";
+    case AudioEngine::EgorkaVoiceCue::DockOk: return "dock_ok.wav";
+    case AudioEngine::EgorkaVoiceCue::UndockOk: return "undock_ok.wav";
+    case AudioEngine::EgorkaVoiceCue::FuelLow: return "fuel_low.wav";
+    case AudioEngine::EgorkaVoiceCue::ShieldLow: return "shield_low.wav";
+    case AudioEngine::EgorkaVoiceCue::TerrainWarn: return "terrain_warn.wav";
+    case AudioEngine::EgorkaVoiceCue::OrbitOk: return "orbit_ok.wav";
+    case AudioEngine::EgorkaVoiceCue::SysOnline: return "sys_online.wav";
+  }
+  return nullptr;
+}
+
+void AudioEngine::stopCurrentVoiceCue() {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  for (auto it = m_voices.begin(); it != m_voices.end(); ) {
+    if (it->type == VoiceType::EgorkaVoice) {
+      it = m_voices.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void AudioEngine::playEgorkaVoice(EgorkaVoiceCue cue, float gainDb) {
+  if (!m_tried || !m_egorkaVoiceEnabled.load()) return;
+  const int cueId = static_cast<int>(cue);
+  const uint64_t nowSample = m_samples.load();
+
+  // Дебаунс: повтор той же реплики не чаще чем раз в 3.0 секунды
+  if (m_lastEgorkaCue == cueId) {
+    const double elapsed = static_cast<double>(nowSample - m_lastEgorkaSample) / kSampleRate;
+    if (elapsed < 3.0) return;
+  }
+
+  // Кеширование буфера в m_egorkaCache
+  std::shared_ptr<std::vector<float>> pcm;
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto it = m_egorkaCache.find(cueId);
+    if (it != m_egorkaCache.end()) {
+      pcm = it->second;
+    }
+  }
+
+  if (!pcm) {
+    const char* fn = egorkaCueFilename(cue);
+    if (!fn) return;
+
+    // Пути поиска: res/audio/egorka/<fn> или ../res/audio/egorka/<fn>
+    const std::string candidates[] = {
+      std::string("res/audio/egorka/") + fn,
+      std::string("../res/audio/egorka/") + fn,
+      std::string("build-gl/Release/res/audio/egorka/") + fn
+    };
+
+    for (const auto& path : candidates) {
+      ma_decoder_config dcfg = ma_decoder_config_init(ma_format_f32, 1, kSampleRate);
+      ma_decoder dec;
+      if (ma_decoder_init_file(path.c_str(), &dcfg, &dec) == MA_SUCCESS) {
+        std::vector<float> buf;
+        float chunk[4096];
+        for (;;) {
+          ma_uint64 got = 0;
+          if (ma_decoder_read_pcm_frames(&dec, chunk, 4096, &got) != MA_SUCCESS || got == 0) break;
+          buf.insert(buf.end(), chunk, chunk + got);
+        }
+        ma_decoder_uninit(&dec);
+        if (!buf.empty()) {
+          pcm = std::make_shared<std::vector<float>>(std::move(buf));
+          std::lock_guard<std::mutex> lock(m_mutex);
+          m_egorkaCache[cueId] = pcm;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!pcm || pcm->empty()) return;
+
+  // Останавливаем предыдущую реплику, чтобы не было наложения
+  stopCurrentVoiceCue();
+
+  // Тактический PTT squelch клик перед голосом
+  playRadioBeep(0.0f);
+
+  Voice v;
+  v.type = VoiceType::EgorkaVoice;
+  v.startSample = m_samples.load() + static_cast<uint64_t>(kSampleRate * 0.05);
+  v.pcm = pcm;
+  v.gainDb = gainDb;
+  v.pan = 0.0f;
+
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_voices.size() <= 32) {
+      m_voices.push_back(std::move(v));
+      m_lastEgorkaSample = nowSample;
+      m_lastEgorkaCue = cueId;
+    }
+  }
+}
+
 float AudioEngine::renderMusic(double tAbs, double tLoop) const {
   // РђРєРєРѕСЂРґ i + equal-power РєСЂРѕСЃСЃС„РµР№Рґ 2СЃ РІ РєРѕРЅС†Рµ РєР°Р¶РґРѕРіРѕ 8СЃ РѕС‚СЂРµР·РєР°.
   const int ci = static_cast<int>(tLoop / kChordSec) % 4;
@@ -682,6 +790,19 @@ float AudioEngine::renderVoice(const Voice& v, double age,
       const float a = (*v.pcm)[i0];
       const float b = (i0 + 1 < n) ? (*v.pcm)[i0 + 1] : a;
       return (a + (b - a) * f) * dbToGain(v.gainDb);
+    }
+    case VoiceType::EgorkaVoice: {
+      if (!v.pcm || v.pcm->empty()) return 0.0f;
+      const size_t n = v.pcm->size();
+      const double idx = age * static_cast<double>(kSampleRate);
+      if (idx < 0.0) return 0.0f;
+      if (idx >= static_cast<double>(n)) return 0.0f;
+      const size_t i0 = static_cast<size_t>(idx);
+      const float f = static_cast<float>(idx - static_cast<double>(i0));
+      const float a = (*v.pcm)[i0];
+      const float b = (i0 + 1 < n) ? (*v.pcm)[i0 + 1] : a;
+      const float vVol = m_egorkaVoiceVolume.load();
+      return (a + (b - a) * f) * dbToGain(v.gainDb) * vVol;
     }
   }
   return 0.0f;

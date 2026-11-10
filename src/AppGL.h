@@ -505,6 +505,14 @@ class AppGL {
   void drawContextualFlightHud();
   void drawUnifiedShipTerminal();
   void tryEngageWarp();  // #135: общий вход в варп-круиз (X-хоткей + кнопки HUD)
+  void toggleLandingGear(); // v5.5.0: управление шасси с голосовым оповещением
+
+  // === Egorka Voice Announcer === (v5.5.0, Issue #137)
+  float m_lastFuelWarnT = -100.0f;
+  float m_lastShieldWarnT = -100.0f;
+  float m_lastTerrainWarnT = -100.0f;
+  bool m_sysOnlinePlayed = false;
+  float m_prevFuelVal = 100.0f;
   // === ModernUI === end
 
   // === WarpDrive === (агент W: отдельный режим путешествий на варпе).
