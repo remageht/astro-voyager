@@ -1877,6 +1877,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 2.0f;
     msg.durationSec = 8.0;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::DialOj287);
   } else if (stationId == "hyperdisk" && !m_bridgeComms.hasTriggered("comms_hyperdisk")) {
     RadioMessage msg;
     msg.id = "comms_hyperdisk";
@@ -1887,6 +1888,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 2.0f;
     msg.durationSec = 8.0;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::DialHyperdisk);
   } else if (stationId == "sgra" && !m_bridgeComms.hasTriggered("comms_sgra")) {
     RadioMessage msg;
     msg.id = "comms_sgra";
@@ -1907,6 +1909,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 1.8f;
     msg.durationSec = 8.0;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::DialGw170817);
   } else if (stationId == "m16" && !m_bridgeComms.hasTriggered("comms_m16")) {
     RadioMessage msg;
     msg.id = "comms_m16";
@@ -1957,6 +1960,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 1.8f;
     msg.durationSec = 8.0;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::DialSn1987a);
   } else if (stationId == "at2019qiz" && !m_bridgeComms.hasTriggered("comms_at2019qiz")) {
     RadioMessage msg;
     msg.id = "comms_at2019qiz";
@@ -6717,6 +6721,31 @@ void AppGL::drawUnifiedShipTerminal() {
             m_audioWasInit = true;
           }
           m_audio.playEgorkaVoice(kVoiceCueBtns[i].cue);
+        }
+      }
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.85f, 0.70f, 1.0f, 1.0f), "📻 %s",
+                         uiRu("СЮЖЕТНЫЕ РАДИОДИАЛОГИ ЕГОРКИ (НАЖМИТЕ ДЛЯ ПРОСЛУШИВАНИЯ):",
+                              "EGORKA STORY RADIO DIALOGUES (CLICK TO PLAY):"));
+      ImGui::Spacing();
+      static const VoiceCueBtn kDialogueBtns[] = {
+        {"1. OJ 287 (Петля)", "1. OJ 287 Loop", AudioEngine::EgorkaVoiceCue::DialOj287},
+        {"2. Гипердиск (Диск)", "2. Hyperdisk Accretion", AudioEngine::EgorkaVoiceCue::DialHyperdisk},
+        {"3. Килонова GW170817", "3. Kilonova Gold", AudioEngine::EgorkaVoiceCue::DialGw170817},
+        {"4. Сверхновая 1987A", "4. Supernova Pearls", AudioEngine::EgorkaVoiceCue::DialSn1987a},
+        {"5. Жесткая посадка", "5. Hard Touchdown", AudioEngine::EgorkaVoiceCue::DialHardLanding},
+        {"6. Эврика керна", "6. Core Eureka", AudioEngine::EgorkaVoiceCue::DialDrillEureka}
+      };
+      for (int i = 0; i < 6; ++i) {
+        if (i % 3 != 0) ImGui::SameLine(0.0f, 6.0f);
+        if (ImGui::Button(uiRu(kDialogueBtns[i].labelRu, kDialogueBtns[i].labelEn), ImVec2(190.0f, 26.0f))) {
+          if (!m_audio.isInitialized()) {
+            m_audio.ensureInitialized();
+            m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+            m_audioWasInit = true;
+          }
+          m_audio.playEgorkaVoice(kDialogueBtns[i].cue);
         }
       }
 
@@ -14920,6 +14949,9 @@ void AppGL::updateLandingOperations(float deltaTime) {
       comm.priority = 2.0f;
       comm.durationSec = 8.0;
       m_bridgeComms.queueMessage(comm, glfwGetTime());
+      if (m_landingTelem.touchdown != TouchdownRating::Safe) {
+        m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::DialHardLanding);
+      }
     }
 
     // v5.3.0: Update Surface Core Drill simulation and audio
@@ -15155,6 +15187,7 @@ void AppGL::drawSurfaceReportModal() {
           comm.priority = 2.5f;
           comm.durationSec = 9.0;
           m_bridgeComms.queueMessage(comm, glfwGetTime());
+          m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::DialDrillEureka);
 
           Toast ct;
           ct.title = uiRu("Керн каталогизирован", "Core Sample Cataloged");

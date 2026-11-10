@@ -21,21 +21,34 @@ if _orig_init is not None:
         return r
     _gu.GenerationMixin._maybe_initialize_input_ids_for_generation = _safe_init
 
+# 11 эмоциональных бортовых реплик аннонсера
 CUES = [
-    ("warp_on.wav", "Варп-привод активирован. Выход на сверхсветовой режим."),
-    ("warp_off.wav", "Варп-привод отключен. Переход на досветовой круиз."),
-    ("gear_down.wav", "Посадочные опоры выпущены. Системы готовы к посадке."),
-    ("gear_up.wav", "Посадочные опоры убраны. Режим свободного полета."),
-    ("dock_ok.wav", "Стыковка со станцией завершена. Системы зафиксированы."),
-    ("undock_ok.wav", "Расстыковка выполнена. Двигатели маневрирования в норме."),
-    ("fuel_low.wav", "Внимание! Запас топлива критический. Требуется дозаправка."),
-    ("shield_low.wav", "Внимание! Пробой дефлекторного щита."),
-    ("terrain_warn.wav", "Внимание: опасное сближение с рельефом."),
-    ("orbit_ok.wav", "Кеплеровская орбита стабилизирована."),
-    ("sys_online.wav", "Бортовой компьютер Егорка-6 в сети. Все системы корабля функционируют штатно."),
+    ("warp_on.wav", "Варп-привод запущен! Пространство поплыло, держись крепче, капитан — погнали!"),
+    ("warp_off.wav", "Выходим из варпа! Гравитационная волна рассеяна, мы на досветовой скорости."),
+    ("gear_down.wav", "Опоры выпущены! Гидравлика в замках, заходим на посадку!"),
+    ("gear_up.wav", "Опоры убраны! Тяга максимальная, выходим на оперативный простор!"),
+    ("dock_ok.wav", "Есть захват! Стыковка прошла идеально. Отличная работа, капитан, можно выдохнуть."),
+    ("undock_ok.wav", "Замки открыты, мы свободны! Маневровые двигатели в норме, счастливого полёта!"),
+    ("fuel_low.wav", "Тревога! Топливо на исходе, баки почти пустые! Капитан, срочно нужна дозаправка!"),
+    ("shield_low.wav", "Щиты пробиты! Дефлектор перегружен, мы горим, маневрируй!"),
+    ("terrain_warn.wav", "Осторожно, земля! Тяни штурвал вверх, сейчас врежемся в скалы!"),
+    ("orbit_ok.wav", "Орбитальный захват стабилен! Мы на идеальной кеплеровской дуге, красота-то какая!"),
+    ("sys_online.wav", "Приветствую на мостике, капитан! Системы корабля в полном порядке, я готов к полёту. Куда держим курс?"),
+]
+
+# 6 сюжетных радиодиалогов с Егоркой
+DIALOGUES = [
+    ("dial_oj287.wav", "Глянь на эту бинарную пару! Метрика дрожит. Мы разорвём эту петлю времени раз и навсегда!"),
+    ("dial_hyperdisk.wav", "Тонкий аккреционный диск в двадцать шесть радиусов Шварцшильда! Идеальный кеплеровский градиент. Варп-ускорители на полную мощность!"),
+    ("dial_gw170817.wav", "Линии золота и платины в ультрафиолете! Мы воочию наблюдаем эрд-процесс нуклеосинтеза. Гравитационные волны сошлись с квантовыми расчётами!"),
+    ("dial_sn1987a.wav", "Сверхновая в Большом Магеллановом Облаке! Тридцать две жемчужины ударной волны. Наша память о Земле так же ярко вспыхивает в кольцах времени."),
+    ("dial_hard_landing.wav", "Удар о поверхность за пределами нормы! Но опора выдержала. Срочно проверьте состояние корпуса!"),
+    ("dial_drill_eureka.wav", "Спектрометрия керна завершена! Образец из скважины каталогизирован во Втором Мозге. Научный отсек ликует!"),
 ]
 
 def main():
+    force_gen = "--force" in sys.argv or True
+
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out_dir = os.path.join(root_dir, "res", "audio", "egorka")
     os.makedirs(out_dir, exist_ok=True)
@@ -63,12 +76,10 @@ def main():
     )
     print("Model successfully loaded!")
 
-    seed = 100
-    for filename, text in CUES:
+    all_tracks = CUES + DIALOGUES
+    seed = 200
+    for filename, text in all_tracks:
         target_path = os.path.join(out_dir, filename)
-        if os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
-            print(f"[SKIP] {filename} already exists ({os.path.getsize(target_path)} bytes)")
-            continue
 
         print(f"\n[SYNTH] Generating {filename}: \"{text}\"")
         torch.manual_seed(seed)
@@ -80,7 +91,9 @@ def main():
             language="Russian",
             ref_audio=(ref_data, ref_sr),
             ref_text=ref_text,
-            max_new_tokens=600,
+            max_new_tokens=800,
+            temperature=0.8,
+            top_p=0.9,
             synced_gpus=False,
         )
 
@@ -101,14 +114,14 @@ def main():
         b_res = os.path.join(root_dir, build_sub, "res", "audio", "egorka")
         if os.path.exists(os.path.dirname(os.path.dirname(b_res))):
             os.makedirs(b_res, exist_ok=True)
-            for filename, _ in CUES:
+            for filename, _ in all_tracks:
                 src_f = os.path.join(out_dir, filename)
                 dst_f = os.path.join(b_res, filename)
                 if os.path.exists(src_f):
                     shutil.copy2(src_f, dst_f)
             print(f"Mirrored voice cues to {b_res}")
 
-    print("\nAll 11 Egorka voice cues successfully generated and deployed!")
+    print(f"\nAll {len(all_tracks)} emotional Egorka voice cues and dialogues successfully generated and deployed!")
 
 if __name__ == "__main__":
     main()

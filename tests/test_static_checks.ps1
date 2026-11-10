@@ -606,12 +606,14 @@ Check 'mission HUD visible in Zero-UI' ($appCpp -match '#135 mission HUD visible
 # Stage 5 / Release 1.0: Ship AI Egorka Voice Announcer (Issue #137)
 $audioH = Read-File 'src/audio/AudioEngine.h'
 $audioCpp = Read-File 'src/audio/AudioEngine.cpp'
-Check 'AudioEngine has EgorkaVoiceCue enum' ($audioH -match 'enum class EgorkaVoiceCue')
+Check 'AudioEngine has EgorkaVoiceCue enum' (($audioH -match 'enum class EgorkaVoiceCue') -and ($audioH -match 'DialOj287') -and ($audioH -match 'DialDrillEureka'))
 Check 'AudioEngine has playEgorkaVoice method' ($audioH -match 'playEgorkaVoice\(EgorkaVoiceCue cue')
 Check 'AudioEngine has Egorka voice enable and volume control' (($audioH -match 'setEgorkaVoiceEnabled') -and ($audioH -match 'setEgorkaVoiceVolume'))
-Check 'AudioEngine implements playEgorkaVoice with PCM cache' (($audioCpp -match 'void AudioEngine::playEgorkaVoice') -and ($audioCpp -match 'm_egorkaCache'))
+Check 'AudioEngine implements playEgorkaVoice with PCM cache' (($audioCpp -match 'void AudioEngine::playEgorkaVoice') -and ($audioCpp -match 'm_egorkaCache') -and ($audioCpp -match 'dial_oj287\.wav'))
 Check 'AppGL triggers Egorka voice on warp, gear, docking, and telemetry' (($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::WarpOn\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::DockOk\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::GearDown\)'))
+Check 'AppGL triggers Egorka dialogue on bridge comms and landing' (($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::DialOj287\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::DialHardLanding\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::DialDrillEureka\)'))
 Check 'res/audio/egorka contains generated voice cues' ((Test-Path 'res/audio/egorka/warp_on.wav') -and (Test-Path 'res/audio/egorka/dock_ok.wav') -and (Test-Path 'res/audio/egorka/sys_online.wav'))
+Check 'res/audio/egorka contains generated story dialogues' ((Test-Path 'res/audio/egorka/dial_oj287.wav') -and (Test-Path 'res/audio/egorka/dial_sn1987a.wav') -and (Test-Path 'res/audio/egorka/dial_drill_eureka.wav'))
 
 # Stage 5 / Release 1.0: Planetary Landing Avionics (Issue #139)
 $landingH = Read-File 'src/LandingSystem.h'

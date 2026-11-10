@@ -113,7 +113,14 @@ class AudioEngine {
     ShieldLow = 7,
     TerrainWarn = 8,
     OrbitOk = 9,
-    SysOnline = 10
+    SysOnline = 10,
+    // Сюжетные радиодиалоги с Егоркой
+    DialOj287 = 11,
+    DialHyperdisk = 12,
+    DialGw170817 = 13,
+    DialSn1987a = 14,
+    DialHardLanding = 15,
+    DialDrillEureka = 16
   };
 
   void playEgorkaVoice(EgorkaVoiceCue cue, float gainDb = 0.0f);
