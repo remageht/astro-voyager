@@ -615,6 +615,13 @@ Check 'AppGL triggers Egorka dialogue on bridge comms and landing' (($appCpp -ma
 Check 'res/audio/egorka contains generated voice cues' ((Test-Path 'res/audio/egorka/warp_on.wav') -and (Test-Path 'res/audio/egorka/dock_ok.wav') -and (Test-Path 'res/audio/egorka/sys_online.wav'))
 Check 'res/audio/egorka contains generated story dialogues' ((Test-Path 'res/audio/egorka/dial_oj287.wav') -and (Test-Path 'res/audio/egorka/dial_sn1987a.wav') -and (Test-Path 'res/audio/egorka/dial_drill_eureka.wav'))
 
+# Stage 5 / Release 1.0: Female Crew Radio Comms & Dialogues (Issue #145)
+Check 'AudioEngine has female crew voice cues (Mia, Elena, Aurora)' (($audioH -match 'MiaM16') -and ($audioH -match 'ElenaSgra') -and ($audioH -match 'AuroraSysOnline') -and ($audioH -match 'MiaTouchdown'))
+Check 'AudioEngine implements female crew audio files search' (($audioCpp -match 'mia_m16\.wav') -and ($audioCpp -match 'crew_female'))
+Check 'AppGL triggers female crew voice on bridge comms and safe touchdown' (($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::MiaM16\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::ElenaSgra\)') -and ($appCpp -match 'playEgorkaVoice\(AudioEngine::EgorkaVoiceCue::MiaTouchdown\)'))
+Check 'AppGL Ship Terminal TAB 3 has female voice soundboard' (($appCpp -match 'kFemaleCrewBtns') -and ($appCpp -match 'ElenaSgra') -and ($appCpp -match 'AuroraSysOnline'))
+Check 'res/audio/crew_female contains generated female voice lines' ((Test-Path 'res/audio/crew_female/mia_m16.wav') -and (Test-Path 'res/audio/crew_female/mia_touchdown.wav') -and (Test-Path 'res/audio/crew_female/elena_sgra.wav') -and (Test-Path 'res/audio/crew_female/aurora_sys_online.wav'))
+
 # Stage 5 / Release 1.0: Planetary Landing Avionics (Issue #139)
 $landingH = Read-File 'src/LandingSystem.h'
 $landingCpp = Read-File 'src/LandingSystem.cpp'

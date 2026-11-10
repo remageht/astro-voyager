@@ -1899,6 +1899,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 1.8f;
     msg.durationSec = 7.5;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::ElenaSgra);
   } else if (stationId == "gw170817" && !m_bridgeComms.hasTriggered("comms_gw170817")) {
     RadioMessage msg;
     msg.id = "comms_gw170817";
@@ -1920,6 +1921,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 1.8f;
     msg.durationSec = 7.5;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::MiaM16);
   } else if (stationId == "sol" && m_visited.size() > 1 && !m_bridgeComms.hasTriggered("comms_sol_return")) {
     RadioMessage msg;
     msg.id = "comms_sol_return";
@@ -1940,6 +1942,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 1.8f;
     msg.durationSec = 7.5;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::MiaM1);
   } else if (stationId == "m87" && !m_bridgeComms.hasTriggered("comms_m87")) {
     RadioMessage msg;
     msg.id = "comms_m87";
@@ -1950,6 +1953,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 1.8f;
     msg.durationSec = 8.0;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::ElenaM87);
   } else if (stationId == "sn1987a" && !m_bridgeComms.hasTriggered("comms_sn1987a")) {
     RadioMessage msg;
     msg.id = "comms_sn1987a";
@@ -1971,6 +1975,7 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
     msg.priority = 1.8f;
     msg.durationSec = 7.5;
     m_bridgeComms.queueMessage(msg, now);
+    m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::MiaAt2019qiz);
   } else if (stationId == "voyager1" && !m_bridgeComms.hasTriggered("comms_voyager1")) {
     RadioMessage msg;
     msg.id = "comms_voyager1";
@@ -6746,6 +6751,32 @@ void AppGL::drawUnifiedShipTerminal() {
             m_audioWasInit = true;
           }
           m_audio.playEgorkaVoice(kDialogueBtns[i].cue);
+        }
+      }
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.85f, 1.0f), "👩‍🚀 %s",
+                         uiRu("РАДИОСВЯЗЬ ЭКИПАЖА И ИИ (МИА САТО, ЕЛЕНА РОСТОВА, АВРОРА):",
+                              "CREW & AI RADIO COMMS (MIA SATO, ELENA ROSTOVA, AURORA):"));
+      ImGui::Spacing();
+      static const VoiceCueBtn kFemaleCrewBtns[] = {
+        {"1. Миа: M16 Столпы", "1. Mia: M16 Pillars", AudioEngine::EgorkaVoiceCue::MiaM16},
+        {"2. Миа: M1 Пульсар", "2. Mia: M1 Pulsar", AudioEngine::EgorkaVoiceCue::MiaM1},
+        {"3. Миа: AT2019qiz", "3. Mia: AT2019qiz", AudioEngine::EgorkaVoiceCue::MiaAt2019qiz},
+        {"4. Миа: Мягкая посадка", "4. Mia: Soft Touchdown", AudioEngine::EgorkaVoiceCue::MiaTouchdown},
+        {"5. Елена: Sgr A* Эргосфера", "5. Elena: Sgr A* Ergo", AudioEngine::EgorkaVoiceCue::ElenaSgra},
+        {"6. Елена: M87* Джет", "6. Elena: M87* Jet", AudioEngine::EgorkaVoiceCue::ElenaM87},
+        {"7. ИИ Аврора: Системы", "7. Aurora AI: Online", AudioEngine::EgorkaVoiceCue::AuroraSysOnline}
+      };
+      for (int i = 0; i < 7; ++i) {
+        if (i % 3 != 0) ImGui::SameLine(0.0f, 6.0f);
+        if (ImGui::Button(uiRu(kFemaleCrewBtns[i].labelRu, kFemaleCrewBtns[i].labelEn), ImVec2(190.0f, 26.0f))) {
+          if (!m_audio.isInitialized()) {
+            m_audio.ensureInitialized();
+            m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+            m_audioWasInit = true;
+          }
+          m_audio.playEgorkaVoice(kFemaleCrewBtns[i].cue);
         }
       }
 
@@ -14951,6 +14982,8 @@ void AppGL::updateLandingOperations(float deltaTime) {
       m_bridgeComms.queueMessage(comm, glfwGetTime());
       if (m_landingTelem.touchdown != TouchdownRating::Safe) {
         m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::DialHardLanding);
+      } else {
+        m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::MiaTouchdown);
       }
     }
 

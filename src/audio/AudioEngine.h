@@ -120,7 +120,15 @@ class AudioEngine {
     DialGw170817 = 13,
     DialSn1987a = 14,
     DialHardLanding = 15,
-    DialDrillEureka = 16
+    DialDrillEureka = 16,
+    // Женские реплики экипажа (Миа Сато, Елена Ростова, ИИ Аврора)
+    MiaM16 = 20,
+    MiaM1 = 21,
+    MiaAt2019qiz = 22,
+    MiaTouchdown = 23,
+    ElenaSgra = 24,
+    ElenaM87 = 25,
+    AuroraSysOnline = 26
   };
 
   void playEgorkaVoice(EgorkaVoiceCue cue, float gainDb = 0.0f);
