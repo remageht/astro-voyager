@@ -474,6 +474,13 @@ static const char* egorkaCueFilename(AudioEngine::EgorkaVoiceCue cue) {
     case AudioEngine::EgorkaVoiceCue::DialSn1987a: return "dial_sn1987a.wav";
     case AudioEngine::EgorkaVoiceCue::DialHardLanding: return "dial_hard_landing.wav";
     case AudioEngine::EgorkaVoiceCue::DialDrillEureka: return "dial_drill_eureka.wav";
+    case AudioEngine::EgorkaVoiceCue::MiaM16: return "mia_m16.wav";
+    case AudioEngine::EgorkaVoiceCue::MiaM1: return "mia_m1.wav";
+    case AudioEngine::EgorkaVoiceCue::MiaAt2019qiz: return "mia_at2019qiz.wav";
+    case AudioEngine::EgorkaVoiceCue::MiaTouchdown: return "mia_touchdown.wav";
+    case AudioEngine::EgorkaVoiceCue::ElenaSgra: return "elena_sgra.wav";
+    case AudioEngine::EgorkaVoiceCue::ElenaM87: return "elena_m87.wav";
+    case AudioEngine::EgorkaVoiceCue::AuroraSysOnline: return "aurora_sys_online.wav";
   }
   return nullptr;
 }
@@ -514,11 +521,14 @@ void AudioEngine::playEgorkaVoice(EgorkaVoiceCue cue, float gainDb) {
     const char* fn = egorkaCueFilename(cue);
     if (!fn) return;
 
-    // Пути поиска: res/audio/egorka/<fn> или ../res/audio/egorka/<fn>
+    // Пути поиска: res/audio/egorka/<fn>, res/audio/crew_female/<fn>
     const std::string candidates[] = {
       std::string("res/audio/egorka/") + fn,
       std::string("../res/audio/egorka/") + fn,
-      std::string("build-gl/Release/res/audio/egorka/") + fn
+      std::string("build-gl/Release/res/audio/egorka/") + fn,
+      std::string("res/audio/crew_female/") + fn,
+      std::string("../res/audio/crew_female/") + fn,
+      std::string("build-gl/Release/res/audio/crew_female/") + fn
     };
 
     for (const auto& path : candidates) {
