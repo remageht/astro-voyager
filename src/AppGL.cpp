@@ -6677,7 +6677,47 @@ void AppGL::drawUnifiedShipTerminal() {
       }
       ImGui::SameLine();
       if (ImGui::Button(uiRu("Тест##termVoice", "Test Voice##termVoice"))) {
+        if (!m_audio.isInitialized()) {
+          m_audio.ensureInitialized();
+          m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+          m_audioWasInit = true;
+        }
         m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::SysOnline);
+      }
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "🔊 %s",
+                         uiRu("ТЕСТ ВСЕХ 11 РЕПЛИК БОРТОВОГО ИИ (НАЖМИТЕ ДЛЯ ПРОСЛУШИВАНИЯ):",
+                              "ALL 11 SHIP AI VOICE CUES TEST (CLICK TO PLAY):"));
+      ImGui::Spacing();
+      struct VoiceCueBtn {
+        const char* labelRu;
+        const char* labelEn;
+        AudioEngine::EgorkaVoiceCue cue;
+      };
+      static const VoiceCueBtn kVoiceCueBtns[] = {
+        {"1. Системы онлайн", "1. Systems Online", AudioEngine::EgorkaVoiceCue::SysOnline},
+        {"2. Варп включён", "2. Warp Engaged", AudioEngine::EgorkaVoiceCue::WarpOn},
+        {"3. Варп выключен", "3. Warp Disengaged", AudioEngine::EgorkaVoiceCue::WarpOff},
+        {"4. Шасси выпущены", "4. Gear Down", AudioEngine::EgorkaVoiceCue::GearDown},
+        {"5. Шасси убраны", "5. Gear Up", AudioEngine::EgorkaVoiceCue::GearUp},
+        {"6. Стыковка успешна", "6. Docking Complete", AudioEngine::EgorkaVoiceCue::DockOk},
+        {"7. Отстыковка завершена", "7. Undocking Complete", AudioEngine::EgorkaVoiceCue::UndockOk},
+        {"8. Мало топлива", "8. Low Fuel Alert", AudioEngine::EgorkaVoiceCue::FuelLow},
+        {"9. Пробитие щитов", "9. Shield Penetration", AudioEngine::EgorkaVoiceCue::ShieldLow},
+        {"10. Опасность рельефа", "10. Terrain Danger", AudioEngine::EgorkaVoiceCue::TerrainWarn},
+        {"11. Орбита захвачена", "11. Orbit Capture", AudioEngine::EgorkaVoiceCue::OrbitOk}
+      };
+      for (int i = 0; i < 11; ++i) {
+        if (i % 3 != 0) ImGui::SameLine(0.0f, 6.0f);
+        if (ImGui::Button(uiRu(kVoiceCueBtns[i].labelRu, kVoiceCueBtns[i].labelEn), ImVec2(190.0f, 26.0f))) {
+          if (!m_audio.isInitialized()) {
+            m_audio.ensureInitialized();
+            m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+            m_audioWasInit = true;
+          }
+          m_audio.playEgorkaVoice(kVoiceCueBtns[i].cue);
+        }
       }
 
     } else if (m_shipTerminalTab == 4) {
@@ -10160,6 +10200,15 @@ void AppGL::drawMenu() {
           float voiceVol = m_audio.egorkaVoiceVolume();
           if (ImGui::SliderFloat(uiRu("Громкость голоса ИИ", "AI Voice Volume"), &voiceVol, 0.0f, 1.0f, "%.2f")) {
             m_audio.setEgorkaVoiceVolume(voiceVol);
+          }
+          ImGui::SameLine();
+          if (ImGui::Button(uiRu("Тест##settingsVoice", "Test Voice##settingsVoice"))) {
+            if (!m_audio.isInitialized()) {
+              m_audio.ensureInitialized();
+              m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+              m_audioWasInit = true;
+            }
+            m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::SysOnline);
           }
 
           ImGui::Spacing();
