@@ -581,7 +581,9 @@ void AppGL::processInput(float deltaTime) {
   const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
   if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard && !m_slidesOpen && !m_epilogueActive) {
     // Esc closes top-most overlay or terminal before main menu
-    if (m_shipTerminalOpen) {
+    if (m_orreryMapOpen) {
+      m_orreryMapOpen = false;
+    } else if (m_shipTerminalOpen) {
       m_shipTerminalOpen = false;
     } else if (m_zettelkastenOpen) {
       m_zettelkastenOpen = false;
@@ -605,6 +607,29 @@ void AppGL::processInput(float deltaTime) {
     m_audio.playWhoosh();
   }
   m_prevTabPressed = tabDown;
+
+  // === 3D Holographic Star Map / Orrery [M] ===
+  const bool mDown = (glfwGetKey(win, GLFW_KEY_M) == GLFW_PRESS);
+  const bool ctrlDown = (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                         glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+  if (mDown && !m_prevMPressed && !io.WantCaptureKeyboard && !m_inMenu && !m_slidesOpen && !m_epilogueActive) {
+    if (ctrlDown) {
+      // Ctrl+M: Audio mute toggle
+      audioEnsureOnFirstInput();
+      if (!m_audio.isInitialized()) {
+        m_audio.ensureInitialized();
+        m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+        m_audioWasInit = true;
+      }
+      m_audio.toggleMute();
+      if (!m_audio.isMuted()) m_audio.playClick();
+    } else {
+      // M: 3D Holographic Star Map / Orrery toggle
+      m_orreryMapOpen = !m_orreryMapOpen;
+      m_audio.playWhoosh();
+    }
+  }
+  m_prevMPressed = mDown;
 
   if (m_shipTerminalOpen && !io.WantCaptureKeyboard) {
     if (glfwGetKey(win, GLFW_KEY_1) == GLFW_PRESS) m_shipTerminalTab = 0;
@@ -1001,6 +1026,37 @@ void AppGL::processGamepadInput(double dt) {
 
   const auto& ctrl = m_gamepad.getFlightControl();
 
+  // 0. Orrery map navigation when active
+  if (m_orreryMapOpen) {
+    if (std::abs(ctrl.lookYaw) > 0.04f) {
+      m_orreryYaw += ctrl.lookYaw * 2.2f * static_cast<float>(dt);
+    }
+    if (std::abs(ctrl.lookPitch) > 0.04f) {
+      m_orreryPitch = glm::clamp(m_orreryPitch + ctrl.lookPitch * 1.8f * static_cast<float>(dt), -1.45f, 1.45f);
+    }
+    if (std::abs(ctrl.roll) > 0.04f) {
+      m_orreryPanX += ctrl.roll * 450.0f * static_cast<float>(dt);
+    }
+    if (std::abs(ctrl.pitch) > 0.04f) {
+      m_orreryPanY -= ctrl.pitch * 450.0f * static_cast<float>(dt);
+    }
+    if (ctrl.throttle > 0.05f) {
+      m_orreryZoom = glm::clamp(m_orreryZoom * (1.0f + ctrl.throttle * 2.5f * static_cast<float>(dt)), 0.25f, 35.0f);
+    }
+    if (ctrl.reverse > 0.05f) {
+      m_orreryZoom = glm::clamp(m_orreryZoom / (1.0f + ctrl.reverse * 2.5f * static_cast<float>(dt)), 0.25f, 35.0f);
+    }
+    if (m_gamepad.isJustPressed(GamepadButton::B) || m_gamepad.isJustPressed(GamepadButton::Start)) {
+      m_orreryMapOpen = false;
+      m_audio.playWhoosh();
+    }
+    if (m_gamepad.isJustPressed(GamepadButton::X)) {
+      m_orreryPanX = 0.0f;
+      m_orreryPanY = 0.0f;
+    }
+    return;
+  }
+
   // 1. Right analog stick: Camera view rotation (Yaw / Pitch)
   if (std::abs(ctrl.lookYaw) > 0.01f || std::abs(ctrl.lookPitch) > 0.01f) {
     const float lookSpeed = 2.4f * m_mouseSensitivity * ship::rcsGimbalMult(m_shipCustomization.rcsGimbalLevel);
@@ -1038,7 +1094,8 @@ void AppGL::processGamepadInput(double dt) {
   // 4. Face buttons & D-Pad shortcuts
   // Start button: Menu / Pause
   if (m_gamepad.isJustPressed(GamepadButton::Start)) {
-    if (m_shipTerminalOpen) m_shipTerminalOpen = false;
+    if (m_orreryMapOpen) m_orreryMapOpen = false;
+    else if (m_shipTerminalOpen) m_shipTerminalOpen = false;
     else if (m_zettelkastenOpen) m_zettelkastenOpen = false;
     else if (m_expeditionMapOpen) m_expeditionMapOpen = false;
     else m_inMenu = !m_inMenu;
@@ -1059,7 +1116,8 @@ void AppGL::processGamepadInput(double dt) {
 
   // Button B: Back / Close / Expedition map
   if (m_gamepad.isJustPressed(GamepadButton::B)) {
-    if (m_shipTerminalOpen) m_shipTerminalOpen = false;
+    if (m_orreryMapOpen) m_orreryMapOpen = false;
+    else if (m_shipTerminalOpen) m_shipTerminalOpen = false;
     else if (m_zettelkastenOpen) m_zettelkastenOpen = false;
     else if (m_expeditionMapOpen) m_expeditionMapOpen = false;
     else if (m_storyOpen) m_storyOpen = false;
@@ -1100,6 +1158,12 @@ void AppGL::processGamepadInput(double dt) {
   // DpadLeft: Bridge radio chatter
   if (m_gamepad.isJustPressed(GamepadButton::DpadLeft)) {
     m_audio.playRadioBeep();
+  }
+
+  // DpadRight: 3D Holographic Star Map / Orrery [M]
+  if (m_gamepad.isJustPressed(GamepadButton::DpadRight)) {
+    m_orreryMapOpen = !m_orreryMapOpen;
+    m_audio.playWhoosh();
   }
 
   // Bumpers LB / RB: Warp factor adjustment in warp, or View mode toggle
@@ -4803,6 +4867,647 @@ void AppGL::drawExpeditionMap() {
   ImGui::PopStyleColor(2);
 }
 
+void AppGL::drawOrreryMap() {
+  if (!m_sceneManager) return;
+  const ImVec2 disp = ImGui::GetIO().DisplaySize;
+  if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+  ImGuiIO& io = ImGui::GetIO();
+  const float currentTime = static_cast<float>(glfwGetTime());
+
+  // === Mouse Orbit & Pan Interaction (Canvas Area) ===
+  const bool mouseInRightCard = (io.MousePos.x > disp.x - 390.0f && io.MousePos.y > 50.0f && io.MousePos.y < disp.y - 40.0f);
+  const bool mouseInLeftCard = (io.MousePos.x < 250.0f && io.MousePos.y > 60.0f && io.MousePos.y < disp.y - 40.0f);
+  const bool mouseInTopBar = (io.MousePos.y < 55.0f);
+  const bool canDragCanvas = (!mouseInRightCard && !mouseInLeftCard && !mouseInTopBar);
+
+  if (canDragCanvas) {
+    if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+      m_orreryYaw += io.MouseDelta.x * 0.0055f;
+      m_orreryPitch = glm::clamp(m_orreryPitch + io.MouseDelta.y * 0.0055f, -1.45f, 1.45f);
+    }
+    if (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+      m_orreryPanX += io.MouseDelta.x;
+      m_orreryPanY += io.MouseDelta.y;
+    }
+  }
+  if (!mouseInRightCard && !mouseInLeftCard && io.MouseWheel != 0.0f) {
+    m_orreryZoom = glm::clamp(m_orreryZoom * (1.0f + io.MouseWheel * 0.12f), 0.25f, 35.0f);
+  }
+
+  // Fullscreen container window
+  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(disp, ImGuiCond_Always);
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                           ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse |
+                           ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.024f, 0.040f, 0.96f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+  if (ImGui::Begin("##OrreryMapCanvas", nullptr, flags)) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    // 3D Projection math
+    auto project3DWithPan = [&](const Vec3& p, const ImVec2& pan) -> ImVec2 {
+      const float cx = disp.x * 0.5f + pan.x;
+      const float cy = disp.y * 0.5f + pan.y;
+      const float cyaw = std::cos(m_orreryYaw);
+      const float syaw = std::sin(m_orreryYaw);
+      const float x1 = static_cast<float>(p.x) * cyaw - static_cast<float>(p.z) * syaw;
+      const float z1 = static_cast<float>(p.x) * syaw + static_cast<float>(p.z) * cyaw;
+      const float cpitch = std::cos(m_orreryPitch);
+      const float spitch = std::sin(m_orreryPitch);
+      const float y1 = static_cast<float>(p.y) * cpitch - z1 * spitch;
+      const float z2 = static_cast<float>(p.y) * spitch + z1 * cpitch;
+      const float dCam = 520.0f;
+      const float depthScale = dCam / (dCam + z2 * 0.45f);
+      const float s = m_orreryZoom * std::max(0.12f, depthScale);
+      return ImVec2(cx + x1 * s, cy - y1 * s);
+    };
+
+    auto project3D = [&](const Vec3& p) -> ImVec2 {
+      return project3DWithPan(p, ImVec2(m_orreryPanX, m_orreryPanY));
+    };
+
+    // Deep cosmic background with radial illumination
+    dl->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(4, 8, 16, 245));
+    const ImVec2 centerProj = project3D(Vec3(0.0, 0.0, 0.0));
+    dl->AddCircleFilled(centerProj, 240.0f * (m_orreryZoom / 5.0f), IM_COL32(25, 45, 80, 45), 48);
+    dl->AddCircleFilled(centerProj, 120.0f * (m_orreryZoom / 5.0f), IM_COL32(50, 85, 140, 30), 32);
+
+    // Ecliptic Polar Grid & Concentric Distance Rings (AU)
+    const float k2Pi = 6.28318530718f;
+    const float gridRadii[] = {5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 40.0f};
+    for (float r : gridRadii) {
+      std::vector<ImVec2> ringPts;
+      ringPts.reserve(48);
+      for (int i = 0; i < 48; ++i) {
+        const float a = k2Pi * static_cast<float>(i) / 48.0f;
+        ringPts.push_back(project3D(Vec3(r * std::cos(a), 0.0, r * std::sin(a))));
+      }
+      dl->AddPolyline(ringPts.data(), static_cast<int>(ringPts.size()), IM_COL32(28, 65, 105, 45), true, 1.0f);
+      const ImVec2 tagPos = project3D(Vec3(r, 0.0, 0.0));
+      char distTag[32];
+      std::snprintf(distTag, sizeof(distTag), "%.0f AU", r);
+      dl->AddText(ImVec2(tagPos.x + 3.0f, tagPos.y - 12.0f), IM_COL32(45, 95, 145, 110), distTag);
+    }
+
+    // Ecliptic axes
+    dl->AddLine(project3D(Vec3(-45.0, 0.0, 0.0)), project3D(Vec3(45.0, 0.0, 0.0)), IM_COL32(25, 55, 90, 40), 1.0f);
+    dl->AddLine(project3D(Vec3(0.0, 0.0, -45.0)), project3D(Vec3(0.0, 0.0, 45.0)), IM_COL32(25, 55, 90, 40), 1.0f);
+
+    // Retrieve live celestial body data
+    const auto& defs = m_sceneManager->getSolarSystem().defs();
+    const auto& liveBodies = m_sceneManager->getBodies();
+    std::unordered_map<std::string, Vec3> bodyPosMap;
+    for (const auto& b : liveBodies) {
+      if (b.def) bodyPosMap[b.def->id] = b.pos;
+    }
+
+    // Default selection fallback
+    if (m_orrerySelectedId.empty()) m_orrerySelectedId = "earth";
+
+    // 1. Render Keplerian Elliptical Orbits
+    for (const auto& d : defs) {
+      if (d.orbitRadius <= 0.0f) continue; // Skip Sun
+
+      Vec3 centerPos(0.0, 0.0, 0.0);
+      if (!d.parentId.empty()) {
+        auto it = bodyPosMap.find(d.parentId);
+        if (it != bodyPosMap.end()) centerPos = it->second;
+      }
+
+      // 64 Keplerian elliptical points
+      const int numSegs = 64;
+      std::vector<ImVec2> orbitScreenPts;
+      orbitScreenPts.reserve(numSegs + 1);
+      const float e = d.ecc;
+      const float incl = d.incl;
+      const float a = d.orbitRadius;
+
+      for (int i = 0; i <= numSegs; ++i) {
+        const float M = k2Pi * static_cast<float>(i) / static_cast<float>(numSegs);
+        float E = M;
+        for (int iter = 0; iter < 3; ++iter) {
+          E = M + e * std::sin(E);
+        }
+        const float halfE = E * 0.5f;
+        const float nu = 2.0f * std::atan2(std::sqrt(std::max(0.0f, 1.0f + e)) * std::sin(halfE),
+                                           std::sqrt(std::max(0.001f, 1.0f - e)) * std::cos(halfE));
+        const float r = a * (1.0f - e * std::cos(E));
+        const float cn = std::cos(nu);
+        const float sn = std::sin(nu);
+        const Vec3 ptLocal(r * cn, r * sn * std::sin(incl), r * sn * std::cos(incl));
+        orbitScreenPts.push_back(project3D(centerPos + ptLocal));
+      }
+
+      const bool isSelected = (m_orrerySelectedId == d.id);
+      ImU32 orbitCol = isSelected ? IM_COL32(56, 189, 248, 235)
+                                  : IM_COL32(static_cast<int>(d.colA.x * 200.0f + 40.0f),
+                                             static_cast<int>(d.colA.y * 200.0f + 40.0f),
+                                             static_cast<int>(d.colA.z * 200.0f + 40.0f), 125);
+      const float orbitThick = isSelected ? 2.4f : 1.0f;
+      if (isSelected) {
+        // Outer glow polyline for selected orbit
+        dl->AddPolyline(orbitScreenPts.data(), static_cast<int>(orbitScreenPts.size()),
+                        IM_COL32(56, 189, 248, 70), true, 5.0f);
+      }
+      dl->AddPolyline(orbitScreenPts.data(), static_cast<int>(orbitScreenPts.size()),
+                      orbitCol, true, orbitThick);
+    }
+
+    // 2. Render Celestial Body Nodes
+    std::string hoveredBodyId;
+    for (const auto& b : liveBodies) {
+      if (!b.def) continue;
+      const PlanetDef& d = *b.def;
+      const Vec3 wpos = b.pos;
+      const ImVec2 spos = project3D(wpos);
+
+      // Node size scaled for holographic readability
+      float baseRad = d.radius * m_orreryZoom * 0.40f;
+      if (d.id == "sun") baseRad = std::clamp(baseRad, 14.0f, 32.0f);
+      else if (d.type == 1) baseRad = std::clamp(baseRad, 8.0f, 18.0f); // Gas giant
+      else if (!d.parentId.empty()) baseRad = std::clamp(baseRad, 3.5f, 7.0f); // Moon
+      else baseRad = std::clamp(baseRad, 5.0f, 11.0f); // Rocky planet
+
+      // Mouse hover detection
+      const float mdx = io.MousePos.x - spos.x;
+      const float mdy = io.MousePos.y - spos.y;
+      const bool isHovered = (std::sqrt(mdx * mdx + mdy * mdy) < std::max(baseRad + 8.0f, 16.0f));
+      if (isHovered && canDragCanvas) {
+        hoveredBodyId = d.id;
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+          m_orrerySelectedId = d.id;
+          m_audio.playClick();
+        }
+      }
+
+      const bool isSelected = (m_orrerySelectedId == d.id);
+
+      // Color computation
+      const ImU32 coreCol = IM_COL32(static_cast<int>(d.colA.x * 255.0f),
+                                     static_cast<int>(d.colA.y * 255.0f),
+                                     static_cast<int>(d.colA.z * 255.0f), 255);
+      const ImU32 glowCol = IM_COL32(static_cast<int>(d.colA.x * 255.0f),
+                                     static_cast<int>(d.colA.y * 255.0f),
+                                     static_cast<int>(d.colA.z * 255.0f), 70);
+
+      // Draw Sun special corona or planet glow
+      if (d.id == "sun") {
+        const float pulse = 1.0f + 0.06f * std::sin(currentTime * 3.0f);
+        dl->AddCircleFilled(spos, baseRad * 2.2f * pulse, IM_COL32(255, 175, 40, 45), 32);
+        dl->AddCircleFilled(spos, baseRad * 1.5f * pulse, IM_COL32(255, 215, 90, 85), 32);
+        dl->AddCircleFilled(spos, baseRad, IM_COL32(255, 250, 220, 255), 32);
+      } else {
+        dl->AddCircleFilled(spos, baseRad * 1.8f, glowCol, 24);
+        dl->AddCircleFilled(spos, baseRad, coreCol, 24);
+
+        // Saturn's tilted holographic ring
+        if (d.id == "saturn") {
+          const float rw = baseRad * 2.5f;
+          const float rh = baseRad * 0.9f;
+          dl->AddEllipse(spos, ImVec2(rw, rh), IM_COL32(235, 205, 145, 195), -0.42f, 32, 1.8f);
+        }
+
+        // Halley comet ion tail
+        if (d.id == "halley") {
+          const Vec3 toSun = Vec3(-wpos.x, -wpos.y, -wpos.z);
+          const double len = std::sqrt(toSun.x * toSun.x + toSun.y * toSun.y + toSun.z * toSun.z);
+          if (len > 0.001) {
+            const Vec3 tailDir(toSun.x / len, toSun.y / len, toSun.z / len);
+            const ImVec2 tailEnd = project3D(wpos - tailDir * 4.5);
+            dl->AddLine(spos, tailEnd, IM_COL32(140, 225, 255, 160), 2.0f);
+          }
+        }
+      }
+
+      // Selection & Hover Brackets
+      if (isSelected || isHovered) {
+        const float bkRad = baseRad + 7.0f;
+        const ImU32 bkCol = isSelected ? IM_COL32(56, 189, 248, 255) : IM_COL32(180, 220, 255, 180);
+        dl->AddCircle(spos, bkRad, bkCol, 24, isSelected ? 2.0f : 1.2f);
+        // Reticle ticks
+        dl->AddLine(ImVec2(spos.x - bkRad - 4.0f, spos.y), ImVec2(spos.x - bkRad + 2.0f, spos.y), bkCol, 1.5f);
+        dl->AddLine(ImVec2(spos.x + bkRad - 2.0f, spos.y), ImVec2(spos.x + bkRad + 4.0f, spos.y), bkCol, 1.5f);
+        dl->AddLine(ImVec2(spos.x, spos.y - bkRad - 4.0f), ImVec2(spos.x, spos.y - bkRad + 2.0f), bkCol, 1.5f);
+        dl->AddLine(ImVec2(spos.x, spos.y + bkRad - 2.0f), ImVec2(spos.x, spos.y + bkRad + 4.0f), bkCol, 1.5f);
+      }
+
+      // Name label
+      const ImU32 textCol = isSelected ? IM_COL32(255, 255, 255, 255)
+                                       : (isHovered ? IM_COL32(200, 235, 255, 240) : IM_COL32(145, 185, 220, 190));
+      dl->AddText(ImVec2(spos.x + baseRad + 6.0f, spos.y - 7.0f), textCol, d.name.c_str());
+    }
+
+    // 3. Render Orbital Stations & Dock Sites
+    const auto& dockSites = m_sceneManager->dockSites();
+    for (const auto& ds : dockSites) {
+      const ImVec2 spos = project3D(ds.pos);
+      const float mdx = io.MousePos.x - spos.x;
+      const float mdy = io.MousePos.y - spos.y;
+      const bool isHovered = (std::sqrt(mdx * mdx + mdy * mdy) < 16.0f);
+      if (isHovered && canDragCanvas) {
+        hoveredBodyId = ds.id;
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+          m_orrerySelectedId = ds.id;
+          m_audio.playClick();
+        }
+      }
+      const bool isSelected = (m_orrerySelectedId == ds.id);
+      const ImU32 dCol = isSelected ? IM_COL32(56, 189, 248, 255) : IM_COL32(45, 212, 191, 200);
+
+      // Diamond marker
+      const float dsz = isSelected ? 7.0f : 5.0f;
+      dl->AddQuadFilled(ImVec2(spos.x, spos.y - dsz),
+                        ImVec2(spos.x + dsz, spos.y),
+                        ImVec2(spos.x, spos.y + dsz),
+                        ImVec2(spos.x - dsz, spos.y), dCol);
+      if (isSelected || isHovered) {
+        dl->AddCircle(spos, dsz + 4.0f, IM_COL32(56, 189, 248, 220), 16, 1.5f);
+      }
+      dl->AddText(ImVec2(spos.x + dsz + 5.0f, spos.y - 7.0f),
+                  isSelected ? IM_COL32(255, 255, 255, 255) : IM_COL32(140, 215, 210, 180),
+                  ds.name.c_str());
+    }
+
+    // 4. Render Player Ship Indicator
+    const Vec3 shipPos = m_camera.position;
+    const ImVec2 shipScreenPos = project3D(shipPos);
+    const float pingPhase = std::fmod(currentTime, 1.2f) / 1.2f;
+    const float pingRad = 10.0f + 24.0f * pingPhase;
+    const ImU32 pingCol = IM_COL32(250, 204, 21, static_cast<int>(220.0f * (1.0f - pingPhase)));
+    dl->AddCircle(shipScreenPos, pingRad, pingCol, 24, 1.5f);
+
+    // Ship heading vector & chevron
+    const Vec3 fwd = m_camera.forward();
+    const ImVec2 fwdScreen = project3D(shipPos + fwd * 1.5);
+    const float shipAng = std::atan2(fwdScreen.y - shipScreenPos.y, fwdScreen.x - shipScreenPos.x);
+
+    const float sLen = 9.0f;
+    const float sWing = 6.0f;
+    const ImVec2 tip(shipScreenPos.x + std::cos(shipAng) * sLen, shipScreenPos.y + std::sin(shipAng) * sLen);
+    const ImVec2 leftW(shipScreenPos.x + std::cos(shipAng + 2.5f) * sWing, shipScreenPos.y + std::sin(shipAng + 2.5f) * sWing);
+    const ImVec2 rightW(shipScreenPos.x + std::cos(shipAng - 2.5f) * sWing, shipScreenPos.y + std::sin(shipAng - 2.5f) * sWing);
+
+    dl->AddTriangleFilled(tip, leftW, rightW, IM_COL32(250, 204, 21, 255));
+    dl->AddTriangle(tip, leftW, rightW, IM_COL32(255, 255, 255, 240), 1.2f);
+    dl->AddText(ImVec2(shipScreenPos.x + 12.0f, shipScreenPos.y - 8.0f),
+                IM_COL32(250, 204, 21, 240), uiRu("ВАШ КОРАБЛЬ [YOU]", "YOUR SHIP [YOU]"));
+
+    // Find currently selected target definition and state
+    const PlanetDef* selDef = nullptr;
+    Vec3 selPos(0.0, 0.0, 0.0);
+    std::string selName = "Earth";
+    float selRadius = 1.0f;
+    std::vector<std::string> selFacts;
+    bool selIsStation = false;
+
+    for (const auto& d : defs) {
+      if (d.id == m_orrerySelectedId) {
+        selDef = &d;
+        selName = d.name;
+        selRadius = d.radius;
+        selFacts = d.facts;
+        auto it = bodyPosMap.find(d.id);
+        if (it != bodyPosMap.end()) selPos = it->second;
+        break;
+      }
+    }
+    if (!selDef) {
+      for (const auto& ds : dockSites) {
+        if (ds.id == m_orrerySelectedId) {
+          selName = ds.name;
+          selPos = ds.pos;
+          selRadius = 1.2f;
+          selIsStation = true;
+          selFacts = {"Orbital station dock facility", "Equipped with automatic IDA docking collars"};
+          break;
+        }
+      }
+    }
+
+    // Focus Camera Action on Target [F]
+    if (ImGui::IsKeyPressed(ImGuiKey_F) && canDragCanvas) {
+      const ImVec2 targetProj0 = project3DWithPan(selPos, ImVec2(0.0f, 0.0f));
+      m_orreryPanX = (disp.x * 0.5f) - targetProj0.x;
+      m_orreryPanY = (disp.y * 0.5f) - targetProj0.y;
+      m_audio.playClick();
+    }
+
+    // Course Plot / Jump Action [Enter]
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter) && canDragCanvas) {
+      if (selIsStation) {
+        teleportToStation(m_orrerySelectedId);
+        m_orreryMapOpen = false;
+      } else {
+        startObjectFlight(selPos, std::max(selRadius * 4.0, 2.5), selName, selPos);
+        m_orreryMapOpen = false;
+        m_audio.playWhoosh();
+      }
+    }
+
+    // Exit Map [M] or [Esc]
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+      m_orreryMapOpen = false;
+      m_audio.playWhoosh();
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor();
+
+  // === Top Sci-Fi Header Bar ===
+  ImGui::SetNextWindowPos(ImVec2(16.0f, 12.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(disp.x - 32.0f, 44.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.024f, 0.042f, 0.92f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.65f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.2f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
+
+  if (ImGui::Begin("##OrreryHeader", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar)) {
+    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "ASTRO-VOYAGER // 3D CELESTIAL ORRERY & TACTICAL SYSTEM MAP");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.78f, 1.0f), " | %s: SOL | %s: %.1fx",
+                       uiRu("СЕКТОР", "SECTOR"), uiRu("МАСШТАБ", "SCALE"), m_orreryZoom);
+
+    // Quick scale buttons
+    ImGui::SameLine(disp.x - 670.0f);
+    if (ImGui::Button(uiRu("1. Внутренние [1]", "1. Inner [1]"), ImVec2(120.0f, 26.0f))) {
+      m_orreryZoom = 14.0f;
+      m_orreryPanX = 0.0f;
+      m_orreryPanY = 0.0f;
+      m_orreryViewScale = 0;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(uiRu("2. Вся система [2]", "2. Full System [2]"), ImVec2(125.0f, 26.0f))) {
+      m_orreryZoom = 4.5f;
+      m_orreryPanX = 0.0f;
+      m_orreryPanY = 0.0f;
+      m_orreryViewScale = 1;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(uiRu("↺ Сброс вида [R]", "↺ Reset [R]"), ImVec2(110.0f, 26.0f))) {
+      m_orreryPitch = 0.58f;
+      m_orreryYaw = 0.35f;
+      m_orreryZoom = 5.0f;
+      m_orreryPanX = 0.0f;
+      m_orreryPanY = 0.0f;
+    }
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.25f, 0.25f, 0.85f));
+    if (ImGui::Button(uiRu("✕ ЗАКРЫТЬ [M]", "✕ CLOSE [M]"), ImVec2(120.0f, 26.0f))) {
+      m_orreryMapOpen = false;
+      m_audio.playWhoosh();
+    }
+    ImGui::PopStyleColor();
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(3);
+  ImGui::PopStyleColor(2);
+
+  // === Left Quick-Select Celestial Directory Panel ===
+  const float leftPanelW = 210.0f;
+  ImGui::SetNextWindowPos(ImVec2(16.0f, 68.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(leftPanelW, disp.y - 110.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.038f, 0.88f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.55f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 10.0f));
+
+  if (ImGui::Begin("##OrreryLeftDir", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
+    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "✦ %s", uiRu("КАТАЛОГ СИСТЕМЫ", "SYSTEM DIRECTORY"));
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    const auto& defs = m_sceneManager->getSolarSystem().defs();
+    const auto& dockSites = m_sceneManager->dockSites();
+
+    ImGui::BeginChild("##LeftDirScroll", ImVec2(0.0f, 0.0f), false);
+    for (const auto& d : defs) {
+      ImGui::PushID(d.id.c_str());
+      const bool isSelected = (m_orrerySelectedId == d.id);
+      if (isSelected) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.50f, 0.88f, 0.95f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+      } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.10f, 0.18f, 0.75f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.75f, 0.85f, 0.95f, 1.0f));
+      }
+      char bLabel[64];
+      std::snprintf(bLabel, sizeof(bLabel), "%s %s", d.parentId.empty() ? "●" : "  ○", d.name.c_str());
+      if (ImGui::Button(bLabel, ImVec2(ImGui::GetContentRegionAvail().x, 24.0f))) {
+        m_orrerySelectedId = d.id;
+        m_audio.playClick();
+      }
+      ImGui::PopStyleColor(2);
+      ImGui::PopID();
+    }
+
+    if (!dockSites.empty()) {
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::TextColored(ImVec4(0.25f, 0.85f, 0.75f, 1.0f), "⚓ %s", uiRu("СТАНЦИИ И ВЕРФИ", "STATIONS & DOCKS"));
+      for (const auto& ds : dockSites) {
+        ImGui::PushID(ds.id.c_str());
+        const bool isSelected = (m_orrerySelectedId == ds.id);
+        if (isSelected) {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.55f, 0.75f, 0.95f));
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        } else {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.10f, 0.16f, 0.75f));
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.88f, 0.85f, 1.0f));
+        }
+        char dLabel[64];
+        std::snprintf(dLabel, sizeof(dLabel), "◇ %s", ds.name.c_str());
+        if (ImGui::Button(dLabel, ImVec2(ImGui::GetContentRegionAvail().x, 24.0f))) {
+          m_orrerySelectedId = ds.id;
+          m_audio.playClick();
+        }
+        ImGui::PopStyleColor(2);
+        ImGui::PopID();
+      }
+    }
+    ImGui::EndChild();
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(3);
+  ImGui::PopStyleColor(2);
+
+  // === Right Telemetry Glass Inspector Card ===
+  const float rightPanelW = 340.0f;
+  ImGui::SetNextWindowPos(ImVec2(disp.x - rightPanelW - 16.0f, 68.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(rightPanelW, disp.y - 110.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.038f, 0.92f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.75f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.2f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+
+  if (ImGui::Begin("##OrreryTelemetryCard", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
+    const auto& liveBodies = m_sceneManager->getBodies();
+    const auto& dockSites = m_sceneManager->dockSites();
+
+    const PlanetDef* selDef = nullptr;
+    Vec3 selPos(0.0, 0.0, 0.0);
+    std::string selName = "Earth";
+    float selRadius = 1.0f;
+    std::vector<std::string> selFacts;
+    bool selIsStation = false;
+
+    for (const auto& b : liveBodies) {
+      if (b.def && b.def->id == m_orrerySelectedId) {
+        selDef = b.def;
+        selPos = b.pos;
+        selName = b.def->name;
+        selRadius = b.def->radius;
+        selFacts = b.def->facts;
+        break;
+      }
+    }
+    if (!selDef) {
+      for (const auto& ds : dockSites) {
+        if (ds.id == m_orrerySelectedId) {
+          selName = ds.name;
+          selPos = ds.pos;
+          selRadius = 1.0f;
+          selIsStation = true;
+          selFacts = {"Orbital station dock facility", "Equipped with automatic IDA docking collars"};
+          break;
+        }
+      }
+    }
+
+    // Distance calculation
+    const Vec3 toShip(selPos.x - m_camera.position.x, selPos.y - m_camera.position.y, selPos.z - m_camera.position.z);
+    const float distUnits = static_cast<float>(std::sqrt(toShip.x * toShip.x + toShip.y * toShip.y + toShip.z * toShip.z));
+    const float distAU = distUnits * 0.1f;
+    const float distMkm = distAU * 149.6f;
+
+    // Header & Target Title
+    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "TARGET // %s", selName.c_str());
+    ImGui::TextColored(ImVec4(0.45f, 0.65f, 0.85f, 1.0f), "%s: %s",
+                       uiRu("КАТАЛОГ ID", "CATALOG ID"), m_orrerySelectedId.c_str());
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Distance metric
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "%s:", uiRu("ДИСТАНЦИЯ ДО КОРАБЛЯ", "DISTANCE TO SHIP"));
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "  %.2f AU  (%.1f Mkm / %.1f u)", distAU, distMkm, distUnits);
+    ImGui::Spacing();
+
+    // Astronomical parameters table
+    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "%s:", uiRu("ОРБИТАЛЬНАЯ ТЕЛЕМЕТРИЯ", "ORBITAL TELEMETRY"));
+    if (selDef) {
+      ImGui::TextColored(ImVec4(0.65f, 0.78f, 0.90f, 1.0f), "• %s: %.2f AU (%.1f u)",
+                         uiRu("Большая полуось a", "Semi-major axis a"), selDef->orbitRadius * 0.1f, selDef->orbitRadius);
+      ImGui::TextColored(ImVec4(0.65f, 0.78f, 0.90f, 1.0f), "• %s: %.4f",
+                         uiRu("Эксцентриситет e", "Eccentricity e"), selDef->ecc);
+      ImGui::TextColored(ImVec4(0.65f, 0.78f, 0.90f, 1.0f), "• %s: %.2f rad (%.1f°)",
+                         uiRu("Наклонение i", "Inclination i"), selDef->incl, selDef->incl * 57.29578f);
+      if (std::abs(selDef->angleSpeed) > 0.0001f) {
+        const float periodSimSec = 6.283185f / std::abs(selDef->angleSpeed);
+        ImGui::TextColored(ImVec4(0.65f, 0.78f, 0.90f, 1.0f), "• %s: %.1f c",
+                           uiRu("Период обращения T", "Orbital Period T"), periodSimSec);
+      }
+      ImGui::TextColored(ImVec4(0.65f, 0.78f, 0.90f, 1.0f), "• %s: %.2f GM",
+                         uiRu("Грав. масса GM", "Grav. Mass GM"), selDef->mass);
+    } else {
+      ImGui::TextColored(ImVec4(0.65f, 0.78f, 0.90f, 1.0f), "• %s: %s",
+                         uiRu("Тип объекта", "Object Type"), uiRu("Орбитальная станция", "Orbital Station"));
+      ImGui::TextColored(ImVec4(0.65f, 0.78f, 0.90f, 1.0f), "• %s: %s",
+                         uiRu("Статус стыковки", "Dock Status"), uiRu("В норме (готов к захвату)", "Nominal (ready)"));
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Scientific facts & Lore
+    ImGui::TextColored(ImVec4(0.95f, 0.80f, 0.35f, 1.0f), "✦ %s:", uiRu("НАУЧНЫЕ СВЕДЕНИЯ", "SCIENTIFIC LORE"));
+    for (const auto& fact : selFacts) {
+      ImGui::TextWrapped("“%s”", fact.c_str());
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Primary action: Course Plotting / Jump [Enter]
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.52f, 0.90f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.65f, 1.00f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button(uiRu("🚀 ПРОЛОЖИТЬ КУРС [Enter]", "🚀 PLOT COURSE [Enter]"),
+                      ImVec2(ImGui::GetContentRegionAvail().x, 34.0f))) {
+      if (selIsStation) {
+        teleportToStation(m_orrerySelectedId);
+        m_orreryMapOpen = false;
+      } else {
+        startObjectFlight(selPos, std::max(selRadius * 4.0, 2.5), selName, selPos);
+        m_orreryMapOpen = false;
+        m_audio.playWhoosh();
+      }
+    }
+    ImGui::PopStyleColor(3);
+
+    ImGui::Spacing();
+    // Center camera action [F]
+    if (ImGui::Button(uiRu("🎯 ЦЕНТРИРОВАТЬ ВИД [F]", "🎯 CENTER CAMERA [F]"),
+                      ImVec2(ImGui::GetContentRegionAvail().x, 28.0f))) {
+      // Calculate projected position of selected target with zero pan
+      const float cyaw = std::cos(m_orreryYaw);
+      const float syaw = std::sin(m_orreryYaw);
+      const float x1 = static_cast<float>(selPos.x) * cyaw - static_cast<float>(selPos.z) * syaw;
+      const float z1 = static_cast<float>(selPos.x) * syaw + static_cast<float>(selPos.z) * cyaw;
+      const float cpitch = std::cos(m_orreryPitch);
+      const float spitch = std::sin(m_orreryPitch);
+      const float y1 = static_cast<float>(selPos.y) * cpitch - z1 * spitch;
+      const float z2 = static_cast<float>(selPos.y) * spitch + z1 * cpitch;
+      const float dCam = 520.0f;
+      const float depthScale = dCam / (dCam + z2 * 0.45f);
+      const float s = m_orreryZoom * std::max(0.12f, depthScale);
+
+      m_orreryPanX = -x1 * s;
+      m_orreryPanY = y1 * s;
+      m_audio.playClick();
+    }
+
+    ImGui::Spacing();
+    // Instant Teleport
+    if (ImGui::Button(uiRu("⚡ МГНОВЕННЫЙ ПЕРЕЛЁТ", "⚡ INSTANT TELEPORT"),
+                      ImVec2(ImGui::GetContentRegionAvail().x, 26.0f))) {
+      m_camera.position = selPos + Vec3(0.0, selRadius * 1.5, selRadius * 3.5);
+      m_orreryMapOpen = false;
+      m_audio.playWhoosh();
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(3);
+  ImGui::PopStyleColor(2);
+
+  // === Bottom Controls Navigation Helper ===
+  ImGui::SetNextWindowPos(ImVec2(leftPanelW + 28.0f, disp.y - 36.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(disp.x - leftPanelW - rightPanelW - 56.0f, 28.0f), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.024f, 0.040f, 0.85f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.45f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 4.0f));
+
+  if (ImGui::Begin("##OrreryBottomHelper", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar)) {
+    ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.85f, 1.0f), "%s",
+                       uiRu("💡 [ЛКМ] Вращение | [ПКМ/СКМ] Панорама | [Колесо] Зум | [F] Центр | [Enter] Курс | [M] Закрыть | 🎮 Геймпад",
+                            "💡 [LMB] Orbit | [RMB/MMB] Pan | [Wheel] Zoom | [F] Center | [Enter] Plot Course | [M] Close | 🎮 Gamepad"));
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(3);
+  ImGui::PopStyleColor(2);
+}
+
 void AppGL::drawFinaleChoice() {
   // v4.4+: развилка Adventure из 6 концовок с голосами персонажей (Мия, Елена, Егорка, Марк, Егорка-6).
   // Выбор пишется в expedition.json и открывает слайд концовки и эпилог.
@@ -5776,6 +6481,19 @@ void AppGL::drawUnifiedShipTerminal() {
       }
 
       ImGui::Spacing();
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.45f, 0.70f, 0.85f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.60f, 0.90f, 1.0f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+      if (ImGui::Button(uiRu("🌐 ОТКРЫТЬ ИНТЕРАКТИВНУЮ 3D-КАРТУ СИСТЕМЫ (ОРРЕРИ) [M]",
+                             "🌐 OPEN INTERACTIVE 3D SYSTEM MAP (ORRERY) [M]"),
+                        ImVec2(ImGui::GetContentRegionAvail().x, 32.0f))) {
+        m_orreryMapOpen = true;
+        m_shipTerminalOpen = false;
+        m_audio.playWhoosh();
+      }
+      ImGui::PopStyleColor(3);
+      ImGui::Spacing();
+
       const std::vector<Station>& cat = builtinCatalog();
       std::string q = m_searchBuf;
       std::transform(q.begin(), q.end(), q.begin(), ::tolower);
@@ -6253,7 +6971,7 @@ void AppGL::drawActionHorizon() {
       }
       ImGui::SameLine();
       if (ImGui::Button(uiRu("🗺 КАРТА (M)", "🗺 MAP (M)"))) {
-        m_expeditionMapOpen = !m_expeditionMapOpen;
+        m_orreryMapOpen = !m_orreryMapOpen;
       }
     }
   }
@@ -6277,7 +6995,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
         m_finaleChoiceOpen || m_storyOpen || m_zettelkastenOpen ||
         m_shipyardOpen || m_expeditionMapOpen || m_codexOpen ||
         m_spectrometerOpen || m_surfaceReportOpen || m_constellationAlignOpen ||
-        m_jumpCine;
+        m_jumpCine || m_orreryMapOpen;
     if (uiNavWanted) {
       navIo.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     } else {
@@ -6323,6 +7041,11 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   // === Unified Ship OS Terminal ===
   if (m_shipTerminalOpen && !m_inMenu) {
     drawUnifiedShipTerminal();
+    return;
+  }
+  // === 3D Holographic Star Map / Orrery (v5.5.0, Issue #141) ===
+  if (m_orreryMapOpen && !m_inMenu) {
+    drawOrreryMap();
     return;
   }
 
@@ -12743,23 +13466,7 @@ void AppGL::audioEnsureOnFirstInput() {
 }
 
 void AppGL::audioProcessKey() {
-  GLFWwindow* w = m_window ? m_window->getNativeWindow() : nullptr;
-  if (!w) return;
-  ImGuiIO& io = ImGui::GetIO();
-  const bool mDown =
-      (glfwGetKey(w, GLFW_KEY_M) == GLFW_PRESS);
-  if (mDown && !m_prevMPressed && !io.WantCaptureKeyboard) {
-    audioEnsureOnFirstInput();
-    // ensure мог не сработать без другого ввода — M сам и есть ввод.
-    if (!m_audio.isInitialized()) {
-      m_audio.ensureInitialized();
-      m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
-      m_audioWasInit = true;
-    }
-    m_audio.toggleMute();
-    if (!m_audio.isMuted()) m_audio.playClick();
-  }
-  m_prevMPressed = mDown;
+  // [M] Orrery map toggle and [Ctrl+M] Audio mute toggle are handled in processInput
 }
 
 void AppGL::audioUpdate(float deltaTime) {

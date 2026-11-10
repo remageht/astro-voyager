@@ -114,6 +114,7 @@ class SceneManager {
 
   const Station* getCurrentStation() const { return m_currentStation; }
   const std::vector<BodyState>& getBodies() const { return m_lastBodies; }
+  const SolarSystem& getSolarSystem() const { return m_sol; }
 
   // M31 named bright stars for close-range labels / fly-to (m31 only).
   // v3.1.0: reused as hero-star records for every galaxy (mag custom).

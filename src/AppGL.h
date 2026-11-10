@@ -513,6 +513,21 @@ class AppGL {
   float m_lastTerrainWarnT = -100.0f;
   bool m_sysOnlinePlayed = false;
   float m_prevFuelVal = 100.0f;
+
+  // === 3D Holographic Star Map / Orrery (v5.5.0, Issue #141) ===
+  bool m_orreryMapOpen = false;
+  float m_orreryPitch = 0.58f;
+  float m_orreryYaw = 0.35f;
+  float m_orreryZoom = 5.0f;
+  float m_orreryZoomTarget = 5.0f;
+  float m_orreryPanX = 0.0f;
+  float m_orreryPanY = 0.0f;
+  std::string m_orrerySelectedId = "earth";
+  int m_orreryViewScale = 0; // 0: Inner, 1: Full, 2: Galaxy
+  bool m_orreryDragging = false;
+  float m_orreryLastMouseX = 0.0f;
+  float m_orreryLastMouseY = 0.0f;
+  void drawOrreryMap();
   // === ModernUI === end
 
   // === WarpDrive === (агент W: отдельный режим путешествий на варпе).
