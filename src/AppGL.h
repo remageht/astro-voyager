@@ -504,6 +504,7 @@ class AppGL {
   void updateDynamicHudAlphas(float dt);
   void drawContextualFlightHud();
   void drawUnifiedShipTerminal();
+  void tryEngageWarp();  // #135: общий вход в варп-круиз (X-хоткей + кнопки HUD)
   // === ModernUI === end
 
   // === WarpDrive === (агент W: отдельный режим путешествий на варпе).

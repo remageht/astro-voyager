@@ -595,6 +595,14 @@ Check 'test_benchmark has telemetry test' ((Read-File 'tests/test_benchmark.cpp'
 Check 'zero ui contextual flight hud and terminal' (((Read-File 'src/AppGL.h') -match 'm_zeroUiMode') -and ((Read-File 'src/AppGL.h') -match 'drawContextualFlightHud') -and ((Read-File 'src/AppGL.h') -match 'drawUnifiedShipTerminal') -and ($appCpp -match 'updateDynamicHudAlphas'))
 Check 'minimalist core vitals flight hud tri-arc' (($appCpp -match 'baseVitalsAlpha') -and ($appCpp -match 'float fu = std::clamp') -and ($appCpp -match 'float fuAng = minAng'))
 
+# Stage 5 / Release 1.0: Flight hotkeys & Zero-UI warp/quest visibility (Issue #135)
+Check 'flight hotkeys: keyboard nav only in UI screens' ($appCpp -match 'uiNavWanted')
+Check 'flight hotkeys: disable NavEnableKeyboard during flight' ($appCpp -match 'ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard')
+Check 'flight hotkeys: dock-E gated on no slides and closed terminal' ($appCpp -match 'm_slidesCurrent\.empty\(\) && !m_shipTerminalOpen')
+Check 'warp engage helper shared by hotkey and HUD' ($appCpp -match 'void AppGL::tryEngageWarp')
+Check 'zero-ui warp control plate' ($appCpp -match '#135 Zero-UI warp plate')
+Check 'mission HUD visible in Zero-UI' ($appCpp -match '#135 mission HUD visible in Zero-UI too')
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

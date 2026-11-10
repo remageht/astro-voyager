@@ -656,9 +656,11 @@ void AppGL::processInput(float deltaTime) {
   m_prevJPressed = jDown;
 
   // === Station Docking === (v4.7): E — contextual dock action near station
+  // #135: было `!m_slidesCurrent.empty()` — инверсия, хоткей мёртв всегда.
+  // Стыковка по E работает только когда слайды НЕ показаны и терминал закрыт.
   const bool eDown = (glfwGetKey(win, GLFW_KEY_E) == GLFW_PRESS);
   if (eDown && !m_prevEPressed && !io.WantCaptureKeyboard && !m_ship.isDocked &&
-      !m_slidesCurrent.empty()) {
+      m_slidesCurrent.empty() && !m_shipTerminalOpen) {
     // gauge flight zero, cinematic vista handled by startDockSequence
     m_shipVel = Vec3();
     m_ship.gravVel = Vec3();
@@ -761,7 +763,7 @@ void AppGL::processInput(float deltaTime) {
 
   // === Orbital Cruise === (v5.3.0 Alpha): R — захват/отключение орбитального круиза
   const bool rDown = (glfwGetKey(win, GLFW_KEY_R) == GLFW_PRESS);
-  if (rDown && !m_prevRPressed && !io.WantCaptureKeyboard) {
+  if (rDown && !m_prevRPressed && !io.WantCaptureKeyboard && !m_shipTerminalOpen) {
     toggleOrbitalCruise();
   }
   m_prevRPressed = rDown;
@@ -5159,6 +5161,26 @@ void AppGL::drawModernTransportBar() {
 // === ModernUI === end
 
 // === Zero-UI & Contextual Flight HUD & Unified Ship Terminal === (Issue #131, #133)
+// #135: единый вход в варп-круиз для X-хоткея, классической пластины и
+// Zero-UI варп-кнопки. Dart/Shuttle — досветовые корпуса, варп недоступен.
+void AppGL::tryEngageWarp() {
+  if (m_warpOn || m_jumpCine) return;
+  if (!ship::styleCanWarp(m_shipStyle)) {
+    m_shipNotice = uiRu(
+        "У этого корпуса нет варп-двигателя (Dart/Shuttle — досветовые).",
+        "This hull has no warp drive (Dart/Shuttle are sublight).");
+    m_shipNoticeT = 3.0f;
+    return;
+  }
+  m_warpOn = true;
+  m_warpStatus = 1;  // Cruise
+  m_warpBaseFov = m_sceneManager->getSettings().fovDegrees;
+  m_warpLastFov = m_warpBaseFov;
+  m_warpFovDirty = true;
+  warpRetarget(warpTargetK(m_warpFactor));
+  m_warpFlash = 0.4f;  // v3.6.0: мягкая вспышка входа (комфорт для глаз)
+}
+
 void AppGL::updateDynamicHudAlphas(float dt) {
   if (dt <= 0.0f) return;
 
@@ -5441,6 +5463,35 @@ void AppGL::drawContextualFlightHud() {
       ImGui::PopStyleColor(2);
       ImGui::PopStyleVar(2);
     }
+  }
+
+  // 4.5 (#135 Zero-UI warp plate): в глубоком космосе m_hudActionAlpha == 0 и
+  // контекстный HUD оставлял игрока без варп-кнопки. Компактная пластина
+  // слева сверху дублирует X-хоткей мышью.
+  if (!m_shipTerminalOpen && !m_ship.isDocked && !m_jumpCine &&
+      m_dockAnimState == DockAnimState::None && !m_epilogueActive) {
+    ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.85f);
+    ImGuiWindowFlags warpFlags = ImGuiWindowFlags_NoTitleBar |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_AlwaysAutoResize |
+                                 ImGuiWindowFlags_NoSavedSettings;
+    if (ImGui::Begin("##ZeroWarpCtl", nullptr, warpFlags)) {
+      if (!m_warpOn) {
+        if (ImGui::Button(uiRu("🚀 ВАРП-ДВИГАТЕЛЬ (X)", "🚀 WARP DRIVE (X)"))) {
+          tryEngageWarp();
+        }
+      } else if (m_warpStatus == 1) {
+        if (ImGui::Button(uiRu("✕ ЗАГЛУШИТЬ ВАРП (X)", "✕ DISENGAGE WARP (X)"))) {
+          disengageWarp();
+        }
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.78f, 1.0f), "F%d",
+                           m_warpFactor);
+      }
+    }
+    ImGui::End();
   }
 
   // 5. Minimalist Micro-Hint for Unified Terminal in Top-Right
@@ -6005,16 +6056,8 @@ void AppGL::drawActionHorizon() {
       }
       ImGui::PopStyleColor(2);
     } else {
-      if (ImGui::Button(uiRu("🌌 ВАРП-ПРЫЖОК (Space)", "🌌 WARP JUMP (Space)"))) {
-        if (ship::styleCanWarp(m_shipStyle)) {
-          m_warpOn = true;
-          m_warpStatus = 1;
-          m_warpBaseFov = m_sceneManager->getSettings().fovDegrees;
-          m_warpLastFov = m_warpBaseFov;
-          m_warpFovDirty = true;
-          warpRetarget(warpTargetK(m_warpFactor));
-          m_warpFlash = 0.4f;
-        }
+      if (ImGui::Button(uiRu("🚀 ВАРП-ДВИГАТЕЛЬ (X)", "🚀 WARP DRIVE (X)"))) {
+        tryEngageWarp();
       }
       ImGui::SameLine();
       if (ImGui::Button(uiRu("🎬 КИНОТУР (T)", "🎬 CINETOUR (T)"))) {
@@ -6036,6 +6079,24 @@ void AppGL::drawActionHorizon() {
 void AppGL::drawImGui() {
 // Детерминизм при съёмке: в горнеле FPS-темп всегда 60.
 if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
+  // #135: клавиатурная навигация ImGui нужна только в UI-экранах (меню,
+  // терминал, панели, катсцены). В чистом полёте снимаем NavEnableKeyboard:
+  // после клика по любому виджету навигация держит WantCaptureKeyboard=true
+  // и глушит игровые хоткеи X/E/R/K/B/N/J — остаётся только мышь.
+  {
+    ImGuiIO& navIo = ImGui::GetIO();
+    const bool uiNavWanted =
+        m_inMenu || m_shipTerminalOpen || m_slidesOpen || m_epilogueActive ||
+        m_finaleChoiceOpen || m_storyOpen || m_zettelkastenOpen ||
+        m_shipyardOpen || m_expeditionMapOpen || m_codexOpen ||
+        m_spectrometerOpen || m_surfaceReportOpen || m_constellationAlignOpen ||
+        m_jumpCine;
+    if (uiNavWanted) {
+      navIo.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    } else {
+      navIo.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+    }
+  }
   // v3.6.0: захват клавиши для переназначения (страница Controls): любая
   // клавиша записывается в выбранную строку, Esc — отмена без изменений.
   if (m_captureKeyFor >= 0) {
@@ -6090,8 +6151,10 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (!m_inMenu) {
     if (!m_zeroUiMode) {
       drawExpeditionHud();
-      drawMissionHud();
     }
+    // #135 mission HUD visible in Zero-UI too: активный контракт не должен
+    // исчезать в минималистичном HUD — иначе квест невозможно выполнить.
+    drawMissionHud();
     if (m_expeditionMapOpen) drawExpeditionMap();
   }
   // === Scientific GW Instrument === (v4.4.0): детектор гравитационных волн
@@ -7369,7 +7432,8 @@ void AppGL::updateShip(float deltaTime) {
     }
   }
   const bool kDown = (glfwGetKey(m_window->getNativeWindow(), GLFW_KEY_K) == GLFW_PRESS);
-  if (kDown && !m_prevKPressed && !colonyIo.WantCaptureKeyboard && m_dockAnimState == DockAnimState::None) {
+  if (kDown && !m_prevKPressed && !colonyIo.WantCaptureKeyboard &&
+      !m_shipTerminalOpen && m_dockAnimState == DockAnimState::None) {
     if (m_ship.isDocked) {
       startUndockSequence();
     } else if (!m_dockHintId.empty()) {
@@ -11353,28 +11417,14 @@ bool AppGL::updateWarp(float deltaTime) {
   ImGuiIO& io = ImGui::GetIO();
 
   // Ключи (фронты, как остальные хоткеи; при фокусе ввода ImGui молчим).
-  // W: вкл/выкл. ВНИМАНИЕ: W также держит движение вперёд (чужой блок
-  // ниже): короткое нажатие включает варп, повторное — выключает.
+  // X: вкл/выкл варп (короткое нажатие включает, повторное — выключает).
+  // ВНИМАНИЕ: W держит движение вперёд, поэтому варп — на X, не на W.
   // [ / ]: фактор 1-9 (в туннеле прыжка фактор растёт сам, ключи глушим).
-  if (!io.WantCaptureKeyboard) {
+  if (!io.WantCaptureKeyboard && !m_shipTerminalOpen) {
     const bool xDown = (glfwGetKey(win, GLFW_KEY_X) == GLFW_PRESS);
     if (xDown && !m_prevXPressed) {
       if (!m_warpOn) {
-        // v4.0.0: Dart и Shuttle — досветовые корпуса, варп им недоступен.
-        if (!ship::styleCanWarp(m_shipStyle)) {
-          m_shipNotice = uiRu(
-              "У этого корпуса нет варп-двигателя (Dart/Shuttle — досветовые).",
-              "This hull has no warp drive (Dart/Shuttle are sublight).");
-          m_shipNoticeT = 3.0f;
-        } else {
-          m_warpOn = true;
-          m_warpStatus = 1;  // Cruise
-          m_warpBaseFov = m_sceneManager->getSettings().fovDegrees;
-          m_warpLastFov = m_warpBaseFov;
-          m_warpFovDirty = true;
-          warpRetarget(warpTargetK(m_warpFactor));
-          m_warpFlash = 0.4f;  // v3.6.0: мягкая вспышка входа (комфорт для глаз)
-        }
+        tryEngageWarp();  // #135: общий вход (замечание про Dart/Shuttle внутри)
       } else if (m_warpStatus == 1 || m_warpStatus == 4) {
         disengageWarp();  // в Charging/Jump игнор — катсцену досматриваем
       }
