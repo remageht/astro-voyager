@@ -244,8 +244,10 @@ bool rkf45Step(double h, double tol, SchwState& s, double rs, double& hNext) {
       err2 += (d[j] / scale) * (d[j] / scale);
     }
     const double err = std::sqrt(err2 / 6.0);
+    const double safeErr = std::max(err, 1e-15);
+    const double safeTol = std::max(tol, 1e-15);
     if (err > tol) {
-      const double fac = std::min(5.0, std::max(0.2, 0.9 * std::pow(tol / err, 0.2)));
+      const double fac = std::min(5.0, std::max(0.2, 0.9 * std::pow(safeTol / safeErr, 0.2)));
       h *= fac;
       if (h < 1e-9) return false;  // avoid infinite shrinking
       continue;
@@ -256,7 +258,7 @@ bool rkf45Step(double h, double tol, SchwState& s, double rs, double& hNext) {
     renormalizeTime(s, rs);
     // Step controller: classic growth on accept (larger tolerances stretch
     // the far-field steps quickly; near-field rejections shrink above).
-    hNext = h * std::min(5.0, std::max(0.2, 0.9 * std::pow(tol / err, 0.2)));
+    hNext = h * std::min(5.0, std::max(0.2, 0.9 * std::pow(safeTol / safeErr, 0.2)));
     return true;
   }
   return false;

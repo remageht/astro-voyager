@@ -232,6 +232,7 @@ void AudioEngine::update(float dt) {
       case VoiceType::LiquidDrop: dur = 0.35; break;
       case VoiceType::Eureka: dur = 3.2; break;
       case VoiceType::File:
+      case VoiceType::EgorkaVoice:
         dur = m_voices[i].pcm ? static_cast<double>(m_voices[i].pcm->size()) /
                                     kSampleRate
                               : 0.0;
@@ -502,15 +503,14 @@ void AudioEngine::playEgorkaVoice(EgorkaVoiceCue cue, float gainDb) {
   const uint64_t nowSample = m_samples.load();
 
   // Дебаунс: повтор той же реплики не чаще чем раз в 3.0 секунды
-  if (m_lastEgorkaCue == cueId) {
-    const double elapsed = static_cast<double>(nowSample - m_lastEgorkaSample) / kSampleRate;
-    if (elapsed < 3.0) return;
-  }
-
   // Кеширование буфера в m_egorkaCache
   std::shared_ptr<std::vector<float>> pcm;
   {
     std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_lastEgorkaCue == cueId) {
+      const double elapsed = static_cast<double>(nowSample - m_lastEgorkaSample) / kSampleRate;
+      if (elapsed < 3.0) return;
+    }
     auto it = m_egorkaCache.find(cueId);
     if (it != m_egorkaCache.end()) {
       pcm = it->second;
@@ -612,7 +612,7 @@ float AudioEngine::renderMusic(double tAbs, double tLoop) const {
   return music * dbToGain(kMusicDb);  // С‚РёС…Рѕ: -18 РґР‘
 }
 
-float AudioEngine::renderVoice(const Voice& v, double age,
+float AudioEngine::renderVoice(const VoiceView& v, double age,
                                uint32_t& rng) const {
   if (age < 0.0) return 0.0f;
   switch (v.type) {
@@ -825,13 +825,19 @@ float AudioEngine::renderVoice(const Voice& v, double age,
 }
 
 void AudioEngine::renderFrames(float* out, unsigned frames) {
-  // РЎРЅРёРјРѕРє РіРѕР»РѕСЃРѕРІ РїРѕРґ РєРѕСЂРѕС‚РєРёРј РјСЊСЋС‚РµРєСЃРѕРј (Р±РµР· Р°Р»Р»РѕРєР°С†РёР№ РІ РєРѕР»Р±СЌРєРµ).
-  Voice snap[40];
+  // Снимок голосов под коротким мьютексом (без аллокаций в колбэке).
+  VoiceView snap[40];
   size_t nSnap = 0;
   {
     std::lock_guard<std::mutex> lock(m_mutex);
     nSnap = m_voices.size() > 40 ? 40 : m_voices.size();
-    for (size_t i = 0; i < nSnap; ++i) snap[i] = m_voices[i];
+    for (size_t i = 0; i < nSnap; ++i) {
+      snap[i].type = m_voices[i].type;
+      snap[i].startSample = m_voices[i].startSample;
+      snap[i].pcm = m_voices[i].pcm.get();
+      snap[i].gainDb = m_voices[i].gainDb;
+      snap[i].pan = m_voices[i].pan;
+    }
   }
   const float vol = m_muted.load() ? 0.0f : m_volume.load();
   const float warpK = m_warpCurrent.load();
@@ -1033,7 +1039,9 @@ void AudioEngine::playThunderCrack(float pan) {
   v.gainDb = 0.0f;
   v.pan = std::clamp(pan, -1.0f, 1.0f);
   std::lock_guard<std::mutex> lock(m_mutex);
-  m_voices.push_back(v);
+  if (m_voices.size() <= 32) {
+    m_voices.push_back(v);
+  }
 }
 
 }  // namespace astro

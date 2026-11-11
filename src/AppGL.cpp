@@ -3835,12 +3835,8 @@ void AppGL::loadExpeditionFileNow() {
 
 void AppGL::saveZettelkastenFileNow() {
   const std::string dir = saveProfileDir();
-  std::error_code ec;
-  std::filesystem::create_directories(dir, ec);
-  std::ofstream f(zettelkastenFilePathFor(dir), std::ios::binary | std::ios::trunc);
-  if (!f.is_open()) return;
-  const std::string text = m_zettelkasten.serialize();
-  f.write(text.c_str(), static_cast<std::streamsize>(text.size()));
+  std::string err;
+  saveWriteFile(zettelkastenFilePathFor(dir), m_zettelkasten.serialize(), err);
 }
 
 void AppGL::loadZettelkastenFileNow() {
@@ -3854,12 +3850,8 @@ void AppGL::loadZettelkastenFileNow() {
 
 void AppGL::saveMissionsFileNow() {
   const std::string dir = saveProfileDir();
-  std::error_code ec;
-  std::filesystem::create_directories(dir, ec);
-  std::ofstream f(dir + "/missions.json", std::ios::binary | std::ios::trunc);
-  if (!f.is_open()) return;
-  const std::string text = m_missions.serialize();
-  f.write(text.c_str(), static_cast<std::streamsize>(text.size()));
+  std::string err;
+  saveWriteFile(dir + "/missions.json", m_missions.serialize(), err);
 }
 
 void AppGL::loadMissionsFileNow() {

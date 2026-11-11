@@ -400,6 +400,25 @@ int main() {
     std::cout << "PASS: Cockpit Test 13 (Orbital Cruise math & telemetry)\n";
   }
 
+  // Test 14: Vertical orientation (pitch +/- 90 deg) does not produce NaN roll
+  {
+    ctrl.reset();
+    glm::vec3 pos(0.0f);
+    glm::vec3 fwd(0.0f, 1.0f, 0.0f);     // pointing straight up
+    glm::vec3 right(0.0f, 0.0f, 1.0f);   // purely along Z, no X/Z horizontal projection if right=(0,1,0)
+    glm::vec3 verticalRight(0.0f, 1.0f, 0.0f); // edge case: right vector along Y
+    glm::vec3 up(0.0f, 0.0f, -1.0f);
+
+    ctrl.update(0.016f, pos, fwd, verticalRight, up, 0.0f, 0.0f, false, 0.0f, 1.0f, 1.0f, "", glm::vec3(0.0f), 0.0f);
+    const CockpitHUDData& hud = ctrl.getHUDData();
+
+    if (std::isnan(hud.rollDeg) || std::isnan(hud.pitchDeg) || std::isnan(hud.yawDeg)) {
+      std::cerr << "Test 14 failed: NaN detected in telemetry angles at vertical pitch\n";
+      return 1;
+    }
+    std::cout << "PASS: Cockpit Test 14 (Vertical orientation no-NaN roll guard)\n";
+  }
+
   std::cout << "ALL COCKPIT CONTROLLER TESTS PASSED\n";
   return 0;
 }

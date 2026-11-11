@@ -22,6 +22,7 @@
 #include "ObjModel.h"
 
 #include "GLCompat.h"
+#include <GLFW/glfw3.h>
 
 #include <cmath>
 #include <cstdint>
@@ -184,6 +185,11 @@ unsigned int loadBmpTexture(const std::string& path) {
 ObjModel::ObjModel() = default;
 
 ObjModel::~ObjModel() {
+  if (!glfwGetCurrentContext()) {
+    // Context is already terminated (e.g. static destruction after main());
+    // calling glDelete* would trigger undefined behavior or driver crash.
+    return;
+  }
   if (m_vbo != 0) glDeleteBuffers(1, &m_vbo);
   if (m_ebo != 0) glDeleteBuffers(1, &m_ebo);
   if (m_vao != 0) glDeleteVertexArrays(1, &m_vao);

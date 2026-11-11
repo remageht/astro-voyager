@@ -107,8 +107,9 @@ void CockpitController::update(float deltaTime,
   if (m_hud.yawDeg < 0.0f) m_hud.yawDeg += 360.0f;
 
   // Roll calculated from horizon vs right vector
-  glm::vec3 horizRight = glm::normalize(glm::vec3(camRight.x, 0.0f, camRight.z));
-  if (glm::length(horizRight) > 0.01f) {
+  glm::vec3 rawHoriz(camRight.x, 0.0f, camRight.z);
+  float horizLenSq = glm::dot(rawHoriz, rawHoriz);
+  if (horizLenSq > 1e-4f) {
     m_hud.rollDeg = std::asin(std::clamp(camRight.y, -1.0f, 1.0f)) * (180.0f / 3.14159265f);
   } else {
     m_hud.rollDeg = 0.0f;
