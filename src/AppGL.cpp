@@ -6420,7 +6420,7 @@ void AppGL::drawUnifiedShipTerminal() {
     dl->AddLine(ImVec2(pMax.x, pMax.y - brkLen), pMax, brkCol, 2.0f);
 
     // Header bar
-    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "ASTRO-VOYAGER // UNIFIED SHIP OS v5.4.0");
+    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "ASTRO-VOYAGER // UNIFIED SHIP OS v5.0.0");
     ImGui::SameLine();
     const Station* curSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
     ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.78f, 1.0f), " | %s: %s",
