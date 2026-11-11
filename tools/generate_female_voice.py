@@ -21,18 +21,20 @@ if _orig_init is not None:
         return r
     _gu.GenerationMixin._maybe_initialize_input_ids_for_generation = _safe_init
 
+import torchaudio
+
 # Женские реплики экипажа: Миа Сато (Пилот), Елена Ростова (Астрофизик), Бортовой ИИ Аврора
 FEMALE_TRACKS = [
-    # Миа Сато [Пилот] — энергичный, решительный тон пилота-исследователя
-    ("mia_m16.wav", "Столпы Творения прямо по курсу... Четыре световых года молекулярного водорода. Здесь рождаются новые звёздные миры.", 101),
-    ("mia_m1.wav", "Фиксирую релятивистский синхротронный ветер пульсара M1. Тридцать импульсов в секунду! Включаю магнитные дефлекторы.", 102),
-    ("mia_at2019qiz.wav", "Приливной разрыв звезды! Потоки плазмы падают по спирали. Какая колоссальная гравитационная мощь!", 103),
-    ("mia_touchdown.wav", "Касание грунта подтверждено! Гидравлические стойки заблокированы. Приступаем к научной экспедиции.", 104),
-    # Елена Ростова [Астрофизик] — вдумчивый, научный тон
-    ("elena_sgra.wav", "Фиксирую эргосферу Стрельца А-звезда. Синхротронное излучение на пике. Включаю спектрометр.", 201),
-    ("elena_m87.wav", "Внимание! Релятивистский джет M87-звезда бьёт на пять тысяч световых лет прямо по траверзу. Мы летим сквозь струю ускоренной плазмы!", 202),
-    # Бортовой ИИ Аврора [Женский бортовой навигатор] — чёткий, уверенный тон
-    ("aurora_sys_online.wav", "Бортовые системы судна активированы. Добро пожаловать на мостик, капитан. Все узлы функционируют штатно.", 301),
+    # Миа Сато [Пилот] — живой, задорный, душевный тон пилота с юмором и эмоциями
+    ("mia_m16.wav", "Столпы Творения прямо по курсу... Четыре световых года молекулярного водорода. Здесь рождаются новые звёздные миры.", 101, 0.0),
+    ("mia_m1.wav", "Ого, слышите пульсар M1? Строчит как бешеный метроном — тридцать ударов в секунду! Врубаю дефлекторы, держитесь за кофе!", 102, 0.0),
+    ("mia_at2019qiz.wav", "Вы только гляньте в обзорный блистер... Чёрная дыра буквально рвёт звезду на части! Плазма летит огненным вихрем... Жутко красиво, аж дух захватывает!", 103, 0.0),
+    ("mia_touchdown.wav", "Есть мягкое касание! Стойки в замках, сели как по маслу. Ну что, капитан, чай допиваем — и на выход! Планета сама себя не исследует.", 104, 0.0),
+    # Елена Ростова [Астрофизик] — глубокий, женственный и зрелый тембр (-1.5 полутона pitch shift), научная элегантность
+    ("elena_sgra.wav", "Фиксирую эргосферу Стрельца А-звезда. Пространство закручивается вокруг горизонта событий, синхротронный пик достигнут. Включаю спектрометрию, не упустите данные.", 201, -1.5),
+    ("elena_m87.wav", "Внимание на обзорные экраны. Релятивистский джет M87 бьёт на пять тысяч световых лет прямо по траверзу. Мы летим сквозь струю ускоренной плазмы. Поразительное, грандиозное явление...", 202, -1.5),
+    # Бортовой ИИ Аврора [Женский бортовой навигатор] — чёткий, уверенный, мелодичный тон
+    ("aurora_sys_online.wav", "Бортовые системы судна активированы. Добро пожаловать на мостик, капитан. Все узлы функционируют штатно.", 301, 0.0),
 ]
 
 def trim_silence(audio: np.ndarray, sr: int, threshold: float = 0.015, pad_ms: int = 150) -> np.ndarray:
@@ -72,20 +74,27 @@ def main():
     )
     print("Model successfully loaded!")
 
-    for filename, text, seed in FEMALE_TRACKS:
+    for filename, text, seed, pitch_shift in FEMALE_TRACKS:
         target_path = os.path.join(out_dir, filename)
 
-        print(f"\n[SYNTH FEMALE] Generating {filename} (seed={seed}): \"{text}\"")
+        print(f"\n[SYNTH FEMALE] Generating {filename} (seed={seed}, pitch_shift={pitch_shift}st): \"{text}\"")
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
+        # Подготовка акустического референса: для Елены Ростовой применяем питч-шифт для более зрелого тембра
+        cur_ref = ref_data
+        if pitch_shift != 0.0:
+            ref_t = torch.tensor(ref_data, dtype=torch.float32).unsqueeze(0)
+            shifted_ref_t = torchaudio.functional.pitch_shift(ref_t, ref_sr, pitch_shift)
+            cur_ref = shifted_ref_t.squeeze(0).numpy()
+
         words = len(text.split())
-        calc_tokens = max(130, min(250, words * 14))
+        calc_tokens = max(130, min(260, words * 14))
 
         res = model.generate_voice_clone(
             text=text,
             language="Russian",
-            ref_audio=(ref_data, ref_sr),
+            ref_audio=(cur_ref, ref_sr),
             x_vector_only_mode=True,
             max_new_tokens=calc_tokens,
             temperature=0.35,
@@ -101,6 +110,13 @@ def main():
             sr = 24000
 
         audio = wavs[0] if isinstance(wavs, (list, tuple)) else wavs
+        
+        # Для Елены Ростовой также применяем легкую постобработку высоты тона для бархатной зрелости
+        if pitch_shift != 0.0:
+            audio_t = torch.tensor(audio, dtype=torch.float32).unsqueeze(0)
+            audio_shifted = torchaudio.functional.pitch_shift(audio_t, sr, pitch_shift)
+            audio = audio_shifted.squeeze(0).numpy()
+
         trimmed_audio = trim_silence(audio, sr, threshold=0.015, pad_ms=150)
 
         # Save WAV
@@ -113,7 +129,7 @@ def main():
         b_res = os.path.join(root_dir, build_sub, "res", "audio", "crew_female")
         if os.path.exists(os.path.dirname(os.path.dirname(b_res))):
             os.makedirs(b_res, exist_ok=True)
-            for filename, _, _ in FEMALE_TRACKS:
+            for filename, _, _, _ in FEMALE_TRACKS:
                 src_f = os.path.join(out_dir, filename)
                 dst_f = os.path.join(b_res, filename)
                 if os.path.exists(src_f):
