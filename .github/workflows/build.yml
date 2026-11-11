@@ -21,13 +21,15 @@ jobs:
       matrix:
         # macOS: core CLI + tests + static checks (Apple clang).
         # The full macOS OpenGL app is built by the build-macos-gl job below.
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-latest, ubuntu-24.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - name: Install Linux deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake g++ libglm-dev
+        run: |
+          for i in 1 2 3; do sudo apt-get update && break || sleep 5; done
+          sudo apt-get install -y --no-install-recommends cmake g++ libglm-dev
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
@@ -46,14 +48,14 @@ jobs:
       - name: Validate shaders (glslang)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y --no-install-recommends glslang-tools
+          for i in 1 2 3; do sudo apt-get install -y --no-install-recommends glslang-tools && break || sleep 5; done
           for f in shaders/*.vert shaders/*.frag; do
             echo "== $f"
             glslangValidator "$f"
           done
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - uses: actions/checkout@v5
@@ -232,14 +234,14 @@ jobs:
   # AppDir + appimagetool type-2 packaging, headless smoke tests inside the
   # AppImage, then the artifact (and, on tags, a Release asset).
   build-appimage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
       - name: Install GL build deps
         run: |
-          sudo apt-get update
+          for i in 1 2 3; do sudo apt-get update && break || sleep 5; done
           sudo apt-get install -y --no-install-recommends \
             cmake g++ make curl unzip file \
             libgl1-mesa-dev libglew-dev \
@@ -307,7 +309,7 @@ jobs:
     name: Create & Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
     needs: [build, docker, build-macos-gl, build-windows-gl, build-appimage]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
