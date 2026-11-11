@@ -389,6 +389,7 @@ bool ObjModel::load(const std::string& path) {
 }
 
 bool ObjModel::loadTextures(const std::string& base) {
+  if (m_sharedTex) return true;
   const std::string albedo = base + "_albedo.bmp";
   const std::string normal = base + "_normal.bmp";
   const std::string rough = base + "_rough.bmp";
@@ -407,7 +408,6 @@ bool ObjModel::loadTextures(const std::string& base) {
     }
     return false;
   }
-  if (m_sharedTex) return true;
   if (m_texAlbedo != 0) glDeleteTextures(1, &m_texAlbedo);
   if (m_texNormal != 0) glDeleteTextures(1, &m_texNormal);
   if (m_texRough != 0) glDeleteTextures(1, &m_texRough);
