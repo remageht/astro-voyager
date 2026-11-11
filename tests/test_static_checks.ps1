@@ -110,7 +110,7 @@ Check 'no reversed smoothstep in shaders' ($badSmooth.Count -eq 0)
 Check 'readme name' ($readme -match 'astro-voyager')
 Check 'readme quickstart' ($readme -match 'cmake -S')
 
-Check 'CI matrix' (($ci -match 'windows-latest') -and ($ci -match 'ubuntu-latest'))
+Check 'CI matrix' (($ci -match 'windows-latest') -and ($ci -match 'ubuntu-(24\.04|latest)'))
 Check 'CI docker' ($ci -match 'docker build')
 Check 'CI appimage job' ($ci -match 'build-appimage')
 Check 'CI appimage packaging script' ($ci -match 'packaging/build-appimage\.sh')
