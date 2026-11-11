@@ -504,6 +504,32 @@ int main() {
     if (!test14Ok) return 1;
   }
 
-  std::cout << "\nAll test_warp_geodesic checks passed successfully (14/14 PASS)!\n";
+  // 15. Alcubierre bubbleCenter numerical stability at small t (catastrophic cancellation guard)
+  {
+    astro::AlcubierreMetric alc(0.0, 0.0, 0.0, 5.0, 0.0, 0.0, 1.0, 0.0, 0.0, 100.0, 10.0);
+    const double tinyTimes[] = {0.0, 1e-9, 1e-7, 1e-5, 1e-3, 0.01, 0.1};
+    double prevX = -1.0;
+    bool monoOk = true;
+
+    for (double t : tinyTimes) {
+      double c[3];
+      alc.bubbleCenter(t, c);
+      if (std::isnan(c[0]) || std::isnan(c[1]) || std::isnan(c[2])) {
+        monoOk = false;
+        break;
+      }
+      if (c[0] < -1e-12 || (prevX >= 0.0 && c[0] < prevX - 1e-12)) {
+        monoOk = false;
+        break;
+      }
+      prevX = c[0];
+    }
+
+    std::cout << "Test 15 (Alcubierre small-t non-negative monotonic center): "
+              << (monoOk ? "PASS" : "FAIL") << "\n";
+    if (!monoOk) return 1;
+  }
+
+  std::cout << "\nAll test_warp_geodesic checks passed successfully (15/15 PASS)!\n";
   return 0;
 }

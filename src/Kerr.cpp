@@ -25,6 +25,9 @@ double kerrBCrit(double a, double rs, bool prograde) {
     return 1.5 * std::sqrt(3.0) * rs;  // 3 * sqrt(3) * M
   }
   const double r_ph = kerrPhotonSphereRadius(aClamped, rs, prograde);
+  if (prograde && std::abs(r_ph - M) < 1e-7) {
+    return 2.0 * M;
+  }
   const double num = -(r_ph * r_ph * r_ph - 3.0 * M * r_ph * r_ph +
                        aClamped * aClamped * r_ph + aClamped * aClamped * M);
   const double den = aClamped * (r_ph - M);

@@ -163,13 +163,20 @@ class AudioEngine {
     float gainDb = 0.0f;
     float pan = 0.0f;  // v4.3.0: -1.0 left .. +1.0 right
   };
+  struct VoiceView {
+    VoiceType type = VoiceType::Click;
+    uint64_t startSample = 0;
+    const std::vector<float>* pcm = nullptr;
+    float gainDb = 0.0f;
+    float pan = 0.0f;
+  };
 
   // Рендер одного музыкального сэмпла (моно; стерео дублируется).
   // tAbs — абсолютное время (фаза синусов непрерывна),
   // tLoop — время в лупе 0..32 (выбор аккорда/щипков, бесшовно).
   float renderMusic(double tAbs, double tLoop) const;
   // Рендер одного голоса; rng — xorshift-состояние аудиопотока.
-  float renderVoice(const Voice& v, double age, uint32_t& rng) const;
+  float renderVoice(const VoiceView& v, double age, uint32_t& rng) const;
   // Вызывается из аудиоколбэка (.cpp) блоками.
   void renderFrames(float* out, unsigned frames);
 

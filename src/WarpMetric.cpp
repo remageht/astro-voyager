@@ -255,12 +255,18 @@ void AlcubierreMetric::bubbleCenter(double t, double center[3]) const {
     return;
   }
   const double u = tClamped / m_tauAcc;
-  const double z = std::tanh((2.0 * u - U) * 0.5);
-  const double kz = std::clamp(k * z, -0.999999999999999, 0.999999999999999);
-  const double k2 = std::clamp(kSq, -0.999999999999999, 0.999999999999999);
-  const double term1 = ((1.0 + kSq) / k) * (std::atanh(kz) + std::atanh(k2));
-  const double term2 = u;
-  const double s = (m_vMax * m_tauAcc / kSq) * (term1 - term2);
+  double s = 0.0;
+  if (u < 1e-5) {
+    s = 0.5 * velocity(tClamped) * tClamped;
+  } else {
+    const double z = std::tanh((2.0 * u - U) * 0.5);
+    const double kz = std::clamp(k * z, -0.999999999999999, 0.999999999999999);
+    const double k2 = std::clamp(kSq, -0.999999999999999, 0.999999999999999);
+    const double term1 = ((1.0 + kSq) / k) * (std::atanh(kz) + std::atanh(k2));
+    const double term2 = u;
+    s = (m_vMax * m_tauAcc / kSq) * (term1 - term2);
+  }
+  if (s < 0.0) s = 0.0;
 
   center[0] = m_pos0[0] + m_dir[0] * s;
   center[1] = m_pos0[1] + m_dir[1] * s;

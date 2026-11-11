@@ -759,21 +759,38 @@ bool saveWriteFile(const std::string& path, const std::string& text,
       return false;
     }
   }
+  const std::filesystem::path tmpP = std::filesystem::u8path(path + ".tmp");
   std::ofstream f;
   for (int retry = 0; retry < 10; ++retry) {
     f.clear();
-    f.open(p, std::ios::binary | std::ios::trunc);
+    f.open(tmpP, std::ios::binary | std::ios::trunc);
     if (f) break;
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
   if (!f) {
-    err = "cannot open for write: " + path;
+    err = "cannot open for write: " + path + ".tmp";
     return false;
   }
   f.write(text.data(), static_cast<std::streamsize>(text.size()));
+  f.flush();
   if (!f) {
-    err = "write failed: " + path;
+    err = "write failed: " + path + ".tmp";
     return false;
+  }
+  f.close();
+
+  // Атомарная замена целевого файла (защита от повреждения при сбоях)
+  std::error_code renameEc;
+  std::filesystem::rename(tmpP, p, renameEc);
+  if (renameEc) {
+    // В Windows переименование поверх существующего файла может требовать remove
+    std::filesystem::remove(p, renameEc);
+    renameEc.clear();
+    std::filesystem::rename(tmpP, p, renameEc);
+    if (renameEc) {
+      err = "atomic rename failed for " + path + ": " + renameEc.message();
+      return false;
+    }
   }
   return true;
 }

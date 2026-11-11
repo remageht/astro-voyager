@@ -484,6 +484,47 @@ int main() {
     }
   }
 
+  // Test 16: Atomic saveWriteFile / saveReadFile roundtrip and .tmp cleanup
+  {
+    const std::string testDir = "build/test_save_atomic";
+    const std::string testFile = testDir + "/profile_atomic.json";
+    const std::string testTmp = testFile + ".tmp";
+    std::string err;
+
+    const std::string sampleData = "{\"status\": \"atomic_test_ok\", \"value\": 12345}";
+    if (!astro::saveWriteFile(testFile, sampleData, err)) {
+      std::cerr << "Test 16 failed: saveWriteFile failed: " << err << "\n";
+      return 1;
+    }
+
+    std::string readBack;
+    if (!astro::saveReadFile(testFile, readBack, err) || readBack != sampleData) {
+      std::cerr << "Test 16 failed: saveReadFile readback mismatch\n";
+      return 1;
+    }
+
+    // Verify .tmp file was atomically cleaned up
+    std::error_code ec;
+    if (std::filesystem::exists(std::filesystem::u8path(testTmp), ec)) {
+      std::cerr << "Test 16 failed: temporary .tmp file lingering after atomic rename\n";
+      return 1;
+    }
+
+    // Overwrite test
+    const std::string updatedData = "{\"status\": \"atomic_overwrite_ok\", \"value\": 67890}";
+    if (!astro::saveWriteFile(testFile, updatedData, err)) {
+      std::cerr << "Test 16 failed: saveWriteFile overwrite failed: " << err << "\n";
+      return 1;
+    }
+    if (!astro::saveReadFile(testFile, readBack, err) || readBack != updatedData) {
+      std::cerr << "Test 16 failed: saveReadFile overwrite readback mismatch\n";
+      return 1;
+    }
+
+    // Cleanup test artifacts
+    std::filesystem::remove_all(std::filesystem::u8path(testDir), ec);
+  }
+
   std::cout << "save tests: ALL PASS\n";
   return 0;
   } catch (const std::exception& e) {
