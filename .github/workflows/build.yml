@@ -25,11 +25,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+      - name: Fix Linux DNS and mirrors
+        if: runner.os == 'Linux'
+        run: |
+          echo -e "nameserver 8.8.8.8\nnameserver 1.1.1.1" | sudo tee /etc/resolv.conf
+          sudo sed -i 's|azure\.archive\.ubuntu\.com|archive\.ubuntu\.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
           for i in 1 2 3; do sudo apt-get update && break || sleep 5; done
-          sudo apt-get install -y --no-install-recommends cmake g++ libglm-dev
+          sudo apt-get install -y --no-install-recommends --fix-missing cmake g++ libglm-dev
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
@@ -239,10 +244,14 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+      - name: Fix Linux DNS and mirrors
+        run: |
+          echo -e "nameserver 8.8.8.8\nnameserver 1.1.1.1" | sudo tee /etc/resolv.conf
+          sudo sed -i 's|azure\.archive\.ubuntu\.com|archive\.ubuntu\.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
       - name: Install GL build deps
         run: |
           for i in 1 2 3; do sudo apt-get update && break || sleep 5; done
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get install -y --no-install-recommends --fix-missing \
             cmake g++ make curl unzip file \
             libgl1-mesa-dev libglew-dev \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
