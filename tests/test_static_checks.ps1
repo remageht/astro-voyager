@@ -640,6 +640,23 @@ Check 'AppGL processInput wires M key to Orrery map toggle' ($appCpp -match 'M: 
 Check 'Unified Ship Terminal wires 3D Orrery Map launch button' ($appCpp -match 'OPEN INTERACTIVE 3D SYSTEM MAP \(ORRERY\) \[M\]')
 Check 'drawImGui gates modal render on m_orreryMapOpen' ($appCpp -match 'if \(m_orreryMapOpen && !m_inMenu\)')
 
+# Stage 5 / Release 1.0: Audio voice lifetime, Kerr stability, atomic saves (Issue #159)
+$kerrCpp = Read-File 'src/Kerr.cpp'
+$cockpitCpp = Read-File 'src/CockpitController.cpp'
+$saveCpp = Read-File 'src/SaveGame.cpp'
+$geodesicCpp = Read-File 'src/Geodesic.cpp'
+Check 'audio voice age computed in signed type' ($audioCpp -match 'static_cast<int64_t>\(now\) -')
+Check 'audio voice pcm shared ownership in snapshot' ($audioH -match 'std::shared_ptr<const std::vector<float>> pcm')
+Check 'audio voice duration table with static_assert' ($audioCpp -match 'voiceDurationTable must have one entry per VoiceType')
+Check 'audio voice retired pcm epoch protocol' (($audioH -match 'm_retiredPcm') -and ($audioH -match 'm_renderEpoch'))
+Check 'kerr b_crit uses stable formula' ($kerrCpp -match 'r_ph \* \(r_ph \+ 3\.0 \* M\)')
+Check 'kerr no absolute epsilon hack' ($kerrCpp -notmatch 'abs\(r_ph - M\) < 1e-7')
+Check 'cockpit roll has no normalize of horizon vector' ($cockpitCpp -notmatch 'normalize\(glm::vec3\(camRight\.x')
+Check 'geodesic rejects non-finite step error' ($geodesicCpp -match '!std::isfinite\(err\)')
+Check 'savegame rename does not remove the original' ($saveCpp -notmatch 'std::filesystem::remove\(p, renameEc\)')
+Check 'test_kerr exists' (Test-Path (Join-Path $root 'tests/test_kerr.cpp'))
+Check 'test_audio_voice exists' (Test-Path (Join-Path $root 'tests/test_audio_voice.cpp'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

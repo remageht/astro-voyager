@@ -1,5 +1,6 @@
 #include "CockpitController.h"
 
+#include <cmath>
 #include <cstring>
 
 namespace astro {
@@ -40,7 +41,9 @@ void CockpitController::update(float deltaTime,
                                const glm::vec3& nearestBodyPos,
                                float nearestBodyRadius,
                                bool hasAtmosphere) {
-  if (deltaTime <= 0.0f || deltaTime > 0.25f) {
+  // #159: NaN-шаг не отбрасывался (сравнения с NaN ложны) и разносил
+  // кресло по всем осям. Проверяем «не-NaN» явно.
+  if (!(deltaTime > 0.0f) || deltaTime > 0.25f) {
     deltaTime = 0.016f;
   }
 
@@ -106,11 +109,16 @@ void CockpitController::update(float deltaTime,
   m_hud.yawDeg = std::atan2(camFwd.x, camFwd.z) * (180.0f / 3.14159265f);
   if (m_hud.yawDeg < 0.0f) m_hud.yawDeg += 360.0f;
 
-  // Roll calculated from horizon vs right vector
-  glm::vec3 rawHoriz(camRight.x, 0.0f, camRight.z);
-  float horizLenSq = glm::dot(rawHoriz, rawHoriz);
-  if (horizLenSq > 1e-4f) {
-    m_hud.rollDeg = std::asin(std::clamp(camRight.y, -1.0f, 1.0f)) * (180.0f / 3.14159265f);
+  // Roll: угол крена из вертикальной компоненты правого вектора.
+  // #159: раньше здесь был glm::normalize(horizRight) — при вертикальном
+  // векторе он давал NaN; «защитой» служила проверка длины НОРМИРОВАННОГО
+  // вектора (всегда 1), а при крене 90° (camRight = (0,1,0)) горизонтальная
+  // проекция пуста и HUD показывал 0° вместо 90°. Теперь roll считается
+  // напрямую (asin от y всегда конечен) и только не-конечные входы
+  // отбрасываются.
+  if (std::isfinite(camRight.y)) {
+    m_hud.rollDeg =
+        std::asin(std::clamp(camRight.y, -1.0f, 1.0f)) * (180.0f / 3.14159265f);
   } else {
     m_hud.rollDeg = 0.0f;
   }

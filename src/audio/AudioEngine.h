@@ -152,13 +152,18 @@ class AudioEngine {
   enum class VoiceType : int {
     Click, Whoosh, Jump, Chime, Blip, Capture, Tick, File,
     RadioBeep, RadioEnd, WarpReady, Hazard, TargetLock,
-    LiquidDrop, Eureka, Thunder, EgorkaVoice
+    LiquidDrop, Eureka, Thunder, EgorkaVoice,
+    // Служебный маркер: количество типов. Используется только в
+    // static_assert (см. voiceDurationTable) — как голос не используется.
+    kCount
   };
   struct Voice {
     VoiceType type = VoiceType::Click;
     uint64_t startSample = 0;
     // File-голос (v4.0): декодированный float-моно PCM, kSampleRate.
-    // audio-поток читает без мьютекса (после push не меняется).
+    // Владелец буфера — Voice; аудиопоток берёт копию shared_ptr в снимок
+    // (VoiceView::pcm), поэтому удаление голоса в основном потоке не может
+    // освободить буфер под ногами рендера (use-after-free).
     std::shared_ptr<std::vector<float>> pcm;
     float gainDb = 0.0f;
     float pan = 0.0f;  // v4.3.0: -1.0 left .. +1.0 right
@@ -166,7 +171,10 @@ class AudioEngine {
   struct VoiceView {
     VoiceType type = VoiceType::Click;
     uint64_t startSample = 0;
-    const std::vector<float>* pcm = nullptr;
+    // #159: разделяемое владение PCM-буфером (копия под мьютексом).
+    // Сырой указатель здесь означал use-after-free: основной поток мог
+    // удалить голос и освободить буфер, пока аудиопоток его читал.
+    std::shared_ptr<const std::vector<float>> pcm;
     float gainDb = 0.0f;
     float pan = 0.0f;
   };
@@ -223,6 +231,37 @@ class AudioEngine {
   std::mutex m_mutex;
   std::vector<Voice> m_voices;
 
+  // --- #159: время жизни PCM-буферов -------------------------------------
+  // Аудиопоток снимает снимок голосов под m_mutex, но читает буферы уже без
+  // мьютекса. Удалённый голос нельзя уничтожать сразу: буфер переносится в
+  // m_retiredPcm и освобождается только после того, как аудиопоток опубликует
+  // epoch новее retireEpoch (т.е. закончит проход, начатый до удаления).
+  // Благодаря этому free() никогда не выполняется в аудиопотоке.
+  struct RetiredPcm {
+    std::shared_ptr<std::vector<float>> pcm;
+    uint64_t retireEpoch = 0;
+  };
+  std::vector<RetiredPcm> m_retiredPcm;
+  // Инкрементируется аудиопотоком в конце renderFrames (после освобождения
+  // снимка). Только основной поток читает его в flushRetiredPcm().
+  std::atomic<uint64_t> m_renderEpoch{0};
+
+  // Переносит PCM-буфер удаляемого голоса в отложенный список.
+  // Вызывается под m_mutex, только из основного потока.
+  void retireVoicePcm(std::shared_ptr<std::vector<float>>& pcm);
+  // Освобождает буферы, чей retireEpoch уже «позади» m_renderEpoch.
+  // Только основной поток.
+  void flushRetiredPcm();
+
+  // --- #159: таблица длительностей голосов --------------------------------
+  // seconds < 0 => длительность берётся из длины PCM-буфера (File/EgorkaVoice).
+  struct VoiceDuration {
+    VoiceType type;
+    double seconds;
+  };
+  static const VoiceDuration* voiceDurationTable(size_t& count);
+  double voiceDurationSeconds(VoiceType type, size_t pcmSamples) const;
+
   // Состояние шума — ТОЛЬКО аудиопоток (renderFrames), update() не трогает.
   uint32_t m_rng = 0x12345678u;
   float m_brown = 0.0f;
@@ -236,6 +275,9 @@ class AudioEngine {
   float m_weatherPatterNoise = 0.0f;
 
   friend struct AudioCallbackBridge;
+  // #159: доступ для регрессионных тестов (tests/test_audio_voice.cpp):
+  // время жизни PCM-буферов, знаковый возраст голоса, таблица длительностей.
+  friend struct AudioTestAccess;
 };
 
 }  // namespace astro

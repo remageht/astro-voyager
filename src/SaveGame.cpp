@@ -779,18 +779,26 @@ bool saveWriteFile(const std::string& path, const std::string& text,
   }
   f.close();
 
-  // Атомарная замена целевого файла (защита от повреждения при сбоях)
+  // Атомарная замена целевого файла (защита от повреждения при сбоях).
+  // #159: прежний fallback делал remove(цель) + rename(tmp) — при падении
+  // процесса между этими операциями профиль терялся ЦЕЛИКОМ (хуже исходной
+  // проблемы). Теперь оригинал не трогаем: сначала несколько попыток
+  // переименования (файл может быть кратко заблокирован антивирусом), а при
+  // неудаче возвращаем ошибку, оставляя .tmp с новыми данными на диске.
   std::error_code renameEc;
-  std::filesystem::rename(tmpP, p, renameEc);
-  if (renameEc) {
-    // В Windows переименование поверх существующего файла может требовать remove
-    std::filesystem::remove(p, renameEc);
+  bool renamed = false;
+  for (int attempt = 0; attempt < 5 && !renamed; ++attempt) {
     renameEc.clear();
     std::filesystem::rename(tmpP, p, renameEc);
-    if (renameEc) {
-      err = "atomic rename failed for " + path + ": " + renameEc.message();
-      return false;
+    renamed = !renameEc;
+    if (!renamed) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(40));
     }
+  }
+  if (!renamed) {
+    err = "atomic rename failed for " + path + ": " + renameEc.message() +
+          " (new data kept in " + path + ".tmp)";
+    return false;
   }
   return true;
 }

@@ -6,8 +6,12 @@ namespace astro {
 
 double kerrPhotonSphereRadius(double a, double rs, bool prograde) {
   const double M = 0.5 * rs;
+  // #159: при rs = 0 (M = 0) возвращаем 0 — иначе деление a/M даёт NaN.
+  if (!(M > 0.0)) return 0.0;
   const double aClamped = std::clamp(std::abs(a), 0.0, M);
-  if (aClamped < 1e-15) {
+  // #159: порог относительный (rs игровых чёрных дыр — 2.95e9 м у Sgr A*),
+  // абсолютный 1e-15 там не срабатывал никогда.
+  if (aClamped <= 1e-15 * M) {
     return 3.0 * M;
   }
   const double sign = prograde ? 1.0 : -1.0;
@@ -20,19 +24,22 @@ double kerrPhotonSphereRadius(double a, double rs, bool prograde) {
 
 double kerrBCrit(double a, double rs, bool prograde) {
   const double M = 0.5 * rs;
+  if (!(M > 0.0)) return 0.0;
   const double aClamped = std::clamp(std::abs(a), 0.0, M);
-  if (aClamped < 1e-15) {
+  if (aClamped <= 1e-15 * M) {
     return 1.5 * std::sqrt(3.0) * rs;  // 3 * sqrt(3) * M
   }
   const double r_ph = kerrPhotonSphereRadius(aClamped, rs, prograde);
-  if (prograde && std::abs(r_ph - M) < 1e-7) {
-    return 2.0 * M;
-  }
-  const double num = -(r_ph * r_ph * r_ph - 3.0 * M * r_ph * r_ph +
-                       aClamped * aClamped * r_ph + aClamped * aClamped * M);
-  const double den = aClamped * (r_ph - M);
-  const double xi = num / den;
-  return std::abs(xi);
+  // #159: устойчивая форма (Bardeen 1973):
+  //   |b_crit| = r_ph (r_ph + 3M) / (2 sqrt(M r_ph)).
+  // Она алгебраически эквивалентна прежней
+  //   -(r^3 - 3M r^2 + a^2 r + M a^2) / (a (r_ph - M))
+  // (расхождение ≤ 6.3e-12 на сетке a/M и rs), но не содержит деления на
+  // (r_ph - M): при a -> M и числитель, и знаменатель одновременно стремятся
+  // к нулю (0/0 -> NaN), а прежний guard с абсолютным eps = 1e-7 не
+  // срабатывал на игровых масштабах rs (Sgr A* 2.95e9 м, M87* 6.6e9 м).
+  // Экстремум теперь точен: prograde -> 2M, retrograde -> 7M при любом rs.
+  return r_ph * (r_ph + 3.0 * M) / (2.0 * std::sqrt(M * r_ph));
 }
 
 KerrOrbitResult kerrPhotonOrbit(double b, double a, double rs,

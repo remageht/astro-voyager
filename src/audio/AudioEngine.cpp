@@ -210,41 +210,94 @@ void AudioEngine::update(float dt) {
   const uint64_t now = m_samples.load();
   const double rate = static_cast<double>(kSampleRate);
 
-  std::lock_guard<std::mutex> lock(m_mutex);
-  for (size_t i = 0; i < m_voices.size();) {
-    const double age =
-        static_cast<double>(now - m_voices[i].startSample) / rate;
-    double dur = 1.0;
-    switch (m_voices[i].type) {
-      case VoiceType::Click: dur = 0.12; break;
-      case VoiceType::Whoosh: dur = 0.7; break;
-      case VoiceType::Jump: dur = 1.6; break;
-      case VoiceType::Chime: dur = 2.0; break;
-      case VoiceType::Blip: dur = 0.3; break;
-      case VoiceType::Capture: dur = 2.4; break;
-      case VoiceType::Tick: dur = 0.05; break;
-      case VoiceType::RadioBeep: dur = 0.08; break;
-      case VoiceType::RadioEnd: dur = 0.06; break;
-      case VoiceType::WarpReady: dur = 0.55; break;
-      case VoiceType::Hazard: dur = 0.45; break;
-      case VoiceType::TargetLock: dur = 0.22; break;
-      case VoiceType::Thunder: dur = 3.5; break;
-      case VoiceType::LiquidDrop: dur = 0.35; break;
-      case VoiceType::Eureka: dur = 3.2; break;
-      case VoiceType::File:
-      case VoiceType::EgorkaVoice:
-        dur = m_voices[i].pcm ? static_cast<double>(m_voices[i].pcm->size()) /
-                                    kSampleRate
-                              : 0.0;
-        break;
-    }
-    if (age > dur + 0.1) {
-      m_voices[i] = m_voices.back();
-      m_voices.pop_back();
-    } else {
-      ++i;
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (size_t i = 0; i < m_voices.size();) {
+      // #159: возраст считаем в ЗНАКОВОМ типе. Реплики Егорки стартуют с
+      // пре-роллом 50 мс (startSample лежит в будущем), поэтому беззнаковое
+      // вычитание now - startSample давало ~4.2e14 секунд, и голос удалялся
+      // в ближайшем же update() — реплика не успевала прозвучать.
+      const double age = static_cast<double>(
+                             static_cast<int64_t>(now) -
+                             static_cast<int64_t>(m_voices[i].startSample)) /
+                         rate;
+      const double dur = voiceDurationSeconds(
+          m_voices[i].type, m_voices[i].pcm ? m_voices[i].pcm->size() : 0);
+      if (age > dur + 0.1) {
+        // #159: буфер удаляемого голоса нельзя освобождать сразу — аудиопоток
+        // читает его из снимка уже без мьютекса. Откладываем освобождение.
+        retireVoicePcm(m_voices[i].pcm);
+        m_voices[i] = m_voices.back();
+        m_voices.pop_back();
+      } else {
+        ++i;
+      }
     }
   }
+  // Освобождение отложенных буферов — вне мьютекса и только в основном
+  // потоке: free() в аудиопотоке (RT-колбэк) недопустим.
+  flushRetiredPcm();
+}
+
+const AudioEngine::VoiceDuration* AudioEngine::voiceDurationTable(size_t& count) {
+  static const VoiceDuration kTable[] = {
+      {VoiceType::Click, 0.12},      {VoiceType::Whoosh, 0.70},
+      {VoiceType::Jump, 1.60},       {VoiceType::Chime, 2.00},
+      {VoiceType::Blip, 0.30},       {VoiceType::Capture, 2.40},
+      {VoiceType::Tick, 0.05},       {VoiceType::File, -1.00},
+      {VoiceType::RadioBeep, 0.08},  {VoiceType::RadioEnd, 0.06},
+      {VoiceType::WarpReady, 0.55},  {VoiceType::Hazard, 0.45},
+      {VoiceType::TargetLock, 0.22}, {VoiceType::LiquidDrop, 0.35},
+      {VoiceType::Eureka, 3.20},     {VoiceType::Thunder, 3.50},
+      {VoiceType::EgorkaVoice, -1.00}};
+  // #159: добавление нового VoiceType обязано ломать сборку, пока для него
+  // не задана длительность. Иначе новый тип молча получил бы «длительность
+  // по умолчанию» и обрывался через 1 секунду (как с EgorkaVoice в #159).
+  static_assert(sizeof(kTable) / sizeof(kTable[0]) ==
+                    static_cast<size_t>(VoiceType::kCount),
+                "voiceDurationTable must have one entry per VoiceType");
+  count = sizeof(kTable) / sizeof(kTable[0]);
+  return kTable;
+}
+
+double AudioEngine::voiceDurationSeconds(VoiceType type,
+                                         size_t pcmSamples) const {
+  size_t count = 0;
+  const VoiceDuration* table = voiceDurationTable(count);
+  for (size_t i = 0; i < count; ++i) {
+    if (table[i].type != type) continue;
+    if (table[i].seconds >= 0.0) return table[i].seconds;
+    // File / EgorkaVoice: длительность = размер PCM-буфера.
+    return static_cast<double>(pcmSamples) / static_cast<double>(kSampleRate);
+  }
+  return 0.0;  // недостижимо: таблица покрывает все VoiceType
+}
+
+void AudioEngine::retireVoicePcm(std::shared_ptr<std::vector<float>>& pcm) {
+  if (!pcm) return;
+  RetiredPcm rv;
+  rv.pcm = std::move(pcm);
+  rv.retireEpoch = m_renderEpoch.load(std::memory_order_acquire);
+  m_retiredPcm.push_back(std::move(rv));
+}
+
+void AudioEngine::flushRetiredPcm() {
+  if (m_retiredPcm.empty()) return;
+  const uint64_t epoch = m_renderEpoch.load(std::memory_order_acquire);
+  size_t keep = 0;
+  for (size_t i = 0; i < m_retiredPcm.size(); ++i) {
+    if (epoch > m_retiredPcm[i].retireEpoch) {
+      // Рендер-проход, который мог читать этот буфер, уже завершён —
+      // освобождаем в основном потоке.
+      m_retiredPcm[i].pcm.reset();
+    } else {
+      if (keep != i) {
+        m_retiredPcm[keep] = std::move(m_retiredPcm[i]);
+      }
+      ++keep;
+    }
+  }
+  m_retiredPcm.resize(keep);
 }
 
 void AudioEngine::setVolume(float v) {
@@ -490,6 +543,9 @@ void AudioEngine::stopCurrentVoiceCue() {
   std::lock_guard<std::mutex> lock(m_mutex);
   for (auto it = m_voices.begin(); it != m_voices.end(); ) {
     if (it->type == VoiceType::EgorkaVoice) {
+      // #159: тот же протокол, что и в update() — буфер освобождается
+      // отложенно, чтобы аудиопоток не читал освобождённую память.
+      retireVoicePcm(it->pcm);
       it = m_voices.erase(it);
     } else {
       ++it;
@@ -820,12 +876,16 @@ float AudioEngine::renderVoice(const VoiceView& v, double age,
       const float vVol = m_egorkaVoiceVolume.load();
       return (a + (b - a) * f) * dbToGain(v.gainDb) * vVol;
     }
+    case VoiceType::kCount:
+      return 0.0f;  // служебный маркер, голосом не является
   }
   return 0.0f;
 }
 
 void AudioEngine::renderFrames(float* out, unsigned frames) {
   // Снимок голосов под коротким мьютексом (без аллокаций в колбэке).
+  // #159: снимок владеет копией shared_ptr на PCM-буфер — основной поток
+  // не может освободить буфер, пока его читает рендер.
   VoiceView snap[40];
   size_t nSnap = 0;
   {
@@ -834,7 +894,7 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
     for (size_t i = 0; i < nSnap; ++i) {
       snap[i].type = m_voices[i].type;
       snap[i].startSample = m_voices[i].startSample;
-      snap[i].pcm = m_voices[i].pcm.get();
+      snap[i].pcm = m_voices[i].pcm;
       snap[i].gainDb = m_voices[i].gainDb;
       snap[i].pan = m_voices[i].pan;
     }
@@ -853,8 +913,13 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
     float sfxL = 0.0f;
     float sfxR = 0.0f;
     for (size_t v = 0; v < nSnap; ++v) {
+      // #159: возраст в знаковом типе — реплика с пре-роллом 50 мс имеет
+      // startSample в будущем, и беззнаковое вычитание давало огромный
+      // возраст вместо отрицательного.
       const double age =
-          static_cast<double>(base + i - snap[v].startSample) / rate;
+          static_cast<double>(static_cast<int64_t>(base + i) -
+                              static_cast<int64_t>(snap[v].startSample)) /
+          rate;
       if (age < 0.0) continue;
       const float s = renderVoice(snap[v], age, m_rng);
       const float pan01 = std::clamp((snap[v].pan + 1.0f) * 0.5f, 0.0f, 1.0f);
@@ -1023,6 +1088,14 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
     out[i * 2 + 1] = mixR;
   }
   m_samples.fetch_add(frames);
+  // #159: сначала отпускаем снимок (PCM-буферы), и только потом публикуем
+  // новый epoch. Порядок обязателен: основной поток освобождает отложенные
+  // буферы лишь увидев epoch > retireEpoch, а к этому моменту аудиопоток
+  // уже не читает эти буферы.
+  for (size_t i = 0; i < nSnap; ++i) {
+    snap[i].pcm.reset();
+  }
+  m_renderEpoch.fetch_add(1, std::memory_order_release);
 }
 
 void AudioEngine::setWeatherAmbience(int weatherType, float intensity, float windKps) {

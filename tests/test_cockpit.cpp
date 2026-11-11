@@ -419,6 +419,47 @@ int main() {
     std::cout << "PASS: Cockpit Test 14 (Vertical orientation no-NaN roll guard)\n";
   }
 
+  // Test 15 (#159): roll 90° (правый вектор вдоль Y) показывает 90°, а не 0°.
+  // Раньше горизонтальная проекция была пустой, и HUD врал «0° крена».
+  {
+    ctrl.reset();
+    glm::vec3 pos(0.0f);
+    glm::vec3 fwd(1.0f, 0.0f, 0.0f);
+    glm::vec3 verticalRight(0.0f, 1.0f, 0.0f);  // крен 90°
+    glm::vec3 up(0.0f, 0.0f, 1.0f);
+
+    ctrl.update(0.016f, pos, fwd, verticalRight, up, 0.0f, 0.0f, false, 0.0f,
+                1.0f, 1.0f, "", glm::vec3(0.0f), 0.0f);
+    const CockpitHUDData& hud = ctrl.getHUDData();
+    if (std::abs(hud.rollDeg - 90.0f) > 1e-2f) {
+      std::cerr << "Test 15 failed: expected roll ~90 deg, got " << hud.rollDeg
+                << "\n";
+      return 1;
+    }
+    std::cout << "PASS: Cockpit Test 15 (roll 90 deg reported correctly)\n";
+  }
+
+  // Test 16 (#159): NaN-шаг времени не ломает телеметрию.
+  {
+    ctrl.reset();
+    glm::vec3 pos(0.0f);
+    glm::vec3 fwd(1.0f, 0.0f, 0.0f);
+    glm::vec3 right(0.0f, 0.0f, 1.0f);
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+    const float nan = std::nanf("");
+    ctrl.update(nan, pos, fwd, right, up, 0.0f, 0.0f, false, 0.0f, 1.0f, 1.0f,
+                "", glm::vec3(0.0f), 0.0f);
+    const CockpitHUDData& hud = ctrl.getHUDData();
+    const glm::vec3 off = ctrl.getHeadOffset();
+    if (std::isnan(hud.rollDeg) || std::isnan(hud.pitchDeg) ||
+        std::isnan(off.x) || std::isnan(off.y) || std::isnan(off.z)) {
+      std::cerr << "Test 16 failed: NaN deltaTime propagated into telemetry\n";
+      return 1;
+    }
+    std::cout << "PASS: Cockpit Test 16 (NaN deltaTime rejected)\n";
+  }
+
   std::cout << "ALL COCKPIT CONTROLLER TESTS PASSED\n";
   return 0;
 }

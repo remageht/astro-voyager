@@ -525,6 +525,37 @@ int main() {
     std::filesystem::remove_all(std::filesystem::u8path(testDir), ec);
   }
 
+  // Test 17 (#159): неудачная подмена НЕ уничтожает существующий профиль.
+  // Прежний fallback делал remove(цель) + rename(tmp): падение процесса
+  // между операциями теряло профиль целиком. Теперь оригинал не трогают.
+  {
+    const std::string testDir = "test_save_atomic_failure_dir";
+    const std::string target = testDir + "/profile.json";
+    std::error_code ec;
+    std::filesystem::remove_all(std::filesystem::u8path(testDir), ec);
+    std::filesystem::create_directories(std::filesystem::u8path(testDir), ec);
+
+    // Цель — существующий каталог: rename(tmp -> dir) обязан провалиться.
+    std::filesystem::create_directory(std::filesystem::u8path(target), ec);
+
+    std::string err;
+    const bool ok = astro::saveWriteFile(target, "{\"schema\":1}", err);
+    if (ok) {
+      std::cerr << "Test 17 failed: saveWriteFile must fail when the target is a directory\n";
+      return 1;
+    }
+    if (err.empty()) {
+      std::cerr << "Test 17 failed: expected a non-empty error message\n";
+      return 1;
+    }
+    if (!std::filesystem::is_directory(std::filesystem::u8path(target), ec)) {
+      std::cerr << "Test 17 failed: the existing target must NOT be removed on failure\n";
+      return 1;
+    }
+
+    std::filesystem::remove_all(std::filesystem::u8path(testDir), ec);
+  }
+
   std::cout << "save tests: ALL PASS\n";
   return 0;
   } catch (const std::exception& e) {

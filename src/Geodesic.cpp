@@ -246,8 +246,13 @@ bool rkf45Step(double h, double tol, SchwState& s, double rs, double& hNext) {
     const double err = std::sqrt(err2 / 6.0);
     const double safeErr = std::max(err, 1e-15);
     const double safeTol = std::max(tol, 1e-15);
-    if (err > tol) {
-      const double fac = std::min(5.0, std::max(0.2, 0.9 * std::pow(safeTol / safeErr, 0.2)));
+    // #159: не-конечная оценка ошибки (NaN/Inf) — это провал шага, а не
+    // «точное решение»: сравнение err > tol с NaN ложно, и такой шаг
+    // принимался, таща NaN в состояние и дальше в рендер/HUD.
+    if (!std::isfinite(err) || err > tol) {
+      const double fac = (std::isfinite(err))
+                             ? std::min(5.0, std::max(0.2, 0.9 * std::pow(safeTol / safeErr, 0.2)))
+                             : 0.2;
       h *= fac;
       if (h < 1e-9) return false;  // avoid infinite shrinking
       continue;
