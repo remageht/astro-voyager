@@ -2913,9 +2913,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_asteroidModels[0].load("res/models/asteroid_1.obj");
             s_asteroidModels[0].loadTextures("res/models/asteroid");
             s_asteroidModels[1].load("res/models/asteroid_2.obj");
-            s_asteroidModels[1].loadTextures("res/models/asteroid");
+            s_asteroidModels[1].shareTexturesFrom(s_asteroidModels[0]);
             s_asteroidModels[2].load("res/models/asteroid_3.obj");
-            s_asteroidModels[2].loadTextures("res/models/asteroid");
+            s_asteroidModels[2].shareTexturesFrom(s_asteroidModels[0]);
           }
           const float astFieldK = warpdrive::astK();
           if (astFieldK > 0.01f && s_asteroidModels[0].ready() && s_shipShader) {
