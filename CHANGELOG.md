@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 5.0.0 - 2026-11-10
+
+## What's new / Что нового
+
+- EN: Voiced Crew Comms & Dialogues (24 tracks) - Cinematic Russian voice acting powered by local Qwen3-TTS (`Qwen/Qwen3-TTS-12Hz-1.7B-Base`) with PyTorch CUDA. Includes 11 emotional ship announcer voice lines for flight engineer Egorka-6, 6 story radio dialogues on bridge comms (OJ 287 binary pair, Hyperdisk, GW170817 kilonova, SN 1987A supernova, hard touchdown, core drill eureka), and 7 female crew radio lines (Pilot Mia Sato, Astrophysicist Elena Rostova, Ship AI Aurora). Integrated interactive soundboard into Unified Ship Terminal and provided standalone HTML5 audio player.
+- RU: Голосовая система экипажа и сюжетные радиодиалоги (24 аудиодорожки) - кинематографичная русская озвучка на базе локальной модели Qwen3-TTS на GPU. Включает 11 эмоциональных бортовых реплик аннонсера бортинженера Егорки-6, 6 сюжетных радиодиалогов мостика (бинарная пара OJ 287, Гипердиск, килонова GW170817, сверхновая SN 1987A, жёсткая посадка, эврика керна), а также 7 кинематографичных реплик женского экипажа (пилот Миа Сато, астрофизик Елена Ростова, ИИ Аврора). Встроен саундборд в Единый Терминал Корабля и автономный интерактивный веб-плеер HTML5.
+- EN: Zero-UI Contextual Flight HUD & Unified Ship OS - Tri-arc minimalist vital status HUD (Shields, Fuel, Hull integrity, Velocity, Target reticle) with unobtrusive contextual auto-fade; Unified Ship OS Terminal (Hotkey `Tab`) with integrated avionics, subsystem diagnostics, 3D star map, and comms soundboard.
+- RU: Zero-UI контекстный ИЛС и Единая ОС Корабля - три-дуговой минималистичный индикатор жизненных параметров судна (щиты, топливо, корпус, скорость, целеуказатель) с автозатуханием; Единый Терминал Корабля Unified Ship OS (клавиша `Tab`) со встроенной диагностикой подсистем, 3D картой и саундбордом радиосвязи.
+- EN: 3D Holographic Star Map & Celestial Orrery (Hotkey `M`) - Interactive celestial orrery rendering 3D Keplerian elliptical orbits of planets, moons, and stations with real-time true anomaly revolution, time-warp controls, and target selection.
+- RU: 3D Голографическая Звездная Карта / Оррери (клавиша `M`) - интерактивная 3D карта орбитальных кеплеровских дуг планет, спутников и станций с динамическим расчетом истинной аномалии, ускорением времени и целеуказанием.
+- EN: Planetary Landing Avionics & Terrain Wireframe - Real-time perspective terrain wireframe grid contouring ground topology during low-altitude descent; vertical variometer descent ladder; planetary surface slope gradient evaluation with terrain hazard warnings (>15° slope danger).
+- RU: Авионика посадки на планеты и сетка рельефа - перспективная проволочная 3D сетка рельефа, оконтуривающая топологию поверхности на малой высоте; вертикальный вариометр скорости снижения; оценка градиента уклона рельефа с предупреждением об опасных склонах (>15°).
+- EN: Full Gamepad & Steam Deck Support - Native controller navigation, radial action rings, contextual glyph prompts, dynamic thumbstick deadzones, and dual-motor haptic rumble feedback.
+- RU: Полная интеграция геймпадов и Steam Deck - нативная навигация контроллером, радиальные меню действий, адаптивные глифы кнопок, настраиваемые мертвые зоны стиков и тактильная двухмоторная вибрация.
+- Gates / Гейты: GL Release build OK, static checks PASS, ctest 19/19 PASS. Closes #147.
+
 ## 4.8.0 - 2026-11-05
 
 ## What's new / Что нового
