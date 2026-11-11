@@ -40,7 +40,7 @@ cmake --build build-gl --config Release
 ```bash
 # Интерактивное 3D-окно:
 .\build-gl\Release\astro-voyager.exe
-# Автоматический захват всех 6 станций в docs/screens/:
+# Автоматический захват всех 22 станций каталога в docs/screens/:
 .\build-gl\Release\astro-voyager.exe --screenshot-all
 ```
 

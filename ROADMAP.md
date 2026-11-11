@@ -17,10 +17,16 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 | Стадия / Stage | Версии / Versions | Фокус / Primary Focus | Статус / Status |
 |---|---|---|---|
 | **Pre-Alpha** | `v1.0.0` – `v4.1.0` | Физика ОТО, релятивистские чёрные дыры, Солнечная система, сюжетная кампания 7 глав | Завершено (Shipped) |
-| **Alpha Stage** | `v4.2.0` | Диегетический 3D-кокпит, коллиматорный ИЛС, динамика перегрузок, SpaceDrive 3D варп-туннель, авионика | Завершено (Shipped) |
+| **Alpha Stage** | `v4.2.0` | Диегетический 3D-кокпит, коллиматорный ИЛС, динамика перегрузок, SpaceDrive 3D варп-туннель, авионика | Завершено (Shipped v4.2.0) |
 | **Beta Stage** | `v4.3.0` – `v4.5.0` | Процедурные PBR-поверхности планет (LOD), Рэлей-Ми атмосфера, Photo Mode v2, LUT, авионика, провенанс ассетов, Егорка-6 | Завершено (Shipped v4.5.0) |
-| **Release Candidate** | `v4.6.0` – `v4.8.0` | Научный спектрометр, радиоэфир экипажа, посадка на планеты, экономика хабов | **Текущий этап (In Progress)** |
-| **Release 1.0** | `v5.0.0` | Полноценный AAA-релиз, Steam Deck верификация, Mod-API мастерская, 5+ языков | Финал карты (Target) |
+| **Release Candidate** | `v4.6.0` – `v4.8.0` | Научный спектрометр, радиоэфир экипажа, посадка на планеты, экономика хабов, центрифуга | Завершено (Shipped v4.8.0) |
+| **Alpha Pre-Releases** | `v4.9.0` – `v4.9.4` | Astro-Zettelkasten («Второй Мозг»), синтез Эврики, кассетная дека, реликвия Voyager-1 | Завершено (Shipped v4.9.4) |
+| **Release 1.0 (Grand Universe)** | `v5.0.0` | 22 станции, 8 концовок Мультивселенной, Zero-UI HUD, 3D Оррери, авионика посадки, геймпады & Steam Deck | Завершено (Shipped v5.0.0) |
+| **Stability Patches** | `v5.0.1` – `v5.0.5` | Озвучка экипажа Whisper, тембр Мии/Елены, фикс VRAM-утечек ObjModel, CI Linux runner, синхронизация документации | **Текущий этап (Shipped / In Progress)** |
+| **Stage 6: Exoplanetary Biomes** | `v5.1.0` | Процедурные континентальные биомы, динамическая гидродинамика океанов, автономный научный дрон | Запланировано (Planned) |
+| **Stage 7: Next-Gen Engine** | `v5.2.0` | SPSC lock-free аудио-буфер, RHI слой абстракции (Vulkan/Metal), трассировка путей черных дыр Керра | Запланировано (Planned) |
+| **Stage 8: Beacon Network** | `v5.3.0` | Асинхронный кооператив, квантовые ретрансляторы на планетах, P2P-обмен Zettelkasten, динамические SOS-события | Запланировано (Planned) |
+| **Stage 9: Beyond the Singularity** | `v6.0.0` | Lua/WASM Mod-API, интеграция Steam Workshop, встроенный менеджер модификаций с Hot Reload | Перспектива (Future Target) |
 
 ## Stage 1 — Foundation / Фундамент (v3.4–v3.6)
 
@@ -100,14 +106,56 @@ cross-platform "AAA-feel" space explorer. AAA here is not a budget claim —
 - EN: Companion black hole event horizon capture & ray termination in `bh.frag` (no blowout white blob), 12.5s orbital revolution, vertical offset for Bridge Chatter toast below Expedition card, ship physics & gravity pause during story cutscenes, custom 16:9 cinematic illustrations for all 6 narrative endings.
 - RU: Захват лучей горизонтом событий второй чёрной дыры в `bh.frag` (устранено белое пятно), вращение пары за 12.5с, вертикальное разделение плашек радиопереговоров и экспедиции, пауза корабля и физики при показе сюжета, кинематографичные 16:9 иллюстрации для всех 6 концовок сюжета.
 
-### v4.7 — Station Hubs & Modular Upgrades / Станции-хабы и модульные апгрейды
-- Status / Статус: **planned (RC2)** / **запланировано (RC2)**.
-- EN: Interior docking vista, credits & research economy, ship subsystem tuning (warp coil capacitors, sensor arrays, thruster gimbal).
-- RU: Вид станции изнутри при стыковке, экономика кредитов и исследований, тюнинг подсистем корабля (конденсаторы варп-катушек, сенсорные решётки, подвес маневровых).
+### v4.7 — Station Hubs & RP Economy / Станции-хабы и экономика RP
+- Status / Статус: **shipped in 4.7.0** / **выпущено в 4.7.0**.
+- EN: Interior docking vista, Research Points (RP) spending on engineering upgrades (warp coil capacitors, shield matrix, RCS gimbal thrusters), interactive station hub dialog.
+- RU: Вид станции изнутри при стыковке, расход очков исследований (RP) на инженерные модули (конденсаторы варп-катушек, матрица щита, маневровые RCS), интерактивный диалог хаба.
 
-## Stage 5 — Ecosystem & Release 1.0 / Экосистема и Release 1.0 (v5.0+)
-- EN: Mod API (data-driven stations/ships/shaders) + workshop, Steam achievements/cloud saves, Windows installer + auto-update, Steam Deck verification (1280x800, full gamepad UX), 5+ language localization, demo/trailer/press kit.
-- RU: Мод-API (станции/корабли/шейдеры как данные) + мастерская, достижения/облачные сейвы платформы, инсталлятор для Windows + автообновление, верификация Steam Deck (1280x800, навигация геймпадом), локализация на 5+ языков, демо/трейлер/пресс-кит.
+### v4.8 — Modular Centrifuge Station & Atmospheric Flight / Модульная центрифуга и атмосфера
+- Status / Статус: **shipped in 4.8.0** / **выпущено в 4.8.0**.
+- EN: Station artificial gravity centrifuge ring rotation ($\omega = 0.30$ rad/s), solar panels with SARJ sun-tracking, dynamic atmospheric weather, angle of attack entry corridor, aerodynamic drag, and re-entry plasma ionization.
+- RU: Вращение жилой центрифуги искусственной гравитации станции ($\omega = 0.30$ рад/с), солнечные батареи с SARJ-слежением за солнцем, динамическая планетарная погода, угол атаки при спуске, аэродинамическое торможение и плазменный кокон входа.
+
+### v4.9 (v4.9.0 – v4.9.4) — Astro-Zettelkasten, Cassette Deck & Avionics / Второй Мозг и кассетная дека
+- Status / Статус: **shipped in 4.9.4 (Alpha Stages)** / **выпущено в 4.9.4 (Alpha Stages)**.
+- EN: Dynamic associative Zettelkasten thought graph with Coulomb-Hooke layout, 3 Eureka synthesis models, [[Wikilinks]] parser with UTF-8 Russian/English search, Obsidian vault export, analog Cosmic Ambient cassette deck with twin spinning reels, and Voyager-1 interstellar relic beacon.
+- RU: Динамический ассоциативный граф мыслей Zettelkasten с физической раскладкой Кулона-Гука, 3 модели синтеза Эврики, парсер [[Вики-ссылок]] с поиском RU/EN, экспорт базы в Obsidian, аналоговая кассетная дека Cosmic Ambient со вращающимися катушками ленты и реликтовый маяк «Вояджер-1».
+
+## Stage 5 — Grand Universe & Release 1.0 / Великая Вселенная и Release 1.0 (v5.0.0 – v5.0.5)
+
+### v5.0.0 — Release 1.0: Grand Universe & Avionics
+- Status / Статус: **shipped in 5.0.0 (Release 1.0)** / **выпущено в 5.0.0 (Release 1.0)**.
+- EN: 22 celestial stations (including GW170817 kilonova, SN 1987A supernova, AT2019qiz TDE, M16 Pillars of Creation), 8 branching Multiverse endings with 16:9 cinematic illustrations and resonance badges, Zero-UI flight HUD with dynamic alpha fade, Unified Ship OS Terminal with 5 tabs, 3D Holographic Celestial Orrery (`M`) with Keplerian orbits, planetary landing avionics (vertical speed variometer ladder, 8x5 terrain wireframe grid, slope hazard warning > 15°), core drill sampling (+250 RP), full Gamepad & Steam Deck integration with radial stick deadzones and button glyphs, Cook-Torrance GGX microfacet ocean glints, Rayleigh-Mie atmospheric scattering, cloud shadows, and far-field geodesic acceleration.
+- RU: 22 космические станции и объекта (включая килонову GW170817, сверхновую SN 1987A, приливной разрыв AT2019qiz, Столпы Творения M16), 8 концовок Мультивселенной с 16:9 иллюстрациями и бейджами резонанса, полетный Zero-UI HUD с плавным затуханием, Единый Терминал корабля на 5 вкладок, 3D-карта звездной системы Оррери (`M`) с кеплеровскими орбитами, посадочная авионика (вариометр спуска, радарная проволочная сетка рельефа 8×5, алерт опасного уклона > 15°), бур керна (+250 RP), нативная поддержка геймпадов и Steam Deck, микрофасеточные блики океанов Cook-Torrance GGX, рассеяние Рэлея-Ми, тени облаков и ускорение трассировки лучей.
+
+### v5.0.1 – v5.0.5 — Stability, Voice Polish & EGM Remediations
+- Status / Статус: **shipped (v5.0.1–v5.0.4) & in progress (v5.0.5)**.
+- EN: 24 voiced crew cues and dialogues verified with OpenAI Whisper (0% hallucinations); timbre polish for Dr. Elena Rostova (deep mature astrophysicist, -1.5 semitones F0) and pilot Mia Sato (lively banter and humor); elimination of VRAM texture leaks in ObjModel via texture sharing; complete synchronization of ARCHITECTURE.md and README.md; Linux runner CI stabilization with Ubuntu 24.04 LTS and DNS fallback.
+- RU: 24 озвученные реплики экипажа со 100% верификацией Whisper (0% галлюцинаций); тембральная полировка голоса д-ра Елены Ростовой (-1.5 полутона F0) и живые реплики пилота Мии Сато; устранение утечки VRAM в ObjModel через разделяемые текстуры; полная синхронизация ARCHITECTURE.md и README.md; стабилизация Linux CI раннеров на Ubuntu 24.04 LTS с DNS-фоллбэком.
+
+## Stage 6 — Exoplanetary Biomes & Surface Hydrology / Экзопланетарные биомы и гидродинамика (v5.1.0)
+- Status / Статус: **planned (Stage 6)** / **запланировано (Stage 6)**.
+- EN: Procedural continental biomes for terraformed planets (cryovolcanic plains, basalt canyons, hydrocarbon lakes, turquoise archipelagos of Hercules-b); dynamic ocean shoreline froth and water wake upon low-altitude flight; autonomous deployable exploration science drone/rover for scouting anomalies within a 10 km radius of landing touchdown.
+- RU: Процедурные континентальные биомы для терраформированных планет (криовулканические равнины, базальтовые каньоны, метановые озера, бирюзовые архипелаги Hercules-b); динамическая пена прибоя и кильватерный след при бреющем полете над водой; автономный исследовательский дрон/ровер для разведки аномалий в радиусе 10 км от места посадки.
+- Gates: шейдер биомов без просадки фреймрейта (< 0.5 мс на кадр), физика плавучести и приводнения, тест отстыковки и автономного возвращения дрона.
+
+## Stage 7 — Multi-Threaded Rendering & SPSC Lock-Free Audio / Многопоточный рендеринг и бессерверный звук (v5.2.0)
+- Status / Статус: **planned (Stage 7)** / **запланировано (Stage 7)**.
+- EN: AudioEngine migration to a Single-Producer Single-Consumer (SPSC) lock-free ring buffer, eliminating WASAPI/ALSA mutex contention with the render thread at 144+ Hz; Render Hardware Interface (RHI) modular abstraction layer preparing native Vulkan 1.3 and Metal backends beyond OpenGL 3.3; compute shader path-tracing for rotating Kerr black hole ergospheres with extreme spin $a \to 0.998$.
+- RU: Перевод AudioEngine на безблокировочный кольцевой буфер SPSC (устранение mutex contention между WASAPI/ALSA и рендер-потоком OpenGL на частотах 144+ Гц); модульный слой абстракции RHI (Render Hardware Interface) с подготовкой бэкендов Vulkan 1.3 и Metal в дополнение к OpenGL 3.3; численная трассировка путей для эргосферы вращающейся черной дыры Керра с экстремальным спином $a \to 0.998$.
+- Gates: нулевой оверхед локов в профилировщике на 240 Гц, кроссплатформенная сборка RHI, верификация гравитационного фрейм-дрэггинга Лензе-Тирринга.
+
+## Stage 8 — Galactic Beacon Network & Async Co-op / Сеть маяков и асинхронный кооператив (v5.3.0)
+- Status / Статус: **planned (Stage 8)** / **запланировано (Stage 8)**.
+- EN: Asynchronous multiplayer: deployable Quantum Eureka Relays and beacons on planetary landing sites; cryptographic P2P hash sharing of Zettelkasten knowledge graphs, custom player notes, and star charts; dynamic deep space emergent events (automated distress beacons, drifting relic probes, rogue asteroid deflections).
+- RU: Асинхронный мультиплеер: установка квантовых ретрансляторов и маяков Эврики в точках высадки; криптографический P2P-обмен графами мыслей Zettelkasten, заметками пилота и звездными картами; динамические события глубокого космоса (сигналы бедствия SOS, дрейфующие реликтовые зонды, перехват опасных астероидов).
+- Gates: детерминизм сериализации маяков, устойчивость P2P-пакетов без центрального сервера, тесты генератора событий.
+
+## Stage 9 — Beyond the Singularity: Mod-API & Steam Workshop / За Сингулярностью: Мод-API и Мастерская (v6.0.0)
+- Status / Статус: **future target (v6.0.0)** / **перспективная цель (v6.0.0)**.
+- EN: Embedded Lua/WASM scripting runtime for community-driven celestial bodies, custom spacecraft hulls, custom GLSL shaders, and procedural narrative quests; Steam Workshop integration with one-click subscription, automated asset sandboxing, and runtime hot-reloading.
+- RU: Встроенная среда выполнения Lua/WASM для пользовательских небесных тел, корпусов кораблей, GLSL-шейдеров и сюжетных квестов; интеграция Steam Workshop с установкой модов в один клик, песочницей безопасности ассетов и горячей перезагрузкой модификаций на лету.
+- Gates: изоляция песочницы Lua/WASM (отсутствие доступа к ФС за пределами мода), обратная совместимость сохранений с модами, валидатор мод-паков в CI.
 
 ## Process rules / Правила процесса
 - Цикл: один фича-пасс → гейты → один коммит → релиз каждые 2–3 пасса (текущий ритм).
