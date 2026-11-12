@@ -131,12 +131,14 @@ class AudioEngine {
     AuroraSysOnline = 26
   };
 
-  void playEgorkaVoice(EgorkaVoiceCue cue, float gainDb = 0.0f);
+  void playEgorkaVoice(EgorkaVoiceCue cue, float gainDb = 0.0f, bool force = false);
   void stopCurrentVoiceCue();
   void setEgorkaVoiceEnabled(bool enabled) { m_egorkaVoiceEnabled.store(enabled); }
   bool isEgorkaVoiceEnabled() const { return m_egorkaVoiceEnabled.load(); }
   void setEgorkaVoiceVolume(float v) { m_egorkaVoiceVolume.store(v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v)); }
   float egorkaVoiceVolume() const { return m_egorkaVoiceVolume.load(); }
+  bool isEgorkaVoicePlaying() const;
+  int currentEgorkaVoiceCue() const { return m_activeEgorkaCue.load(); }
 
   // v4.0: файл-голос для катсцен (wav, декодируется miniaudio в float
   // моно kSampleRate синхронно при запуске; каталог с аудио рядом).
@@ -227,6 +229,7 @@ class AudioEngine {
   std::unordered_map<int, std::shared_ptr<std::vector<float>>> m_egorkaCache;
   uint64_t m_lastEgorkaSample = 0;
   int m_lastEgorkaCue = -1;
+  std::atomic<int> m_activeEgorkaCue{-1};
 
   std::mutex m_mutex;
   std::vector<Voice> m_voices;

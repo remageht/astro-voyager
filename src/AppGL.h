@@ -78,6 +78,7 @@ class AppGL {
   void processMouse();
   void drawImGui();
   void drawMenu();
+  void drawVoiceCatalogPage(float areaH);
   void drawHelpContent();
   void drawHelpOverlay();
   void drawWorldLabels();
@@ -355,8 +356,10 @@ class AppGL {
 
   // Main menu / overlay state
   bool m_inMenu = true;
-  int m_menuPage = 0;  // 0 main, 1 settings, 2 help, 3 patch notes
+  int m_menuPage = 0;  // 0 main, 1 settings, 2 help, 3 patch notes, 4 voice catalog
   int m_prevMenuPage = 0;
+  int m_voiceCatalogTab = 0;           // v5.0.7: вкладка каталога реплик (0: экипаж, 1: диалоги, 2: авионика, 3: все)
+  char m_voiceSearchFilter[64] = "";   // v5.0.7: быстрый текстовый фильтр поиска реплик
   bool m_showPatchNotesModal = false;  // v4.2.0: модальное окно примечаний к выпуску
   bool m_menuCrtFx = true;             // v4.8.1: CRT сканирующие линии и тень от белой рамки
   std::string m_selectedRadarId = "sol"; // Выбранная цель на тактическом радаре

@@ -224,6 +224,9 @@ void AudioEngine::update(float dt) {
       const double dur = voiceDurationSeconds(
           m_voices[i].type, m_voices[i].pcm ? m_voices[i].pcm->size() : 0);
       if (age > dur + 0.1) {
+        if (m_voices[i].type == VoiceType::EgorkaVoice) {
+          m_activeEgorkaCue.store(-1);
+        }
         // #159: буфер удаляемого голоса нельзя освобождать сразу — аудиопоток
         // читает его из снимка уже без мьютекса. Откладываем освобождение.
         retireVoicePcm(m_voices[i].pcm);
@@ -540,6 +543,7 @@ static const char* egorkaCueFilename(AudioEngine::EgorkaVoiceCue cue) {
 }
 
 void AudioEngine::stopCurrentVoiceCue() {
+  m_activeEgorkaCue.store(-1);
   std::lock_guard<std::mutex> lock(m_mutex);
   for (auto it = m_voices.begin(); it != m_voices.end(); ) {
     if (it->type == VoiceType::EgorkaVoice) {
@@ -553,17 +557,26 @@ void AudioEngine::stopCurrentVoiceCue() {
   }
 }
 
-void AudioEngine::playEgorkaVoice(EgorkaVoiceCue cue, float gainDb) {
+bool AudioEngine::isEgorkaVoicePlaying() const {
+  if (m_activeEgorkaCue.load() < 0) return false;
+  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_mutex));
+  for (const auto& v : m_voices) {
+    if (v.type == VoiceType::EgorkaVoice) return true;
+  }
+  return false;
+}
+
+void AudioEngine::playEgorkaVoice(EgorkaVoiceCue cue, float gainDb, bool force) {
   if (!m_tried || !m_egorkaVoiceEnabled.load()) return;
   const int cueId = static_cast<int>(cue);
   const uint64_t nowSample = m_samples.load();
 
-  // Дебаунс: повтор той же реплики не чаще чем раз в 3.0 секунды
+  // Дебаунс: повтор той же реплики не чаще чем раз в 3.0 секунды (если не force)
   // Кеширование буфера в m_egorkaCache
   std::shared_ptr<std::vector<float>> pcm;
   {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_lastEgorkaCue == cueId) {
+    if (!force && m_lastEgorkaCue == cueId) {
       const double elapsed = static_cast<double>(nowSample - m_lastEgorkaSample) / kSampleRate;
       if (elapsed < 3.0) return;
     }
@@ -630,6 +643,7 @@ void AudioEngine::playEgorkaVoice(EgorkaVoiceCue cue, float gainDb) {
       m_voices.push_back(std::move(v));
       m_lastEgorkaSample = nowSample;
       m_lastEgorkaCue = cueId;
+      m_activeEgorkaCue.store(cueId);
     }
   }
 }

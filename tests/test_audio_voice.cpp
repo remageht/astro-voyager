@@ -62,6 +62,9 @@ struct AudioTestAccess {
     e.voiceDurationTable(n);
     return n;
   }
+  static void setActiveCue(AudioEngine& e, int cue) {
+    e.m_activeEgorkaCue.store(cue);
+  }
 };
 
 }  // namespace astro
@@ -202,6 +205,28 @@ int main() {
     audio.join();
     check(renders.load() > 0, "audio thread rendered while main thread pushed voices");
     check(!bad.load(), "no non-finite samples under concurrent push/erase");
+  }
+
+  // 6. Отслеживание статуса воспроизведения реплик экипажа и мгновенный stop.
+  {
+    AudioEngine eng;
+    AudioTestAccess::useNullBackend(eng);
+    check(!eng.isEgorkaVoicePlaying(), "initially no voice cue is playing");
+    check(eng.currentEgorkaVoiceCue() < 0, "initially currentEgorkaVoiceCue is -1");
+
+    auto pcm = std::make_shared<std::vector<float>>(44100, 0.2f);
+    AudioTestAccess::pushVoice(eng, AudioTestAccess::VoiceType::EgorkaVoice, pcm,
+                               AudioTestAccess::samples(eng));
+    AudioTestAccess::setActiveCue(eng, static_cast<int>(AudioEngine::EgorkaVoiceCue::SysOnline));
+
+    check(eng.isEgorkaVoicePlaying(), "isEgorkaVoicePlaying returns true when voice is active");
+    check(eng.currentEgorkaVoiceCue() == static_cast<int>(AudioEngine::EgorkaVoiceCue::SysOnline),
+          "currentEgorkaVoiceCue returns active cue ID");
+
+    eng.stopCurrentVoiceCue();
+    check(!eng.isEgorkaVoicePlaying(), "isEgorkaVoicePlaying is false after stopCurrentVoiceCue()");
+    check(eng.currentEgorkaVoiceCue() < 0, "currentEgorkaVoiceCue is -1 after stopCurrentVoiceCue()");
+    check(AudioTestAccess::voiceCount(eng) == 0, "all EgorkaVoice instances erased by stop");
   }
 
   if (g_fail > 0) {
