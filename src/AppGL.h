@@ -69,6 +69,7 @@ class AppGL {
   static int captureZettelCheck(const std::string& outPath);
   static int captureHudCheck(const std::string& outPath);
   static int captureTerminalCheck(const std::string& outPath);
+  static int captureMenuCheck(const std::string& outDir);
 
   // === Perf Benchmark Harness === (Stage 4, public entry for CLI)
   void enableBenchmarkMode(float durationSec, const std::string& outPath,
@@ -386,7 +387,14 @@ class AppGL {
   unsigned int m_menuBgTex = 0;
   int m_menuBgW = 0;
   int m_menuBgH = 0;
-  float m_menuCameraFloatTimer = 0.0f;
+  std::vector<std::vector<unsigned char>> m_menuVideoFrames;
+  unsigned int m_menuVideoTex = 0;
+  int m_menuVideoIdx = -1;
+  bool m_menuVideoTried = false;
+  double m_menuVideoStart = -1.0;
+  unsigned int m_menuDiskMaskTex = 0;
+  unsigned int updateMenuVideo(double time);
+  void renderMenuBackdrop(int width, int height, double time);
   bool m_hasStartedFlight = false;
   void requestCloseMenu();
 

@@ -88,6 +88,7 @@ Window::Window(int width, int height, const char* title, bool visible) {
 #endif
   glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
   glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
+  glfwWindowHint(GLFW_AUTO_ICONIFY, GLFW_FALSE);
 
   m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
   if (!m_window) {
@@ -169,6 +170,8 @@ Window::Window(int width, int height, const char* title, bool visible) {
 
 Window::~Window() {
   if (m_window) {
+    glfwHideWindow(m_window);
+    glfwPollEvents();
     glfwDestroyWindow(m_window);
     m_window = nullptr;
   }
