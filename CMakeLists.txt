@@ -197,6 +197,36 @@ if(GLM_AVAILABLE AND EXISTS "${CMAKE_SOURCE_DIR}/tests/test_cockpit.cpp")
   endif()
 endif()
 
+# Issue #159: устойчивость Kerr (сингулярность a = M) и аудио-регрессии.
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_kerr.cpp")
+  add_executable(test_kerr
+    tests/test_kerr.cpp
+    src/Kerr.cpp
+  )
+  target_include_directories(test_kerr PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_kerr PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_kerr PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_audio_voice.cpp")
+  add_executable(test_audio_voice
+    tests/test_audio_voice.cpp
+    src/audio/AudioEngine.cpp
+  )
+  target_include_directories(test_audio_voice PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(UNIX)
+    target_link_libraries(test_audio_voice PRIVATE pthread dl m)
+  endif()
+  if(MSVC)
+    target_compile_options(test_audio_voice PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(test_audio_voice PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
 if(GLM_AVAILABLE AND EXISTS "${CMAKE_SOURCE_DIR}/tests/test_planet_lod.cpp")
   add_executable(test_planet_lod
     tests/test_planet_lod.cpp
@@ -495,6 +525,12 @@ endif()
 
 if(TARGET test_cockpit)
   add_test(NAME test_cockpit COMMAND test_cockpit)
+endif()
+if(TARGET test_kerr)
+  add_test(NAME test_kerr COMMAND test_kerr)
+endif()
+if(TARGET test_audio_voice)
+  add_test(NAME test_audio_voice COMMAND test_audio_voice)
 endif()
 
 if(TARGET test_planet_lod)

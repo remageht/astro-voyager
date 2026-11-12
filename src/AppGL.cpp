@@ -3806,13 +3806,14 @@ void AppGL::openEndingSlide(int choice) {
 void AppGL::saveExpeditionFileNow() {
   // === Expedition === (v3.5.0): state в отдельном expedition.json рядом
   // с профилями игры (схема SaveGame не тронута — kSaveSchema=1).
+  // #161: раньше файл писался напрямую с trunc — падение процесса посреди
+  // записи обнуляло прогресс экспедиции. Теперь через атомарный писатель.
   const std::string dir = saveProfileDir();
   std::error_code ec;
   std::filesystem::create_directories(dir, ec);
-  std::ofstream f(expeditionFilePathFor(dir), std::ios::binary | std::ios::trunc);
-  if (!f.is_open()) return;
-  f.write(serializeExpedition(m_expedition).c_str(),
-          static_cast<std::streamsize>(serializeExpedition(m_expedition).size()));
+  const std::string text = serializeExpedition(m_expedition);
+  std::string err;
+  saveWriteFile(expeditionFilePathFor(dir), text, err);
 }
 
 void AppGL::loadExpeditionFileNow() {
