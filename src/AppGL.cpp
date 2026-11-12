@@ -9672,14 +9672,16 @@ void AppGL::drawMenu() {
       ImGui::PopStyleColor(2);
     };
 
-    ImGui::SameLine(gw - 440.0f);
+    ImGui::SameLine(gw - 540.0f);
     drawHeaderTab(uiRu("01 ТАКТИКА", "01 TACTICAL"), 0);
     ImGui::SameLine();
     drawHeaderTab(uiRu("02 НАСТРОЙКИ", "02 SETTINGS"), 1);
     ImGui::SameLine();
     drawHeaderTab(uiRu("03 СПРАВКА", "03 HELP"), 2);
     ImGui::SameLine();
-    drawHeaderTab(uiRu("04 ВЕРСИЯ", "04 VERSION"), 3);
+    drawHeaderTab(uiRu("04 ГОЛОСА", "04 VOICES"), 4);
+    ImGui::SameLine();
+    drawHeaderTab(uiRu("05 ВЕРСИЯ", "05 VERSION"), 3);
 
     ImGui::Spacing();
   }
@@ -10486,6 +10488,8 @@ void AppGL::drawMenu() {
       }
     }
     ImGui::EndChild();
+  } else if (m_menuPage == 4) {
+    drawVoiceCatalogPage(colAreaH);
   } else {
     if (ImGui::BeginChild("##pageFallback", ImVec2(-1.0f, colAreaH), true)) {
       ImGui::Text("Help - Controls");
@@ -10620,6 +10624,426 @@ void AppGL::drawMenu() {
   if (fontPushed) ImGui::PopFont();
 
   drawPatchNotesModal();
+}
+
+void AppGL::drawVoiceCatalogPage(float areaH) {
+  struct VoiceCatalogEntry {
+    AudioEngine::EgorkaVoiceCue cue;
+    int category; // 0: female crew, 1: story dialogue, 2: telemetry
+    const char* speakerRu;
+    const char* speakerEn;
+    const char* roleRu;
+    const char* roleEn;
+    ImU32 accentColor;
+    const char* filename;
+    const char* titleRu;
+    const char* titleEn;
+    const char* triggerRu;
+    const char* triggerEn;
+    const char* quoteRu;
+    const char* quoteEn;
+  };
+
+  static const VoiceCatalogEntry kVoiceEntries[] = {
+    // --- Экипаж (Женский состав и бортовой голос ИИ) ---
+    {AudioEngine::EgorkaVoiceCue::MiaM16, 0,
+     "Миа Сато", "Mia Sato", "ПИЛОТ", "PILOT", IM_COL32(244, 63, 94, 255),
+     "mia_m16.wav", "Столпы Творения M16", "M16 Pillars of Creation",
+     "Подлёт к туманности Орел M16 (Пилот Миа Сато)", "Approach to Eagle Nebula M16 (Pilot Mia Sato)",
+     "«Столпы Творения прямо по курсу... Четыре световых года молекулярного водорода. Здесь рождаются новые звёздные миры.»",
+     "\"Pillars of Creation straight ahead... Four light-years of molecular hydrogen. This is where new stellar worlds are born.\""},
+
+    {AudioEngine::EgorkaVoiceCue::MiaM1, 0,
+     "Миа Сато", "Mia Sato", "ПИЛОТ", "PILOT", IM_COL32(251, 113, 133, 255),
+     "mia_m1.wav", "Пульсар M1 Крабовидный", "M1 Crab Pulsar",
+     "Подлёт к пульсару M1 (Пилот Миа Сато)", "Approach to Crab Pulsar M1 (Pilot Mia Sato)",
+     "«Ого, слышите пульсар M1? Строчит как бешеный метроном — тридцать ударов в секунду! Врубаю дефлекторы, держитесь за кофе!»",
+     "\"Whoa, hear pulsar M1? Ticking like a frantic metronome — thirty beats a second! Deflectors up, hold onto your coffee!\""},
+
+    {AudioEngine::EgorkaVoiceCue::MiaAt2019qiz, 0,
+     "Миа Сато", "Mia Sato", "ПИЛОТ", "PILOT", IM_COL32(253, 164, 175, 255),
+     "mia_at2019qiz.wav", "Приливной разрыв звезды AT2019qiz", "AT2019qiz Tidal Disruption",
+     "Подлёт к ЧД AT2019qiz (Пилот Миа Сато)", "Approach to AT2019qiz TDE (Pilot Mia Sato)",
+     "«Вы только гляньте в обзорный блистер... Чёрная дыра буквально рвёт звезду на части! Плазма летит огненным вихрем... Жутко красиво, аж дух захватывает!»",
+     "\"Just look out the viewport... The black hole is ripping that star to shreds! Plasma spiraling in a fiery maelstrom... Terrifyingly breathtaking!\""},
+
+    {AudioEngine::EgorkaVoiceCue::MiaTouchdown, 0,
+     "Миа Сато", "Mia Sato", "ПИЛОТ", "PILOT", IM_COL32(52, 211, 153, 255),
+     "mia_touchdown.wav", "Мягкая посадка на планету", "Soft Planetary Touchdown",
+     "Мягкая посадка на грунт (Пилот Миа Сато)", "Gentle Planetary Landing (Pilot Mia Sato)",
+     "«Есть мягкое касание! Стойки в замках, сели как по маслу. Ну что, капитан, чай допиваем — и на выход! Планета сама себя не исследует.»",
+     "\"Smooth touchdown confirmed! Struts locked, soft as silk. Well, Captain, finish your tea and suit up! This world won't explore itself.\""},
+
+    {AudioEngine::EgorkaVoiceCue::ElenaSgra, 0,
+     "Елена Ростова", "Elena Rostova", "АСТРОФИЗИК", "ASTROPHYSICIST", IM_COL32(168, 85, 247, 255),
+     "elena_sgra.wav", "Стрелец A* и эргосфера", "Sagittarius A* & Ergosphere",
+     "Вход в эргосферу Sgr A* (Астрофизик Елена Ростова)", "Entering Sgr A* Ergosphere (Astrophysicist Elena)",
+     "«Внимание мостику. Мы вошли в эргосферу сверхмассивной чёрной дыры Стрелец A*. Увлечение инерциальных систем отсчёта предельное. Наблюдаю гравитационное красное смещение...»",
+     "\"Bridge attention. We have entered the ergosphere of Sagittarius A*. Frame-dragging is extreme. Recording gravitational redshift...\""},
+
+    {AudioEngine::EgorkaVoiceCue::ElenaM87, 0,
+     "Елена Ростова", "Elena Rostova", "АСТРОФИЗИК", "ASTROPHYSICIST", IM_COL32(192, 132, 252, 255),
+     "elena_m87.wav", "Релятивистский джет M87*", "M87* Relativistic Jet",
+     "Наблюдение джета галактики M87 (Астрофизик Елена Ростова)", "Observation of M87 Jet (Astrophysicist Elena)",
+     "«Фиксирую релятивистский джет галактики M87. Пять тысяч световых лет чистой синхротронной плазмы. Поляризация излучения подтверждает спиральные магнитные поля.»",
+     "\"Detecting relativistic jet from galaxy M87. Five thousand light-years of pure synchrotron plasma. Radiation polarization confirms helical magnetic fields.\""},
+
+    {AudioEngine::EgorkaVoiceCue::AuroraSysOnline, 0,
+     "ИИ Аврора", "AI Aurora", "СУДОВОЙ ИИ", "SHIP AI", IM_COL32(56, 189, 248, 255),
+     "aurora_sys_online.wav", "Женский бортовой голос Аврора", "Female Avionics Voice Aurora",
+     "Инициализация бортовых систем (ИИ Аврора)", "Avionics System Initialization (AI Aurora)",
+     "«Бортовые системы судна активированы. Добро пожаловать на мостик, капитан. Все узлы функционируют штатно.»",
+     "\"Shipboard avionics online. Welcome to the bridge, Captain. All systems functioning normally.\""},
+
+    // --- Сюжетные радиодиалоги Егорки ---
+    {AudioEngine::EgorkaVoiceCue::DialOj287, 1,
+     "Егорка-6", "Egorka-6", "БОРТИНЖЕНЕР", "FLIGHT ENGINEER", IM_COL32(245, 158, 11, 255),
+     "dial_oj287.wav", "OJ 287 (Сверхмассивная пара ЧД)", "OJ 287 Binary Black Hole",
+     "Подлёт к сверхмассивной ЧД OJ 287 (Диалог)", "Approach to supermassive binary OJ 287",
+     "«Капитан, глянь на гравитационный интерферометр! OJ 287... Двойная чёрная дыра, восемнадцать миллиардов масс Солнца! Меньшая дыра пробивает аккреционный диск каждые двенадцать лет...»",
+     "\"Captain, look at the interferometer! OJ 287... Binary black hole, eighteen billion solar masses! The smaller hole punches through the disk every twelve years...\""},
+
+    {AudioEngine::EgorkaVoiceCue::DialHyperdisk, 1,
+     "Егорка-6", "Egorka-6", "БОРТИНЖЕНЕР", "FLIGHT ENGINEER", IM_COL32(234, 179, 8, 255),
+     "dial_hyperdisk.wav", "Гипердиск аккреции", "Accretion Hyperdisk",
+     "Наблюдение аккреционного диска чёрной дыры (Диалог)", "Observation of relativistic accretion disk",
+     "«Ого, посмотри на этот аккреционный диск... Температура на внутреннем радиусе — миллионы кельвинов, детекторы рентгена зашкаливают! Если подойдём ближе — нас расплющит гравитацией.»",
+     "\"Whoa, look at that accretion disk... Millions of Kelvin at the inner edge, X-ray sensors maxed out! Any closer and tidal forces will flatten us.\""},
+
+    {AudioEngine::EgorkaVoiceCue::DialGw170817, 1,
+     "Егорка-6", "Egorka-6", "БОРТИНЖЕНЕР", "FLIGHT ENGINEER", IM_COL32(217, 119, 6, 255),
+     "dial_gw170817.wav", "Килонова GW170817 (Слияние)", "Kilonova GW170817 Merger",
+     "Детектирование килоновой GW170817 (Диалог)", "Kilonova GW170817 Detection",
+     "«Детекторы гравитационных волн сработали! GW170817... Слияние двух нейтронных звёзд. В этой вспышке рождается больше золота и платины, чем во всей нашей галактике!»",
+     "\"GW detectors firing! GW170817... Binary neutron star merger. That flare synthesizes more gold and platinum than our entire galaxy!\""},
+
+    {AudioEngine::EgorkaVoiceCue::DialSn1987a, 1,
+     "Егорка-6", "Egorka-6", "БОРТИНЖЕНЕР", "FLIGHT ENGINEER", IM_COL32(249, 115, 22, 255),
+     "dial_sn1987a.wav", "Сверхновая SN 1987A", "Supernova SN 1987A",
+     "Подлёт к сверхновой 1987A в БМО (Диалог)", "Approach to Supernova 1987A in LMC",
+     "«Сверхновая 1987A в Большом Магеллановом Облаке... Эти три люминесцентных кольца светятся как жемчужное ожерелье в пустоте. До чего же красиво погибает звезда...»",
+     "\"Supernova 1987A in the Large Magellanic Cloud... Those three glowing rings look like a pearl necklace in the void. A dying star is truly magnificent...\""},
+
+    {AudioEngine::EgorkaVoiceCue::DialHardLanding, 1,
+     "Егорка-6", "Egorka-6", "БОРТИНЖЕНЕР", "FLIGHT ENGINEER", IM_COL32(239, 68, 68, 255),
+     "dial_hard_landing.wav", "Жёсткая посадка на грунт", "Hard Surface Touchdown",
+     "Посадка с высокой вертикальной скоростью (Диалог)", "High vertical speed touchdown",
+     "«Ух... Касание жестковато вышло! Амортизаторы скрипят, но корпус цел, герметичность в норме. Ну и денёк... Зато сели!»",
+     "\"Oof... That was a bumpy landing! Dampers groaned, but the hull is intact and pressure holds. What a day... But we made it!\""},
+
+    {AudioEngine::EgorkaVoiceCue::DialDrillEureka, 1,
+     "Егорка-6", "Egorka-6", "БОРТИНЖЕНЕР", "FLIGHT ENGINEER", IM_COL32(16, 185, 129, 255),
+     "dial_drill_eureka.wav", "Эврика бурения керна", "Drill Core Eureka",
+     "Успешный отбор глубокого керна буром (Диалог)", "Successful extraction of geological core",
+     "«Есть контакт бура! Керн поднят... Капитан, ты не поверишь — в образце кристаллический гексагональный кремний и следы эндогенной воды! Это открытие года!»",
+     "\"Drill contact solid! Core sample secured... Captain, you won't believe this: crystalline hexagonal silicon and endogenous water traces! Discovery of the year!\""},
+
+    // --- Авионика и телеметрия Егорки-6 ---
+    {AudioEngine::EgorkaVoiceCue::SysOnline, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(0, 229, 255, 255),
+     "sys_online.wav", "Системы корабля в норме", "Ship Systems Online",
+     "Старт полета / загрузка корабля", "Flight start / ship boot",
+     "«Приветствую на мостике, капитан! Системы корабля в полном порядке, я готов к полёту. Куда держим курс?»",
+     "\"Welcome aboard, Captain! Ship systems operational, ready for departure. What are our coordinates?\""},
+
+    {AudioEngine::EgorkaVoiceCue::WarpOn, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(179, 136, 255, 255),
+     "warp_on.wav", "Варп-привод запущен", "Warp Engaged",
+     "Включение варп-двигателя (W / кнопка)", "Warp drive engagement",
+     "«Варп-привод запущен! Пространство поплыло, держись крепче, капитан — погнали!»",
+     "\"Warp drive engaged! Spacetime warping, hang on tight, Captain — here we go!\""},
+
+    {AudioEngine::EgorkaVoiceCue::WarpOff, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(124, 77, 255, 255),
+     "warp_off.wav", "Выход из варпа", "Warp Disengaged",
+     "Выход из варпа на субсвет", "Warp exit to sub-light",
+     "«Выходим из варпа! Гравитационная волна рассеяна, мы на досветовой скорости.»",
+     "\"Exiting warp! Gravitational wave dispersed, sub-light velocity restored.\""},
+
+    {AudioEngine::EgorkaVoiceCue::GearDown, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(100, 255, 218, 255),
+     "gear_down.wav", "Шасси выпущены", "Landing Gear Down",
+     "Выпуск посадочных опор (G)", "Landing gear deployment",
+     "«Посадочные опоры выпущены и зафиксированы. Готов к посадке на грунт.»",
+     "\"Landing struts deployed and locked. Ready for surface touchdown.\""},
+
+    {AudioEngine::EgorkaVoiceCue::GearUp, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(30, 215, 96, 255),
+     "gear_up.wav", "Шасси убраны", "Landing Gear Up",
+     "Уборка посадочных опор (G)", "Landing gear retraction",
+     "«Посадочные опоры убраны. Корабль в полётной конфигурации.»",
+     "\"Landing struts retracted. Vessel in flight configuration.\""},
+
+    {AudioEngine::EgorkaVoiceCue::DockOk, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(0, 230, 118, 255),
+     "dock_ok.wav", "Стыковка завершена", "Docking Complete",
+     "Успешная стыковка со станцией (E)", "Successful station docking",
+     "«Стыковочный шлюз захвачен, давление выровнено. Стыковка завершена успешно.»",
+     "\"Docking clamp secured, pressure equalized. Docking sequence complete.\""},
+
+    {AudioEngine::EgorkaVoiceCue::UndockOk, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(64, 196, 255, 255),
+     "undock_ok.wav", "Отстыковка завершена", "Undocking Complete",
+     "Расстыковка со станцией", "Station undocking",
+     "«Шлюз расстыкован, отходим от станции на маневровых двигателях.»",
+     "\"Airway uncoupled, backing away from station on thrusters.\""},
+
+    {AudioEngine::EgorkaVoiceCue::FuelLow, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(255, 171, 0, 255),
+     "fuel_low.wav", "Критический уровень топлива", "Low Fuel Alert",
+     "Топливо < 15%", "Fuel reserves < 15%",
+     "«Внимание, уровень топлива критический! Требуется дозаправка или орбитальная станция.»",
+     "\"Warning, fuel reserves critical! Refueling or docking station required.\""},
+
+    {AudioEngine::EgorkaVoiceCue::ShieldLow, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(255, 82, 82, 255),
+     "shield_low.wav", "Пробитие щитов", "Shield Depleted",
+     "Щиты = 0%", "Deflector shields breached",
+     "«Тревога, щиты перегружены! Защитное поле отключено, корпус уязвим!»",
+     "\"Alert, deflector overloaded! Shield collapsed, hull exposed!\""},
+
+    {AudioEngine::EgorkaVoiceCue::TerrainWarn, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(255, 23, 68, 255),
+     "terrain_warn.wav", "Опасность рельефа (Terrain)", "Terrain Proximity Hazard",
+     "Высота < 300м при опасном спуске", "Low altitude terrain hazard",
+     "«Опасное сближение с поверхностью! Выравнивай корабль, капитан, разобьёмся!»",
+     "\"Terrain proximity warning! Pull up, Captain, impact imminent!\""},
+
+    {AudioEngine::EgorkaVoiceCue::OrbitOk, 2,
+     "Егорка-6", "Egorka-6", "БОРТОВОЙ ИИ", "SHIP AI", IM_COL32(24, 255, 255, 255),
+     "orbit_ok.wav", "Орбита стабилизирована", "Orbit Stabilized",
+     "Выход на стабильную кеплерову орбиту", "Stable orbital trajectory achieved",
+     "«Орбита стабилизирована. Корабль на круговой траектории, гравитационный захват в норме.»",
+     "\"Orbit stabilized. Vessel on circular path, gravitational capture normal.\""}
+  };
+  const size_t kNumVoiceEntries = sizeof(kVoiceEntries) / sizeof(kVoiceEntries[0]);
+
+  if (ImGui::BeginChild("##pageVoiceCatalog", ImVec2(-1.0f, areaH), true)) {
+    // Верхняя заголовочная планка
+    ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "[ 04 // %s ]",
+                       uiRu("КАТАЛОГ ГОЛОСОВЫХ РЕПЛИК ЭКИПАЖА", "CREW & AVIONICS VOICE CATALOG"));
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.50f, 0.58f, 0.68f, 1.0f), "%s",
+                       uiRu("// Миа Сато [Пилот], Елена Ростова [Астрофизик], Егорка-6 [Бортинженер], ИИ Аврора",
+                            "// Mia Sato [Pilot], Elena Rostova [Astrophysicist], Egorka-6 [Engineer], AI Aurora"));
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Панель быстрого управления звуком и статусом
+    {
+      float voiceVol = m_audio.egorkaVoiceVolume() * 100.0f;
+      ImGui::SetNextItemWidth(160.0f);
+      if (ImGui::SliderFloat(uiRu("Громкость##VoiceVol", "Voice Vol##VoiceVol"), &voiceVol, 0.0f, 100.0f, "%.0f%%")) {
+        m_audio.setEgorkaVoiceVolume(voiceVol / 100.0f);
+      }
+      ImGui::SameLine(0.0f, 16.0f);
+      bool voiceEnabled = m_audio.isEgorkaVoiceEnabled();
+      if (ImGui::Checkbox(uiRu("Озвучка вкл##VoiceEnabled", "Voice Enabled##VoiceEnabled"), &voiceEnabled)) {
+        m_audio.setEgorkaVoiceEnabled(voiceEnabled);
+      }
+      ImGui::SameLine(0.0f, 16.0f);
+      if (ImGui::Button(uiRu("⏹ СТОП РЕПЛИКУ", "⏹ STOP PLAYBACK"), ImVec2(140.0f, 22.0f))) {
+        m_audio.stopCurrentVoiceCue();
+        m_audio.playBlip();
+      }
+      ImGui::SameLine(0.0f, 16.0f);
+      const int activeCue = m_audio.currentEgorkaVoiceCue();
+      const bool isPlaying = m_audio.isEgorkaVoicePlaying();
+      if (isPlaying && activeCue >= 0) {
+        ImGui::TextColored(ImVec4(0.20f, 1.00f, 0.40f, 1.0f), "🔊 [ %s: CUE #%d ]",
+                           uiRu("ВОСПРОИЗВЕДЕНИЕ", "PLAYING"), activeCue);
+      } else {
+        ImGui::TextColored(ImVec4(0.45f, 0.55f, 0.65f, 0.85f), "💤 [ %s ]",
+                           uiRu("ОЖИДАНИЕ ВЫБОРА", "IDLE"));
+      }
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Категории каталога
+    if (ImGui::BeginTabBar("##VoiceCatalogCategories", ImGuiTabBarFlags_None)) {
+      if (ImGui::BeginTabItem(uiRu("👩‍🚀 Экипаж: Миа и Елена (7)", "👩‍🚀 Crew: Mia & Elena (7)"))) {
+        m_voiceCatalogTab = 0;
+        ImGui::EndTabItem();
+      }
+      if (ImGui::BeginTabItem(uiRu("📻 Сюжетные диалоги Егорки (6)", "📻 Egorka Story Dialogues (6)"))) {
+        m_voiceCatalogTab = 1;
+        ImGui::EndTabItem();
+      }
+      if (ImGui::BeginTabItem(uiRu("🤖 Авионика и телеметрия Егорки (11)", "🤖 Egorka Avionics & Telemetry (11)"))) {
+        m_voiceCatalogTab = 2;
+        ImGui::EndTabItem();
+      }
+      if (ImGui::BeginTabItem(uiRu("📋 Все реплики (24)", "📋 All Voice Lines (24)"))) {
+        m_voiceCatalogTab = 3;
+        ImGui::EndTabItem();
+      }
+      ImGui::EndTabBar();
+    }
+
+    // Быстрый фильтр для сводной вкладки
+    if (m_voiceCatalogTab == 3) {
+      ImGui::Spacing();
+      ImGui::SetNextItemWidth(260.0f);
+      ImGui::InputTextWithHint("##VoiceSearchFilter",
+                               uiRu("Поиск по тексту, файлу или роли...", "Search text, file or role..."),
+                               m_voiceSearchFilter, sizeof(m_voiceSearchFilter));
+      if (m_voiceSearchFilter[0] != '\0') {
+        ImGui::SameLine();
+        if (ImGui::Button(uiRu("Очистить", "Clear"))) {
+          m_voiceSearchFilter[0] = '\0';
+        }
+      }
+    }
+
+    ImGui::Spacing();
+
+    // Область карточек с прокруткой
+    const float scrollH = areaH - ((m_voiceCatalogTab == 3) ? 142.0f : 108.0f);
+    if (ImGui::BeginChild("##VoiceCardsScroll", ImVec2(-1.0f, scrollH), false)) {
+      const float availW = ImGui::GetContentRegionAvail().x;
+      const int numCols = (availW >= 680.0f) ? 2 : 1;
+      const float colW = (numCols == 2) ? ((availW - 10.0f) * 0.5f) : availW;
+      const float cardH = 175.0f;
+
+      auto matchesFilter = [&](const VoiceCatalogEntry& e) {
+        if (m_voiceSearchFilter[0] == '\0') return true;
+        std::string needle = m_voiceSearchFilter;
+        for (char& c : needle) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+        auto matchStr = [&](const char* s) {
+          if (!s) return false;
+          std::string h = s;
+          for (char& c : h) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+          return h.find(needle) != std::string::npos;
+        };
+        return matchStr(e.titleRu) || matchStr(e.titleEn) ||
+               matchStr(e.speakerRu) || matchStr(e.speakerEn) ||
+               matchStr(e.roleRu) || matchStr(e.roleEn) ||
+               matchStr(e.filename) || matchStr(e.quoteRu) || matchStr(e.quoteEn);
+      };
+
+      int renderedIdx = 0;
+      for (size_t i = 0; i < kNumVoiceEntries; ++i) {
+        const auto& e = kVoiceEntries[i];
+        if (m_voiceCatalogTab != 3 && e.category != m_voiceCatalogTab) {
+          continue;
+        }
+        if (m_voiceCatalogTab == 3 && !matchesFilter(e)) {
+          continue;
+        }
+
+        if (numCols == 2 && (renderedIdx % 2 != 0)) {
+          ImGui::SameLine(0.0f, 10.0f);
+        }
+
+        ImGui::PushID(static_cast<int>(i));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f, 0.07f, 0.11f, 0.85f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.28f, 0.38f, 0.70f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+
+        char cardChildId[32];
+        snprintf(cardChildId, sizeof(cardChildId), "##vcard_%d", static_cast<int>(i));
+        if (ImGui::BeginChild(cardChildId, ImVec2(colW, cardH), true,
+                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+          ImDrawList* cdl = ImGui::GetWindowDrawList();
+          const ImVec2 cp = ImGui::GetCursorScreenPos();
+
+          // Левая акцентная полоса цвета персонажа
+          cdl->AddRectFilled(ImVec2(cp.x - 10.0f, cp.y - 8.0f),
+                             ImVec2(cp.x - 6.0f, cp.y - 8.0f + cardH),
+                             e.accentColor, 2.0f);
+
+          // Строка 1: Бейдж роли + Персонаж и Название
+          ImGui::TextColored(ImVec4(
+              ((e.accentColor >> 0) & 0xFF) / 255.0f,
+              ((e.accentColor >> 8) & 0xFF) / 255.0f,
+              ((e.accentColor >> 16) & 0xFF) / 255.0f, 1.0f),
+              "[%s]", uiRu(e.roleRu, e.roleEn));
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.92f, 0.95f, 0.98f, 1.0f), "%s · %s",
+                             uiRu(e.speakerRu, e.speakerEn), uiRu(e.titleRu, e.titleEn));
+
+          // Правый бейдж имени файла
+          const float fnW = ImGui::CalcTextSize(e.filename).x + 12.0f;
+          ImGui::SameLine(std::max(colW - fnW - 14.0f, 100.0f));
+          ImGui::TextColored(ImVec4(0.48f, 0.58f, 0.68f, 0.9f), "%s", e.filename);
+
+          // Строка 2: Триггерная ситуация
+          ImGui::TextColored(ImVec4(0.50f, 0.60f, 0.70f, 0.90f), "⚡ %s",
+                             uiRu(e.triggerRu, e.triggerEn));
+
+          ImGui::Spacing();
+
+          // Окно расшифровки цитаты
+          ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.04f, 0.06f, 0.60f));
+          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+          char quoteId[32];
+          snprintf(quoteId, sizeof(quoteId), "##quote_%d", static_cast<int>(i));
+          if (ImGui::BeginChild(quoteId, ImVec2(colW - 14.0f, 54.0f), false,
+                                ImGuiWindowFlags_NoScrollbar)) {
+            ImGui::PushTextWrapPos(colW - 22.0f);
+            ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 0.95f), "%s",
+                               uiRu(e.quoteRu, e.quoteEn));
+            ImGui::PopTextWrapPos();
+          }
+          ImGui::EndChild();
+          ImGui::PopStyleVar();
+          ImGui::PopStyleColor();
+
+          ImGui::Spacing();
+
+          // Кнопка воспроизведения с динамическим отслеживанием
+          const bool isThisPlaying = (m_audio.currentEgorkaVoiceCue() == static_cast<int>(e.cue) &&
+                                      m_audio.isEgorkaVoicePlaying());
+          if (isThisPlaying) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.55f, 0.28f, 0.95f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.65f, 0.35f, 1.0f));
+            if (ImGui::Button(uiRu("🔊 ИГРАЕТ... (НАЖМИТЕ ДЛЯ СТОПА)##PBtn",
+                                   "🔊 PLAYING... (CLICK TO STOP)##PBtn"), ImVec2(colW - 14.0f, 24.0f))) {
+              m_audio.stopCurrentVoiceCue();
+            }
+            ImGui::PopStyleColor(2);
+          } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.18f, 0.28f, 0.85f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.32f, 0.48f, 0.98f));
+            if (ImGui::Button(uiRu("▶ ПРОСЛУШАТЬ РЕПЛИКУ##PBtn",
+                                   "▶ PLAY VOICE CUE##PBtn"), ImVec2(colW - 14.0f, 24.0f))) {
+              if (!m_audio.isInitialized()) {
+                m_audio.ensureInitialized();
+                m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+                m_audioWasInit = true;
+              }
+              m_audio.playEgorkaVoice(e.cue, 0.0f, true);
+            }
+            ImGui::PopStyleColor(2);
+          }
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+        ImGui::PopID();
+
+        ++renderedIdx;
+      }
+    }
+    ImGui::EndChild();
+
+    // Нижняя кнопка возврата
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    if (ImGui::Button(uiRu("<< НАЗАД В ТАКТИЧЕСКИЙ РЕЖИМ", "<< BACK TO TACTICAL CONSOLE"), ImVec2(280.0f, 26.0f))) {
+      m_pageTransitionTimer = 0.0f;
+      m_prevMenuPage = m_menuPage;
+      m_menuPage = 0;
+      m_audio.playBlip();
+    }
+  }
+  ImGui::EndChild();
 }
 
 void AppGL::drawPatchNotesModal() {

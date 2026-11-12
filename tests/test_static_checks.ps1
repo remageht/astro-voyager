@@ -657,6 +657,12 @@ Check 'savegame rename does not remove the original' ($saveCpp -notmatch 'std::f
 Check 'expedition save uses atomic writer' (($appCpp -match 'saveWriteFile\(expeditionFilePathFor\(dir\), text, err\)') -and ($appCpp -notmatch 'std::ofstream f\(expeditionFilePathFor'))
 Check 'test_kerr exists' (Test-Path (Join-Path $root 'tests/test_kerr.cpp'))
 Check 'test_audio_voice exists' (Test-Path (Join-Path $root 'tests/test_audio_voice.cpp'))
+Check 'egorka_voice_player.html removed from root' (-not (Test-Path (Join-Path $root 'egorka_voice_player.html')))
+Check 'AppGL has drawVoiceCatalogPage declaration' ((Read-File 'src/AppGL.h') -match 'void drawVoiceCatalogPage\(float areaH\)')
+Check 'AppGL implements drawVoiceCatalogPage' ($appCpp -match 'void AppGL::drawVoiceCatalogPage\(float areaH\)')
+Check 'AppGL drawMenu header has voice catalog tab' ($appCpp -match '04 VOICES')
+Check 'AudioEngine has isEgorkaVoicePlaying' ($audioH -match 'bool isEgorkaVoicePlaying\(\)')
+Check 'AudioEngine has currentEgorkaVoiceCue' ($audioH -match 'int currentEgorkaVoiceCue\(\)')
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
