@@ -654,6 +654,7 @@ Check 'kerr no absolute epsilon hack' ($kerrCpp -notmatch 'abs\(r_ph - M\) < 1e-
 Check 'cockpit roll has no normalize of horizon vector' ($cockpitCpp -notmatch 'normalize\(glm::vec3\(camRight\.x')
 Check 'geodesic rejects non-finite step error' ($geodesicCpp -match '!std::isfinite\(err\)')
 Check 'savegame rename does not remove the original' ($saveCpp -notmatch 'std::filesystem::remove\(p, renameEc\)')
+Check 'expedition save uses atomic writer' (($appCpp -match 'saveWriteFile\(expeditionFilePathFor\(dir\), text, err\)') -and ($appCpp -notmatch 'std::ofstream f\(expeditionFilePathFor'))
 Check 'test_kerr exists' (Test-Path (Join-Path $root 'tests/test_kerr.cpp'))
 Check 'test_audio_voice exists' (Test-Path (Join-Path $root 'tests/test_audio_voice.cpp'))
 
