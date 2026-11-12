@@ -277,11 +277,8 @@ int AppGL::run() {
       m_window->getFramebufferSize(menuFbW, menuFbH);
       glViewport(0, 0, menuFbW, menuFbH);
 
-      // === MenuSky === (v3.5.0): живой космос за меню — собственный
-      // фуллскрин-шейдер (туманность + MW-полоса + параллакс-звёзды),
-      // лениво инициализируется при первом кадре меню. Показ не зависит
-      // от того, какая станция осталась в профиле (uma/mw/m31 = пустой
-      // фон), свежий запуск и загруженный профиль видят одинаковый hero-вид.
+      // === MenuSky === (v5.0.9): живой синематичный космос за меню — шейдер
+      // с динамической физикой чёрной дыры Керра и варп-драйвом Алькубьерре.
       if (!m_menuSkyTried) {
         m_menuSkyTried = true;
         m_menuSkyShader =
@@ -289,12 +286,18 @@ int AppGL::run() {
         m_menuSkyQuad = std::make_unique<ScreenQuad>();
       }
       if (m_menuSkyShader && m_menuSkyQuad) {
+        if (m_menuBgTex == 0) {
+          m_menuBgTex = loadUiTexture("res/textures/main_menu_bg.jpg", &m_menuBgW, &m_menuBgH);
+        }
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
         m_menuSkyShader->bind();
         m_menuSkyShader->setUniform1f("u_Time", currentTime);
         m_menuSkyShader->setUniform2f("u_Res", static_cast<float>(menuFbW),
                                       static_cast<float>(menuFbH));
+        m_menuSkyShader->setUniform1i("u_BgTex", 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_menuBgTex);
         m_menuSkyQuad->draw();
         m_menuSkyShader->unbind();
       } else {
@@ -9632,21 +9635,24 @@ void AppGL::drawMainMenuBackground(float screenW, float screenH) {
   ImDrawList* bgDl = ImGui::GetBackgroundDrawList();
   if (!bgDl) return;
 
-  // Если текстура загружена - рисуем полноэкранный арт с панорамированием Ken Burns
-  if (m_menuBgTex != 0) {
-    const float zoom = 1.05f;
-    const float driftX = std::sin(m_menuCameraFloatTimer * 0.08f) * 0.012f;
-    const float driftY = std::cos(m_menuCameraFloatTimer * 0.06f) * 0.010f;
+  // Если шейдер меню не активен - рисуем полноэкранный арт с панорамированием Ken Burns в качестве фоллбэка
+  const bool shaderActive = (m_menuSkyShader && m_menuSkyQuad);
+  if (!shaderActive) {
+    if (m_menuBgTex != 0) {
+      const float zoom = 1.05f;
+      const float driftX = std::sin(m_menuCameraFloatTimer * 0.08f) * 0.012f;
+      const float driftY = std::cos(m_menuCameraFloatTimer * 0.06f) * 0.010f;
 
-    ImVec2 uv0(0.5f - 0.5f / zoom + driftX, 0.5f - 0.5f / zoom + driftY);
-    ImVec2 uv1(0.5f + 0.5f / zoom + driftX, 0.5f + 0.5f / zoom + driftY);
+      ImVec2 uv0(0.5f - 0.5f / zoom + driftX, 0.5f - 0.5f / zoom + driftY);
+      ImVec2 uv1(0.5f + 0.5f / zoom + driftX, 0.5f + 0.5f / zoom + driftY);
 
-    bgDl->AddImage((ImTextureID)(intptr_t)m_menuBgTex, ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH), uv0, uv1);
-  } else {
-    // Фоллбэк: глубокий космический градиент
-    bgDl->AddRectFilledMultiColor(ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH),
-                                  IM_COL32(2, 4, 10, 255), IM_COL32(5, 12, 28, 255),
-                                  IM_COL32(10, 20, 40, 255), IM_COL32(1, 3, 8, 255));
+      bgDl->AddImage((ImTextureID)(intptr_t)m_menuBgTex, ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH), uv0, uv1);
+    } else {
+      // Фоллбэк: глубокий космический градиент
+      bgDl->AddRectFilledMultiColor(ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH),
+                                    IM_COL32(2, 4, 10, 255), IM_COL32(5, 12, 28, 255),
+                                    IM_COL32(10, 20, 40, 255), IM_COL32(1, 3, 8, 255));
+    }
   }
 
   // Кинематографичное затемнение левой трети экрана (под командное меню) для идеальной читаемости
