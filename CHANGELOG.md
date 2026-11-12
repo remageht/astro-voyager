@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 5.0.8 - 2026-11-12
+
+## What's new / Что нового
+
+- EN: AAA Cinematic Main Menu GUI & Interstellar Artwork - Transformed the title screen into a fullscreen, open sci-fi command deck with photorealistic 16:9 background art (`res/textures/main_menu_bg.jpg`) featuring a Kerr supermassive black hole with luminous accretion disk (Gargantua-style) and exploration vessel activating an Alcubierre warp drive ring. Includes subtle Ken Burns camera drift (`sin(t * 0.08)`), star dust particles, cinematic vignette, left-hand command rack with in-flight resume button, and right-hand floating frosted glass HUD dossier card with mission directives, crew roster, science RP, and tactical toggles.
+- RU: Кинематографичный титульный интерфейс AAA Main Menu и арт Interstellar - главное меню переработано из компактного окна в открытый полноэкранный командный мостик с высокодетализированным фотореалистичным фоном 16:9 (`res/textures/main_menu_bg.jpg`), изображающим сверхмассивную чёрную дыру Керра со светящимся аккреционным диском (в стиле «Гаргантюа») и кораблём, запускающим варп-кольцо Алькубьерре. Реализовано плавное дыхание камеры Ken Burns (`sin(t * 0.08)`), мерцающая звёздная пыль, кинематографичная виньетка, левая вертикальная командная стойка с динамической кнопкой возврата к штурвалу из полёта и правая парящая стеклянная HUD-карточка с активной сюжетной директивой, составом экипажа, очками науки RP и тумблерами.
+- EN: Multi-Phase Loading Screen & Transitions (`src/LoadingScreen.h`, `src/LoadingScreen.cpp`) - High-tech visual transition system:
+  1) `ColdBoot`: Game startup loading sequence (2.2s) with rotating concentric reticle gyroscopes, 36-segment neon progress bar (0..100%), sequential subsystem telemetry checklist (Kerr tensor, astronomical catalog, laser variometer, crew comms, warp core), and randomized quotes from theoretical astrophysicists (Kip Thorne, Albert Einstein, Carl Sagan, Stephen Hawking, Miguel Alcubierre);
+  2) `NewGameWarp`: Hyperspace wormhole transit sequence (2.4s) with relativistic radial warp streak lines, flash-to-white horizon breakout, and audio cues (`playJump()` + Egorka voice);
+  3) `ContinueWarp`: Telemetry synchronization sequence (1.6s) with coordinate recovery and sector destination sync;
+  4) Instant skip support via `Space`, `Enter`, or `Esc` on all phases.
+- RU: Мультифазная система экранов загрузки и переходов (`src/LoadingScreen.h`, `src/LoadingScreen.cpp`) - высокотехнологичная подсистема переходов:
+  1) `ColdBoot`: экран инициализации при старте игры (2.2 с) с вращающимся гироскопическим компасом, 36-сегментной неоновой шкалой прогресса (0..100%), пошаговыми логами телеметрии (тензор Керра, астрономический каталог, лазерный высотомер, радиосвязь, варп-привод) и коллекцией цитат выдающихся астрофизиков (Кип Торн, Эйнштейн, Саган, Хокинг, Алькубьерре);
+  2) `NewGameWarp`: переход сквозь червоточину/гиперпространство (2.4 с) с радиальными варп-линиями, финальной фотонной вспышкой и звуком варп-прыжка;
+  3) `ContinueWarp`: синхронизация телеметрии (1.6 с) с восстановлением полетного вектора и координат сектора;
+  4) Мгновенный пропуск загрузки по клавишам `Space`, `Enter` или `Esc` на всех этапах.
+- Gates / Гейты: MSVC Release build OK, static checks PASS (including v5.0.8 checks), ctest 22/22 PASS (`test_loading` OK). Closes #165.
+
 ## 5.0.0 - 2026-11-10
 
 ## What's new / Что нового

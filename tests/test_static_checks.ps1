@@ -663,6 +663,16 @@ Check 'AppGL implements drawVoiceCatalogPage' ($appCpp -match 'void AppGL::drawV
 Check 'AppGL drawMenu header has voice catalog tab' ($appCpp -match '04 VOICES')
 Check 'AudioEngine has isEgorkaVoicePlaying' ($audioH -match 'bool isEgorkaVoicePlaying\(\)')
 Check 'AudioEngine has currentEgorkaVoiceCue' ($audioH -match 'int currentEgorkaVoiceCue\(\)')
+Check 'main menu background texture exists' (Test-Path (Join-Path $root 'res/textures/main_menu_bg.jpg'))
+Check 'LoadingScreen header exists' (Test-Path (Join-Path $root 'src/LoadingScreen.h'))
+Check 'LoadingScreen source exists' (Test-Path (Join-Path $root 'src/LoadingScreen.cpp'))
+Check 'test_loading exists' (Test-Path (Join-Path $root 'tests/test_loading.cpp'))
+Check 'cmake lists test_loading' ((Read-File 'CMakeLists.txt') -match 'test_loading')
+Check 'AppGL declares drawMainMenuHero' ((Read-File 'src/AppGL.h') -match 'drawMainMenuHero')
+Check 'AppGL declares drawMainMenuBackground' ((Read-File 'src/AppGL.h') -match 'drawMainMenuBackground')
+Check 'AppGL implements drawMainMenuHero' ($appCpp -match 'AppGL::drawMainMenuHero')
+Check 'AppGL implements drawMainMenuBackground' ($appCpp -match 'AppGL::drawMainMenuBackground')
+Check 'AppGL triggers cold boot' ($appCpp -match 'm_loadingScreen\.startColdBoot')
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
