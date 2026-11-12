@@ -31,6 +31,7 @@
 // === Audio === begin (агент AU: процедурный звук, только GL-таргет).
 #include "audio/AudioEngine.h"
 // === Audio === end
+#include "LoadingScreen.h"
 
 // === Cinematic ===: forward-decls для ImGui-типов (imgui.h тянуть в хедер не
 // нужно; дефолтный шрифт и чужие виджеты не тронуты).
@@ -78,6 +79,8 @@ class AppGL {
   void processMouse();
   void drawImGui();
   void drawMenu();
+  void drawMainMenuHero(float screenW, float screenH);
+  void drawMainMenuBackground(float screenW, float screenH);
   void drawVoiceCatalogPage(float areaH);
   void drawHelpContent();
   void drawHelpOverlay();
@@ -378,6 +381,13 @@ class AppGL {
   float m_togglePosScanner = 1.0f;
   float m_togglePosCrt = 1.0f;
   float m_radarLockTimer = 1.0f;
+  // === Loading & Transitions === (v5.0.8)
+  astro::LoadingScreen m_loadingScreen;
+  unsigned int m_menuBgTex = 0;
+  int m_menuBgW = 0;
+  int m_menuBgH = 0;
+  float m_menuCameraFloatTimer = 0.0f;
+  bool m_hasStartedFlight = false;
   void requestCloseMenu();
 
   void drawPatchNotesModal();

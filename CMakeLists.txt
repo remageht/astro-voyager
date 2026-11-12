@@ -409,6 +409,7 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/PostFX.cpp
     src/SceneManager.cpp
     src/AppGL.cpp
+    src/LoadingScreen.cpp
     src/StorySlides.cpp  # === Expedition === (v3.5.0): слайды + вектор-арт
     src/WarpJump.cpp  # === WarpJump === (агент J: чистая логика катсцены)
     src/CockpitController.cpp  # === CockpitController === (v4.2.0): динамика кабины и HUD
@@ -612,6 +613,24 @@ endif()
 
 if(TARGET test_gamepad)
   add_test(NAME test_gamepad COMMAND test_gamepad)
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_loading.cpp")
+  add_executable(test_loading
+    tests/test_loading.cpp
+    src/LoadingScreen.cpp
+  )
+  target_include_directories(test_loading PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  target_compile_definitions(test_loading PRIVATE ASTRO_NO_IMGUI)
+  if(MSVC)
+    target_compile_options(test_loading PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_loading PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_loading)
+  add_test(NAME test_loading COMMAND test_loading)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):
