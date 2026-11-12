@@ -673,6 +673,12 @@ Check 'AppGL declares drawMainMenuBackground' ((Read-File 'src/AppGL.h') -match 
 Check 'AppGL implements drawMainMenuHero' ($appCpp -match 'AppGL::drawMainMenuHero')
 Check 'AppGL implements drawMainMenuBackground' ($appCpp -match 'AppGL::drawMainMenuBackground')
 Check 'AppGL triggers cold boot' ($appCpp -match 'm_loadingScreen\.startColdBoot')
+Check 'shaders/menu.frag has u_BgTex uniform' ((Read-File 'shaders/menu.frag') -match 'uniform sampler2D u_BgTex;')
+Check 'shaders/menu.frag has Keplerian accretion disk' ((Read-File 'shaders/menu.frag') -match 'Keplerian')
+Check 'shaders/menu.frag has Alcubierre warp coils' ((Read-File 'shaders/menu.frag') -match 'Alcubierre')
+Check 'AppGL binds u_BgTex in menu loop' ($appCpp -match 'setUniform1i\("u_BgTex", 0\)')
+Check 'AppGL drawMainMenuBackground has shaderActive check' ($appCpp -match 'const bool shaderActive = \(m_menuSkyShader && m_menuSkyQuad\);')
+Check 'render_menu_warp_ship script exists' (Test-Path (Join-Path $root 'blender/scripts/render_menu_warp_ship.py'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

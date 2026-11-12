@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 5.0.9 - 2026-11-12
+
+## What's new / Что нового
+
+- EN: Authentic In-Game Alcubierre Warp Cruiser & Live 60 FPS Black Hole Menu Animation - Replaced generic background vessel in `res/textures/main_menu_bg.jpg` with the authentic 3D hero model of the Alcubierre Tri-Ring warp cruiser (`res/models/warp_ship.obj`, 22.2 MB) rendered in Blender 5.2 Cycles with 2048x2048 PBR texture maps (albedo, emissive, metallic, roughness, normal) and realistic accretion disk key-lighting. Upgraded `shaders/menu.frag` and `AppGL.cpp` to execute a real-time 60 FPS GLSL simulation behind the UI: differential Keplerian swirl and relativistic Doppler brightening on the Kerr accretion disk, dynamic rotation of all three Alcubierre warp coils with pulsating cyan energy waves, Alcubierre spacetime metric compression/expansion ripples along the warp bubble, pulsing ion thruster exhaust, and floating relativistic cosmic dust.
+- RU: Аутентичный внутриигровой варп-крейсер Алькубьерре и живая 60 FPS анимация меню с чёрной дырой - случайный корабль в `res/textures/main_menu_bg.jpg` заменён на штатную 3D-модель трёхкольцевого варп-крейсера (`res/models/warp_ship.obj`, 22.2 МБ), отрендеренную в Blender 5.2 Cycles с полным комплектом 2048x2048 PBR-текстур и физически корректным освещением от аккреционного диска. Шейдер `shaders/menu.frag` и движок `AppGL.cpp` модернизированы для работы в реальном времени (60 FPS): дифференциальное кеплеровское вращение и релятивистское доплеровское усиление яркости аккреционного диска чёрной дыры Керра, динамическое вращение трёх катушек варп-двигателя с бегущими неоновыми циан-волнами, метрические волны сжатия/расширения пространства вдоль пузыря Алькубьерре, мерцание ионного факела кормовых сопел и парящая космическая пыль.
+- Gates / Гейты: MSVC Release build OK, static checks PASS (including v5.0.9 checks), ctest 22/22 PASS. Closes #167.
+
 ## 5.0.8 - 2026-11-12
 
 ## What's new / Что нового
