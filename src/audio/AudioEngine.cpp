@@ -87,24 +87,24 @@ float pluckTone(double freq, double age) {
 void renderMenuAmbient(double tAbs, float& left, float& right) {
   const double phase = 2.0 * kPi * tAbs;
   const float hum =
-      0.018f * static_cast<float>(std::sin(phase * 36.708)) +
-      0.007f * static_cast<float>(std::sin(phase * 73.416 + 0.3));
+      0.006f * static_cast<float>(std::sin(phase * 55.0)) +
+      0.002f * static_cast<float>(std::sin(phase * 110.0 + 0.3));
   const float pad =
-      0.011f * static_cast<float>(std::sin(phase * 146.832)) +
-      0.007f * static_cast<float>(std::sin(phase * 220.248 + 0.5));
+      0.006f * static_cast<float>(std::sin(phase * 164.814)) +
+      0.0035f * static_cast<float>(std::sin(phase * 246.942 + 0.5));
   const float airL =
-      0.005f * static_cast<float>(std::sin(phase * 293.664 + 0.9)) +
-      0.003f * static_cast<float>(std::sin(phase * 440.496 + 1.7)) +
-      0.002f * static_cast<float>(std::sin(phase * 587.328 + 0.2));
+      0.0025f * static_cast<float>(std::sin(phase * 329.628 + 0.9)) +
+      0.0015f * static_cast<float>(std::sin(phase * 493.883 + 1.7)) +
+      0.001f * static_cast<float>(std::sin(phase * 659.255 + 0.2));
   const float airR =
-      0.005f * static_cast<float>(std::sin(phase * 293.664 + 1.6)) +
-      0.003f * static_cast<float>(std::sin(phase * 440.496 + 0.4)) +
-      0.002f * static_cast<float>(std::sin(phase * 587.328 + 2.1));
+      0.0025f * static_cast<float>(std::sin(phase * 329.628 + 1.6)) +
+      0.0015f * static_cast<float>(std::sin(phase * 493.883 + 0.4)) +
+      0.001f * static_cast<float>(std::sin(phase * 659.255 + 2.1));
   // Only slow breathing (tens of seconds), without rhythmic pulses or beats.
   const float breathL =
-      0.78f + 0.18f * static_cast<float>(std::sin(phase * 0.031));
+      0.86f + 0.10f * static_cast<float>(std::sin(phase * 0.031));
   const float breathR =
-      0.78f + 0.18f * static_cast<float>(std::sin(phase * 0.023 + 1.3));
+      0.86f + 0.10f * static_cast<float>(std::sin(phase * 0.023 + 1.3));
   left = hum + (pad + airL) * breathL;
   right = hum + (pad + airR) * breathR;
 }

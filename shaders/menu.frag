@@ -7,6 +7,7 @@ uniform sampler2D u_BgTex;
 uniform sampler2D u_DiskVideo;
 uniform sampler2D u_DiskMask;
 uniform int u_HasDiskVideo;
+uniform int u_AnimateDisk;
 uniform float u_Time;
 uniform vec2 u_Res;
 uniform float u_BgAspect;
@@ -20,7 +21,7 @@ void main() {
   vec3 color = texture(u_BgTex, imageUv).rgb;
   float diskMask = texture(u_DiskMask, imageUv).r;
 
-  if (diskMask > 0.0) {
+  if (u_AnimateDisk != 0 && diskMask > 0.0) {
     if (u_HasDiskVideo != 0) {
       color = mix(color, texture(u_DiskVideo, imageUv).rgb, diskMask);
     } else {

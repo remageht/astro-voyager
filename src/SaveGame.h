@@ -49,6 +49,7 @@ struct SaveSettings {
   int colorblindMode = 0;            // 0 Default, 1 Protanopia, 2 Deuteranopia, 3 Tritanopia, 4 HighContrast
   bool audioProximityCue = true;     // звуковой сигнал при сближении со станцией/посадке
   bool highContrastReticle = false;  // утолщённый высококонтрастный прицел
+  int menuBackground = 0;            // 0 animated black hole, 1..4 scenic stills
 };
 
 struct SaveCustom {

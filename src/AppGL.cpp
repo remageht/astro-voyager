@@ -9027,6 +9027,7 @@ void AppGL::applySaveSettings(const SaveSettings& s) {
   m_colorblindMode = std::clamp(s.colorblindMode, 0, 4);
   m_audioProximityCue = s.audioProximityCue;
   m_highContrastReticle = s.highContrastReticle;
+  m_menuBackground = std::clamp(s.menuBackground, 0, 4);
   ImGui::GetIO().FontGlobalScale = m_uiScale;
   m_renderCamValid = false;
 }
@@ -9133,6 +9134,7 @@ void AppGL::saveProfileNow(bool quiet) {
   st.colorblindMode = m_colorblindMode;
   st.audioProximityCue = m_audioProximityCue;
   st.highContrastReticle = m_highContrastReticle;
+  st.menuBackground = m_menuBackground;
   const bool settingsOk =
       saveWriteFile(saveSettingsFilePath(), saveSerializeSettings(st), err);
 
@@ -9692,6 +9694,26 @@ unsigned int AppGL::updateMenuVideo(double time) {
   return m_menuVideoTex;
 }
 
+void AppGL::ensureMenuBackground() {
+  static constexpr const char* paths[] = {
+      "res/textures/main_menu_bg.jpg",
+      "res/textures/main_menu_bg_lagoon.png",
+      "res/textures/main_menu_bg_crimson.png",
+      "res/textures/main_menu_bg_emerald.png",
+      "res/textures/main_menu_bg_violet.png"};
+  const int background = std::clamp(m_menuBackground, 0, 4);
+  if (m_menuBgTex != 0 && m_loadedMenuBackground == background) return;
+  unsigned int nextTexture =
+      loadUiTexture(paths[background], &m_menuBgW, &m_menuBgH);
+  if (nextTexture == 0 && background != 0) {
+    nextTexture = loadUiTexture(paths[0], &m_menuBgW, &m_menuBgH);
+  }
+  if (nextTexture == 0) return;
+  if (m_menuBgTex != 0) glDeleteTextures(1, &m_menuBgTex);
+  m_menuBgTex = nextTexture;
+  m_loadedMenuBackground = background;
+}
+
 void AppGL::renderMenuBackdrop(int width, int height, double time) {
   if (width <= 0 || height <= 0) return;
   if (!m_menuSkyTried) {
@@ -9700,10 +9722,8 @@ void AppGL::renderMenuBackdrop(int width, int height, double time) {
         std::make_unique<Shader>("shaders/quad.vert", "shaders/menu.frag");
     m_menuSkyQuad = std::make_unique<ScreenQuad>();
   }
-  const unsigned int videoTex = updateMenuVideo(time);
-  if (m_menuBgTex == 0) {
-    m_menuBgTex = loadUiTexture("res/textures/main_menu_bg.jpg", &m_menuBgW, &m_menuBgH);
-  }
+  ensureMenuBackground();
+  const unsigned int videoTex = m_menuBackground == 0 ? updateMenuVideo(time) : 0;
   if (m_menuDiskMaskTex == 0) {
     m_menuDiskMaskTex = loadUiTexture("res/textures/main_menu_disk_mask.png", nullptr, nullptr);
   }
@@ -9721,6 +9741,7 @@ void AppGL::renderMenuBackdrop(int width, int height, double time) {
   m_menuSkyShader->setUniform1i("u_DiskVideo", 1);
   m_menuSkyShader->setUniform1i("u_DiskMask", 2);
   m_menuSkyShader->setUniform1i("u_HasDiskVideo", videoTex ? 1 : 0);
+  m_menuSkyShader->setUniform1i("u_AnimateDisk", m_menuBackground == 0 ? 1 : 0);
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_2D, m_menuDiskMaskTex);
   glActiveTexture(GL_TEXTURE1);
@@ -9732,9 +9753,7 @@ void AppGL::renderMenuBackdrop(int width, int height, double time) {
 }
 
 void AppGL::drawMainMenuBackground(float screenW, float screenH) {
-  if (m_menuBgTex == 0) {
-    m_menuBgTex = loadUiTexture("res/textures/main_menu_bg.jpg", &m_menuBgW, &m_menuBgH);
-  }
+  ensureMenuBackground();
 
   ImDrawList* bgDl = ImGui::GetBackgroundDrawList();
   if (!bgDl) return;
@@ -9788,14 +9807,16 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   ImGui::SetCursorPos(ImVec2(leftMargin, topMargin));
 
   const Station* curSt = m_sceneManager->getCurrentStation();
-  std::string sectorBadge = "[ СЕКТОР: " + (curSt ? curSt->name : std::string("СИСТЕМА КЕРРА")) + " ]";
+  std::string sectorBadge = std::string(uiRu("[ МАРШРУТ: ", "[ ROUTE: ")) +
+                            (curSt ? curSt->name : uiRu("НЕИЗВЕСТНО", "UNKNOWN")) + " ]";
   {
     // Пилюли только для чтения: рисуем вручную, без ложной кликабельности ImGui::Button.
     ImDrawList* bdl = ImGui::GetWindowDrawList();
     ImVec2 bp = ImGui::GetCursorScreenPos();
     const std::string pills[3] = {
-        "[ СУДНО: СМК-01 · СТРАННИК ]",
-        m_toggleWarpStandby ? "[ ВАРП-ПРИВОД: 100% ]" : "[ ВАРП-ПРИВОД: STANDBY ]",
+        uiRu("[ КОРАБЛЬ: СТРАННИК ]", "[ SHIP: VOYAGER ]"),
+        m_toggleWarpStandby ? uiRu("[ ДВИГАТЕЛЬ: ГОТОВ ]", "[ ENGINE: READY ]")
+                            : uiRu("[ ДВИГАТЕЛЬ: ОЖИДАНИЕ ]", "[ ENGINE: STANDBY ]"),
         sectorBadge};
     const ImU32 pillText[3] = {IM_COL32(150, 210, 235, 240), IM_COL32(120, 165, 190, 220),
                                IM_COL32(120, 165, 190, 220)};
@@ -9821,8 +9842,8 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   ImGui::SetWindowFontScale(1.0f);
   ImGui::SetCursorPosX(leftMargin);
   ImGui::TextColored(menuui::kAccentDim, "%s",
-                     uiRu("РЕЛЯТИВИСТСКИЙ ИССЛЕДОВАТЕЛЬСКИЙ СИМУЛЯТОР // МЕТРИКА КЕРРА & АЛЬКУБЬЕРРЕ",
-                          "RELATIVISTIC EXPLORATION SIMULATOR // KERR METRIC & ALCUBIERRE WARP"));
+                     uiRu("ПУТЕШЕСТВИЕ СКВОЗЬ КОСМОС",
+                          "A JOURNEY THROUGH SPACE"));
 
   ImGui::SetCursorPosX(leftMargin);
   ImGui::Dummy(ImVec2(0.0f, 12.0f));
@@ -9839,8 +9860,8 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   const ImU32 navBorder = menuui::kNavBorder;
   const ImU32 navBg = menuui::kNavBg;
 
-  std::string contSubtitle = curSt ? curSt->name : uiRu("ОРБИТА КЕРРА", "KERR ORBIT");
-  const char* contLabel = m_hasStartedFlight ? uiRu("ВЕРНУТЬСЯ К ШТУРВАЛУ", "RESUME FLIGHT")
+  std::string contSubtitle = curSt ? curSt->name : uiRu("ПОСЛЕДНИЙ МАРШРУТ", "LAST ROUTE");
+  const char* contLabel = m_hasStartedFlight ? uiRu("ПРОДОЛЖИТЬ ПОЛЁТ", "RESUME FLIGHT")
                                              : uiRu("ПРОДОЛЖИТЬ", "CONTINUE");
   if (drawTacticalCutButton(contLabel, ImVec2(cmdW, 56.0f),
                            menuui::kNavPrimaryBorder, menuui::kNavPrimaryBg, 10.0f,
@@ -9853,9 +9874,10 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
     requestCloseMenu();
   }
 
-  if (drawTacticalCutButton(uiRu("НОВАЯ ЭКСПЕДИЦИЯ", "NEW EXPEDITION"),
+  ImGui::SetCursorPosX(leftMargin);
+  if (drawTacticalCutButton(uiRu("НОВАЯ ИГРА", "NEW GAME"),
                            ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f)) {
-    m_loadingScreen.startNewGameWarp("КУРС: ТОЧКА ЛАГРАНЖА L1 // ВХОД В ЧЕРВОВОТИНУ");
+    m_loadingScreen.startNewGameWarp(uiRu("НАЧИНАЕМ НОВУЮ ЭКСПЕДИЦИЮ", "STARTING A NEW EXPEDITION"));
     m_audio.playJump();
     m_hasStartedFlight = true;
     if (!m_expedition.introSeen && m_expedition.chapterIndex == 0) {
@@ -9865,26 +9887,29 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
     }
   }
   if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("%s", m_expedition.introSeen ? "Resume your journey" : "Begin the expedition");
+    ImGui::SetTooltip("%s", uiRu("Начать новое путешествие", "Start a new journey"));
   }
 
+  ImGui::SetCursorPosX(leftMargin);
   if (drawTacticalCutButton(uiRu("СВОБОДНЫЙ ПОЛЁТ", "FREE FLIGHT"),
                            ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f)) {
     m_hasStartedFlight = true;
     requestCloseMenu();
   }
   if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("%s", uiRu("Свободный полёт без сюжетных сцен", "Free flight, no story scenes"));
+    ImGui::SetTooltip("%s", uiRu("Исследование без сюжета", "Explore without story missions"));
   }
 
-  if (drawTacticalCutButton(uiRu("НАСТРОЙКИ СИСТЕМЫ", "SYSTEM SETTINGS"),
+  ImGui::SetCursorPosX(leftMargin);
+  if (drawTacticalCutButton(uiRu("НАСТРОЙКИ", "SETTINGS"),
                            ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f)) {
     m_menuPage = 1;
     m_pageTransitionTimer = 0.0f;
     m_audio.playBlip();
   }
 
-  if (drawTacticalCutButton(uiRu("АРХИВ И МАТЕРИАЛЫ", "ARCHIVE & MATERIALS"),
+  ImGui::SetCursorPosX(leftMargin);
+  if (drawTacticalCutButton(uiRu("МАТЕРИАЛЫ", "EXTRAS"),
                            ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f)) {
     m_menuPage = 5;
     m_pageTransitionTimer = 0.0f;
@@ -9892,7 +9917,8 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   }
 
   ImGui::Dummy(ImVec2(0.0f, 6.0f));
-  if (drawTacticalCutButton(uiRu("ВЫХОД В СИСТЕМУ", "EXIT TO DESKTOP"),
+  ImGui::SetCursorPosX(leftMargin);
+  if (drawTacticalCutButton(uiRu("ВЫХОД", "EXIT"),
                            ImVec2(cmdW, 38.0f), IM_COL32(70, 110, 140, 120), navBg, 10.0f)) {
     glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
   }
@@ -9904,13 +9930,13 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   float bottomY = screenH - 32.0f;
   ImGui::SetCursorPos(ImVec2(leftMargin, bottomY));
   ImGui::TextColored(menuui::kTextMute, "%s",
-                     uiRu("[ESC] Пауза/Меню  |  [W/A/S/D] Двигатели  |  [M] Карта Оррери  |  [Tab] Журнал  |  [F1] Справка",
-                          "[ESC] Pause/Menu  |  [W/A/S/D] Engines  |  [M] Orrery Map  |  [Tab] Journal  |  [F1] Help"));
+                     uiRu("[ESC] Меню  |  [W/A/S/D] Полёт  |  [M] Карта  |  [Tab] Журнал  |  [F1] Справка",
+                          "[ESC] Menu  |  [W/A/S/D] Flight  |  [M] Map  |  [Tab] Journal  |  [F1] Help"));
 
-  const char* verTag = "ASTRO-VOYAGER v5.0.8-PRODUCTION // INTERSTELLAR WARP ENGINE";
-  ImVec2 verSz = ImGui::CalcTextSize(verTag);
+  const std::string verTag = std::string("ASTRO-VOYAGER v") + kVersion;
+  ImVec2 verSz = ImGui::CalcTextSize(verTag.c_str());
   ImGui::SameLine(screenW - verSz.x - leftMargin);
-  ImGui::TextColored(ImVec4(0.24f, 0.52f, 0.68f, 0.80f), "%s", verTag);
+  ImGui::TextColored(ImVec4(0.24f, 0.52f, 0.68f, 0.80f), "%s", verTag.c_str());
 
   ImGui::End();
 }
@@ -10065,11 +10091,11 @@ void AppGL::drawMenu() {
   if (m_menuPage == 1) {
     if (ImGui::BeginChild("##pageSettings", ImVec2(-1.0f, colAreaH), true)) {
       ImGui::TextColored(menuui::kAccent, "[ 02 // %s ]",
-                         uiRu("БОРТОВЫЕ НАСТРОЙКИ КОРАБЛЯ", "AVIONICS & RENDER SETTINGS"));
+                         uiRu("НАСТРОЙКИ", "SETTINGS"));
       ImGui::SameLine();
       ImGui::TextColored(menuui::kTextDim, "%s",
-                         uiRu("// Конфигурация релятивистского движка, сенсоров и кокпита",
-                              "// Configuration of relativistic core, sensors and cockpit"));
+                         uiRu("// Изображение, корабль, управление и звук",
+                              "// Graphics, ship, controls and audio"));
       ImGui::Separator();
       ImGui::Spacing();
 
@@ -10077,9 +10103,22 @@ void AppGL::drawMenu() {
       bool menuChanged = false;
 
       if (ImGui::BeginTabBar("##SettingsTabs", ImGuiTabBarFlags_None)) {
-        if (ImGui::BeginTabItem(uiRu("Графика и ОТО", "Graphics & GR"))) {
+        if (ImGui::BeginTabItem(uiRu("Графика", "Graphics"))) {
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Быстрые пресеты графики (v4.3.0)", "Aero Graphics Presets (v4.3.0)"));
+          ImGui::SeparatorText(uiRu("Фон главного меню", "Main menu background"));
+          const char* backgroundNames[] = {
+              uiRu("Чёрная дыра (анимация)", "Black hole (animated)"),
+              uiRu("Голубая лагуна", "Celestial Lagoon"),
+              uiRu("Багровый горизонт", "Crimson Horizon"),
+              uiRu("Изумрудная туманность", "Emerald Sanctuary"),
+              uiRu("Фиолетовый рубеж", "Violet Frontier")};
+          ImGui::Combo(uiRu("Фон", "Background"), &m_menuBackground, backgroundNames, 5);
+          ImGui::TextColored(menuui::kTextDim, "%s",
+                             uiRu("Новый фон появится сразу и сохранится вместе с профилем.",
+                                  "The new background appears immediately and is saved with your profile."));
+
+          ImGui::Spacing();
+          ImGui::SeparatorText(uiRu("Качество графики", "Graphics quality"));
           float qBtnW = (ImGui::GetContentRegionAvail().x - 3.0f * ImGui::GetStyle().ItemSpacing.x) / 4.0f;
           if (ImGui::Button("Ultra", ImVec2(qBtnW, 0.0f))) {
             m_sceneManager->applyPreset(PerfPreset::Ultra);
@@ -10186,7 +10225,7 @@ void AppGL::drawMenu() {
           ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem(uiRu("Корабль и Кокпит", "Ship & Cockpit"))) {
+        if (ImGui::BeginTabItem(uiRu("Корабль", "Ship"))) {
           ImGui::Spacing();
           ImGui::SeparatorText(uiRu("Корпус и двигатели", "Ship"));
           const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle", "Model (OBJ)"};
@@ -10209,7 +10248,7 @@ void AppGL::drawMenu() {
           ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem(uiRu("Полет и Физика", "Flight & Physics"))) {
+        if (ImGui::BeginTabItem(uiRu("Полёт", "Flight"))) {
           ImGui::Spacing();
           ImGui::SeparatorText(uiRu("Сложность экспедиции", "Game"));
           const char* diffNames[] = {"Easy", "Normal", "Hard"};
@@ -12427,9 +12466,36 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
   }
   stbi_image_free(mask);
   app.renderMenuBackdrop(0, 0, 20.0);
-  ok = backdropChecks == 3 && glGetError() == GL_NO_ERROR && ok;
+  app.m_menuSkyTried = false;
+  int staticBackdropChecks = 0;
+  unsigned int previousBackgroundTexture = app.m_menuBgTex;
+  for (int background = 1; background <= 4; ++background) {
+    app.m_menuBackground = background;
+    auto captureStatic = [&](double time) {
+      app.renderMenuBackdrop(1280, 720, time);
+      std::vector<unsigned char> pixels(1280u * 720u * 3u);
+      glPixelStorei(GL_PACK_ALIGNMENT, 1);
+      glReadPixels(0, 0, 1280, 720, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+      return pixels;
+    };
+    const auto first = captureStatic(2.0);
+    const auto second = captureStatic(5.0);
+    const bool previousReleased =
+        previousBackgroundTexture == 0 || glIsTexture(previousBackgroundTexture) == GL_FALSE;
+    const bool stable = app.m_menuBgTex != 0 && glIsTexture(app.m_menuBgTex) == GL_TRUE &&
+                        app.m_loadedMenuBackground == background && previousReleased &&
+                        first == second;
+    std::cout << "Static backdrop " << background << ": "
+              << (stable ? "PASS" : "FAIL") << "\n";
+    ok = stable && ok;
+    previousBackgroundTexture = app.m_menuBgTex;
+    ++staticBackdropChecks;
+  }
+  ok = backdropChecks == 3 && staticBackdropChecks == 4 &&
+       glGetError() == GL_NO_ERROR && ok;
   std::cout << "Menu check: " << (ok ? "PASS" : "FAIL")
             << ", backdrop checks=" << backdropChecks
+            << ", static backdrop checks=" << staticBackdropChecks
             << ", audio=" << (app.m_audio.isDeviceLive() ? "live" : "null")
             << ", mean backdrop ms=" << renderSeconds * 1000.0 / std::max(rendered, 1)
             << ", max backdrop ms=" << maxRenderSeconds * 1000.0 << "\n";

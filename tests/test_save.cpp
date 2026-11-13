@@ -148,6 +148,7 @@ int main() {
     s.colorblindMode = 2;
     s.audioProximityCue = true;
     s.highContrastReticle = true;
+    s.menuBackground = 4;
     const std::string text = astro::saveSerializeSettings(s);
     astro::SaveSettings out;
     std::string err;
@@ -171,7 +172,8 @@ int main() {
         !close(out.uiScale, s.uiScale, 1e-5) ||
         out.colorblindMode != s.colorblindMode ||
         out.audioProximityCue != s.audioProximityCue ||
-        out.highContrastReticle != s.highContrastReticle) {
+        out.highContrastReticle != s.highContrastReticle ||
+        out.menuBackground != s.menuBackground) {
       std::cerr << "Test 2 failed: settings mismatch\n";
       return 1;
     }
@@ -387,7 +389,7 @@ int main() {
     if (out.perfPreset != 2 || out.difficulty != 1 || out.aaMode != 1 ||
         !out.shipReflections || out.enginePalette != 0 ||
         out.renderScale != 0.0f || out.shellRadius != 0.0f ||
-        out.stepSize != 0.0f || out.maxSteps != 0) {
+        out.stepSize != 0.0f || out.maxSteps != 0 || out.menuBackground != 0) {
       std::cerr << "Test 13 failed: defaults for missing fields\n";
       return 1;
     }

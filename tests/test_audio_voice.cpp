@@ -315,13 +315,13 @@ int main() {
     double energyL = 0.0, energyR = 0.0, stereoEnergy = 0.0;
     for (size_t i = 0; i < out.size(); i += 2) {
       bounded = bounded && std::isfinite(out[i]) && std::isfinite(out[i + 1]) &&
-                std::abs(out[i]) < 0.06f && std::abs(out[i + 1]) < 0.06f;
+                std::abs(out[i]) < 0.03f && std::abs(out[i + 1]) < 0.03f;
       energyL += out[i] * out[i];
       energyR += out[i + 1] * out[i + 1];
       const double side = out[i] - out[i + 1];
       stereoEnergy += side * side;
     }
-    check(bounded, "menu ambient is finite and bounded below 0.06 at full volume");
+    check(bounded, "menu ambient is finite and bounded below 0.03 at full volume");
     check(energyL > 0.1 && energyR > 0.1 && stereoEnergy > 0.01,
           "menu ambient has nonzero left/right energy and stereo separation");
     check(eng.cassetteTape() == 0, "menu ambient does not enable a cassette");
