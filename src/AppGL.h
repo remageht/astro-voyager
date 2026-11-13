@@ -389,7 +389,9 @@ class AppGL {
   int m_menuBgH = 0;
   int m_menuBackground = 0;
   int m_loadedMenuBackground = -1;
+  unsigned int m_menuMotionMaskTex = 0;
   void ensureMenuBackground();
+  unsigned int loadMenuBackgroundTexture(const char* path);
   std::vector<std::vector<unsigned char>> m_menuVideoFrames;
   unsigned int m_menuVideoTex = 0;
   int m_menuVideoIdx = -1;
