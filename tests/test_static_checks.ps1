@@ -309,7 +309,7 @@ Check 'story journal test wired' (($cmake -match 'tests/test_story\.cpp') -and (
 # --- v3.5.0 expedition pass ---
 Check 'expedition core module' (((Read-File 'src/Expedition.h') -match 'class ExpeditionState') -and ((Read-File 'src/Expedition.cpp') -match 'expeditionChapters') -and ($cmake -match 'src/Expedition\.cpp'))
 Check 'expedition slides module' (((Read-File 'src/StorySlides.h') -match 'storyIntroSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'drawStoryArt') -and ($cmake -match 'src/StorySlides\.cpp'))
-Check 'expedition play hook' (($appCpp -match 'startExpeditionIntro') -and ($appCpp -match 'Begin the expedition'))
+Check 'expedition play hook' (($appCpp -match 'startExpeditionIntro') -and ($appCpp -match 'startNewAdventure'))
 Check 'free flight button' ($appCpp -match 'FREE FLIGHT')
 Check 'expedition map key N' (($appCpp -match 'm_keyMap') -and ($appCpp -match 'm_expeditionMapOpen'))
 Check 'expedition test wired' (($cmake -match 'tests/test_expedition\.cpp') -and ($cmake -match 'add_test\(NAME test_expedition'))
