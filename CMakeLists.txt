@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 5.0.0 LANGUAGES CXX)
+project(astro-voyager VERSION 5.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -643,5 +643,14 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/shaders")
       "${CMAKE_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:astro-voyager>/shaders"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
       "${CMAKE_SOURCE_DIR}/res" "$<TARGET_FILE_DIR:astro-voyager>/res"
+  )
+endif()
+
+# The root-level astro-voyager.exe is the double-click entry point, so it must
+# track the freshly built target rather than whatever was last copied by hand.
+# If the user is currently running the game, ignore lock and continue.
+if(WIN32)
+  add_custom_command(TARGET astro-voyager POST_BUILD
+    COMMAND powershell -NoProfile -Command "try { Copy-Item -LiteralPath '$<TARGET_FILE:astro-voyager>' -Destination '${CMAKE_SOURCE_DIR}/astro-voyager.exe' -Force -ErrorAction Stop } catch { Write-Host 'Note: root astro-voyager.exe in use, skipping' }"
   )
 endif()

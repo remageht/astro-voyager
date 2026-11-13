@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 5.1.0 - 2026-11-12
+
+## What's new / Что нового
+
+- EN: Minimalist AAA Main Menu & Decluttered HUD - Redesigned the main menu into an uncluttered, atmospheric sci-fi title screen. Completely removed the heavy right-hand dashboard card (`##heroGlassHud`) so that the full screen view of the animated Kerr black hole, Keplerian accretion disk, and 3D Alcubierre warp cruiser is completely unobstructed. Replaced the chaotic 8-button rainbow rack with 6 sleek, unified, semi-transparent glass navigation buttons (Continue, New Expedition, Free Flight, System Settings, Archive & Materials, Exit to Desktop). Relocated profile save/load (F9/F10) into the Settings avionics menu.
+- RU: Минималистичный интерфейс Главного Меню и устранение визуального шума - главное меню переработано в лаконичный кинематографичный титульный экран в стиле AAA sci-fi. Полностью удалена тяжеловесная правая панель (`##heroGlassHud`), закрывавшая обзор, благодаря чему ожившая черная дыра Керра, аккреционный диск и 3D-крейсер Алькубьерре видны на весь экран без препятствий. Разноцветный стек из 8 кнопок заменен на 6 сдержанных полупрозрачных пунктов в единой холодной палитре (Продолжить, Новая экспедиция, Свободный полёт, Настройки системы, Архив и материалы, Выход в систему). Быстрое сохранение/загрузка профиля (F9/F10) аккуратно перенесены в раздел настроек.
+- EN: Fixed Dear ImGui `Missing PopStyleColor()` Assert - Resolved the style color stack imbalance in `drawMainMenuHero` by replacing raw styled buttons with native `ImDrawList` read-only status pills, ensuring 0 unbalanced style pushes and permanently eliminating the red ImGui error popup.
+- RU: Исправление ошибки ImGui `Missing PopStyleColor()` - устранен дисбаланс стека цветов стиля в `drawMainMenuHero`. Бейджи статуса переведены на прямой рендеринг через `ImDrawList`, стек цветов стал идеально сбалансированным, а красное окно ошибки ImGui полностью ликвидировано.
+- EN: Eliminated Broken '?' Button Glyphs - Removed non-BMP emoji and unsupported dingbats (`🎙️`, `📡`, `📋`, `✦`, `★`, `▶`, `◀`) from menu buttons and labels, replacing them with clean typographic styling.
+- RU: Устранение битых символов '?' на кнопках - исключены многобайтовые эмодзи и спецсимволы, отсутствующие в шрифтовом атласе ImGui, что навсегда устранило появление знаков вопроса перед текстом кнопок.
+- EN: Graceful Shutdown & Zero-Flicker Exit - Fixed the 1-2 second black screen and display mode drop on exit by configuring `GLFW_AUTO_ICONIFY` to `GLFW_FALSE`, immediately hiding the window via `glfwHideWindow` and pumping window events before destroying the OpenGL context, and stopping the miniaudio device (`ma_device_stop`) prior to `ma_device_uninit` to prevent WASAPI audio thread stalls during save operations.
+- RU: Плавный выход из игры без мерцания и затемнения экрана - устранено зависание и 1-2 секундное затемнение экрана при закрытии игры за счет отключения `GLFW_AUTO_ICONIFY`, мгновенного скрытия окна (`glfwHideWindow`) и прокачки очереди событий Windows DWM до разрушения контекста OpenGL, а также остановки аудиоустройства (`ma_device_stop`) перед выгрузкой драйвера WASAPI.
+- Gates / Гейты: MSVC Release build OK, static checks PASS (including v5.1.0 checks), ctest 22/22 PASS. Closes #169.
+
 ## 5.0.9 - 2026-11-12
 
 ## What's new / Что нового

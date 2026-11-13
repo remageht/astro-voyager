@@ -46,7 +46,8 @@ void printUsage() {
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --screenshot-all [--disk]"
                " | --capture-station <png> | --capture-dragon <png> | --capture-zettel <png>"
-               " | --capture-hud <png> | --capture-terminal <png>"
+               " | --capture-hud <png> | --capture-terminal <png> | --capture-menu <dir>"
+               " | --capture-earth <dir>"
                " | --benchmark [--benchmark-duration <sec>]"
                " [--benchmark-out <path>] [--benchmark-compare <baseline.json>]";
 #endif
@@ -785,6 +786,14 @@ int main(int argc, char** argv) {
   if (arg == "--capture-hud") {
     std::string outPng = (argc > 2) ? argv[2] : "docs/screens/holo_flight_hud.png";
     return astro::AppGL::captureHudCheck(outPng);
+  }
+  if (arg == "--capture-earth") {
+    std::string outDir = (argc > 2) ? argv[2] : "vibe_videos/earth_check";
+    return astro::AppGL::captureEarthCheck(outDir);
+  }
+  if (arg == "--capture-menu") {
+    std::string outDir = (argc > 2) ? argv[2] : "vibe_videos/menu_check";
+    return astro::AppGL::captureMenuCheck(outDir);
   }
   if (arg == "--capture-terminal") {
     std::string outPng = (argc > 2) ? argv[2] : "docs/screens/unified_terminal.png";

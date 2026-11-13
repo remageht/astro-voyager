@@ -56,6 +56,7 @@ class AudioEngine {
   void setWarpLevel(float k);  // 0..1: коричневый шум + суб-синус,
                                // сам же дакает музыку (-8 дБ при K=1)
   void setEngineLevel(float k);  // v3.3.0: гул двигателя от скорости 0..1
+  void setMenuActive(bool active);
   void setDrillLevel(float k, float strain = 0.0f);  // v5.3.0: бур реголита
   float drillLevel() const { return m_drillCurrent.load(); }
                                  // (тон 52-82 Гц + обертон + шум-дыхание)
@@ -200,6 +201,7 @@ class AudioEngine {
 
   std::atomic<float> m_volume{0.7f};
   std::atomic<bool> m_muted{false};
+  std::atomic<bool> m_menuTarget{false};
   std::atomic<float> m_warpTarget{0.0f};
   std::atomic<float> m_warpCurrent{0.0f};
   std::atomic<float> m_engineTarget{0.0f};
@@ -265,6 +267,8 @@ class AudioEngine {
   static const VoiceDuration* voiceDurationTable(size_t& count);
   double voiceDurationSeconds(VoiceType type, size_t pcmSamples) const;
 
+  // Fade position — ONLY renderFrames owns it; setters/update() never touch it.
+  double m_menuBlend = 0.0;
   // Состояние шума — ТОЛЬКО аудиопоток (renderFrames), update() не трогает.
   uint32_t m_rng = 0x12345678u;
   float m_brown = 0.0f;

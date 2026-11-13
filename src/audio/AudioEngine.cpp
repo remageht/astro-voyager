@@ -35,6 +35,7 @@ constexpr double kEcho1 = 0.375;  // delay-СЌС…o С‰РёРїРєРѕРІ
 constexpr double kEcho2 = 0.75;
 
 constexpr double kPi = 3.14159265358979323846;
+constexpr double kMenuFadeSec = 0.8;
 
 float whiteNoise(uint32_t& rng) {
   // xorshift32 -> [-1, 1].
@@ -82,6 +83,32 @@ float pluckTone(double freq, double age) {
   return (s1 + 0.4f * s2) * env;
 }
 
+// Absolute sample time keeps phase continuous across blocks and menu toggles.
+void renderMenuAmbient(double tAbs, float& left, float& right) {
+  const double phase = 2.0 * kPi * tAbs;
+  const float hum =
+      0.006f * static_cast<float>(std::sin(phase * 55.0)) +
+      0.002f * static_cast<float>(std::sin(phase * 110.0 + 0.3));
+  const float pad =
+      0.006f * static_cast<float>(std::sin(phase * 164.814)) +
+      0.0035f * static_cast<float>(std::sin(phase * 246.942 + 0.5));
+  const float airL =
+      0.0025f * static_cast<float>(std::sin(phase * 329.628 + 0.9)) +
+      0.0015f * static_cast<float>(std::sin(phase * 493.883 + 1.7)) +
+      0.001f * static_cast<float>(std::sin(phase * 659.255 + 0.2));
+  const float airR =
+      0.0025f * static_cast<float>(std::sin(phase * 329.628 + 1.6)) +
+      0.0015f * static_cast<float>(std::sin(phase * 493.883 + 0.4)) +
+      0.001f * static_cast<float>(std::sin(phase * 659.255 + 2.1));
+  // Only slow breathing (tens of seconds), without rhythmic pulses or beats.
+  const float breathL =
+      0.86f + 0.10f * static_cast<float>(std::sin(phase * 0.031));
+  const float breathR =
+      0.86f + 0.10f * static_cast<float>(std::sin(phase * 0.023 + 1.3));
+  left = hum + (pad + airL) * breathL;
+  right = hum + (pad + airR) * breathR;
+}
+
 }  // namespace
 
 struct AudioEngine::DeviceHolder {
@@ -95,6 +122,7 @@ AudioEngine::AudioEngine() : m_holder(new DeviceHolder()) {
 
 AudioEngine::~AudioEngine() {
   if (m_live) {
+    ma_device_stop(&m_holder->device);
     ma_device_uninit(&m_holder->device);
     m_live = false;
   }
@@ -321,6 +349,10 @@ void AudioEngine::setEngineLevel(float k) {
   if (k < 0.0f) k = 0.0f;
   if (k > 1.0f) k = 1.0f;
   m_engineTarget.store(k);
+}
+
+void AudioEngine::setMenuActive(bool active) {
+  m_menuTarget.store(active);
 }
 
 void AudioEngine::setDrillLevel(float k, float /*strain*/) {
@@ -917,10 +949,20 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
   const float warpK = m_warpCurrent.load();
   const float duck = dbToGain(kDuckDb * warpK);  // -8 РґР‘ РїСЂРё K=1
   const double rate = static_cast<double>(kSampleRate);
+  const double menuStep = (m_menuTarget.load() ? 1.0 : -1.0) /
+                          (kMenuFadeSec * rate);
   uint64_t base = m_samples.load();
 
   for (unsigned i = 0; i < frames; ++i) {
+    // Keep the fade and oscillator phase continuous when the target reverses.
+    m_menuBlend = std::clamp(m_menuBlend + menuStep, 0.0, 1.0);
+    const float menuGain = static_cast<float>(
+        m_menuBlend * m_menuBlend * (3.0 - 2.0 * m_menuBlend));
+    const float gameGain = 1.0f - menuGain;
     const double tAbs = static_cast<double>(base + i) / rate;
+    float ambientL = 0.0f;
+    float ambientR = 0.0f;
+    if (menuGain > 0.0f) renderMenuAmbient(tAbs, ambientL, ambientR);
     const double tLoop = wrapLoop(tAbs);
     float music = renderMusic(tAbs, tLoop) * duck;
 
@@ -1094,8 +1136,13 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
       weatherSoundR = (windSound * 0.95f + patterSound * 1.05f) * weaIntensity;
     }
 
-    float mixL = (music + sfxL + rumble + engine + drone + atmoRoar + radioStaticSound + tapeL + drillSound + weatherSoundL) * vol;
-    float mixR = (music + sfxR + rumble + engine + drone + atmoRoar + radioStaticSound + tapeR + drillSound + weatherSoundR) * vol;
+    // Preserve cassette phase and leave UI/voice SFX outside the crossfade.
+    const float gameplay = music + rumble + engine + drone + atmoRoar +
+                           radioStaticSound + drillSound;
+    float mixL = ((gameplay + tapeL + weatherSoundL) * gameGain +
+                  ambientL * menuGain + sfxL) * vol;
+    float mixR = ((gameplay + tapeR + weatherSoundR) * gameGain +
+                  ambientR * menuGain + sfxR) * vol;
     mixL = std::tanh(mixL * 1.1f);
     mixR = std::tanh(mixR * 1.1f);
     out[i * 2 + 0] = mixL;

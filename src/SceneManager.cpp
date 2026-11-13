@@ -3,6 +3,10 @@
 
 #include "GLCompat.h"
 #include "ObjModel.h"
+#include <stb_image.h>
+#include <stb_image_write.h>
+#include <filesystem>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <cmath>
@@ -246,6 +250,134 @@ SceneManager::SceneManager() {
   }
 
   applyPreset(PerfPreset::Med);
+}
+
+SceneManager::~SceneManager() {
+  if (m_earthMapTex != 0) glDeleteTextures(1, &m_earthMapTex);
+}
+
+void SceneManager::bindEarthMap() {
+  if (!m_earthMapTried) {
+    m_earthMapTried = true;
+    int width = 0, height = 0;
+    unsigned char* pixels = stbi_load("res/textures/earth_daymap.jpg", &width, &height, nullptr, 4);
+    if (pixels && width == 2 * height && width >= 2048 && width <= 8192) {
+      for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
+        unsigned char* p = pixels + i * 4;
+        const bool ocean = p[2] > p[0] * 1.15f && p[2] > p[1] * 1.08f;
+        p[3] = ocean ? 0 : 255;
+      }
+      glGenTextures(1, &m_earthMapTex);
+      glBindTexture(GL_TEXTURE_2D, m_earthMapTex);
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0,
+                   GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+      glGenerateMipmap(GL_TEXTURE_2D);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    } else {
+      std::cerr << "Earth map missing or invalid: res/textures/earth_daymap.jpg\n";
+    }
+    stbi_image_free(pixels);
+  }
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, m_earthMapTex);
+  m_planetShader->setUniform1i("u_EarthMap", 0);
+  m_planetShader->setUniform1i("u_HasEarthMap", m_earthMapTex != 0 ? 1 : 0);
+}
+
+bool SceneManager::captureEarthCheck(const std::string& outDir) {
+  std::filesystem::create_directories(outDir);
+  m_planetShader->bind();
+  bindEarthMap();
+  if (m_earthMapTex == 0 || glIsTexture(m_earthMapTex) != GL_TRUE) return false;
+  int width = 0, height = 0;
+  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+  if (width != 5400 || height != 2700) return false;
+  std::vector<unsigned char> map(static_cast<size_t>(width) * height * 4);
+  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, map.data());
+  struct Landmark { const char* name; float lat, lon; bool land; };
+  const Landmark landmarks[] = {
+      {"Sahara", 25.0f, 15.0f, true}, {"Brazil", -12.0f, -52.0f, true},
+      {"North America", 40.0f, -100.0f, true}, {"Asia", 45.0f, 100.0f, true},
+      {"Australia", -25.0f, 135.0f, true}, {"Greenland", 72.0f, -40.0f, true},
+      {"Antarctica", -80.0f, 30.0f, true}, {"Pacific", 0.0f, -140.0f, false},
+      {"Atlantic", 0.0f, -30.0f, false}, {"Indian Ocean", -25.0f, 75.0f, false}};
+  bool ok = true;
+  for (const auto& p : landmarks) {
+    const int x = static_cast<int>((p.lon / 360.0f + 0.5f) * width);
+    const int y = static_cast<int>((0.5f - p.lat / 180.0f) * height);
+    const bool land = map[(static_cast<size_t>(y) * width + x) * 4 + 3] > 127;
+    std::cout << "Earth landmark " << p.name << ": " << (land == p.land ? "PASS" : "FAIL") << "\n";
+    ok = land == p.land && ok;
+  }
+  m_planetShader->unbind();
+
+  constexpr int shotWidth = 1600, shotHeight = 1066;
+  const glm::vec3 center(0.0f, 0.0f, 25.0f);
+  const glm::vec3 eye = center + glm::vec3(0.0f, 0.0f, -4.0f);
+  const glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
+  const glm::mat4 projection = glm::perspective(glm::radians(35.0f),
+      static_cast<float>(shotWidth) / shotHeight, 0.1f, 100.0f);
+  const glm::mat4 view = glm::lookAt(eye, center, glm::vec3(0.0f, 1.0f, 0.0f));
+  auto capture = [&](float longitude, float clouds, float spinOffset) {
+    m_postFx.beginScene(shotWidth, shotHeight);
+    glViewport(0, 0, shotWidth, shotHeight);
+    glClearColor(0.003f, 0.004f, 0.007f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    m_planetShader->bind();
+    bindEarthMap();
+    m_planetShader->setUniformMat4f("u_MVP", projection * view);
+    m_planetShader->setUniformMat4f("u_Model", model);
+    m_planetShader->setUniform1i("u_Type", 2);
+    m_planetShader->setUniform1i("u_Body", 4);
+    m_planetShader->setUniform1f("u_Time", 0.0f);
+    m_planetShader->setUniform1f("u_Seed", 4.0f);
+    m_planetShader->setUniform3f("u_CamPos", eye);
+    m_planetShader->setUniform1f("u_Exposure", 1.0f);
+    m_planetShader->setUniform1f("u_Radius", 1.0f);
+    m_planetShader->setUniform1f("u_SpinAngle", glm::radians(longitude - 90.0f) + spinOffset);
+    m_planetShader->setUniform1f("u_Spot", 0.0f);
+    m_planetShader->setUniform1f("u_Clouds", clouds);
+    m_planetShader->setUniform1i("u_RingOn", 0);
+    m_planetShader->setUniform1i("u_MoonOccN", 0);
+    m_planetShader->setUniform1i("u_PlanetRelief", 1);
+    m_planetShader->setUniform1i("u_PlanetAtmosphere", 1);
+    m_sphereHiRes.draw();
+    m_planetShader->unbind();
+    m_postFx.endScene(shotWidth, shotHeight);
+    std::vector<unsigned char> pixels(static_cast<size_t>(shotWidth) * shotHeight * 4);
+    glReadPixels(0, 0, shotWidth, shotHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    const size_t stride = static_cast<size_t>(shotWidth) * 4;
+    for (int y = 0; y < shotHeight / 2; ++y) {
+      std::swap_ranges(pixels.begin() + y * stride, pixels.begin() + (y + 1) * stride,
+                       pixels.begin() + (shotHeight - 1 - y) * stride);
+    }
+    return pixels;
+  };
+  struct Shot { const char* name; float lon; };
+  const Shot shots[] = {{"americas", -90.0f}, {"africa_europe", 20.0f}, {"asia_australia", 130.0f}};
+  for (const auto& shot : shots) {
+    const auto first = capture(shot.lon, 0.0f, 0.0f);
+    const auto repeat = capture(shot.lon, 0.0f, 0.0f);
+    const auto rotated = capture(shot.lon, 0.0f, 0.25f);
+    const auto cloudy = capture(shot.lon, 0.55f, 0.0f);
+    const std::string path = outDir + "/earth_" + shot.name + ".png";
+    const std::string cloudPath = outDir + "/earth_" + shot.name + "_clouds.png";
+    const bool saved = stbi_write_png(path.c_str(), shotWidth, shotHeight, 4, first.data(), shotWidth * 4) &&
+                       stbi_write_png(cloudPath.c_str(), shotWidth, shotHeight, 4, cloudy.data(), shotWidth * 4);
+    const bool pass = saved && first == repeat && first != rotated && first != cloudy;
+    std::cout << "Earth view " << shot.name << ": " << (pass ? "PASS" : "FAIL") << "\n";
+    ok = pass && ok;
+  }
+  ok = glGetError() == GL_NO_ERROR && ok;
+  std::cout << "Earth check: " << (ok ? "PASS" : "FAIL") << ", map=" << width << "x" << height << "\n";
+  return ok;
 }
 
 static const char* customIdPrefix(const CustomBody& b) {
@@ -779,6 +911,7 @@ void SceneManager::updateDockSites() {
     m_dockSites.push_back(DockSite{"dock-soyuz", "Soyuz MS-25 (Roscosmos)", "sol", Vec3(earthPos.x - 0.85, earthPos.y - 0.35, earthPos.z + 1.35), 3.0f});
     m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
     m_dockSites.push_back(DockSite{"dock-probe", "Helios Deep Space Relay", "sol", Vec3(earthPos.x - 1.85, earthPos.y + 0.65, earthPos.z - 2.45), 3.0f});
+    m_dockSites.push_back(DockSite{"dock-aurora", "Aurora Ring Station", "sol", Vec3(earthPos.x - 0.35, earthPos.y + 1.05, earthPos.z + 0.95), 4.0f});
   } else if (m_currentStation->id == "m13") {
     m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
   } else if (m_currentStation->id == "sgra") {
@@ -1353,8 +1486,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         m_planetShader->setUniform3f("u_ColB", static_cast<float>(cb.x),
                                      static_cast<float>(cb.y),
                                      static_cast<float>(cb.z));
-        m_planetShader->setUniform1i("u_Spot", 0);
-        m_planetShader->setUniform1i("u_Clouds", 0);
+        m_planetShader->setUniform1f("u_Spot", 0.0f);
+        m_planetShader->setUniform1f("u_Clouds", 0.0f);
         m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
         m_planetShader->setUniform1f("u_Radius", static_cast<float>(radius));
         m_planetShader->setUniform1i("u_RingOn", 0);
@@ -1507,6 +1640,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(def->radius));
       m_planetShader->setUniformMat4f("u_Model", model);
       m_planetShader->setUniform1i("u_Type", def->type);
+      bindEarthMap();
       m_planetShader->setUniform1i("u_Body", def->detail);
       m_planetShader->setUniform1f("u_Seed", def->seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(def->colA.x),
@@ -1515,8 +1649,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_planetShader->setUniform3f("u_ColB", static_cast<float>(def->colB.x),
                                    static_cast<float>(def->colB.y),
                                    static_cast<float>(def->colB.z));
-      m_planetShader->setUniform1i("u_Spot", (def->id == "jupiter" ? 1 : 0));
-      m_planetShader->setUniform1i("u_Clouds", (def->id == "earth" ? 1 : 0));
+      m_planetShader->setUniform1f("u_Spot", def->id == "jupiter" ? 1.0f : 0.0f);
+      m_planetShader->setUniform1f("u_Clouds", def->id == "earth" ? 0.55f : 0.0f);
       m_planetShader->setUniform1f("u_SpinAngle", def->spinRate * m_simTime);
       // Relief bump mapping LOD: skip multi-tap procedural noise when body is small on screen
       bool enableRelief = m_settings.planetRelief && (projPixels >= 32.0f);
@@ -1611,6 +1745,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       // v3.2.0 editor: surface type from the palette (rock/rocky/moon/gas/
       // star), secondary colour, world radius (ring shadow + close detail).
       m_planetShader->setUniform1i("u_Type", custom.type);
+      bindEarthMap();
       m_planetShader->setUniform1i("u_Body", custom.detail);
       m_planetShader->setUniform1f("u_Seed", custom.seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(custom.color.x),
@@ -1620,8 +1755,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                    static_cast<float>(custom.colorB.y),
                                    static_cast<float>(custom.colorB.z));
       m_planetShader->setUniform1f("u_Radius", custom.radius);
-      m_planetShader->setUniform1i("u_Spot", 0);
-      m_planetShader->setUniform1i("u_Clouds", 0);
+      m_planetShader->setUniform1f("u_Spot", 0.0f);
+      m_planetShader->setUniform1f("u_Clouds", 0.0f);
       m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
       m_planetShader->setUniform1i("u_MoonOccN", 0);
       bool enableRelief = m_settings.planetRelief && (projPixels >= 32.0f);
@@ -2477,7 +2612,13 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_stationCoreModel;
           static ObjModel s_stationRingModel;
           static ObjModel s_stationPanelsModel;
+          static ObjModel s_auroraModel;
+          static ObjModel s_auroraCoreModel;
+          static ObjModel s_auroraRingModel;
+          static ObjModel s_auroraPanelsModel;
           static ObjModel s_telescopeModel;
+          static ObjModel s_telescopeMirrorModel;
+          static ObjModel s_telescopeBodyModel;
           static ObjModel s_warpCoreModel;
           static ObjModel s_probeModel;
           static ObjModel s_dragonModel;
@@ -2496,9 +2637,21 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_stationRingModel.shareTexturesFrom(s_stationModel);
             s_stationPanelsModel.load("res/models/station_panels.obj");
             s_stationPanelsModel.shareTexturesFrom(s_stationModel);
+            s_auroraModel.load("res/models/station_aurora.obj");
+            s_auroraModel.loadTextures("res/models/station_aurora");
+            s_auroraCoreModel.load("res/models/station_aurora_core.obj");
+            s_auroraCoreModel.shareTexturesFrom(s_auroraModel);
+            s_auroraRingModel.load("res/models/station_aurora_ring.obj");
+            s_auroraRingModel.shareTexturesFrom(s_auroraModel);
+            s_auroraPanelsModel.load("res/models/station_aurora_panels.obj");
+            s_auroraPanelsModel.shareTexturesFrom(s_auroraModel);
 
             s_telescopeModel.load("res/models/telescope.obj");
             s_telescopeModel.loadTextures("res/models/telescope");
+            s_telescopeMirrorModel.load("res/models/telescope_mirror.obj");
+            s_telescopeMirrorModel.shareTexturesFrom(s_telescopeModel);
+            s_telescopeBodyModel.load("res/models/telescope_body.obj");
+            s_telescopeBodyModel.shareTexturesFrom(s_telescopeModel);
 
             s_warpCoreModel.load("res/models/warp_core.obj");
             s_warpCoreModel.loadTextures("res/models/warp_core");
@@ -2645,20 +2798,31 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customRough = 0.60f;
               emOverride = glm::vec3(0.05f, 0.2f, 0.6f);
             } else if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
-              siteModel = &s_telescopeModel;
               // 2.2-unit model * 0.135 = 0.297 world units. The observatory
               // stays below the 0.38 ISS and the 0.35 warp core, but above
               // the 0.247 Dragon, instead of towering over the station.
               stScale = 0.135f;
               dockRingScale = 0.20f;
               const float effScale = stScale * lodScale;
-              // James Webb Telescope: oriented into deep space, sunshield facing Sol
-              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+              // Sunshield + bus stay sun-oriented; only the optics head slews.
+              const glm::mat4 webbBase = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.02f * time + 0.785f, glm::vec3(0.0f, 1.0f, 0.0f)) *
                         glm::rotate(glm::mat4(1.0f), 0.25f, glm::vec3(1.0f, 0.0f, 0.0f)) *
                         glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               customMetal = 0.92f;
               customRough = 0.25f;
+              if (s_telescopeMirrorModel.ready() && s_telescopeBodyModel.ready() && s_shipShader) {
+                const glm::mat4 mBody = webbBase;
+                const glm::mat4 mMirror = webbBase *
+                    glm::rotate(glm::mat4(1.0f), 0.18f * std::sin(0.10f * time), glm::vec3(1.0f, 0.0f, 0.0f)) *
+                    glm::rotate(glm::mat4(1.0f), 0.12f * std::sin(0.07f * time + 1.3f), glm::vec3(0.0f, 0.0f, 1.0f));
+                drawStationObjModel(&s_telescopeBodyModel, mBody, customMetal, customRough, emOverride);
+                drawStationObjModel(&s_telescopeMirrorModel, mMirror, customMetal, customRough, emOverride);
+                siteModel = nullptr;
+              } else {
+                siteModel = &s_telescopeModel;
+                stModel = webbBase;
+              }
             } else if ((dock.id == "dock-sgra" || dock.id == "dock-m13") && s_warpCoreModel.ready()) {
               siteModel = &s_warpCoreModel;
               stScale = 0.35f;
@@ -2689,6 +2853,28 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               emOverride = glm::vec3(0.1f, 0.85f, 0.65f) * blink;
               customMetal = 0.80f;
               customRough = 0.28f;
+            } else if (dock.id == "dock-aurora") {
+              // Aurora ring station: modular core + spinning centrifuge + SARJ wings.
+              stScale = 0.045f;
+              dockRingScale = 0.22f;
+              const float effScale = stScale * lodScale;
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              if (s_auroraCoreModel.ready() && s_auroraRingModel.ready() &&
+                  s_auroraPanelsModel.ready() && s_shipShader) {
+                const glm::mat4 mCore = stModel;
+                const glm::mat4 mRing = stModel *
+                    glm::rotate(glm::mat4(1.0f), 0.30f * time, glm::vec3(0.0f, 0.0f, 1.0f));
+                const glm::mat4 mPanels = stModel *
+                    glm::rotate(glm::mat4(1.0f), 0.06f * std::sin(0.05f * time), glm::vec3(0.0f, 1.0f, 0.0f));
+                drawStationObjModel(&s_auroraCoreModel, mCore, customMetal, customRough, emOverride);
+                drawStationObjModel(&s_auroraRingModel, mRing, customMetal, customRough, emOverride);
+                drawStationObjModel(&s_auroraPanelsModel, mPanels, customMetal, customRough, emOverride);
+                siteModel = nullptr;
+              } else {
+                siteModel = s_auroraModel.ready() ? &s_auroraModel : &s_stationModel;
+              }
             } else {
               // Standard orbital space station (ISS): modular hierarchy when
               // available (core + spinning centrifuge ring + SARJ solar wings),
@@ -2732,8 +2918,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               m_planetShader->setUniform3f("u_ColA", 0.38f, 0.42f, 0.48f);
               m_planetShader->setUniform3f("u_ColB", 0.16f, 0.19f, 0.24f);
               m_planetShader->setUniform1f("u_Radius", 0.95f);
-              m_planetShader->setUniform1i("u_Spot", 0);
-              m_planetShader->setUniform1i("u_Clouds", 0);
+              m_planetShader->setUniform1f("u_Spot", 0.0f);
+              m_planetShader->setUniform1f("u_Clouds", 0.0f);
               m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
               m_planetShader->setUniform1i("u_MoonOccN", 0);
               m_planetShader->setUniform1i("u_RingOn", 0);
@@ -2857,8 +3043,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               m_planetShader->setUniform3f("u_ColA", 0.60f, 0.65f, 0.72f);
               m_planetShader->setUniform3f("u_ColB", 0.32f, 0.36f, 0.42f);
               m_planetShader->setUniform1f("u_Radius", 0.95f);
-              m_planetShader->setUniform1i("u_Spot", 0);
-              m_planetShader->setUniform1i("u_Clouds", 0);
+              m_planetShader->setUniform1f("u_Spot", 0.0f);
+              m_planetShader->setUniform1f("u_Clouds", 0.0f);
               m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
               m_planetShader->setUniform1i("u_MoonOccN", 0);
               m_planetShader->setUniform1i("u_RingOn", 0);

@@ -27,6 +27,7 @@ $bh = Read-File 'shaders/bh.frag'
 $ci = Read-File '.github/workflows/build.yml'
 $dockerfile = Read-File 'Dockerfile'
 $ver = (Read-File 'VERSION').Trim()
+$appCpp = Read-File 'src/AppGL.cpp'
 
 Check 'cmake project astro-voyager' ($cmake -match 'project\(astro-voyager')
 Check 'cmake cxx17' ($cmake -match 'CMAKE_CXX_STANDARD 17')
@@ -245,6 +246,13 @@ Check 'galilean moons and titan' ((($solarCpp -match '"io"') -and ($solarCpp -ma
 Check 'belt density 5200' ($sceneCpp -match 'setBelt\(5200')
 Check 'earth ocean glint' (($planetFrag -match 'glint') -and ($planetFrag -match '1\.0 - land'))
 Check 'sol earth close shots harness' (($appCpp -match 'sol_close') -and ($appCpp -match 'earth_close'))
+Check 'real Earth day map and provenance are packaged' ((Test-Path (Join-Path $root 'res/textures/earth_daymap.jpg')) -and (Test-Path (Join-Path $root 'res/textures/earth_daymap.source.json')) -and ($sceneCpp -match 'res/textures/earth_daymap\.jpg') -and ($sceneCpp -notmatch 'res/models/earth_map\.bmp'))
+Check 'Earth longitude is not mirrored and latitude is north-up' (($planetFrag -match 'atan\(-p\.z, p\.x\)') -and ($planetFrag -match '0\.5 - asin\(clamp\(p\.y'))
+Check 'Earth albedo and land use the same geographic map' (($planetFrag -match 'texture\(u_EarthMap, earthUv\(spN\)\)') -and ($planetFrag -match 'land = surface\.a') -and ($planetFrag -match 'albedo = surface\.rgb'))
+Check 'Earth excludes procedural elevation and close-range noise' (($planetFrag -match 'u_PlanetRelief == 1 && u_Body != 4') -and ($planetFrag -match 'u_Type == 2 && u_Body != 4'))
+Check 'Earth texture is per-scene sRGB with clamped poles' (($sceneH -match 'unsigned int m_earthMapTex') -and ($sceneCpp -match 'GL_SRGB8_ALPHA8') -and ($sceneCpp -match 'GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE') -and ($sceneCpp -match 'SceneManager::~SceneManager'))
+Check 'planet cloud and spot uniforms use floats' (($sceneCpp -match 'setUniform1f\("u_Clouds"') -and ($sceneCpp -notmatch 'setUniform1i\("u_(Clouds|Spot)"'))
+Check 'Earth native regression checks continents and oceans' (($sceneCpp -match 'Earth landmark') -and ($sceneCpp -match 'Earth view') -and ($sceneCpp -match 'first == repeat') -and ($sceneCpp -match 'first != rotated') -and ($sceneCpp -match 'first != cloudy') -and ((Read-File 'src/main.cpp') -match '--capture-earth'))
 Check 'planet radius uniform u_Radius' (($planetFrag -match 'uniform float u_Radius') -and ($sceneCpp -match 'setUniform1f\("u_Radius"'))
 
 # --- v3.2.0 content pass ---
@@ -308,8 +316,8 @@ Check 'story journal test wired' (($cmake -match 'tests/test_story\.cpp') -and (
 # --- v3.5.0 expedition pass ---
 Check 'expedition core module' (((Read-File 'src/Expedition.h') -match 'class ExpeditionState') -and ((Read-File 'src/Expedition.cpp') -match 'expeditionChapters') -and ($cmake -match 'src/Expedition\.cpp'))
 Check 'expedition slides module' (((Read-File 'src/StorySlides.h') -match 'storyIntroSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'drawStoryArt') -and ($cmake -match 'src/StorySlides\.cpp'))
-Check 'expedition play hook' (($appCpp -match 'startExpeditionIntro') -and ($appCpp -match 'Begin the expedition'))
-Check 'free visit button' ($appCpp -match 'Free Visit')
+Check 'expedition play hook' (($appCpp -match 'startExpeditionIntro') -and ($appCpp -match 'startNewAdventure'))
+Check 'free flight button' ($appCpp -match 'FREE FLIGHT')
 Check 'expedition map key N' (($appCpp -match 'm_keyMap') -and ($appCpp -match 'm_expeditionMapOpen'))
 Check 'expedition test wired' (($cmake -match 'tests/test_expedition\.cpp') -and ($cmake -match 'add_test\(NAME test_expedition'))
 Check 'adventure finale branch' (($appCpp -match 'drawFinaleChoice') -and ((Read-File 'src/Expedition.h') -match 'finaleChoice') -and ((Read-File 'src/Expedition.cpp') -match 'kFinaleHorizon') -and ((Read-File 'src/StorySlides.cpp') -match 'far horizon ending'))
@@ -376,7 +384,7 @@ Check 'shader embedded fallback' ((Read-File 'src/Shader.cpp') -match 'embeddedS
 Check 'windows portable release job' (($ci -match 'build-windows-gl') -and ($ci -match 'astro-voyager\.exe') -and ($ci -match 'windows-x86_64\.zip'))
 
 # --- fx split pass v3.6.0: ускорение и варп — разные явления, мягче ---
-Check 'menu unique button ids' (($appCpp -match '##dest-') -and ($appCpp -match '##recent-'))
+Check 'main menu hero decluttered' (($appCpp -notmatch '##heroGlassHud') -and ($appCpp -match '##pageArchive'))
 Check 'warp lens only for warp drive' (($sceneCpp -match 'const float lensK = m_warpFx;') -and ((Read-File 'shaders/post_comp.frag') -match '0\.18 \* k'))
 Check 'fx amplitudes softened' (((Read-File 'shaders/post_comp.frag') -match '0\.26, 0\.0, 0\.32') -and ((Read-File 'shaders/warp.frag') -match '0\.62 \+ fringe'))
 
@@ -673,12 +681,41 @@ Check 'AppGL declares drawMainMenuBackground' ((Read-File 'src/AppGL.h') -match 
 Check 'AppGL implements drawMainMenuHero' ($appCpp -match 'AppGL::drawMainMenuHero')
 Check 'AppGL implements drawMainMenuBackground' ($appCpp -match 'AppGL::drawMainMenuBackground')
 Check 'AppGL triggers cold boot' ($appCpp -match 'm_loadingScreen\.startColdBoot')
-Check 'shaders/menu.frag has u_BgTex uniform' ((Read-File 'shaders/menu.frag') -match 'uniform sampler2D u_BgTex;')
-Check 'shaders/menu.frag has Keplerian accretion disk' ((Read-File 'shaders/menu.frag') -match 'Keplerian')
-Check 'shaders/menu.frag has Alcubierre warp coils' ((Read-File 'shaders/menu.frag') -match 'Alcubierre')
+$menuFrag = [regex]::Replace((Read-File 'shaders/menu.frag'), '(?s)/\*.*?\*/|//[^\r\n]*', '')
+$menuAppH = Read-File 'src/AppGL.h'
+Check 'shaders/menu.frag has u_BgTex uniform' ($menuFrag -match 'uniform\s+sampler2D\s+u_BgTex\s*;')
+Check 'menu disk mask exists and has a sampler uniform' ((Test-Path (Join-Path $root 'res/textures/main_menu_disk_mask.png')) -and ($menuFrag -match 'uniform\s+sampler2D\s+u_DiskMask\s*;'))
+Check 'four scenic menu backgrounds exist' ((Test-Path (Join-Path $root 'res/textures/main_menu_bg_lagoon.png')) -and (Test-Path (Join-Path $root 'res/textures/main_menu_bg_crimson.png')) -and (Test-Path (Join-Path $root 'res/textures/main_menu_bg_emerald.png')) -and (Test-Path (Join-Path $root 'res/textures/main_menu_bg_violet.png')))
+Check 'four scenic motion masks exist' ((Test-Path (Join-Path $root 'res/textures/main_menu_motion_lagoon.png')) -and (Test-Path (Join-Path $root 'res/textures/main_menu_motion_crimson.png')) -and (Test-Path (Join-Path $root 'res/textures/main_menu_motion_emerald.png')) -and (Test-Path (Join-Path $root 'res/textures/main_menu_motion_violet.png')))
+Check 'menu disk mask is sampled at immutable image UVs' ($menuFrag -match '\bfloat\s+diskMask\s*=\s*texture\s*\(\s*u_DiskMask\s*,\s*imageUv\s*\)\s*\.r\s*;')
+Check 'menu video and fallback flow stay inside the animated disk branch' ($menuFrag -match '(?s)if\s*\(\s*u_AnimateDisk\s*!=\s*0\s*&&\s*diskMask\s*>\s*0(?:\.\d+)?\s*\).*?texture\s*\(\s*u_DiskVideo\s*,\s*imageUv\s*\).*?else.*?\bfloat\s+flowPhase\s*=.*?\bfloat\s+plasma\s*=')
+Check 'menu fallback uses directional flow instead of rocking UV displacement' (($menuFrag -match '\bflowPhase\s*=\s*angle[^;]*-\s*timePhase') -and ($menuFrag -notmatch '\b(?:sampleUv|tangent)\b'))
 Check 'AppGL binds u_BgTex in menu loop' ($appCpp -match 'setUniform1i\("u_BgTex", 0\)')
+Check 'static menu backgrounds disable disk animation' (($menuFrag -match 'uniform\s+int\s+u_AnimateDisk\s*;') -and ($appCpp -match 'setUniform1i\("u_AnimateDisk", m_menuBackground == 0 \? 1 : 0\)'))
+Check 'scenic nebula motion is masked and periodic' (($menuFrag -match 'uniform\s+sampler2D\s+u_MotionMask\s*;') -and ($menuFrag -match 'uniform\s+int\s+u_ScenicMode\s*;') -and ($menuFrag -match 'float\s+motionMask\s*=\s*texture\s*\(\s*u_MotionMask\s*,\s*imageUv\s*\)\s*\.r\s*;') -and ($menuFrag -match 'mod\s*\(\s*u_Time\s*,\s*24\.0\s*\)') -and ($appCpp -match 'setUniform1i\("u_ScenicMode", m_menuBackground\)'))
+Check 'menu background selection is persisted' (($appCpp -match 'st\.menuBackground\s*=\s*m_menuBackground') -and ((Read-File 'src/SaveGame.cpp') -match '"menuBackground"') -and ($appCpp -match 'Чёрная дыра \(анимация\)'))
+Check 'menu background switch releases the previous texture' ($appCpp -match 'if\s*\(m_menuBgTex\s*!=\s*0\)\s*glDeleteTextures\s*\(\s*1\s*,\s*&m_menuBgTex\s*\)')
+Check 'menu backgrounds are owned outside the UI texture cache' (($appCpp -match 'AppGL::loadMenuBackgroundTexture') -and ($appCpp -match 'loadMenuBackgroundTexture\(paths\[background\]\)') -and ($appCpp -match 'm_uiTex\.clear\(\);\s*if\s*\(m_menuBgTex\s*!=\s*0\)\s*\{\s*glDeleteTextures'))
+Check 'AppGL loads and binds the disk mask on texture unit 2' (($menuAppH -match '\bm_menuDiskMaskTex\b') -and ($appCpp -match 'res/textures/main_menu_disk_mask\.png') -and ($appCpp -match 'setUniform1i\("u_DiskMask", 2\)') -and ($appCpp -match 'glActiveTexture\s*\(\s*GL_TEXTURE2\s*\)') -and ($appCpp -match 'glBindTexture\s*\(\s*GL_TEXTURE_2D\s*,\s*m_menuDiskMaskTex\s*\)'))
 Check 'AppGL drawMainMenuBackground has shaderActive check' ($appCpp -match 'const bool shaderActive = \(m_menuSkyShader && m_menuSkyQuad\);')
 Check 'render_menu_warp_ship script exists' (Test-Path (Join-Path $root 'blender/scripts/render_menu_warp_ship.py'))
+Check 'AppGL drawMainMenuHero draws read-only status pills' ($appCpp -match 'Пилюли только для чтения')
+Check 'AppGL drawMainMenuHero no longer clutters with heroGlassHud' (-not ($appCpp -match 'heroGlassHud'))
+Check 'Window constructor disables AUTO_ICONIFY' ((Read-File 'src/Window.cpp') -match 'GLFW_AUTO_ICONIFY, GLFW_FALSE')
+Check 'Window destructor hides window and polls events before destroy' ((Read-File 'src/Window.cpp') -match 'glfwHideWindow\(m_window\);\s*glfwPollEvents\(\);\s*glfwDestroyWindow\(m_window\);')
+Check 'AudioEngine destructor stops device before uninit' ((Read-File 'src/audio/AudioEngine.cpp') -match 'ma_device_stop\(&m_holder->device\);\s*ma_device_uninit\(&m_holder->device\);')
+
+Check 'menu loop includes 195 runtime JPEG frames' (@(Get-ChildItem (Join-Path $root 'res/video/menu') -Filter 'frame*.jpg').Count -eq 195)
+Check 'menu video texture is bound only as masked disk input' (($appCpp -match '\bupdateMenuVideo\b') -and ($appCpp -match 'glTexSubImage2D') -and ($appCpp -match 'setUniform1i\("u_DiskVideo", 1\)') -and ($appCpp -match 'setUniform1i\("u_HasDiskVideo", videoTex \? 1 : 0\)') -and ($menuFrag -match 'mix\s*\(\s*color\s*,\s*texture\s*\(\s*u_DiskVideo\s*,\s*imageUv\s*\)\.rgb\s*,\s*diskMask\s*\)'))
+Check 'menu shader has no global drift or animated ship effects' ($menuFrag -notmatch '\b(?:u_AnimatedFrame|drift|warpDistort|engineFlicker|starLayer|warpCenter|coilWave|enginePlume|dustUv)\b')
+Check 'menu loop has a native capture check' (($appCpp -match 'AppGL::captureMenuCheck') -and ((Read-File 'src/main.cpp') -match '--capture-menu'))
+$menuCapture = [regex]::Match($appCpp, '(?s)int\s+AppGL::captureMenuCheck\([^)]*\)\s*\{.*?\r?\n\}').Value
+Check 'native menu regression compares raw pixels with disk-only changes' (($menuCapture -match '\bglReadPixels\s*\(') -and ($menuCapture -match '\bchangesOutsideMask\s*==\s*0\b') -and ($menuCapture -match '\bchangedPixels\s*>\s*1000\b'))
+Check 'native menu regression samples five phases over the 6.5 second loop' (($menuCapture -match '\bcapture\(0\.0\)') -and ($menuCapture -match '\bcapture\(1\.625\)') -and ($menuCapture -match '\bcapture\(3\.25\)') -and ($menuCapture -match '\bcapture\(4\.875\)') -and ($menuCapture -match '\bcapture\(6\.5\)'))
+Check 'native menu regression logs motion, outside-mask and exact loop differences' (($menuCapture -match 'quarter-difference') -and ($menuCapture -match 'outside-mask') -and ($menuCapture -match 'loop-difference') -and ($menuCapture -match '\bquarterDifference\s*>\s*1000\b') -and ($menuCapture -match '\bloopDifference\s*==\s*0\b'))
+Check 'native menu regression verifies scenic motion, ship immobility and repeat selection' (($menuCapture -match 'ship-changed') -and ($menuCapture -match 'Repeat selection') -and ($menuCapture -match '\boutsideMask\s*==\s*0\b') -and ($menuCapture -match '\bshipChanged\s*==\s*0\b') -and ($menuCapture -match '\brepeatChecks\s*==\s*10\b'))
+Check 'menu backdrop and disk mask retain aspect-ratio cover crop' (($menuFrag -match 'uniform\s+float\s+u_BgAspect\s*;') -and ($menuFrag -match '\bvec2\s+coverScale\s*=') -and ($menuFrag -match '\bimageUv\s*=[^;]*\bcoverScale\b') -and ($menuFrag -match 'texture\s*\(\s*u_BgTex\s*,\s*imageUv\s*\)'))
+Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenuActive\(m_inMenu\)')
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

@@ -643,7 +643,8 @@ std::string saveSerializeSettings(const SaveSettings& s) {
   out += ind(1) + std::string("\"audioProximityCue\": ") +
          (s.audioProximityCue ? "true" : "false") + ",\n";
   out += ind(1) + std::string("\"highContrastReticle\": ") +
-         (s.highContrastReticle ? "true" : "false") + "\n";
+         (s.highContrastReticle ? "true" : "false") + ",\n";
+  out += ind(1) + "\"menuBackground\": " + std::to_string(s.menuBackground) + "\n";
   out += "}\n";
   return out;
 }
@@ -688,6 +689,7 @@ bool saveDeserializeSettings(const std::string& text, SaveSettings& out,
   out.colorblindMode = std::clamp(readInt(root, "colorblindMode", out.colorblindMode), 0, 4);
   out.audioProximityCue = readBool(root, "audioProximityCue", out.audioProximityCue);
   out.highContrastReticle = readBool(root, "highContrastReticle", out.highContrastReticle);
+  out.menuBackground = std::clamp(readInt(root, "menuBackground", out.menuBackground), 0, 4);
   return true;
 }
 
