@@ -269,7 +269,6 @@ class AudioEngine {
 
   // Fade position — ONLY renderFrames owns it; setters/update() never touch it.
   double m_menuBlend = 0.0;
-
   // Состояние шума — ТОЛЬКО аудиопоток (renderFrames), update() не трогает.
   uint32_t m_rng = 0x12345678u;
   float m_brown = 0.0f;
