@@ -39,6 +39,9 @@ void main() {
     float t = (d - 1.05) * 6.0;
     float ring = exp(-t * t);
     col += starCol * ring * 0.8;
+    vec2 q = abs(gl_PointCoord - vec2(0.5)) * 2.0;
+    float spike = exp(-pow(min(q.x, q.y) * 7.0, 2.0)) * (1.0 - smoothstep(0.2, 1.0, d));
+    col += starCol * spike * 0.5;
     col *= v_Tw;
     float a = clamp(disc + ring * 0.5, 0.0, 1.0);
     // v3.0.0: sprite art is display-referred; decode to linear HDR.

@@ -3,6 +3,8 @@
 
 #include "GLCompat.h"
 #include "ObjModel.h"
+
+static unsigned int s_earthMapTex = 0;
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <cmath>
@@ -779,6 +781,7 @@ void SceneManager::updateDockSites() {
     m_dockSites.push_back(DockSite{"dock-soyuz", "Soyuz MS-25 (Roscosmos)", "sol", Vec3(earthPos.x - 0.85, earthPos.y - 0.35, earthPos.z + 1.35), 3.0f});
     m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
     m_dockSites.push_back(DockSite{"dock-probe", "Helios Deep Space Relay", "sol", Vec3(earthPos.x - 1.85, earthPos.y + 0.65, earthPos.z - 2.45), 3.0f});
+    m_dockSites.push_back(DockSite{"dock-aurora", "Aurora Ring Station", "sol", Vec3(earthPos.x - 0.35, earthPos.y + 1.05, earthPos.z + 0.95), 4.0f});
   } else if (m_currentStation->id == "m13") {
     m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
   } else if (m_currentStation->id == "sgra") {
@@ -1507,6 +1510,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(def->radius));
       m_planetShader->setUniformMat4f("u_Model", model);
       m_planetShader->setUniform1i("u_Type", def->type);
+      if (s_earthMapTex == 0) s_earthMapTex = loadBmpTexture("res/models/earth_map.bmp");
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, s_earthMapTex);
+      m_planetShader->setUniform1i("u_EarthMap", 0);
+      m_planetShader->setUniform1i("u_HasEarthMap", s_earthMapTex != 0 ? 1 : 0);
       m_planetShader->setUniform1i("u_Body", def->detail);
       m_planetShader->setUniform1f("u_Seed", def->seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(def->colA.x),
@@ -1611,6 +1619,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       // v3.2.0 editor: surface type from the palette (rock/rocky/moon/gas/
       // star), secondary colour, world radius (ring shadow + close detail).
       m_planetShader->setUniform1i("u_Type", custom.type);
+      if (s_earthMapTex == 0) s_earthMapTex = loadBmpTexture("res/models/earth_map.bmp");
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, s_earthMapTex);
+      m_planetShader->setUniform1i("u_EarthMap", 0);
+      m_planetShader->setUniform1i("u_HasEarthMap", s_earthMapTex != 0 ? 1 : 0);
       m_planetShader->setUniform1i("u_Body", custom.detail);
       m_planetShader->setUniform1f("u_Seed", custom.seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(custom.color.x),
@@ -2477,7 +2490,13 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_stationCoreModel;
           static ObjModel s_stationRingModel;
           static ObjModel s_stationPanelsModel;
+          static ObjModel s_auroraModel;
+          static ObjModel s_auroraCoreModel;
+          static ObjModel s_auroraRingModel;
+          static ObjModel s_auroraPanelsModel;
           static ObjModel s_telescopeModel;
+          static ObjModel s_telescopeMirrorModel;
+          static ObjModel s_telescopeBodyModel;
           static ObjModel s_warpCoreModel;
           static ObjModel s_probeModel;
           static ObjModel s_dragonModel;
@@ -2496,9 +2515,21 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_stationRingModel.shareTexturesFrom(s_stationModel);
             s_stationPanelsModel.load("res/models/station_panels.obj");
             s_stationPanelsModel.shareTexturesFrom(s_stationModel);
+            s_auroraModel.load("res/models/station_aurora.obj");
+            s_auroraModel.loadTextures("res/models/station_aurora");
+            s_auroraCoreModel.load("res/models/station_aurora_core.obj");
+            s_auroraCoreModel.shareTexturesFrom(s_auroraModel);
+            s_auroraRingModel.load("res/models/station_aurora_ring.obj");
+            s_auroraRingModel.shareTexturesFrom(s_auroraModel);
+            s_auroraPanelsModel.load("res/models/station_aurora_panels.obj");
+            s_auroraPanelsModel.shareTexturesFrom(s_auroraModel);
 
             s_telescopeModel.load("res/models/telescope.obj");
             s_telescopeModel.loadTextures("res/models/telescope");
+            s_telescopeMirrorModel.load("res/models/telescope_mirror.obj");
+            s_telescopeMirrorModel.shareTexturesFrom(s_telescopeModel);
+            s_telescopeBodyModel.load("res/models/telescope_body.obj");
+            s_telescopeBodyModel.shareTexturesFrom(s_telescopeModel);
 
             s_warpCoreModel.load("res/models/warp_core.obj");
             s_warpCoreModel.loadTextures("res/models/warp_core");
@@ -2645,20 +2676,31 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customRough = 0.60f;
               emOverride = glm::vec3(0.05f, 0.2f, 0.6f);
             } else if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
-              siteModel = &s_telescopeModel;
               // 2.2-unit model * 0.135 = 0.297 world units. The observatory
               // stays below the 0.38 ISS and the 0.35 warp core, but above
               // the 0.247 Dragon, instead of towering over the station.
               stScale = 0.135f;
               dockRingScale = 0.20f;
               const float effScale = stScale * lodScale;
-              // James Webb Telescope: oriented into deep space, sunshield facing Sol
-              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+              // Sunshield + bus stay sun-oriented; only the optics head slews.
+              const glm::mat4 webbBase = glm::translate(glm::mat4(1.0f), stPos) *
                         glm::rotate(glm::mat4(1.0f), 0.02f * time + 0.785f, glm::vec3(0.0f, 1.0f, 0.0f)) *
                         glm::rotate(glm::mat4(1.0f), 0.25f, glm::vec3(1.0f, 0.0f, 0.0f)) *
                         glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               customMetal = 0.92f;
               customRough = 0.25f;
+              if (s_telescopeMirrorModel.ready() && s_telescopeBodyModel.ready() && s_shipShader) {
+                const glm::mat4 mBody = webbBase;
+                const glm::mat4 mMirror = webbBase *
+                    glm::rotate(glm::mat4(1.0f), 0.18f * std::sin(0.10f * time), glm::vec3(1.0f, 0.0f, 0.0f)) *
+                    glm::rotate(glm::mat4(1.0f), 0.12f * std::sin(0.07f * time + 1.3f), glm::vec3(0.0f, 0.0f, 1.0f));
+                drawStationObjModel(&s_telescopeBodyModel, mBody, customMetal, customRough, emOverride);
+                drawStationObjModel(&s_telescopeMirrorModel, mMirror, customMetal, customRough, emOverride);
+                siteModel = nullptr;
+              } else {
+                siteModel = &s_telescopeModel;
+                stModel = webbBase;
+              }
             } else if ((dock.id == "dock-sgra" || dock.id == "dock-m13") && s_warpCoreModel.ready()) {
               siteModel = &s_warpCoreModel;
               stScale = 0.35f;
@@ -2689,6 +2731,28 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               emOverride = glm::vec3(0.1f, 0.85f, 0.65f) * blink;
               customMetal = 0.80f;
               customRough = 0.28f;
+            } else if (dock.id == "dock-aurora") {
+              // Aurora ring station: modular core + spinning centrifuge + SARJ wings.
+              stScale = 0.045f;
+              dockRingScale = 0.22f;
+              const float effScale = stScale * lodScale;
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              if (s_auroraCoreModel.ready() && s_auroraRingModel.ready() &&
+                  s_auroraPanelsModel.ready() && s_shipShader) {
+                const glm::mat4 mCore = stModel;
+                const glm::mat4 mRing = stModel *
+                    glm::rotate(glm::mat4(1.0f), 0.30f * time, glm::vec3(0.0f, 0.0f, 1.0f));
+                const glm::mat4 mPanels = stModel *
+                    glm::rotate(glm::mat4(1.0f), 0.06f * std::sin(0.05f * time), glm::vec3(0.0f, 1.0f, 0.0f));
+                drawStationObjModel(&s_auroraCoreModel, mCore, customMetal, customRough, emOverride);
+                drawStationObjModel(&s_auroraRingModel, mRing, customMetal, customRough, emOverride);
+                drawStationObjModel(&s_auroraPanelsModel, mPanels, customMetal, customRough, emOverride);
+                siteModel = nullptr;
+              } else {
+                siteModel = s_auroraModel.ready() ? &s_auroraModel : &s_stationModel;
+              }
             } else {
               // Standard orbital space station (ISS): modular hierarchy when
               // available (core + spinning centrifuge ring + SARJ solar wings),
