@@ -104,13 +104,14 @@ constexpr int kTimePacePresetCount = 5;
 class SceneManager {
  public:
   SceneManager();
-  ~SceneManager() = default;
+  ~SceneManager();
 
   SceneManager(const SceneManager&) = delete;
   SceneManager& operator=(const SceneManager&) = delete;
 
   void teleportTo(const std::string& stationId, Camera& camera);
   void render(const Camera& camera, int fbWidth, int fbHeight, float time);
+  bool captureEarthCheck(const std::string& outDir);
 
   const Station* getCurrentStation() const { return m_currentStation; }
   const std::vector<BodyState>& getBodies() const { return m_lastBodies; }
@@ -387,6 +388,9 @@ class SceneManager {
   std::unique_ptr<Shader> m_supernovaShader;
   std::unique_ptr<Shader> m_tdeShader;
   std::unique_ptr<Shader> m_planetShader;
+  unsigned int m_earthMapTex = 0;
+  bool m_earthMapTried = false;
+  void bindEarthMap();
   std::unique_ptr<Shader> m_ringShader;
   std::unique_ptr<Shader> m_cometShader;
   std::unique_ptr<Shader> m_skyShader;

@@ -70,6 +70,7 @@ class AppGL {
   static int captureHudCheck(const std::string& outPath);
   static int captureTerminalCheck(const std::string& outPath);
   static int captureMenuCheck(const std::string& outDir);
+  static int captureEarthCheck(const std::string& outDir);
 
   // === Perf Benchmark Harness === (Stage 4, public entry for CLI)
   void enableBenchmarkMode(float durationSec, const std::string& outPath,

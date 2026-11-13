@@ -246,6 +246,13 @@ Check 'galilean moons and titan' ((($solarCpp -match '"io"') -and ($solarCpp -ma
 Check 'belt density 5200' ($sceneCpp -match 'setBelt\(5200')
 Check 'earth ocean glint' (($planetFrag -match 'glint') -and ($planetFrag -match '1\.0 - land'))
 Check 'sol earth close shots harness' (($appCpp -match 'sol_close') -and ($appCpp -match 'earth_close'))
+Check 'real Earth day map and provenance are packaged' ((Test-Path (Join-Path $root 'res/textures/earth_daymap.jpg')) -and (Test-Path (Join-Path $root 'res/textures/earth_daymap.source.json')) -and ($sceneCpp -match 'res/textures/earth_daymap\.jpg') -and ($sceneCpp -notmatch 'res/models/earth_map\.bmp'))
+Check 'Earth longitude is not mirrored and latitude is north-up' (($planetFrag -match 'atan\(-p\.z, p\.x\)') -and ($planetFrag -match '0\.5 - asin\(clamp\(p\.y'))
+Check 'Earth albedo and land use the same geographic map' (($planetFrag -match 'texture\(u_EarthMap, earthUv\(spN\)\)') -and ($planetFrag -match 'land = surface\.a') -and ($planetFrag -match 'albedo = surface\.rgb'))
+Check 'Earth excludes procedural elevation and close-range noise' (($planetFrag -match 'u_PlanetRelief == 1 && u_Body != 4') -and ($planetFrag -match 'u_Type == 2 && u_Body != 4'))
+Check 'Earth texture is per-scene sRGB with clamped poles' (($sceneH -match 'unsigned int m_earthMapTex') -and ($sceneCpp -match 'GL_SRGB8_ALPHA8') -and ($sceneCpp -match 'GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE') -and ($sceneCpp -match 'SceneManager::~SceneManager'))
+Check 'planet cloud and spot uniforms use floats' (($sceneCpp -match 'setUniform1f\("u_Clouds"') -and ($sceneCpp -notmatch 'setUniform1i\("u_(Clouds|Spot)"'))
+Check 'Earth native regression checks continents and oceans' (($sceneCpp -match 'Earth landmark') -and ($sceneCpp -match 'Earth view') -and ($sceneCpp -match 'first == repeat') -and ($sceneCpp -match 'first != rotated') -and ($sceneCpp -match 'first != cloudy') -and ((Read-File 'src/main.cpp') -match '--capture-earth'))
 Check 'planet radius uniform u_Radius' (($planetFrag -match 'uniform float u_Radius') -and ($sceneCpp -match 'setUniform1f\("u_Radius"'))
 
 # --- v3.2.0 content pass ---

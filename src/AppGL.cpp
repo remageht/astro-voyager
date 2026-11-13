@@ -12356,6 +12356,34 @@ int AppGL::captureTerminalCheck(const std::string& outPath) {
   return ok ? 0 : 1;
 }
 
+int AppGL::captureEarthCheck(const std::string& outDir) {
+  std::filesystem::create_directories(outDir);
+  AppGL app(1600, 1066, false);
+  warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+  warpdrive::setDockSitesVisible(false);
+  app.m_sceneManager->setShowOrbits(false);
+  app.m_sceneManager->setShowBelt(false);
+  app.m_sceneManager->setTimeScale(0.0f);
+  app.m_sceneManager->getSettings().fovDegrees = 35.0f;
+  app.m_sceneManager->teleportTo("sol", app.m_camera);
+  app.m_sceneManager->render(app.m_camera, 1600, 1066, 0.0f);
+  bool found = false;
+  for (const auto& body : app.m_sceneManager->getBodies()) {
+    if (!body.def || body.def->id != "earth") continue;
+    const Vec3& pos = body.pos;
+    const double distance = std::sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+    const double k = 1.0 - body.def->radius * 4.0 / distance;
+    app.m_camera.position = Vec3(pos.x * k, pos.y * k + body.def->radius * 0.4, pos.z * k);
+    app.computeLookYawPitch(app.m_camera.position, pos, app.m_camera.yaw, app.m_camera.pitch);
+    found = true;
+    break;
+  }
+  if (!found) return 1;
+  app.m_sceneManager->render(app.m_camera, 1600, 1066, 0.0f);
+  const bool inGame = app.saveScreenshot(outDir + "/earth_ingame.png") && glGetError() == GL_NO_ERROR;
+  return app.m_sceneManager->captureEarthCheck(outDir) && inGame ? 0 : 1;
+}
+
 int AppGL::captureMenuCheck(const std::string& outDir) {
   std::filesystem::create_directories(outDir);
   AppGL app(1280, 720, true);
