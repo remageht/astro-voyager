@@ -83,6 +83,7 @@ class AppGL {
   void drawMenu();
   void drawMainMenuHero(float screenW, float screenH);
   void drawMainMenuBackground(float screenW, float screenH);
+  void drawFlightBriefingCard(int hoveredOption, float cardW, const Station* curSt);
   void drawVoiceCatalogPage(float areaH);
   void drawHelpContent();
   void drawHelpOverlay();
