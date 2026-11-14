@@ -545,18 +545,13 @@ int AppGL::run() {
     m_window->swapBuffers();
   }
 
-  // Graceful shutdown: мгновенно скрываем окно, чтобы пользователь не наблюдал
-  // подвисший экран во время синхронизации профилей на диск и выгрузки аудиодрайвера.
-  if (m_window && m_window->getNativeWindow()) {
-    glfwHideWindow(m_window->getNativeWindow());
-    glfwPollEvents();
-  }
-
   // === SaveGame === (v3.4.0): автосейв при выходе (тихо, без тостов).
   saveProfileNow(true);
   saveExpeditionFileNow();   // === Expedition === (v3.5.0).
   saveZettelkastenFileNow(); // === Zettelkasten === (v4.8.0).
   saveMissionsFileNow();     // === MissionSystem === (Stage 7 / Roadmap #5).
+
+  m_audio.shutdown();
 
   if (m_benchmarkMode) {
     return m_benchmarkExitCode;
@@ -10345,7 +10340,9 @@ void AppGL::drawMenu() {
               uiRu("Багровый горизонт", "Crimson Horizon"),
               uiRu("Изумрудная туманность", "Emerald Sanctuary"),
               uiRu("Фиолетовый рубеж", "Violet Frontier")};
-          ImGui::Combo(uiRu("Фон", "Background"), &m_menuBackground, backgroundNames, 5);
+          if (ImGui::Combo(uiRu("Фон", "Background"), &m_menuBackground, backgroundNames, 5)) {
+            menuChanged = true;
+          }
           ImGui::TextColored(menuui::kTextDim, "%s",
                              uiRu("Новый фон появится сразу и сохранится вместе с профилем.",
                                   "The new background appears immediately and is saved with your profile."));

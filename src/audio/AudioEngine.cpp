@@ -121,6 +121,10 @@ AudioEngine::AudioEngine() : m_holder(new DeviceHolder()) {
 }
 
 AudioEngine::~AudioEngine() {
+  shutdown();
+}
+
+void AudioEngine::shutdown() {
   if (m_live) {
     ma_device_stop(&m_holder->device);
     ma_device_uninit(&m_holder->device);

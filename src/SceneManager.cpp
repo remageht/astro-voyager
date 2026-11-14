@@ -1608,6 +1608,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_planetShader->setUniform3f("u_CamPos", static_cast<float>(cp.x),
                                  static_cast<float>(cp.y), static_cast<float>(cp.z));
     m_planetShader->setUniform1i("u_PlanetAtmosphere", m_settings.planetAtmosphere ? 1 : 0);
+    bindEarthMap();
     const float fovHalfRad = glm::radians(m_settings.fovDegrees) * 0.5f;
     const float tanFovHalf = std::max(std::tan(fovHalfRad), 1e-4f);
     const float screenProjK = static_cast<float>(fbHeight) / (2.0f * tanFovHalf);
@@ -1643,7 +1644,6 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(def->radius));
       m_planetShader->setUniformMat4f("u_Model", model);
       m_planetShader->setUniform1i("u_Type", def->type);
-      bindEarthMap();
       m_planetShader->setUniform1i("u_Body", def->detail);
       m_planetShader->setUniform1f("u_Seed", def->seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(def->colA.x),
@@ -1748,7 +1748,6 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       // v3.2.0 editor: surface type from the palette (rock/rocky/moon/gas/
       // star), secondary colour, world radius (ring shadow + close detail).
       m_planetShader->setUniform1i("u_Type", custom.type);
-      bindEarthMap();
       m_planetShader->setUniform1i("u_Body", custom.detail);
       m_planetShader->setUniform1f("u_Seed", custom.seed);
       m_planetShader->setUniform3f("u_ColA", static_cast<float>(custom.color.x),

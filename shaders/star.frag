@@ -43,7 +43,7 @@ void main() {
     float spike = exp(-pow(min(q.x, q.y) * 7.0, 2.0)) * (1.0 - smoothstep(0.2, 1.0, d));
     col += starCol * spike * 0.5;
     col *= v_Tw;
-    float a = clamp(disc + ring * 0.5, 0.0, 1.0);
+    float a = clamp(disc + ring * 0.5 + spike * 0.5, 0.0, 1.0);
     // v3.0.0: sprite art is display-referred; decode to linear HDR.
     FragColor = vec4(pow(max(col, vec3(0.0)), vec3(2.2)), a);
   } else {

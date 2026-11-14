@@ -463,8 +463,7 @@ void main() {
         float r1 = fbm5(sp * 70.0 + u_Seed * 3.1);
         float r2 = fbm5(sp * 180.0 + u_Seed * 7.7);
         float r3 = fbm5(sp * 340.0 + u_Seed * 11.3);
-        float rockK = (u_Body == 4) ? mix(0.2, 0.7, land) : 1.0;
-        albedo *= 1.0 + (0.20 * (r1 - 0.5) + 0.12 * (r2 - 0.5) + 0.07 * (r3 - 0.5)) * nearK * rockK;
+        albedo *= 1.0 + (0.20 * (r1 - 0.5) + 0.12 * (r2 - 0.5) + 0.07 * (r3 - 0.5)) * nearK;
       }
     }
   }

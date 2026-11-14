@@ -35,6 +35,9 @@ class AudioEngine {
   AudioEngine(const AudioEngine&) = delete;
   AudioEngine& operator=(const AudioEngine&) = delete;
 
+  // Явное завершение работы аудиоустройства перед выходом
+  void shutdown();
+
   // Ленивая инициализация устройства. Вызывать при ПЕРВОМ вводе
   // пользователя (клик/клавиша). Возвращает true, если устройство живое.
   // false = null-backend (звука нет, но API безопасно, падений нет).
