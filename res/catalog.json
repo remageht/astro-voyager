@@ -70,7 +70,7 @@
       "id": "sol",
       "type": "solar_system",
       "name": "Solar System",
-      "description": "Sun + 8 planets + Moon, rings, belt.",
+      "description": "Sun + 8 planets + Moon, rings, belt. Orbital fleet: Aurora Ring Station, Gateway Shipyard, SpaceX Crew Dragon, Soyuz MS-25, and Webb Observatory.",
       "spawnDistanceRs": 70.0,
       "mass": 0.0
     },
