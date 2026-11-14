@@ -159,6 +159,7 @@ class SceneManager {
   bool showBelt() const { return m_showBelt; }
   void setShowPlanets(bool on) { m_showPlanets = on; }
   bool showPlanets() const { return m_showPlanets; }
+  void bindEarthMap();
 
   // === Ship survival === (v3.3.0): low-shield postfx amounts (0 = off;
   // the screenshot harness never calls this, so its PNGs stay byte-exact).
@@ -390,7 +391,6 @@ class SceneManager {
   std::unique_ptr<Shader> m_planetShader;
   unsigned int m_earthMapTex = 0;
   bool m_earthMapTried = false;
-  void bindEarthMap();
   std::unique_ptr<Shader> m_ringShader;
   std::unique_ptr<Shader> m_cometShader;
   std::unique_ptr<Shader> m_skyShader;

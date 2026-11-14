@@ -284,8 +284,11 @@ void SceneManager::bindEarthMap() {
   }
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_earthMapTex);
-  m_planetShader->setUniform1i("u_EarthMap", 0);
-  m_planetShader->setUniform1i("u_HasEarthMap", m_earthMapTex != 0 ? 1 : 0);
+  if (m_planetShader) {
+    m_planetShader->bind();
+    m_planetShader->setUniform1i("u_EarthMap", 0);
+    m_planetShader->setUniform1i("u_HasEarthMap", m_earthMapTex != 0 ? 1 : 0);
+  }
 }
 
 bool SceneManager::captureEarthCheck(const std::string& outDir) {

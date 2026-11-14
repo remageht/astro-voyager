@@ -209,6 +209,10 @@ int AppGL::run() {
   m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
   // === Loading Screen === (v5.0.8): холодный старт с логами квантовых систем
   m_loadingScreen.startColdBoot();
+  // Предзагрузка реалистичной карты Земли 5400x2700 во время экрана загрузки для исключения 200мс фриза в полёте
+  if (m_sceneManager) {
+    m_sceneManager->bindEarthMap();
+  }
   float lastTime = static_cast<float>(glfwGetTime());
   static float menuAngle = 0.0f;
 
