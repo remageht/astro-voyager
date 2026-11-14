@@ -399,6 +399,7 @@ class AppGL {
   bool m_menuVideoTried = false;
   double m_menuVideoStart = -1.0;
   unsigned int m_menuDiskMaskTex = 0;
+  bool m_menuProceduralDisk = true;
   unsigned int updateMenuVideo(double time);
   void renderMenuBackdrop(int width, int height, double time);
   bool m_hasStartedFlight = false;

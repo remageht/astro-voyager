@@ -50,6 +50,7 @@ struct SaveSettings {
   bool audioProximityCue = true;     // звуковой сигнал при сближении со станцией/посадке
   bool highContrastReticle = false;  // утолщённый высококонтрастный прицел
   int menuBackground = 0;            // 0 animated black hole, 1..4 scenic stills
+  bool menuProceduralDisk = true;    // v5.1.0: процедурный GPU-шейдер диска по умолчанию (0% CPU)
 };
 
 struct SaveCustom {

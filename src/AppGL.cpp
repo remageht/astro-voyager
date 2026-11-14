@@ -9032,6 +9032,7 @@ void AppGL::applySaveSettings(const SaveSettings& s) {
   m_audioProximityCue = s.audioProximityCue;
   m_highContrastReticle = s.highContrastReticle;
   m_menuBackground = std::clamp(s.menuBackground, 0, 4);
+  m_menuProceduralDisk = s.menuProceduralDisk;
   ImGui::GetIO().FontGlobalScale = m_uiScale;
   m_renderCamValid = false;
 }
@@ -9139,6 +9140,7 @@ void AppGL::saveProfileNow(bool quiet) {
   st.audioProximityCue = m_audioProximityCue;
   st.highContrastReticle = m_highContrastReticle;
   st.menuBackground = m_menuBackground;
+  st.menuProceduralDisk = m_menuProceduralDisk;
   const bool settingsOk =
       saveWriteFile(saveSettingsFilePath(), saveSerializeSettings(st), err);
 
@@ -9644,6 +9646,7 @@ void AppGL::requestCloseMenu() {
 }
 
 unsigned int AppGL::updateMenuVideo(double time) {
+  if (m_menuProceduralDisk) return 0;
   constexpr int frameCount = 195;
   constexpr double fps = 30.0;
   if (!m_menuVideoTried) {
@@ -10143,6 +10146,16 @@ void AppGL::drawMenu() {
           ImGui::TextColored(menuui::kTextDim, "%s",
                              uiRu("Новый фон появится сразу и сохранится вместе с профилем.",
                                   "The new background appears immediately and is saved with your profile."));
+          if (m_menuBackground == 0) {
+            ImGui::Spacing();
+            if (ImGui::Checkbox(uiRu("Процедурный GPU-диск (0% CPU)", "Procedural GPU Disk (0% CPU)"),
+                                &m_menuProceduralDisk)) {
+              menuChanged = true;
+            }
+            ImGui::TextColored(menuui::kTextDim, "%s",
+                               uiRu("Шейдерный аккреционный диск на GPU без распаковки 195 JPEG-кадров на CPU.",
+                                    "Procedural GPU accretion disk with zero CPU JPEG decompression overhead."));
+          }
 
           ImGui::Spacing();
           ImGui::SeparatorText(uiRu("Качество графики", "Graphics quality"));
@@ -12389,6 +12402,7 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
   AppGL app(1280, 720, true);
   ImGui::GetIO().IniFilename = nullptr;
   app.m_menuBooting = false;
+  app.m_menuProceduralDisk = false;
   app.audioEnsureOnFirstInput();
   int maskWidth = 0, maskHeight = 0;
   unsigned char* mask = stbi_load("res/textures/main_menu_disk_mask.png", &maskWidth, &maskHeight, nullptr, 1);
