@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "Types.h"
+#include "ColonySystem.h"
 
 namespace astro {
 
@@ -72,7 +73,9 @@ struct SaveProgress {
   std::vector<std::string> unlocked;  // открытые ачивки (id)
   std::vector<std::string> route;     // история маршрута
   // === v3.6.0: колонии ===
-  std::vector<std::string> colonies;  // id колонизированных тел (mars, hercules-b)
+  std::vector<std::string> colonies;
+  ColonyStages colonyStages;
+  int researchPoints = -1;  // Older profiles reconstruct the balance from scanned entries.
   double minBhDistance = 1e9;
   bool exported = false;
   bool imported = false;

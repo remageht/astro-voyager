@@ -8,11 +8,15 @@ Run: blender --background --python blender/scripts/generate_own_craft.py
 """
 import math
 import struct
+import sys
 from pathlib import Path
 
 import bpy
 import numpy as np
 from mathutils import Vector
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import asset_atlas
 
 ROOT = Path(__file__).resolve().parents[2]
 MODELS = ROOT / "res/models"
@@ -33,71 +37,21 @@ MIRROR_PARTS = []
 TAG = ""
 
 
-def write_bmp(path, rgb):
-    height, width, _ = rgb.shape
-    rows = np.clip(rgb * 255.0, 0, 255).astype(np.uint8)[:, :, ::-1]
-    padding = (-width * 3) % 4
-    payload = b"".join(row.tobytes() + b"\0" * padding for row in rows)
-    header = struct.pack("<2sIHHI", b"BM", 54 + len(payload), 0, 0, 54)
-    dib = struct.pack("<IiiHHIIiiII", 40, width, height, 1, 24, 0,
-                      len(payload), 2835, 2835, 0, 0)
-    path.write_bytes(header + dib + payload)
-
-
 def make_atlas(prefix, size=1024, overrides=None):
-    palette = list(PALETTE)
-    if overrides:
-        for slot, val in overrides.items():
-            palette[slot] = val
-    maps = {k: np.zeros((size, size, 3), dtype=np.float32)
-            for k in ("albedo", "rough", "metal", "normal", "emissive")}
-    tile = size // 8
-    yy, xx = np.mgrid[:size, :tile]
-    yy = np.minimum(yy, size - 1 - yy)
-    for slot, (color, rough, metal, emission) in enumerate(palette):
-        x0 = slot * tile
-        region = (slice(None), slice(x0, x0 + tile))
-        for key, value in (("albedo", color), ("rough", rough),
-                           ("metal", metal), ("emissive", emission)):
-            maps[key][region] = value
-        maps["normal"][region] = (0.5, 0.5, 1.0)
-        if slot == 3:
-            grid = (xx % 16 < 1) | (yy % 64 < 2)
-            cells = np.broadcast_to(np.array(color), (size, tile, 3)).copy()
-            cells[grid] = (0.26, 0.36, 0.47)
-            maps["albedo"][region] = cells
-        elif slot == 0:
-            seams = (xx % 64 < 1) | (yy % 128 < 2)
-            panels = np.broadcast_to(np.array(color), (size, tile, 3)).copy()
-            panels[seams] *= 0.62
-            maps["albedo"][region] = panels
-    for key, pixels in maps.items():
-        write_bmp(MODELS / f"{prefix}_{key}.bmp", pixels)
-    material = bpy.data.materials.new(f"{prefix}_PBR")
-    material.use_nodes = True
-    tree = material.node_tree
-    bsdf = tree.nodes.get("Principled BSDF")
-    for key, socket in (("albedo", "Base Color"), ("rough", "Roughness"),
-                        ("metal", "Metallic"), ("emissive", "Emission Color")):
-        image = bpy.data.images.load(str(MODELS / f"{prefix}_{key}.bmp"))
-        if key in ("rough", "metal"):
-            image.colorspace_settings.name = "Non-Color"
-        node = tree.nodes.new("ShaderNodeTexImage")
-        node.image = image
-        tree.links.new(node.outputs["Color"], bsdf.inputs[socket])
-    bsdf.inputs["Emission Strength"].default_value = 3.0
-    return material
+    # Shared flip-safe atlas: square tiles, height-derived normals, mirrored
+    # rows so the game's BMP loader and Blender agree on every material.
+    return asset_atlas.build(f"{prefix}_PBR", PALETTE, MODELS, prefix,
+                             size=size, overrides=overrides,
+                             roles=("panel", "rib", "polished" if prefix == "telescope" else "quilt", "cells",
+                                    "window", "brushed", "recess", "lens"),
+                             seed_base=1500)
 
 
 def finish(obj, slot, smooth=False, bevel=0.008):
     obj.data.materials.append(MATERIAL)
-    uv = obj.data.uv_layers.active or obj.data.uv_layers.new(name="UVMap")
+    asset_atlas.remap_uv(obj, slot)
     for polygon in obj.data.polygons:
         polygon.use_smooth = smooth
-        for index in polygon.loop_indices:
-            coord = uv.data[index].uv
-            coord.x = slot * 0.125 + 0.006 + coord.x * 0.113
-            coord.y = 0.012 + coord.y * 0.976
     if bevel > 0:
         bpy.context.view_layer.objects.active = obj
         mod = obj.modifiers.new("Bevel", "BEVEL")

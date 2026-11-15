@@ -48,6 +48,7 @@ void printUsage() {
                " | --capture-station <png> | --capture-dragon <png> | --capture-zettel <png>"
                " | --capture-hud <png> | --capture-terminal <png> | --capture-menu <dir>"
                " | --capture-earth <dir>"
+               " | --capture-fleet <dir>"
                " | --benchmark [--benchmark-duration <sec>]"
                " [--benchmark-out <path>] [--benchmark-compare <baseline.json>]";
 #endif
@@ -778,6 +779,10 @@ int main(int argc, char** argv) {
   if (arg == "--capture-dragon") {
     std::string outPng = (argc > 2) ? argv[2] : "docs/screens/spacex_dragon_ingame.png";
     return astro::AppGL::captureDragonCheck(outPng);
+  }
+  if (arg == "--capture-fleet") {
+    std::string outDir = (argc > 2) ? argv[2] : "docs/screens/fleet_ingame";
+    return astro::AppGL::captureFleetCheck(outDir);
   }
   if (arg == "--capture-zettel") {
     std::string outPng = (argc > 2) ? argv[2] : "docs/screens/zettelkasten_mind_map.png";

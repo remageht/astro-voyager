@@ -25,6 +25,7 @@ add_executable(astro-voyager
   src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
   src/StoryJournal.cpp  # === StoryJournal === (v3.5.0): бортовой журнал, чистый C++17
   src/Expedition.cpp  # === Expedition === (v3.5.0): сюжетная арка, чистый C++17
+  src/ColonySystem.cpp
   src/ScienceSystem.cpp  # === ScienceSystem === (v4.6.0): спектрометрия, кодекс и радиопереговоры
   src/LandingSystem.cpp  # === LandingSystem === (v4.7.0): посадка на планеты, шасси и отчёты
   src/Zettelkasten.cpp  # === Zettelkasten === (v4.8.0): Второй Мозг Егорки, граф мыслей и истинные концовки
@@ -100,6 +101,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_save.cpp")
   add_executable(test_save
     tests/test_save.cpp
     src/SaveGame.cpp
+    src/ColonySystem.cpp
   )
   target_include_directories(test_save PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
@@ -631,6 +633,23 @@ endif()
 
 if(TARGET test_loading)
   add_test(NAME test_loading COMMAND test_loading)
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_colony.cpp")
+  add_executable(test_colony
+    tests/test_colony.cpp
+    src/ColonySystem.cpp
+  )
+  target_include_directories(test_colony PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_colony PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_colony PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_colony)
+  add_test(NAME test_colony COMMAND test_colony)
 endif()
 
 # Runtime resources next to the binary (double-click launch support):

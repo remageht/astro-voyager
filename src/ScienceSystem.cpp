@@ -429,13 +429,13 @@ bool ScienceCodex::isScanned(const std::string& stationId) const {
   return false;
 }
 
-bool ScienceCodex::scanObject(const std::string& stationId, double timestamp) {
+bool ScienceCodex::scanObject(const std::string& stationId, double timestamp, int bonusPercent) {
   for (auto& e : m_entries) {
     if (e.stationId == stationId) {
       if (!e.scanned) {
         e.scanned = true;
         e.scannedTimestamp = timestamp;
-        m_totalPoints += e.researchPoints;
+        m_totalPoints += e.researchPoints * (100 + std::clamp(bonusPercent, 0, 50)) / 100;
         return true;  // Newly scanned!
       }
       return false;  // Already scanned before

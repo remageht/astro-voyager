@@ -64,6 +64,16 @@ void main() {
   vec3 V = normalize(u_CamPos - v_WorldPos);
 
   if (u_StationPbr > 0.5) {
+    if (u_TexOn == 1) {
+      vec3 nmap = textureLod(u_NormalTex, v_UV, 0.0).xyz * 2.0 - 1.0;
+      vec3 dp1 = dFdx(v_WorldPos), dp2 = dFdy(v_WorldPos);
+      vec2 uv1 = dFdx(v_UV), uv2 = dFdy(v_UV);
+      vec3 a = cross(dp2, n), b = cross(n, dp1);
+      vec3 T = a * uv1.x + b * uv2.x;
+      vec3 B = a * uv1.y + b * uv2.y;
+      float scale = inversesqrt(max(dot(T, T), dot(B, B)) + 1e-12);
+      n = normalize(T * (scale * nmap.x) + B * (scale * nmap.y) + n * nmap.z);
+    }
     vec3 L = normalize(u_KeyDir);
     float NoL = max(dot(n, L), 0.0);
     vec3 earthDir = normalize(vec3(-0.2, -0.9, 0.3));

@@ -434,6 +434,17 @@ std::string saveSerialize(const SaveGame& g) {
   out += ind(2) + "\"colonies\": ";
   writeStrArray(out, g.progress.colonies);
   out += ",\n";
+  out += ind(2) + "\"colonyStages\": [";
+  bool firstColony = true;
+  for (const auto& colony : g.progress.colonyStages) {
+    if (!firstColony) out += ", ";
+    firstColony = false;
+    out += "{\"id\": ";
+    writeEscaped(out, colony.first);
+    out += ", \"stage\": " + std::to_string(colony.second) + "}";
+  }
+  out += "],\n";
+  out += ind(2) + "\"researchPoints\": " + std::to_string(g.progress.researchPoints) + ",\n";
   out += ind(2) + "\"unlocked\": ";
   writeStrArray(out, g.progress.unlocked);
   out += ",\n";
@@ -546,6 +557,17 @@ bool saveDeserialize(const std::string& text, SaveGame& out, std::string& err) {
   if (const JVal* pr = findOf(root, "progress", JVal::Kind::Obj)) {
     readStrArray(*pr, "visited", out.progress.visited);
     readStrArray(*pr, "colonies", out.progress.colonies);
+    if (const JVal* stages = findOf(*pr, "colonyStages", JVal::Kind::Arr)) {
+      for (const auto& value : stages->arr) {
+        if (value.kind != JVal::Kind::Obj) continue;
+        const std::string id = readStr(value, "id", "");
+        if (!colonyWorld(id)) continue;
+        const double stage = readNum(value, "stage", 1);
+        out.progress.colonyStages.emplace(id, static_cast<int>(std::clamp(stage, 1.0, static_cast<double>(kColonyStageCount))));
+      }
+    }
+    normalizeColonies(out.progress.colonies, out.progress.colonyStages);
+    out.progress.researchPoints = static_cast<int>(std::clamp(readNum(*pr, "researchPoints", -1), -1.0, 1000000000.0));
     readStrArray(*pr, "unlocked", out.progress.unlocked);
     readStrArray(*pr, "route", out.progress.route);
     out.progress.minBhDistance = readNum(*pr, "minBhDistance", out.progress.minBhDistance);

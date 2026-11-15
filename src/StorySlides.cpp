@@ -565,95 +565,186 @@ int slideIndexForFinale(int choice) {
 }
 
 // v4.0 prologue of the "New Game / Adventure" slot: Egorka's own path.
-// v4.0 prologue of the "New Game / Adventure" slot: Egorka's own path.
 // Photos live in res/story/ (jpg/png, stb_image); art slides reuse the table.
 const std::vector<StorySlide>& storyPrologueSlides() {
   static const std::vector<StorySlide> slides = [] {
     std::vector<StorySlide> s;
-    s.push_back(StorySlide{  // 0: The Encounter in Paris
-        "Париж. Дождливый вечер на набережной Сены. Пространство с треском "
-        "вскрылось синим порталом: навстречу шагнул странник в звёздном плаще — "
-        "Егорка из Пятой Вселенной с пульсирующей сингулярностью в руке.",
-        "Paris. A rainy night by the Seine. Spacetime tore open with a crackling "
-        "blue portal: a traveler in a starlight cloak stepped forward — older "
-        "Egorka from the Fifth Universe, holding a pulsing singularity.",
+    s.push_back(StorySlide{  // 0: Act 1 - Peaceful Paris & Stargazing Dreams
+        "Париж. Мирный осенний вечер на набережной Сены. В окнах мансарды отражаются "
+        "тёплые огни кафе «De Paris», а над старыми крышами зажигаются первые звёзды. "
+        "Молодой студент политеха Егорка проводил ночи за чертежами и подержанным телескопом: "
+        "«Мы не останемся в колыбели навсегда. Наступит день — и человечество шагнёт за край "
+        "Солнечной системы». Никто вокруг не воспринимал эти слова всерьёз.",
+        "Paris. A peaceful autumn evening on the banks of the Seine. Warm lights of "
+        "Cafe de Paris reflect in the attic windows, while the first stars ignite above old rooftops. "
+        "Young polytechnic student Egorka spent his nights over schematics and a secondhand telescope: "
+        "\"We will not stay in the cradle forever. One day, humanity will step beyond the edge "
+        "of the Solar System.\" Nobody around took his words seriously.",
+        0, "res/story/paris_peace.jpg"});
+    s.push_back(StorySlide{  // 1: Act 2 - The Tear in Spacetime
+        "Год спустя. Дождливая ноябрьская ночь на набережной. Воздух внезапно запах "
+        "озоном и жжёной медью; уличные фонари затрещали и погасли. Ткань пространства "
+        "с сухим громоподобным треском раскололась лазурным порталом: из сияющего вихря "
+        "искривлённой метрики шагнул человек в тёмном герметичном комбинезоне со светящимся "
+        "хроно-компасом в руке.",
+        "A year later. A rain-drenched November night by the Seine. The air suddenly smelled "
+        "of ozone and scorched copper; streetlamps flickered and died. Spacetime ruptured "
+        "with a dry, thunderous crack into an azure portal: from the swirling vortex of curved "
+        "metric stepped a traveler in a dark pressure suit, holding a glowing chrononavigational compass.",
         0, "res/story/01_paris_portal.jpg"});
-    s.push_back(StorySlide{  // 1: The Secret of Antimatter
-        "«Ваш варп-проект застрял, потому что ищут отрицательную массу. "
-        "Нужен асимметричный резонатор Казимира: аннигиляция антиматерии создаёт "
-        "когерентный сдвиг вакуума, локально опуская плотность энергии ниже нуля. "
-        "Не антигравитация, Егорка. Инженерия метрики».",
-        "\"Your warp project stalled hunting for negative mass. You need an "
-        "asymmetric Casimir cavity: antimatter annihilation creates a coherent "
-        "vacuum shift, driving energy density below zero. Not antigravity, "
-        "Egorka. Spacetime engineering\".",
+    s.push_back(StorySlide{  // 2: Act 3 - Handover of the Casimir Key
+        "Странник поднял забрало: лицо было старше, изрезано космическим ультрафиолетом, "
+        "но это был... он сам. «Слушай внимательно, у меня меньше двух минут. Все ваши теории "
+        "варп-привода зашли в тупик, потому что физики ищут экзотическую отрицательную массу. "
+        "Её нет в природе. Нужен асимметричный резонатор Казимира: аннигиляция антивещества "
+        "создаёт локальный сдвиг квантового вакуума, опуская плотность энергии ниже нуля. "
+        "Не толкай корабль, Егорка. Согни само пространство перед ним». Он вложил в ладонь юноши "
+        "пульсирующий кулон из гиперсплава.",
+        "The traveler raised his visor: the face was older, weathered by cosmic ultraviolet, "
+        "yet unmistakably... himself. \"Listen carefully, I have under two minutes. Your warp theories "
+        "stalled because physicists hunt for exotic negative mass. It does not exist in nature. "
+        "What you need is an asymmetric Casimir cavity: antimatter annihilation creates a localized "
+        "quantum vacuum shift, dropping energy density below zero. Don't push the ship, Egorka. "
+        "Bend spacetime itself ahead of the bow.\" He pressed a pulsing hyper-alloy pendant into the youth's palm.",
         0, "res/story/02_pendant_handover.jpg"});
-    s.push_back(StorySlide{  // 2: Decoding the Metric in the Attic
-        "«Портал нестабилен — у меня две минуты. Не жди, пока станешь великим. "
-        "Начни, пока ты всё ещё троечник с несданной домашкой. Именно такие "
-        "люди уводят корабли за горизонт... И да: выключи автопилот, он ужасно зануден». "
-        "Ночи на чердаке под шум дождя превратили фантастику в уравнения.",
-        "\"The portal is unstable — I have two minutes. Don't wait until you "
-        "are great. Start while you are still a C-student with overdue homework. "
-        "Those are the ones who steer ships beyond horizons... And turn off "
-        "the autopilot, it is dreadfully boring\". Nights in the attic under rain turned fantasy into equations.",
+    s.push_back(StorySlide{  // 3: Act 4 - The Attic Equations
+        "«И ещё: не жди, пока станешь великим академиком. Начинай сейчас, пока ты всё ещё дерзкий "
+        "троечник, не знающий слова „невозможно“». Портал схлопнулся, оставив на асфальте круг "
+        "оплавленного камня. Месяцы на чердаке под стук парижского дождя превратили интуицию "
+        "в строгие тензорные уравнения. На школьной доске родилась математическая модель "
+        "локального искривления метрики пространства-времени без парадоксов теории относительности.",
+        "\"And one more thing: don't wait until you become an eminent academic. Start now, while "
+        "you are still a daring C-student who doesn't believe in the word 'impossible'.\" The rift "
+        "collapsed, leaving a ring of vitrified asphalt. Months in the attic under the drum of Parisian "
+        "rain forged intuition into rigorous tensor equations. On an old chalkboard, the mathematical "
+        "framework for localized spacetime curvature without relativistic paradoxes was born.",
         0, "res/story/03_attic_equation.jpg"});
-    s.push_back(StorySlide{  // 3: The Crisis & The Global Scientific Council
-        "Годы спустя. Солнце тускнело, покрывая планету багровой тенью холода. "
-        "Совет учёных объявил варп невозможным: без отрицательной массы человечество обречено замерзнуть. "
-        "Егорка вышел к трибуне и зажёг проекцию: «Масса положительна. Но плотность вакуума поддаётся кривизне».",
-        "Years later. The Sun dimmed, casting a crimson chill over the continents. "
-        "The Science Council declared interstellar flight impossible: without negative mass, humanity was doomed to freeze. "
-        "Egorka stepped to the podium and lit the projection: \"The mass is positive. But vacuum density yields to curvature\".",
+    s.push_back(StorySlide{  // 4: Act 5 - The Dying Sun & Global Freeze
+        "Прошли годы, и пророчество странника сбылось. Спектральная светимость Солнца начала "
+        "необратимо падать: ядерный синтез в ядре дал необъяснимый квантовый сбой. Ледники двинулись "
+        "на юг, набережные Сены сковало чёрным льдом, а небо затянуло багровой дымкой остывающего "
+        "светила. Земля умирала от холода: расчёты климатологов давали цивилизации не более двух "
+        "поколений до полного вымерзания биосферы.",
+        "Years passed, and the traveler's grim prophecy came to pass. The Sun's spectral output began "
+        "an irreversible decay: core fusion suffered an unexplained quantum damping. Glaciers crept "
+        "southward, the Seine froze under black ice, and the sky turned into the crimson twilight "
+        "of a cooling star. Earth was freezing to death: climatologists gave civilization less than "
+        "two generations before the biosphere perished.",
+        0, "res/story/paris_burn.jpg"});
+    s.push_back(StorySlide{  // 5: Act 6 - The Council & The Heresy
+        "На Всемирном Научном Консилиуме царило отчаяние. Главы комиссий предлагали рыть подземные "
+        "геотермальные бункеры и консервировать генофонд: «Межзвёздные перелёты на досветовой тяге "
+        "займут тысячи лет, а варп-двигатель требует энергии целой галактики». Егорка шагнул к трибуне "
+        "и активировал голографический проектор. Формулы Казимира зажглись в воздухе: «Ваша геометрия "
+        "статична. С миллиграммами антиматерии в нано-резонаторе мы можем свернуть парсек пространства "
+        "в ленту Мёбиуса. Мы полетим к другим звёздам — или замёрзнем здесь».",
+        "Despair reigned at the World Science Council. Commission chairs argued for underground "
+        "geothermal bunkers and cryogenic vaults: \"Sub-light arks will take millennia, and warp drives "
+        "require the mass of an entire galaxy.\" Egorka stepped to the podium and engaged his holographic "
+        "projector. Casimir tensors ignited in the air: \"Your geometry is static. With mere milligrams "
+        "of antimatter inside a resonant cavity, we can compress a parsec into a Mobius strip. "
+        "We reach the stars — or freeze in the dark\".",
         0, "res/story/04_council_crisis.jpg"});
-    s.push_back(StorySlide{  // 4: Meeting Mia Sato in the Hangar
-        "В пустом ангаре космодрома его ждала Мия Сато — лучший пилот-испытатель корпуса. "
-        "Она смотрела на звёздную голограмму в его руке: «Все называют тебя сумасшедшим. "
-        "Но если твой резонатор удержит геометрию пузыря — я выведу нас в открытый космос. Мы сделаем это вместе».",
-        "In the empty hangar, Mia Sato awaited him — the fleet's finest test pilot. "
-        "She gazed at the stellar hologram in his hand: \"Everyone calls you mad. "
-        "But if your cavity holds the bubble geometry — I will fly us through the horizon. We do this together\".",
+    s.push_back(StorySlide{  // 6: Act 7 - Meeting Test Pilot Mia Sato
+        "Идею назвали опасной ересью, но в полночь у ангара космодрома его ждала Мия Сато — легендарный "
+        "пилот-испытатель экспериментальной авиации, отстранённая начальством за отказ смириться "
+        "с гибелью планеты. Она внимательно изучила трёхмерный расчёт гравитационного градиента: "
+        "«Теоретики боятся того, чего не могут пощупать руками. Если твои магнитные катушки удержат пузырь "
+        "без приливного разрыва — я подниму эту машину в небо. Мы сделаем это вместе».",
+        "The council branded the theory dangerous heresy, but at midnight near the spaceport hangars, "
+        "Mia Sato waited for him. The elite test pilot, grounded by command for refusing to accept "
+        "extinction, studied the 3D gravitational gradient: \"Theoreticians fear what they cannot "
+        "touch with their hands. If your magnetic coils hold the bubble without tidal shear — I will fly "
+        "this machine to the stars. We will do this together\".",
         0, "res/story/05_mia_hangar.jpg"});
-    s.push_back(StorySlide{  // 5: Orbital Shipyard Assembly
-        "На околоземной верфи в невесомости ожили титановые стапели. Снопы плазменных искр "
-        "озаряли ночную сторону Земли: инженеры монтировали сдвоенные кольца резонатора "
-        "вокруг корпуса Astro-Voyager, заряжая магнитные ловушки антивеществом.",
-        "In the zero-gravity orbital shipyard, titanium gantries roared to life. Cascades of plasma sparks "
-        "lit Earth's night side: engineers mounted the dual resonator rings "
-        "around Astro-Voyager's hull, charging magnetic traps with antimatter.",
+    s.push_back(StorySlide{  // 7: Act 8 - The Simulator & Steering Silence
+        "Полгода каторжных тренировок в шестиосевом варп-симуляторе. Перегрузки в центрифуге "
+        "сменялись леденящей невесомостью. Мия учила Егорку слушать отклик привода кончиками пальцев: "
+        "«Варп-корабль не толкает газы назад, как ракета. Он скользит по искусственному наклону метрики. "
+        "Ты управляешь не тягой, Егорка, а абсолютной тишиной. Одно неверное движение интерферометра — "
+        "и приливные силы разорвут корпус на атомы». На тринадцатой симуляции траектория легла в идеальный коридор.",
+        "Six months of grueling training in the six-axis warp simulator. Centrifuge g-forces alternated "
+        "with chilling zero-g. Mia taught Egorka to read drive harmonics through fingertips: \"A warp ship "
+        "does not push reaction mass like a rocket. It surfs an artificial slope of metric curvature. "
+        "You don't steer thrust, Egorka — you steer absolute silence. One twitch on the interferometer, "
+        "and tidal gradients will tear the hull into atoms.\" On the thirteenth run, their trajectory locked "
+        "into a flawless corridor.",
+        0, "res/story/05_egorka_cockpit.png"});
+    s.push_back(StorySlide{  // 8: Act 9 - Orbital Shipyard Construction
+        "На околоземной верфи ожили исполинские стапели. Лучшие инженеры, поверившие в проект, "
+        "работали в три смены в открытом космосе. Снопы плазменных сварочных дуг озаряли тёмную сторону "
+        "планеты: вокруг композитного корпуса «Астронавигатора» монтировались титановые тороидальные кольца "
+        "генераторов Алькубьерре. В криогенные ловушки бережно закачивали первые граммы позитронов и антипротонов.",
+        "At the orbital shipyard, colossal construction gantries roared to life. Humanity's finest "
+        "engineers who believed in the dream worked around the clock in hard vacuum. Plasma welding arcs "
+        "illuminated Earth's night side: dual titanium toroidal Alcubierre rings were anchored around "
+        "Astro-Voyager's composite hull. The first precious grams of positrons and antiprotons were "
+        "chilled and loaded into superconducting magnetic traps.",
         0, "res/story/06_shipyard_assembly.jpg"});
-    s.push_back(StorySlide{  // 6: Astro-Voyager Awakens in Orbit
-        "Колосс пробудился. Двойные тороидальные кольца варп-двигателя вспыхнули "
-        "фиолетовой плазмой антиматерии. Отрицательная плотность энергии зафиксирована. "
-        "Впервые в истории корабль стал готов согнуть пространство перед собой.",
-        "The colossus awoke. The dual toroidal warp rings flared with "
-        "violet antimatter plasma. Negative energy density secured. "
-        "For the first time in history, a ship was ready to bend spacetime ahead of its bow.",
+    s.push_back(StorySlide{  // 9: Act 10 - The Last Watch & Fleet Farewell
+        "Перед генеральным пуском корабль ошвартовался у исторического причала Международной станции. "
+        "У шлюза их встретили ветераны космонавтики — командор Марк Хейл и доктор Елена Ростова. "
+        "Марк положил руку на шлем Мии: «Восемь миллиардов душ смотрят сегодня на ваши варп-кольца. "
+        "Если найдёте новый мир у далёких звёзд — зажгите маяк. Если нет — знайте, что вы дали нам "
+        "право гордиться тем, что мы люди». За бронестеклом сияла беззащитная голубая колыбель Земли.",
+        "Before final departure, the vessel docked at the historic berth of the International Station. "
+        "Spacefarer veterans Cmdr. Mark Hale and Dr. Elena Rostova greeted them at the airlock. Mark placed "
+        "a hand on Mia's helmet: \"Eight billion souls are gazing up at your warp rings tonight. "
+        "If you find a new home among distant suns — light the beacon. If you don't — know that you gave "
+        "humanity the right to die proud of who we were.\" Beyond the viewport glowed the fragile blue cradle of Earth.",
+        0, "res/story/06_last_watch.png"});
+    s.push_back(StorySlide{  // 10: Act 11 - Awakening the Singularity Core
+        "«Астронавигатор-1» отдал швартовы и вышел на исходную точку над экватором. Магнитные захваты "
+        "расцепились. В глубине машинного отсека взвыли инжекторы: асимметричный резонатор Казимира замкнул "
+        "квантовый контур. Двойные кольца вспыхнули ослепительным фиолетово-лазурным черенковским сиянием "
+        "антивещества. Плотность энергии на внешней кромке упала ниже нуля: пространство вокруг корабля "
+        "зарябило, как воздух над раскалённой пустыней.",
+        "AstroNavigator-1 cast off her moorings and drifted to the departure coordinates above the equator. "
+        "Docking clamps released. Deep within the engineering deck, the injectors screamed: the asymmetric "
+        "Casimir cavity locked its quantum circuit. The twin rings flared with blinding violet-azure Cherenkov "
+        "radiance. Energy density along the outer boundary plunged below zero: space around the ship rippled "
+        "like heat mirages above a desert.",
         0, "res/story/07_ship_orbit.jpg"});
-    s.push_back(StorySlide{  // 7: Command Bridge Departure
-        "Панорамный мостик. В огромном фонаре кабины тихо сияет полумесяц Земли. "
-        "Мия переводит маневровые в боевой режим: «Сингулярный резонатор на 99.8% мощности. Курс за пределы системы». "
-        "Егорка касается кулона на груди: «Мы не стали ждать, пока станем великими. Пора».",
-        "The panoramic bridge. In the canopy, Earth's crescent glows in quiet silence. "
-        "Mia switches the drives to standby: \"Singularity cavity locked at 99.8%. Trajectory set beyond the system\". "
-        "Egorka touches the pendant on his chest: \"We didn't wait until we were great. It's time\".",
+    s.push_back(StorySlide{  // 11: Act 12 - On the Command Bridge
+        "Панорамный мостик. В огромном фонаре кабины тихо тает серебряный серп Земли. Мия перевела "
+        "маневровые контуры в боевой режим, её пальцы лежали на рычагах пространственной геометрии: "
+        "«Резонатор синхронизирован на 99.8%. Метрика стабильна. Курс проложен к сверхмассивной чёрной дыре "
+        "в сердце Галактики». Егорка коснулся звёздного кулона на груди и улыбнулся: «Автопилот выключен, "
+        "капитан. Мы не стали ждать, пока станем великими. Пора».",
+        "The panoramic command bridge. In the sprawling canopy, the silver crescent of Earth silently receded. "
+        "Mia engaged the spatial thrusters, fingers firm on the metric control yokes: \"Cavity synchronized "
+        "at 99.8%. Bubble geometry stable. Trajectory locked toward the supermassive black hole at the Galactic Core.\" "
+        "Egorka touched the star pendant on his chest and smiled: \"Autopilot off, Captain. We didn't wait until "
+        "we were great. It's time\".",
         0, "res/story/08_bridge_departure.jpg"});
-    s.push_back(StorySlide{  // 8: Warp Factor 9 - Spacetime Jump (Ship Flies Away)
-        "Варп-фактор 9. Корабль не летит — он договаривается с пространством, "
-        "чтобы расстояние перестало быть наглым. Вспышка сине-фиолетовой плазмы, метрика сминается в гармошку, "
-        "и звёзды вытягиваются в синие нити. «Астронавигатор-1» уходит в неизведанную Вселенную!",
-        "Warp factor 9. The ship doesn't fly — it negotiates with spacetime "
-        "so distance stops being insolent. A blinding Cherenkov flare, space folds like origami, "
-        "and stars stretch into brilliant azure threads. AstroNavigator-1 hurtles into the unknown!",
+    s.push_back(StorySlide{  // 12: Act 13 - Warp Factor 9: Folding the Void
+        "Варп-фактор 9! Корабль не сдвинулся с места в своей локальной системе отсчёта — пространство "
+        "перед носом сжалось в гармошку, а позади расширилось с немыслимой скоростью. Ослепительная квантовая "
+        "вспышка сорвала темноту; видимый спектр звёзд растянулся в радужные релятивистские кольца и лазурные "
+        "нити. «Астронавигатор-1» преодолел световой барьер и устремился в неизведанную Вселенную!",
+        "Warp Factor 9! The ship did not move within its local reference frame — instead, spacetime ahead "
+        "collapsed into origami folds while expanding behind at unimaginable velocity. A blinding Cherenkov "
+        "shockwave tore the void; the visible starfield bent into kaleidoscopic relativistic rings and azure "
+        "threads. AstroNavigator-1 shattered the speed of light and plunged into the unknown cosmos!",
         0, "res/story/09_warp_jump_cinema.jpg"});
-    s.push_back(StorySlide{  // 9: Cinematic Warp Flight Animation
-        "Разрывая пустоту, Astro-Voyager устремляется сквозь искривлённое "
-        "пространство. Гравитационные кольца ревут на пике мощности: "
-        "горизонт событий позади, впереди — неизведанные глубины космоса.",
-        "Tearing through the void, the Astro-Voyager hurtles across warped "
-        "space. Gravitational rings roar at peak power: the event horizon "
-        "behind, the uncharted depths of the cosmos ahead.",
+    s.push_back(StorySlide{  // 13: Act 14 - The Hyperspace Flight Chrysalis
+        "Разрывая пустоту, Astro-Voyager несётся сквозь искривлённый гиперпространственный коридор. "
+        "Гравитационные кольца ревут на пике квантовой мощности: солнечная колыбель осталась позади, "
+        "впереди — гравитационные бездны, квазары и надежда на спасение человечества.",
+        "Tearing through the void, Astro-Voyager hurtles through the warped hyperspace corridor. "
+        "Gravitational rings roar at peak quantum harmonics: the solar cradle lies far behind, ahead "
+        "lie gravitational chasms, quasars, and the salvation of mankind.",
         0, "", "res/story/warp_flight-frames"});
+    s.push_back(StorySlide{  // 14: Act 15 - Arrival at the Sol Gateway
+        "Выход из варпа на рубежах Солнечной системы. Метрика выравнивается, звёздные нити вновь "
+        "обретают покой. Перед экипажем открывается панорама родного дома и орбитальной станции: "
+        "Мие и Егорке предстоит провести финальную диагностику систем и проложить вектор к центру "
+        "Галактики. Бортовой журнал открыт — клавиша J запишет каждый шаг экспедиции!",
+        "Dropout from warp at the frontier of the Solar System. The metric flattens, stellar threads "
+        "settle into tranquil points of light. Before the crew stretches the panorama of home and "
+        "the orbital gateway: Mia and Egorka must run final system diagnostics and chart the vector "
+        "to the Galactic Core. The mission log is open — key J will record every step of the expedition!",
+        6});
     return s;
   }();
   return slides;

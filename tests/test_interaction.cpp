@@ -610,6 +610,39 @@ int main() {
       std::cerr << "Test 22 failed: res/story/finale_fifth_alliance.jpg must be a valid non-empty image\n";
       return 1;
     }
+
+    // 5. Verification of all expanded 15-act prologue visual assets
+    const std::vector<std::string> prologueAssets = {
+        "paris_peace.jpg",
+        "01_paris_portal.jpg",
+        "02_pendant_handover.jpg",
+        "03_attic_equation.jpg",
+        "paris_burn.jpg",
+        "04_council_crisis.jpg",
+        "05_mia_hangar.jpg",
+        "05_egorka_cockpit.png",
+        "06_shipyard_assembly.jpg",
+        "06_last_watch.png",
+        "07_ship_orbit.jpg",
+        "08_bridge_departure.jpg",
+        "09_warp_jump_cinema.jpg",
+        "warp_flight-frames/frame_001.jpg"
+    };
+
+    for (const auto& relPath : prologueAssets) {
+      std::filesystem::path p = std::filesystem::path("res/story") / relPath;
+      if (!std::filesystem::exists(p)) {
+        p = std::filesystem::path("../res/story") / relPath;
+      }
+      if (!std::filesystem::exists(p)) {
+        std::cerr << "Test 22 failed: prologue asset missing: " << p << "\n";
+        return 1;
+      }
+      if (std::filesystem::file_size(p) < 1000) {
+        std::cerr << "Test 22 failed: prologue asset corrupted/empty: " << p << "\n";
+        return 1;
+      }
+    }
   }
 
   std::cout << "All BlackHoleInteraction tests passed!\n";

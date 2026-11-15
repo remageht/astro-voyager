@@ -66,6 +66,7 @@ class AppGL {
   static int captureAllScreenshots(const std::string& outDir = "docs/screens", bool diskOn = false);
   static int captureStationCheck(const std::string& outPath);
   static int captureDragonCheck(const std::string& outPath);
+  static int captureFleetCheck(const std::string& outDir);
   static int captureZettelCheck(const std::string& outPath);
   static int captureHudCheck(const std::string& outPath);
   static int captureTerminalCheck(const std::string& outPath);
@@ -93,6 +94,10 @@ class AppGL {
   // === Science & Radio Chatter === (v4.6.0)
   void drawSpectrometer();
   void drawCodex();
+  void drawColonies();
+  bool foundColony(const std::string& id);
+  bool upgradeColony(const std::string& id);
+  void updateColonyEconomy(float dt);
   void drawBridgeCommsToast();
   void checkBridgeCommsTriggers(const std::string& stationId);
   // === Planetary Landing & Surface Operations === (v4.6.1)
@@ -443,9 +448,13 @@ class AppGL {
   // сайта включает подсказку [C], колония сохраняется в профиль и горит
   // кольцом-маркером в сцене.
   std::vector<std::string> m_colonies;
+  ColonyStages m_colonyStages;
+  bool m_coloniesOpen = false;
+  std::string m_selectedColony = "mars";
   bool m_prevCPressed = false;
   std::string m_colonyHint;    // имя сайта в радиусе посадки ("" = нет)
   std::string m_colonyHintId;  // id сайта для hotkey
+  double m_lastPassiveColonyTime = 0.0;
   // === Science & Radio Chatter === (v4.6.0)
   ScienceCodex m_codex;
   BridgeComms m_bridgeComms;

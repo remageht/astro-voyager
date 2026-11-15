@@ -817,8 +817,8 @@ void SceneManager::initCluster() {
 }
 
 bool SceneManager::hasColony(const std::string& id) const {
-  return std::find(m_colonies.begin(), m_colonies.end(), id) !=
-         m_colonies.end();
+  if (std::find(m_colonies.begin(), m_colonies.end(), id) != m_colonies.end()) return true;
+  return colonyStage(m_colonyStages, id) > 0;
 }
 
 const std::vector<SceneManager::M31BrightStar>& SceneManager::galaxyBrightStars() const {
@@ -906,15 +906,27 @@ void SceneManager::updateDockSites() {
   }
   if (m_currentStation->id == "sol") {
     Vec3 earthPos(0.0, 0.0, 10.0);
+    Vec3 marsPos(0.0, 0.0, 17.0);
+    Vec3 moonPos(0.0, 0.0, 11.3);
+    Vec3 voyagerPos(0.0, 0.0, 55.0);
     for (const auto& b : m_lastBodies) {
-      if (b.def && b.def->id == "earth") { earthPos = b.pos; break; }
+      if (!b.def) continue;
+      if (b.def->id == "earth") earthPos = b.pos;
+      else if (b.def->id == "mars") marsPos = b.pos;
+      else if (b.def->id == "moon") moonPos = b.pos;
+      else if (b.def->id == "voyager1") voyagerPos = b.pos;
     }
     m_dockSites.push_back(DockSite{"dock-sol", "Gateway Orbital Shipyard", "sol", Vec3(earthPos.x + 0.35, earthPos.y + 0.25, earthPos.z + 0.65), 4.5f});
     m_dockSites.push_back(DockSite{"dock-dragon", "SpaceX Crew Dragon (Endeavour)", "sol", Vec3(earthPos.x + 0.85, earthPos.y - 0.45, earthPos.z + 1.25), 3.0f});
     m_dockSites.push_back(DockSite{"dock-soyuz", "Soyuz MS-25 (Roscosmos)", "sol", Vec3(earthPos.x - 0.85, earthPos.y - 0.35, earthPos.z + 1.35), 3.0f});
     m_dockSites.push_back(DockSite{"dock-webb", "Webb Deep Space Observatory", "sol", Vec3(earthPos.x + 1.25, earthPos.y + 0.35, earthPos.z + 1.75), 3.5f});
     m_dockSites.push_back(DockSite{"dock-probe", "Helios Deep Space Relay", "sol", Vec3(earthPos.x - 1.85, earthPos.y + 0.65, earthPos.z - 2.45), 3.0f});
+    m_dockSites.push_back(DockSite{"dock-voyager", "Voyager 1 Interstellar Probe", "sol", Vec3(voyagerPos.x + 0.16, voyagerPos.y + 0.05, voyagerPos.z + 0.10), 2.0f});
     m_dockSites.push_back(DockSite{"dock-aurora", "Aurora Ring Station", "sol", Vec3(earthPos.x - 0.35, earthPos.y + 1.05, earthPos.z + 0.95), 4.0f});
+    m_dockSites.push_back(DockSite{"dock-colony", "O'Neill Ring Colony", "sol", Vec3(earthPos.x - 1.4, earthPos.y - 1.1, earthPos.z + 1.9), 4.0f});
+    m_dockSites.push_back(DockSite{"dock-sail", "Starshot Solar Sail", "sol", Vec3(earthPos.x + 1.9, earthPos.y + 1.3, earthPos.z - 1.2), 3.5f});
+    m_dockSites.push_back(DockSite{"dock-lander", "Artemis Lunar Lander", "sol", Vec3(moonPos.x + 0.4, moonPos.y + 0.3, moonPos.z + 0.5), 3.0f});
+    m_dockSites.push_back(DockSite{"dock-rover", "Perseverance Mars Rover", "sol", Vec3(marsPos.x + 0.5, marsPos.y + 0.3, marsPos.z + 0.4), 3.0f});
   } else if (m_currentStation->id == "m13") {
     m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
   } else if (m_currentStation->id == "sgra") {
@@ -1541,6 +1553,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     float dt = tickSimTime(time);
     m_sol.update(m_simTime);
     m_lastBodies = m_sol.bodies();
+    if (!m_voyagerRelicTried) {
+      m_voyagerRelicTried = true;
+      m_voyagerRelic.load("res/models/voyager.obj");
+      m_voyagerRelic.loadTextures("res/models/voyager");
+    }
     if (!m_paused && dt > 0.0f) updateCustom(dt * m_timeScale);
 
     glm::mat4 proj = glm::perspective(glm::radians(m_settings.fovDegrees), aspect, 0.1f, 1000.0f);
@@ -1616,6 +1633,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     for (const auto& body : m_lastBodies) {
       const PlanetDef* def = body.def;
       if (!def) continue;
+      // Voyager 1 is a probe, not a planet: the relic mesh drawn at dock-voyager
+      // replaces the gold placeholder sphere whenever it is on screen.
+      if (def->id == "voyager1" && m_voyagerRelic.ready() && warpdrive::dockSitesVisible()) {
+        continue;
+      }
       glm::vec3 bpos(static_cast<float>(body.pos.x),
                      static_cast<float>(body.pos.y),
                      static_cast<float>(body.pos.z));
@@ -1804,15 +1826,21 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
 
     // v3.6.0: сайт колонии на Марсе — кольцо-маркер (виден при сближении;
     // AppGL показывает подсказку [C] в hint-радиусе radius*8+2.5).
-    if (hasColony("mars")) {
+    // Registered colony sites in catalog: {"mars", "Mars", "sol"} and {"hercules-b", "Hercules b", "m13"}
+    for (const auto& body : m_lastBodies) {
+      if (body.def && colonyWorld(body.def->id)) {
+        const std::string stId = (body.def->id == "hercules-b") ? "m13" : "sol";
+        m_colonySites.push_back(ColonySite{body.def->id, body.def->name, stId, body.pos, body.def->radius});
+      }
+    }
+    if (hasColony("mars") || !m_colonies.empty() || !m_colonyStages.empty()) {
+      for (const auto& site : m_colonySites) {
+        if (!hasColony(site.id)) continue;
       for (const auto& body : m_lastBodies) {
-        if (body.def && body.def->id == "mars") {
+        if (body.def && body.def->id == site.id) {
           glm::vec3 mpos(static_cast<float>(body.pos.x),
                          static_cast<float>(body.pos.y),
                          static_cast<float>(body.pos.z));
-          m_colonySites.push_back(ColonySite{"mars", "Mars", "sol",
-                                             Vec3(mpos.x, mpos.y, mpos.z),
-                                             1.5f});
           m_ringShader->bind();
           m_ringShader->setUniformMat4f("u_MVP", mvp);
           glm::mat4 ringModel =
@@ -1822,7 +1850,15 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           m_ringShader->setUniform1f("u_Seed", 1.0f);
           m_ringShader->setUniform1f("u_Time", time);
           m_ringShader->setUniform3f("u_Center", mpos.x, mpos.y, mpos.z);
-          m_ringShader->setUniform3f("u_ColA", 1.0f, 0.8f, 0.5f);
+          glm::vec3 ringCol(1.0f, 0.8f, 0.5f);
+          if (site.id == "moon") ringCol = glm::vec3(0.7f, 0.9f, 1.0f);
+          else if (site.id == "europa") ringCol = glm::vec3(0.3f, 0.95f, 1.0f);
+          else if (site.id == "titan") ringCol = glm::vec3(1.0f, 0.85f, 0.25f);
+          else if (site.id == "mercury") ringCol = glm::vec3(1.0f, 0.55f, 0.20f);
+          else if (site.id == "ganymede") ringCol = glm::vec3(0.75f, 0.55f, 1.0f);
+          else if (site.id == "callisto") ringCol = glm::vec3(0.85f, 0.90f, 0.85f);
+          else if (site.id == "hercules-b") ringCol = glm::vec3(1.0f, 0.35f, 0.95f);
+          m_ringShader->setUniform3f("u_ColA", ringCol.x, ringCol.y, ringCol.z);
           m_ringShader->setUniform1f("u_PlanetR", 0.0f);
           glEnable(GL_BLEND);
           glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1832,6 +1868,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         }
       }
     }
+  }
 
     // Halley ion tail: additive ellipsoid oriented anti-sunward.
     {
@@ -2623,11 +2660,18 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_telescopeBodyModel;
           static ObjModel s_warpCoreModel;
           static ObjModel s_probeModel;
+          static ObjModel s_roverModel;
+          static ObjModel s_colonyModel;
+          static ObjModel s_landerModel;
+          static ObjModel s_sailModel;
           static ObjModel s_dragonModel;
           static ObjModel s_soyuzModel;
           static ObjModel s_warpBubbleModel;
           static ObjModel s_warpTunnelModel;
           static ObjModel s_warpDriveVisModel;
+          static ObjModel s_colonyDomeModel;
+          static ObjModel s_colonyFactoryModel;
+          static ObjModel s_colonyPadModel;
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2661,6 +2705,15 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_probeModel.load("res/models/probe.obj");
             s_probeModel.loadTextures("res/models/probe");
 
+            s_roverModel.load("res/models/rover.obj");
+            s_roverModel.loadTextures("res/models/rover");
+            s_colonyModel.load("res/models/colony.obj");
+            s_colonyModel.loadTextures("res/models/colony");
+            s_landerModel.load("res/models/lander.obj");
+            s_landerModel.loadTextures("res/models/lander");
+            s_sailModel.load("res/models/sail.obj");
+            s_sailModel.loadTextures("res/models/sail");
+
             s_dragonModel.load("res/models/dragon.obj");
             s_dragonModel.loadTextures("res/models/dragon");
 
@@ -2675,6 +2728,13 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
 
             s_warpDriveVisModel.load("res/models/warp_drive_vis.obj");
             s_warpDriveVisModel.loadTextures("res/models/warp_drive_vis");
+
+            s_colonyDomeModel.load("res/models/colony_dome.obj");
+            s_colonyDomeModel.loadTextures("res/models/colony_dome");
+            s_colonyFactoryModel.load("res/models/colony_factory.obj");
+            s_colonyFactoryModel.loadTextures("res/models/colony_factory");
+            s_colonyPadModel.load("res/models/colony_pad.obj");
+            s_colonyPadModel.loadTextures("res/models/colony_pad");
           }
 
           glEnable(GL_DEPTH_TEST);
@@ -2684,6 +2744,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           for (const auto& dock : m_dockSites) {
             if (!m_currentStation || dock.stationId != m_currentStation->id) continue;
             glm::vec3 stPos(static_cast<float>(dock.pos.x), static_cast<float>(dock.pos.y), static_cast<float>(dock.pos.z));
+
+            // The procedural fleet is authored Blender-style (up = +Z), while the
+            // game world points up along +Y. Every own-model attitude below starts
+            // from this tip so wheels, legs and dish point the right way.
+            const glm::mat4 ownUpToY(glm::rotate(glm::mat4(1.0f), -1.5707963f,
+                                                 glm::vec3(1.0f, 0.0f, 0.0f)));
 
             // Adaptive distance-based LOD scale: preserves 100% full scale close up for
             // docking corridors, attitude alignment and latching, while scaling down smoothly
@@ -2855,6 +2921,67 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               emOverride = glm::vec3(0.1f, 0.85f, 0.65f) * blink;
               customMetal = 0.80f;
               customRough = 0.28f;
+            } else if (dock.id == "dock-voyager" && m_voyagerRelic.ready()) {
+              siteModel = &m_voyagerRelic;
+              // 3.0-unit probe * 0.10 = 0.30 world units, slightly larger than the
+              // 0.16 sphere it replaces. The LOD squeeze is deliberately skipped
+              // here: the relic sits ~55 units out in the Kuiper belt, where the
+              // curve would shrink it into a sub-pixel dot long before the player
+              // arrives.
+              stScale = 0.10f;
+              dockRingScale = 0.18f;
+              stModel = glm::translate(glm::mat4(1.0f), stPos) * ownUpToY *
+                        glm::rotate(glm::mat4(1.0f), 0.04f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                        glm::rotate(glm::mat4(1.0f), -0.35f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(stScale));
+              // No flat emOverride here: ship.frag adds it to every pixel of the
+              // mesh, so the probe's own emissive atlas carries the RTG glow.
+              customMetal = 0.70f;
+              customRough = 0.35f;
+            } else if (dock.id == "dock-rover" && s_roverModel.ready()) {
+              siteModel = &s_roverModel;
+              stScale = 0.09f;
+              dockRingScale = 0.14f;
+              const float effScale = stScale * lodScale;
+              stModel = glm::translate(glm::mat4(1.0f), stPos) * ownUpToY *
+                        glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              customMetal = 0.55f;
+              customRough = 0.45f;
+            } else if (dock.id == "dock-colony" && s_colonyModel.ready()) {
+              siteModel = &s_colonyModel;
+              stScale = 0.06f;
+              dockRingScale = 0.24f;
+              const float effScale = stScale * lodScale;
+              stModel = glm::translate(glm::mat4(1.0f), stPos) * ownUpToY *
+                        glm::rotate(glm::mat4(1.0f), 0.10f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                        glm::rotate(glm::mat4(1.0f), 0.3f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              // Rim windows come from colony_emissive.bmp; a flat override would
+              // paint the whole torus cyan.
+              customMetal = 0.6f;
+              customRough = 0.4f;
+            } else if (dock.id == "dock-lander" && s_landerModel.ready()) {
+              siteModel = &s_landerModel;
+              stScale = 0.08f;
+              dockRingScale = 0.16f;
+              const float effScale = stScale * lodScale;
+              stModel = glm::translate(glm::mat4(1.0f), stPos) * ownUpToY *
+                        glm::rotate(glm::mat4(1.0f), 0.04f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              customMetal = 0.7f;
+              customRough = 0.35f;
+            } else if (dock.id == "dock-sail" && s_sailModel.ready()) {
+              siteModel = &s_sailModel;
+              stScale = 0.07f;
+              dockRingScale = 0.2f;
+              const float effScale = stScale * lodScale;
+              stModel = glm::translate(glm::mat4(1.0f), stPos) * ownUpToY *
+                        glm::rotate(glm::mat4(1.0f), 0.03f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                        glm::rotate(glm::mat4(1.0f), 0.5f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              customMetal = 0.85f;
+              customRough = 0.15f;
             } else if (dock.id == "dock-aurora") {
               // Aurora ring station: modular core + spinning centrifuge + SARJ wings.
               stScale = 0.045f;
@@ -3087,6 +3214,79 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 m_sphere.draw();
               }
               m_planetShader->unbind();
+            }
+          }
+
+          // === v5.2.0: 3D Planetary Colony Surface Infrastructure ===
+          const glm::mat4 ownUpToY(glm::rotate(glm::mat4(1.0f), -1.5707963f,
+                                               glm::vec3(1.0f, 0.0f, 0.0f)));
+          for (const auto& site : m_colonySites) {
+            if (!m_currentStation || site.stationId != m_currentStation->id) continue;
+            const int st = colonyStage(m_colonyStages, site.id);
+            if (st <= 0 && !hasColony(site.id)) continue;
+
+            const int activeStage = std::max(st, 1);
+            const ColonyEpoch ep = colonyEpoch(activeStage);
+
+            const glm::vec3 planetPos(static_cast<float>(site.pos.x),
+                                      static_cast<float>(site.pos.y),
+                                      static_cast<float>(site.pos.z));
+            const float planetRadius = static_cast<float>(site.radius);
+
+            // Iconic anchor surface normal for each colonized world
+            glm::vec3 surfNormal(0.0f, 1.0f, 0.0f);
+            if (site.id == "mars") surfNormal = glm::normalize(glm::vec3(0.55f, 0.45f, 0.70f));
+            else if (site.id == "moon") surfNormal = glm::normalize(glm::vec3(0.15f, 0.85f, 0.50f));
+            else if (site.id == "europa") surfNormal = glm::normalize(glm::vec3(-0.60f, 0.35f, 0.72f));
+            else if (site.id == "titan") surfNormal = glm::normalize(glm::vec3(0.40f, 0.20f, -0.89f));
+            else if (site.id == "mercury") surfNormal = glm::normalize(glm::vec3(0.70f, 0.65f, 0.28f));
+            else if (site.id == "ganymede") surfNormal = glm::normalize(glm::vec3(-0.50f, 0.70f, -0.51f));
+            else if (site.id == "callisto") surfNormal = glm::normalize(glm::vec3(0.30f, -0.60f, 0.74f));
+            else surfNormal = glm::normalize(glm::vec3(0.0f, 0.707f, 0.707f));
+
+            const glm::vec3 surfPos = planetPos + surfNormal * planetRadius;
+            const float camDist = glm::length(eye - surfPos);
+
+            // Readable scaling both in close approach and orbital perspective
+            const float baseScale = std::max(0.025f, planetRadius * 0.10f);
+            float lodScale = 1.0f;
+            if (camDist > 1.8f) {
+              const float t = glm::clamp((camDist - 1.8f) / 4.0f, 0.0f, 1.0f);
+              lodScale = glm::mix(1.0f, 0.20f, t * t * (3.0f - 2.0f * t));
+            }
+            const float effScale = baseScale * lodScale;
+
+            // Surface tangent space
+            const glm::vec3 upRef = std::abs(surfNormal.y) < 0.90f ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+            const glm::vec3 tangentU = glm::normalize(glm::cross(surfNormal, upRef));
+            const glm::vec3 tangentV = glm::normalize(glm::cross(surfNormal, tangentU));
+
+            glm::mat4 alignMat(1.0f);
+            alignMat[0] = glm::vec4(tangentU, 0.0f);
+            alignMat[1] = glm::vec4(surfNormal, 0.0f);
+            alignMat[2] = glm::vec4(tangentV, 0.0f);
+
+            // Epoch I+: Geodesic Bio-Dome
+            if (s_colonyDomeModel.ready()) {
+              const glm::mat4 mDome = glm::translate(glm::mat4(1.0f), surfPos) * alignMat * ownUpToY *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              drawStationObjModel(&s_colonyDomeModel, mDome, 0.70f, 0.35f, glm::vec3(0.0f));
+            }
+
+            // Epoch II+: Heavy Industrial Smelting Plant
+            if (ep >= ColonyEpoch::Industry && s_colonyFactoryModel.ready()) {
+              const glm::vec3 factPos = surfPos + tangentU * (effScale * 2.8f);
+              const glm::mat4 mFact = glm::translate(glm::mat4(1.0f), factPos) * alignMat * ownUpToY *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(effScale * 0.88f));
+              drawStationObjModel(&s_colonyFactoryModel, mFact, 0.82f, 0.28f, glm::vec3(0.0f));
+            }
+
+            // Epoch III+: Octagonal Planetary Spaceport
+            if (ep >= ColonyEpoch::Society && s_colonyPadModel.ready()) {
+              const glm::vec3 padPos = surfPos + tangentV * (effScale * 3.4f);
+              const glm::mat4 mPad = glm::translate(glm::mat4(1.0f), padPos) * alignMat * ownUpToY *
+                                     glm::scale(glm::mat4(1.0f), glm::vec3(effScale * 0.95f));
+              drawStationObjModel(&s_colonyPadModel, mPad, 0.78f, 0.32f, glm::vec3(0.0f));
             }
           }
         } // end if (warpdrive::dockSitesVisible())

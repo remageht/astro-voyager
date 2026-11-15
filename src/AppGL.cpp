@@ -1707,7 +1707,7 @@ void AppGL::drawSpectrometer() {
       if (ImGui::Button(uiRu("✦ Занести в Кодекс открытий (+100 RP)",
                             "✦ Log to Ship Codex (+100 RP)"), ImVec2(-1, 28.0f))) {
         double now = glfwGetTime();
-        if (m_codex.scanObject(stId, now)) {
+        if (m_codex.scanObject(stId, now, colonyResearchBonus(m_colonyStages))) {
           m_audio.playChime();
           RadioMessage rm;
           rm.id = "scan_" + stId;
@@ -1722,6 +1722,295 @@ void AppGL::drawSpectrometer() {
         }
       }
     }
+  }
+  ImGui::End();
+  if (pushed) ImGui::PopFont();
+}
+
+bool AppGL::foundColony(const std::string& id) {
+  if (!colonyWorld(id) || colonyStage(m_colonyStages, id) != 0) return false;
+  const Station* current = m_sceneManager->getCurrentStation();
+  if (!current) return false;
+  bool nearby = false;
+  for (const auto& site : m_sceneManager->colonySites()) {
+    if (site.id != id || site.stationId != current->id) continue;
+    const Vec3 delta = m_camera.position - site.pos;
+    const double limit = site.radius * 8.0 + 2.5;
+    nearby = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z <= limit * limit;
+  }
+  if (!nearby) return false;
+  m_colonies.push_back(id);
+  m_colonyStages[id] = 1;
+  m_sceneManager->setColonies(m_colonies);
+  m_sceneManager->setColonyStages(m_colonyStages);
+  checkAchievements();
+  saveProfileNow(true);
+  return true;
+}
+
+bool AppGL::upgradeColony(const std::string& id) {
+  int points = m_codex.getTotalResearchPoints();
+  const int before = points;
+  if (advanceColony(m_colonyStages, id, m_codex.getScannedCount(), points) != ColonyUpgradeResult::Success)
+    return false;
+  m_codex.spendResearchPoints(before - points);
+  m_sceneManager->setColonyStages(m_colonyStages);
+  saveProfileNow(true);
+  return true;
+}
+
+void AppGL::updateColonyEconomy(float dt) {
+  (void)dt;
+  const double now = glfwGetTime();
+  if (m_lastPassiveColonyTime == 0.0) {
+    m_lastPassiveColonyTime = now;
+  }
+  // Passive RP accrual every 10 seconds
+  if (now - m_lastPassiveColonyTime >= 10.0) {
+    const double elapsed = now - m_lastPassiveColonyTime;
+    m_lastPassiveColonyTime = now;
+    const int ratePerMin = colonyPassiveRatePerMin(m_colonyStages);
+    if (ratePerMin > 0) {
+      const int addPoints = static_cast<int>(ratePerMin * (elapsed / 60.0));
+      if (addPoints > 0) {
+        m_codex.addResearchPoints(addPoints);
+      }
+    }
+  }
+
+  // Ship resupply (refuel and shield recharge) near spaceports (stage >= 14)
+  if (m_sceneManager) {
+    const Station* current = m_sceneManager->getCurrentStation();
+    for (const auto& site : m_sceneManager->colonySites()) {
+      if (!current || site.stationId != current->id) continue;
+      if (!colonyCanResupply(m_colonyStages, site.id)) continue;
+      const Vec3 d = m_camera.position - site.pos;
+      const double limit = site.radius * 8.0 + 3.0;
+      if (d.x * d.x + d.y * d.y + d.z * d.z <= limit * limit) {
+        // In spaceport service zone: resupply fuel & recharge shield & repair hull
+        if (m_ship.fuel < 100.0f) {
+          m_ship.fuel = std::min(100.0f, m_ship.fuel + 15.0f * dt);
+        }
+        if (m_ship.shield < 100.0f) {
+          m_ship.shield = std::min(100.0f, m_ship.shield + 20.0f * dt);
+        }
+        if (m_ship.hull < 100.0f) {
+          m_ship.hull = std::min(100.0f, m_ship.hull + 5.0f * dt);
+        }
+      }
+    }
+  }
+}
+
+void AppGL::drawColonies() {
+  const bool pushed = modernPushFont();
+  const ImVec2 display = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(std::min(980.0f, display.x - 30.0f), std::min(780.0f, display.y - 30.0f)), ImGuiCond_FirstUseEver);
+  if (ImGui::Begin(uiRu("Планетарные Цивилизации & Инфраструктура###colonies", "Planetary Civilizations & Infrastructure###colonies"), &m_coloniesOpen)) {
+    const ColonyWorld* selected = colonyWorld(m_selectedColony);
+    if (!selected) selected = colonyWorld("mars");
+
+    // World selector combo
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::BeginCombo("##colonyWorld", uiRu(selected->nameRu, selected->nameEn))) {
+      for (const auto& world : colonyWorlds()) {
+        const int wStage = colonyStage(m_colonyStages, world.id);
+        char label[128];
+        if (wStage > 0) {
+          std::snprintf(label, sizeof(label), "%s  [%s: %d/24 | %s]",
+                        uiRu(world.nameRu, world.nameEn),
+                        uiRu("Этап", "Stage"), wStage,
+                        uiRu(colonyEpochNameRu(colonyEpoch(wStage)), colonyEpochNameEn(colonyEpoch(wStage))));
+        } else {
+          std::snprintf(label, sizeof(label), "%s  [%s]",
+                        uiRu(world.nameRu, world.nameEn),
+                        uiRu("Не колонизирована", "Uncolonized"));
+        }
+        if (ImGui::Selectable(label, m_selectedColony == world.id))
+          m_selectedColony = world.id;
+      }
+      ImGui::EndCombo();
+    }
+    const int stage = colonyStage(m_colonyStages, m_selectedColony);
+    const auto& stages = colonyStages();
+    const ColonyEpoch epoch = colonyEpoch(stage);
+
+    // Color theme based on epoch
+    ImVec4 epochColor(0.2f, 0.85f, 1.0f, 1.0f);
+    if (epoch == ColonyEpoch::Industry) epochColor = ImVec4(1.0f, 0.75f, 0.25f, 1.0f);
+    else if (epoch == ColonyEpoch::Society) epochColor = ImVec4(0.35f, 1.0f, 0.60f, 1.0f);
+    else if (epoch == ColonyEpoch::HighTech) epochColor = ImVec4(0.85f, 0.50f, 1.0f, 1.0f);
+    else if (epoch == ColonyEpoch::Civilization) epochColor = ImVec4(1.0f, 0.90f, 0.35f, 1.0f);
+
+    // Planetary Environment & Telemetry Bar
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.08f, 0.12f, 0.85f));
+    ImGui::BeginChild("##worldEnvBar", ImVec2(0.0f, 68.0f), true);
+    ImGui::TextColored(epochColor, "✦ %s: %s   |   %s: %s",
+                       uiRu("Мир", "World"), uiRu(selected->nameRu, selected->nameEn),
+                       uiRu("Эпоха", "Epoch"), uiRu(colonyEpochNameRu(epoch), colonyEpochNameEn(epoch)));
+    ImGui::TextColored(ImVec4(0.80f, 0.85f, 0.90f, 1.0f),
+                       "%s: %s   |   %s: %s   |   %s: %s",
+                       uiRu("Гравитация", "Gravity"), selected->gravity,
+                       uiRu("Атмосфера", "Atmosphere"), uiRu(selected->atmosphereRu, selected->atmosphereEn),
+                       uiRu("Температура", "Temperature"), uiRu(selected->temperatureRu, selected->temperatureEn));
+    ImGui::TextColored(ImVec4(0.40f, 0.95f, 1.0f, 1.0f), "★ %s: %s — %s",
+                       uiRu("Перк планеты", "World perk"),
+                       uiRu(selected->perk.titleRu, selected->perk.titleEn),
+                       uiRu(selected->perk.descriptionRu, selected->perk.descriptionEn));
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+
+    // Civilization telemetry row
+    ImGui::Spacing();
+    ImGui::Text("%s: %d RP   |   %s: %d   |   %s: +%d%%   |   %s: %d   |   %s: +%d RP/%s",
+                uiRu("Баланс RP", "Balance RP"), m_codex.getTotalResearchPoints(),
+                uiRu("Открытия", "Discoveries"), m_codex.getScannedCount(),
+                uiRu("Бонус науки", "Science bonus"), colonyResearchBonus(m_colonyStages),
+                uiRu("Население Федерации", "Civilization pop"), colonyTotalPopulation(m_colonyStages),
+                uiRu("Пассивный доход", "Passive rate"), colonyPassiveRatePerMin(m_colonyStages),
+                uiRu("мин", "min"));
+
+    // Progress bar across the 24 stages
+    ImGui::Spacing();
+    char progressBuf[128];
+    std::snprintf(progressBuf, sizeof(progressBuf), "%s: %d / %d (%s)",
+                  uiRu("Прогресс цивилизации", "Civilization progress"),
+                  stage, kColonyStageCount,
+                  uiRu(colonyEpochNameRu(epoch), colonyEpochNameEn(epoch)));
+    ImGui::ProgressBar(static_cast<float>(stage) / kColonyStageCount, ImVec2(-1, 24), progressBuf);
+
+    // Active project / Next project construction box
+    ImGui::Spacing();
+    if (stage == 0) {
+      bool nearby = false;
+      const Station* current = m_sceneManager->getCurrentStation();
+      for (const auto& site : m_sceneManager->colonySites()) {
+        if (!current || site.stationId != current->id || site.id != m_selectedColony) continue;
+        const Vec3 d = m_camera.position - site.pos;
+        const double limit = site.radius * 8.0 + 2.5;
+        nearby = d.x * d.x + d.y * d.y + d.z * d.z <= limit * limit;
+      }
+      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.12f, 0.08f, 0.85f));
+      ImGui::BeginChild("##foundPrompt", ImVec2(0.0f, 110.0f), true);
+      ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.55f, 1.0f), "❖ %s",
+                         uiRu("Готовность к Первичному Десанту", "Ready for Initial Touchdown"));
+      ImGui::TextWrapped("%s", uiRu("Для основания цивилизации на этом мире подлетите к планете на расстояние посадочной орбиты. Первый разведывательный аванпост бесплатен.",
+                                   "To establish human civilization on this world, enter close orbital radius. The initial survey outpost is free of charge."));
+      ImGui::Spacing();
+      ImGui::BeginDisabled(!nearby);
+      if (ImGui::Button(uiRu("✦ Развернуть Первичный Аванпост (Бесплатно)", "✦ Deploy Survey Outpost (Free)"), ImVec2(-1, 32))) {
+        foundColony(m_selectedColony);
+      }
+      ImGui::EndDisabled();
+      if (!nearby) {
+        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "%s",
+                           uiRu("Подлетите ближе к небесному телу для разблокировки десанта.",
+                                "Fly closer to the celestial body to enable landing deployment."));
+      }
+      ImGui::EndChild();
+      ImGui::PopStyleColor();
+    } else if (stage < kColonyStageCount) {
+      const auto& next = stages[stage];
+      const int cost = colonyUpgradeCost(m_colonyStages, m_selectedColony, stage);
+      const bool funded = m_codex.getTotalResearchPoints() >= cost;
+      const bool researched = m_codex.getScannedCount() >= next.requiredScans;
+
+      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.10f, 0.16f, 0.85f));
+      ImGui::BeginChild("##nextStageBox", ImVec2(0.0f, 160.0f), true);
+      ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "✦ %s %d: %s (%s)",
+                         uiRu("Следующий Проект", "Next Project"), stage + 1,
+                         uiRu(next.nameRu, next.nameEn),
+                         uiRu(colonyEpochNameRu(next.epoch), colonyEpochNameEn(next.epoch)));
+      ImGui::TextColored(ImVec4(0.75f, 0.85f, 0.95f, 1.0f), "%s: %s",
+                         uiRu("Инфраструктура", "Infrastructure"), uiRu(next.infrastructureRu, next.infrastructureEn));
+      ImGui::TextWrapped("%s: %s", uiRu("Научный базис", "Scientific basis"), uiRu(next.loreRu, next.loreEn));
+      ImGui::TextColored(ImVec4(0.40f, 1.0f, 0.65f, 1.0f), "★ %s: %s",
+                         uiRu("Открытия & Бонусы", "Tech Unlocks & Perks"), uiRu(next.techUnlocksRu, next.techUnlocksEn));
+      ImGui::Spacing();
+      ImGui::Text("%s: %d RP   |   %s: %d / %d   |   %s: +%d чел.",
+                  uiRu("Стоимость", "Cost"), cost,
+                  uiRu("Требуемые сканы", "Required scans"), m_codex.getScannedCount(), next.requiredScans,
+                  uiRu("Прирост населения", "Population delta"), next.population - stages[stage - 1].population);
+      ImGui::Spacing();
+      ImGui::BeginDisabled(!funded || !researched);
+      char buildBtnLabel[128];
+      std::snprintf(buildBtnLabel, sizeof(buildBtnLabel), "%s (%d RP)###buildStageBtn",
+                    uiRu("✦ Построить следующий этап", "✦ Build Next Stage"), cost);
+      if (ImGui::Button(buildBtnLabel, ImVec2(-1, 32))) {
+        upgradeColony(m_selectedColony);
+      }
+      ImGui::EndDisabled();
+      if (!funded || !researched) {
+        ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.25f, 1.0f), "%s",
+                           !researched ? uiRu("Недостаточно открытий: исследуйте новые космические объекты.",
+                                              "More discoveries needed: scan new astronomical objects.")
+                                       : uiRu("Недостаточно RP: дождитесь пассивного дохода колоний или соберите образцы.",
+                                              "Insufficient RP: wait for passive colony income or collect surface samples."));
+      }
+      ImGui::EndChild();
+      ImGui::PopStyleColor();
+    } else {
+      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.10f, 0.04f, 0.85f));
+      ImGui::BeginChild("##maxStageBox", ImVec2(0.0f, 90.0f), true);
+      ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.25f, 1.0f), "👑 %s",
+                         uiRu("Триумф Планетарной Цивилизации (Кардашев I+)",
+                              "Planetary Civilization Triumph (Kardashev I+)"));
+      ImGui::TextWrapped("%s", uiRu("Мир достиг абсолютного технологического могущества. Атмосферные процессоры контролируют биосферу, геомагнитный щит защищает от радиации, а квантовый маяк связывает систему со скоплением М13.",
+                                   "This world has attained absolute technological mastery. Atmospheric processors regulate the biosphere, planetary magnetosphere shields from radiation, and subspace beacon connects to the M13 cluster."));
+      ImGui::EndChild();
+      ImGui::PopStyleColor();
+    }
+
+    // Scrollable catalog of all 24 stages grouped by Epoch
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.70f, 0.85f, 1.0f, 1.0f), "❖ %s",
+                       uiRu("Генеральный План Развития Планетарной Цивилизации (24 Этапа)",
+                            "Planetary Civilization Master Blueprint (24 Stages)"));
+    ImGui::BeginChild("##colonyStagesScroll", ImVec2(0, 0), true);
+
+    ColonyEpoch currentEpochGroup = static_cast<ColonyEpoch>(-1);
+    for (int i = 0; i < kColonyStageCount; ++i) {
+      const auto& s = stages[i];
+      if (s.epoch != currentEpochGroup) {
+        currentEpochGroup = s.epoch;
+        ImGui::Spacing();
+        ImVec4 epHdrCol(0.2f, 0.85f, 1.0f, 1.0f);
+        if (currentEpochGroup == ColonyEpoch::Industry) epHdrCol = ImVec4(1.0f, 0.75f, 0.25f, 1.0f);
+        else if (currentEpochGroup == ColonyEpoch::Society) epHdrCol = ImVec4(0.35f, 1.0f, 0.60f, 1.0f);
+        else if (currentEpochGroup == ColonyEpoch::HighTech) epHdrCol = ImVec4(0.85f, 0.50f, 1.0f, 1.0f);
+        else if (currentEpochGroup == ColonyEpoch::Civilization) epHdrCol = ImVec4(1.0f, 0.90f, 0.35f, 1.0f);
+
+        ImGui::TextColored(epHdrCol, "═══════════ %s ═══════════",
+                           uiRu(colonyEpochNameRu(currentEpochGroup), colonyEpochNameEn(currentEpochGroup)));
+      }
+
+      const bool isBuilt = (i < stage);
+      const bool isNext = (i == stage);
+      const ImVec4 stateColor = isBuilt ? ImVec4(0.35f, 1.0f, 0.55f, 1.0f)
+                                       : (isNext ? ImVec4(1.0f, 0.85f, 0.35f, 1.0f)
+                                                 : ImVec4(0.55f, 0.60f, 0.65f, 1.0f));
+      const char* stateText = isBuilt ? uiRu("✓ ПОСТРОЕНО", "✓ BUILT")
+                                     : (isNext ? uiRu("▶ АКТИВНЫЙ ПРОЕКТ", "▶ ACTIVE PROJECT")
+                                               : uiRu("🔒 ЗАБЛОКИРОВАНО", "🔒 LOCKED"));
+
+      ImGui::TextColored(stateColor, "[%s] %02d. %s", stateText, i + 1, uiRu(s.nameRu, s.nameEn));
+      ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.85f, 1.0f), "   • %s: %s",
+                         uiRu("Инфраструктура", "Infrastructure"), uiRu(s.infrastructureRu, s.infrastructureEn));
+      ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.80f, 1.0f), "   • %s: %s",
+                         uiRu("Базис", "Basis"), uiRu(s.loreRu, s.loreEn));
+      ImGui::TextColored(ImVec4(0.40f, 0.90f, 0.80f, 1.0f), "   • %s: %s",
+                         uiRu("Эффект", "Unlocks"), uiRu(s.techUnlocksRu, s.techUnlocksEn));
+      ImGui::TextColored(ImVec4(0.60f, 0.65f, 0.70f, 1.0f),
+                         "   • %s: %d чел.  |  %s: %d RP  |  %s: %d  |  %s: +%d RP/мин%s",
+                         uiRu("Жителей", "Pop"), s.population,
+                         uiRu("Цена", "Cost"), s.costRP,
+                         uiRu("Сканы", "Scans"), s.requiredScans,
+                         uiRu("Доход", "Passive"), s.passiveRpPerMin,
+                         s.allowsResupply ? uiRu("  [КОСМОПОРТ]", "  [SPACEPORT]") : "");
+      ImGui::Spacing();
+    }
+    ImGui::EndChild();
   }
   ImGui::End();
   if (pushed) ImGui::PopFont();
@@ -3684,6 +3973,8 @@ void AppGL::saveAdventureSlotNow(bool quiet) {
   g.progress.unlocked.assign(m_unlockedIds.begin(), m_unlockedIds.end());
   g.progress.route = m_route;
   g.progress.colonies = m_colonies;
+  g.progress.colonyStages = m_colonyStages;
+  g.progress.researchPoints = m_codex.getTotalResearchPoints();
   g.progress.discoveries.assign(m_discoveredConstellations.begin(), m_discoveredConstellations.end());
   g.progress.minBhDistance = m_minBhDistance;
   g.session.custom = m_shipCustomization;
@@ -7102,7 +7393,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
     const bool uiNavWanted =
         m_inMenu || m_shipTerminalOpen || m_slidesOpen || m_epilogueActive ||
         m_finaleChoiceOpen || m_storyOpen || m_zettelkastenOpen ||
-        m_shipyardOpen || m_expeditionMapOpen || m_codexOpen ||
+        m_shipyardOpen || m_expeditionMapOpen || m_codexOpen || m_coloniesOpen ||
         m_spectrometerOpen || m_surfaceReportOpen || m_constellationAlignOpen ||
         m_jumpCine || m_orreryMapOpen;
     if (uiNavWanted) {
@@ -7164,6 +7455,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (m_storyOpen && !m_inMenu) drawStoryPanel();
   // === Orbital Shipyard === (v3.11.0): верфь и кастомизация кораблей.
   if (m_shipyardOpen && !m_inMenu) drawShipyard();
+  if (!m_inMenu) updateColonyEconomy(ImGui::GetIO().DeltaTime);
+  if (m_coloniesOpen && !m_inMenu) drawColonies();
   // === Constellation Alignment Minigame ===
   if (m_constellationAlignOpen && !m_inMenu) drawConstellationAlignment();
   // === Expedition === (v3.5.0): HUD-карточка главы над сценой.
@@ -7842,7 +8135,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   ImGui::SetWindowFontScale(1.5f);
   ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Progress");
   ImGui::SetWindowFontScale(1.15f);
-  ImGui::BulletText("Colonies founded: %d/2", static_cast<int>(m_colonies.size()));
+  ImGui::BulletText("Colonies founded: %d/%d", static_cast<int>(m_colonies.size()), static_cast<int>(colonyWorlds().size()));
+  if (ImGui::Button(uiRu("Развитие колоний", "Colony development"))) m_coloniesOpen = true;
   ImGui::BulletText("Debris dodged: %d", m_asteroidDodges);
   ImGui::BulletText("Event horizon crossed: %s",
                     m_capturedHorizon ? "yes" : "no");
@@ -8391,17 +8685,18 @@ void AppGL::updateShip(float deltaTime) {
   if (!m_inMenu && !m_slidesOpen && !m_jumpCine && !m_captureAnim) {
     const Station* stNow = m_sceneManager->getCurrentStation();
     if (stNow) {
+      double nearestColony = 1e30;
       for (const SceneManager::ColonySite& site : m_sceneManager->colonySites()) {
         if (site.stationId != stNow->id) continue;
-        if (m_sceneManager->hasColony(site.id)) continue;
         const double dx = m_camera.position.x - site.pos.x;
         const double dy = m_camera.position.y - site.pos.y;
         const double dz = m_camera.position.z - site.pos.z;
         const double lim = static_cast<double>(site.radius) * 8.0 + 2.5;
-        if (dx * dx + dy * dy + dz * dz < lim * lim) {
+        const double distanceSquared = dx * dx + dy * dy + dz * dz;
+        if (distanceSquared < lim * lim && distanceSquared < nearestColony) {
+          nearestColony = distanceSquared;
           m_colonyHint = site.name;
           m_colonyHintId = site.id;
-          break;
         }
       }
     }
@@ -8411,19 +8706,9 @@ void AppGL::updateShip(float deltaTime) {
   ImGuiIO& colonyIo = ImGui::GetIO();
   if (cDown && !m_prevCPressed && !colonyIo.WantCaptureKeyboard) {
     if (!m_colonyHintId.empty()) {
-      m_colonies.push_back(m_colonyHintId);
-      m_sceneManager->setColonies(m_colonies);
-      Toast ct;
-      ct.title = uiRu("Колония основана", "Colony established");
-      ct.desc = m_colonyHint + uiRu(" — под вашим флагом.", " — under your flag.");
-      ct.time = static_cast<float>(glfwGetTime());
-      m_toasts.push_back(ct);
-      m_shipNotice = uiRu("Колония основана: ", "Colony established: ") + m_colonyHint;
-      m_shipNoticeT = 4.0f;
-      checkAchievements();  // v3.7.0: colonist / architect
-      saveProfileNow(false);
-      m_colonyHint.clear();
-      m_colonyHintId.clear();
+      m_selectedColony = m_colonyHintId;
+      foundColony(m_selectedColony);
+      m_coloniesOpen = true;
     } else if (!m_inMenu) {
       m_spectrometerOpen = !m_spectrometerOpen;
     }
@@ -9057,7 +9342,11 @@ void AppGL::applySaveGame(const SaveGame& g) {
   m_capturedHorizon = g.progress.capturedHorizon;
   // v3.6.0: колонии (профиль → менеджер сцены для маркеров).
   m_colonies = g.progress.colonies;
+  m_colonyStages = g.progress.colonyStages;
+  normalizeColonies(m_colonies, m_colonyStages);
   m_sceneManager->setColonies(m_colonies);
+  m_sceneManager->setColonyStages(m_colonyStages);
+  m_codex.init();
   // v3.7.0: жизненный счётчик уклонений.
   m_asteroidDodges = g.progress.asteroidDodges;
   m_discoveredConstellations.clear();
@@ -9068,6 +9357,8 @@ void AppGL::applySaveGame(const SaveGame& g) {
       m_discoveredConstellations.insert(d);
     }
   }
+  if (g.progress.researchPoints >= 0)
+    m_codex.addResearchPoints(g.progress.researchPoints - m_codex.getTotalResearchPoints());
   if (!m_discoveredConstellations.empty()) {
     m_constellationAligned = true;
   }
@@ -9150,6 +9441,8 @@ void AppGL::saveProfileNow(bool quiet) {
   g.progress.unlocked.assign(m_unlockedIds.begin(), m_unlockedIds.end());
   g.progress.route = m_route;
   g.progress.colonies = m_colonies;
+  g.progress.colonyStages = m_colonyStages;
+  g.progress.researchPoints = m_codex.getTotalResearchPoints();
   g.progress.asteroidDodges = m_asteroidDodges;  // v3.7.0
   g.progress.discoveries.assign(m_discoveredConstellations.begin(), m_discoveredConstellations.end());
   for (const auto& ce : m_codex.getEntries()) {
@@ -10084,11 +10377,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
     m_loadingScreen.startNewGameWarp(uiRu("НАЧИНАЕМ НОВУЮ ЭКСПЕДИЦИЮ", "STARTING A NEW EXPEDITION"));
     m_audio.playJump();
     m_hasStartedFlight = true;
-    if (!m_expedition.introSeen && m_expedition.chapterIndex == 0) {
-      startExpeditionIntro();
-    } else {
-      startNewAdventure();
-    }
+    startNewAdventure();
   }
   if (ImGui::IsItemHovered()) {
     hoveredOption = 1;
@@ -12415,6 +12704,146 @@ int AppGL::captureDragonCheck(const std::string& outPath) {
   bool ok = app.saveScreenshot(outPath);
   app.m_window->swapBuffers();
   app.m_window->pollEvents();
+  return ok ? 0 : 1;
+}
+
+int AppGL::captureFleetCheck(const std::string& outDir) {
+  s_harnessPinFps = true;
+  warpdrive::setDockSitesVisible(true);
+  warpdrive::setShip(true, 0.0f, 0.0f, 0.0f, 0.0f);
+  std::filesystem::create_directories(outDir);
+
+  std::unique_ptr<AppGL> appPtr;
+  try {
+    appPtr = std::make_unique<AppGL>(1280, 720, false);
+  } catch (...) {
+    return 1;
+  }
+  AppGL& app = *appPtr;
+
+  app.m_sceneManager->teleportTo("sol", app.m_camera);
+  int fbWidth = 1280, fbHeight = 720;
+  app.m_window->getFramebufferSize(fbWidth, fbHeight);
+  glViewport(0, 0, fbWidth, fbHeight);
+
+  // Warmup render to compute planet orbits and populate m_dockSites.
+  app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+  app.m_sceneManager->getSettings().fovDegrees = 30.0f;
+  app.m_sceneManager->setShowOrbits(false);
+  app.m_sceneManager->setShowBelt(false);
+
+  bool ok = app.m_sceneManager->voyagerRelicReady();
+  std::cout << "Voyager relic mesh: " << (ok ? "PASS" : "FAIL") << "\n";
+
+  const auto findDock = [&](const char* id, Vec3& out) {
+    for (const auto& dock : app.m_sceneManager->dockSites()) {
+      if (dock.id == id) {
+        out = dock.pos;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // The relic dock has to follow the real Voyager 1 body, not a fixed point.
+  Vec3 bodyPos(0.0, 0.0, 0.0), relicDock(0.0, 0.0, 0.0);
+  bool bodyFound = false;
+  for (const auto& b : app.m_sceneManager->getBodies()) {
+    if (b.def && b.def->id == "voyager1") {
+      bodyPos = b.pos;
+      bodyFound = true;
+      break;
+    }
+  }
+  const bool dockFound = findDock("dock-voyager", relicDock);
+  const double followGap = (bodyFound && dockFound)
+      ? std::sqrt((bodyPos.x - relicDock.x) * (bodyPos.x - relicDock.x) +
+                  (bodyPos.y - relicDock.y) * (bodyPos.y - relicDock.y) +
+                  (bodyPos.z - relicDock.z) * (bodyPos.z - relicDock.z))
+      : 1e9;
+  const bool follows = followGap < 0.5;
+  std::cout << "Voyager dock follows body: gap=" << followGap
+            << (follows ? " PASS" : " FAIL") << "\n";
+  ok = follows && ok;
+
+  struct FleetShot {
+    const char* dockId;
+    const char* file;
+    float dist;
+  };
+  const FleetShot shots[] = {
+      {"dock-voyager", "voyager_relic.png", 0.85f},
+      {"dock-rover", "mars_rover.png", 0.60f},
+      {"dock-colony", "ring_colony.png", 0.95f},
+      {"dock-lander", "lunar_lander.png", 0.65f},
+      {"dock-sail", "solar_sail.png", 0.85f}};
+
+  // Absolute luminance is useless here: Earth, Mars and the Moon already fill
+  // the centre box, so a craft can only *remove* bright pixels by occluding
+  // them. Compare the frame with the dock layer against the same frame without
+  // it and count how much of the centre actually changed.
+  const int boxX0 = fbWidth / 2 - 160, boxX1 = fbWidth / 2 + 160;
+  const int boxY0 = fbHeight / 2 - 160, boxY1 = fbHeight / 2 + 160;
+  auto grabCentre = [&]() {
+    std::vector<unsigned char> pixels(static_cast<size_t>(fbWidth) * fbHeight * 3u);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, fbWidth, fbHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    std::vector<unsigned char> crop(static_cast<size_t>(boxX1 - boxX0) * (boxY1 - boxY0) * 3u);
+    for (int y = boxY0; y < boxY1; ++y) {
+      memcpy(&crop[static_cast<size_t>(y - boxY0) * (boxX1 - boxX0) * 3],
+             &pixels[(static_cast<size_t>(y) * fbWidth + boxX0) * 3],
+             static_cast<size_t>(boxX1 - boxX0) * 3);
+    }
+    return crop;
+  };
+  auto centreDiff = [&](const std::vector<unsigned char>& a,
+                        const std::vector<unsigned char>& b) {
+    int changed = 0;
+    for (size_t i = 0; i < a.size(); i += 3) {
+      if (a[i] != b[i] || a[i + 1] != b[i + 1] || a[i + 2] != b[i + 2]) ++changed;
+    }
+    return changed;
+  };
+
+  int shotChecks = 0;
+  for (const auto& shot : shots) {
+    ++shotChecks;
+    Vec3 target(0.0, 0.0, 0.0);
+    if (!findDock(shot.dockId, target)) {
+      std::cout << "Fleet shot " << shot.dockId << ": FAIL (dock missing)\n";
+      ok = false;
+      continue;
+    }
+    app.m_camera.position = Vec3(target.x + shot.dist * 0.55,
+                                 target.y + shot.dist * 0.35,
+                                 target.z - shot.dist);
+    app.computeLookYawPitch(app.m_camera.position, target,
+                            app.m_camera.yaw, app.m_camera.pitch);
+    for (int frame = 0; frame < 6; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      if (frame < 5) {
+        app.m_window->swapBuffers();
+        app.m_window->pollEvents();
+      }
+    }
+    const auto withCraft = grabCentre();
+    const bool saved = app.saveScreenshot(outDir + "/" + shot.file);
+    warpdrive::setDockSitesVisible(false);
+    for (int frame = 0; frame < 3; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
+    const auto bare = grabCentre();
+    warpdrive::setDockSitesVisible(true);
+    const int changed = centreDiff(withCraft, bare);
+    const bool pass = saved && changed > 1000;
+    std::cout << "Fleet shot " << shot.dockId << ": centre-changed=" << changed
+              << (pass ? " PASS" : " FAIL") << "\n";
+    ok = pass && ok;
+  }
+
+  std::cout << "Fleet capture checks: " << shotChecks + 2 << "\n";
   return ok ? 0 : 1;
 }
 
@@ -14957,6 +15386,10 @@ bool AppGL::getDockPortTransform(const std::string& dockId, float time,
 
   const Vec3 stPos = targetDock->pos;
   glm::mat4 rotM(1.0f);
+  // Own procedural models are authored Z-up; the world is Y-up. Ports for the
+  // fleet start from the same tip SceneManager uses, then add its animation.
+  const glm::mat4 ownUpToY = glm::rotate(glm::mat4(1.0f), -1.5707963f,
+                                         glm::vec3(1.0f, 0.0f, 0.0f));
   float portDistance = 0.40f;
 
   if (targetDock->id == "dock-dragon") {
@@ -14981,6 +15414,31 @@ bool AppGL::getDockPortTransform(const std::string& dockId, float time,
     portDistance = 0.18f;
     rotM = glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
            glm::rotate(glm::mat4(1.0f), -0.30f, glm::vec3(1.0f, 0.0f, 0.0f));
+  } else if (targetDock->id == "dock-voyager") {
+    // Port must ride the same attitude as the relic mesh in SceneManager,
+    // otherwise the approach aligns to where the probe was at teleport time.
+    portDistance = 0.20f;
+    rotM = ownUpToY *
+           glm::rotate(glm::mat4(1.0f), 0.04f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+           glm::rotate(glm::mat4(1.0f), -0.35f, glm::vec3(1.0f, 0.0f, 0.0f));
+  } else if (targetDock->id == "dock-rover") {
+    portDistance = 0.15f;
+    rotM = ownUpToY *
+           glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f));
+  } else if (targetDock->id == "dock-colony") {
+    portDistance = 0.22f;
+    rotM = ownUpToY *
+           glm::rotate(glm::mat4(1.0f), 0.10f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+           glm::rotate(glm::mat4(1.0f), 0.3f, glm::vec3(1.0f, 0.0f, 0.0f));
+  } else if (targetDock->id == "dock-lander") {
+    portDistance = 0.16f;
+    rotM = ownUpToY *
+           glm::rotate(glm::mat4(1.0f), 0.04f * time, glm::vec3(0.0f, 0.0f, 1.0f));
+  } else if (targetDock->id == "dock-sail") {
+    portDistance = 0.20f;
+    rotM = ownUpToY *
+           glm::rotate(glm::mat4(1.0f), 0.03f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+           glm::rotate(glm::mat4(1.0f), 0.5f, glm::vec3(1.0f, 0.0f, 0.0f));
   } else if (targetDock->id == "dock-sgra" || targetDock->id == "dock-m13") {
     portDistance = 0.42f;
     rotM = glm::rotate(glm::mat4(1.0f), 0.12f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -15467,6 +15925,7 @@ void AppGL::drawShipyard() {
                        uiRu("Доступно RP", "Available RP"),
                        m_codex.getTotalResearchPoints());
     ImGui::Separator();
+    if (ImGui::Button(uiRu("Развитие колоний", "Colony development"), ImVec2(-1, 30))) m_coloniesOpen = true;
     if (ImGui::BeginTabBar("##shipyardTabs")) {
       
       // === TAB 1: HANGAR / SWITCH SHIP ===
@@ -15833,6 +16292,143 @@ void AppGL::drawShipyard() {
         }
       }
 
+      // === TAB 7: VOYAGER 1 RELIC (v5.1.0 own procedural mesh) ===
+      if (m_ship.dockedStationId == "dock-voyager" || m_dockHintId == "dock-voyager") {
+        if (ImGui::BeginTabItem(uiRu("Вояджер-1", "Voyager 1"))) {
+          ImGui::TextColored(ImVec4(0.95f, 0.72f, 0.25f, 1.0f), "%s",
+                             uiRu("Пассивный ретранслятор реликвии «Вояджер-1»:",
+                                  "Voyager 1 Relic Telemetry (passive relay):"));
+          ImGui::Separator();
+          ImGui::BulletText("%s: %s", uiRu("Запуск", "Launch"),
+                           "1977-09-05, Titan IIIE / Centaur (NASA JPL)");
+          ImGui::BulletText("%s: %s", uiRu("Масса", "Mass"), "825 kg (721.6 kg dry)");
+          ImGui::BulletText("%s: 3.7 m", uiRu("Антенна", "High-gain antenna"));
+          ImGui::BulletText("%s: %s", uiRu("РИТЭГ", "RTG output"),
+                           uiRu("~270 Вт из 470 Вт на запуске (3x MHW-RTG)",
+                                "~270 W of 470 W at launch (3x MHW-RTG)"));
+          ImGui::BulletText("%s: %s", uiRu("Статус", "Regime"),
+                           uiRu("Межзвёздная среда (с 2012-08-25), ~17 км/с",
+                                "Interstellar space (since 2012-08-25), ~17 km/s"));
+          ImGui::BulletText("%s: ~23 ч", uiRu("Задержка сигнала", "One-way light time"));
+          ImGui::BulletText("%s: %s", uiRu("Пластинка", "Golden Record"),
+                           uiRu("Медь с золотым покрытием, 55 языков, 115 изображений",
+                                "Gold-plated copper, 55 languages, 115 images"));
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.35f, 1.0f), "%s",
+                             uiRu("Статус: аппарат молчит — связь только через DSN.",
+                                  "Status: silent hull — contact only via the Deep Space Network."));
+          ImGui::EndTabItem();
+        }
+      }
+
+      // === TAB 8: PERSEVERANCE ROVER ===
+      if (m_ship.dockedStationId == "dock-rover" || m_dockHintId == "dock-rover") {
+        if (ImGui::BeginTabItem(uiRu("Марсоход", "Mars Rover"))) {
+          ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.25f, 1.0f), "%s",
+                             uiRu("Бортная система «Персеверанс» (кратер Джезеро):",
+                                  "Perseverance rover systems (Jezero Crater):"));
+          ImGui::Separator();
+          ImGui::BulletText("%s: %s", uiRu("Посадка", "Landing"),
+                           "2021-02-18, skycrane (Mars 2020)");
+          ImGui::BulletText("%s: 1025 kg", uiRu("Масса", "Mass"));
+          ImGui::BulletText("%s: 110 Вт", uiRu("MMRTG", "MMRTG output"));
+          ImGui::BulletText("%s: %s", uiRu("Ходовая", "Mobility"),
+                           uiRu("rocker-bogie, 6 колёс с грунтозацепами, 158 м/сут",
+                                "rocker-bogie, 6 groused wheels, 158 m/sol"));
+          ImGui::BulletText("%s: %s", uiRu("Наука", "Instruments"),
+                           "SuperCam / SHERLOC / PIXL / MOXIE / MEDLI");
+          ImGui::BulletText("%s: %s", uiRu("Лазер SuperCam", "SuperCam laser"),
+                           uiRu("1-30 импульсов на цель, 6.5 мДж, дальность 10 м",
+                                "1-30 pulses per target, 6.5 mJ, 10 m standoff"));
+          ImGui::BulletText("%s: 20+", uiRu("Герметичных капсул", "Sealed sample tubes"));
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%s",
+                             uiRu("Статус: архив образцов у дельты готов к возврату.",
+                                  "Status: delta sample archive staged for Earth return."));
+          ImGui::EndTabItem();
+        }
+      }
+
+      // === TAB 9: O'NEILL RING COLONY ===
+      if (m_ship.dockedStationId == "dock-colony" || m_dockHintId == "dock-colony") {
+        if (ImGui::BeginTabItem(uiRu("Колония", "Ring Colony"))) {
+          ImGui::TextColored(ImVec4(0.35f, 0.9f, 1.0f, 1.0f), "%s",
+                             uiRu("Центробежный тор О’Нила — бытовой контур:",
+                                  "O'Neill centrifuge torus - habitat loop:"));
+          ImGui::Separator();
+          ImGui::BulletText("%s: 250 м", uiRu("Радиус тора", "Torus radius"));
+          ImGui::BulletText("%s: 1.9 об/мин", uiRu("Скорость вращения", "Spin rate"));
+          ImGui::BulletText("%s: 1.0 g", uiRu("Перегрузка на ободе", "Rim gravity"));
+          ImGui::BulletText("%s: 10 000", uiRu("Жителей", "Residents"));
+          ImGui::BulletText("%s: %s", uiRu("Освещение", "Daylight"),
+                           uiRu("2 гелиоствора, цикл день/ночь 24 ч",
+                                "2 heliostat mirrors, 24 h day/night cycle"));
+          ImGui::BulletText("%s: %s", uiRu("Агропояс", "Hydroponic belt"),
+                           uiRu("33% обода, замкнутый водооборот",
+                                "33% of rim, closed water loop"));
+          ImGui::BulletText("%s: 6", uiRu("Спиц-ферм", "Spoke trusses"));
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%s",
+                             uiRu("Статус: атмосфера 101.3 кПа, орбита 1 а.е. (L4-группа).",
+                                  "Status: 101.3 kPa atmosphere, 1 AU orbit (L4 group)."));
+          ImGui::EndTabItem();
+        }
+      }
+
+      // === TAB 10: ARTEMIS LUNAR LANDER ===
+      if (m_ship.dockedStationId == "dock-lander" || m_dockHintId == "dock-lander") {
+        if (ImGui::BeginTabItem(uiRu("Лендер", "Lunar Lander"))) {
+          ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f), "%s",
+                             uiRu("Посадочно-взлётная ступень (низкая лунная орбита):",
+                                  "Descent/ascent stage (low lunar orbit):"));
+          ImGui::Separator();
+          ImGui::BulletText("%s: %s", uiRu("Ступени", "Stack"),
+                           uiRu("посадочная + жилой модуль + взлётная",
+                                "descent + crew module + ascent stage"));
+          ImGui::BulletText("%s: 250 kN", uiRu("Тормжная камера", "Descent thrust"));
+          ImGui::BulletText("%s: %s", uiRu("Топливо", "Propellant"), "LOX / LH2");
+          ImGui::BulletText("%s: 4 %s", uiRu("Опоры с", "Footpads"),
+                           uiRu("пятами 60 см", "60 cm pads"));
+          ImGui::BulletText("%s: 6.5 ч", uiRu("Выход на поверхность", "Surface EVA budget"));
+          ImGui::BulletText("%s: 1/6 g", uiRu("Гравитация", "Surface gravity"));
+          ImGui::BulletText("%s: %s", uiRu("Теплозащита", "Thermal control"),
+                           uiRu("многослойная экранно-вакуумная изоляция",
+                                "MLI blanket, vacuum-insulated hull"));
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%s",
+                             uiRu("Статус: готов к спуску, окно ускорений открыто.",
+                                  "Status: ready for descent, burn window open."));
+          ImGui::EndTabItem();
+        }
+      }
+
+      // === TAB 11: SOLAR SAIL ===
+      if (m_ship.dockedStationId == "dock-sail" || m_dockHintId == "dock-sail") {
+        if (ImGui::BeginTabItem(uiRu("Солнечный парус", "Solar Sail"))) {
+          ImGui::TextColored(ImVec4(0.8f, 0.9f, 1.0f, 1.0f), "%s",
+                             uiRu("Парусно-импульсный аппарат (солнечная тяга):",
+                                  "Photon-drive sailcraft (solar radiation pressure):"));
+          ImGui::Separator();
+          ImGui::BulletText("%s: 32 м2", uiRu("Площадь паруса", "Sail area"));
+          ImGui::BulletText("%s: 2.5 мкм", uiRu("Толщина плёнки", "Film thickness"));
+          ImGui::BulletText("%s: %s", uiRu("Покрытие", "Coating"),
+                           uiRu("алюминий на каптоне, отражение 90%",
+                                "aluminium on capton, 90% reflectance"));
+          ImGui::BulletText("%s: 4.5 мкН/м2", uiRu("Давление у Земли", "Pressure at 1 AU"));
+          ImGui::BulletText("%s: 4 %s", uiRu("Буны", "Booms"),
+                           uiRu("диагональные, стеклопластик", "diagonal composite"));
+          ImGui::BulletText("%s: %s", uiRu("Ориентация", "Attitude"),
+                           uiRu("солнечный датчик + маховики, швы-квадранты",
+                                "sun sensor + reaction wheels, quadrant seams"));
+          ImGui::BulletText("%s: ~100 м/с", uiRu("Прирост скорости в год", "Delta-v per year"));
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%s",
+                             uiRu("Статус: парус натянут, тяга без расхода топлива.",
+                                  "Status: sail tensioned, thrust with zero propellant."));
+          ImGui::EndTabItem();
+        }
+      }
+
       // === TAB: CONTRACTS & MISSIONS (Roadmap #5) ===
       if (ImGui::BeginTabItem(uiRu("Контракты & Миссии", "Contracts & Missions"))) {
         ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "%s",
@@ -16142,7 +16738,7 @@ void AppGL::drawSurfaceReportModal() {
       if (ImGui::Button(uiRu("✦ Собрать экспресс-образцы реголита (+150 RP)", "✦ Collect Surface Samples (+150 RP)"),
                         ImVec2(-1, 32.0f))) {
         m_currentSurfaceReport.samplesCollected = true;
-        m_codex.scanObject(m_currentSurfaceReport.bodyId, glfwGetTime());
+        m_codex.scanObject(m_currentSurfaceReport.bodyId, glfwGetTime(), colonyResearchBonus(m_colonyStages));
         m_missions.onSurfaceSample(m_currentSurfaceReport.bodyId, 30.0f);
 
         RadioMessage comm;

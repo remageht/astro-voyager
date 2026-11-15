@@ -60,7 +60,7 @@ class ScienceCodex {
   const CodexEntry* getEntry(const std::string& stationId) const;
 
   bool isScanned(const std::string& stationId) const;
-  bool scanObject(const std::string& stationId, double timestamp = 0.0);
+  bool scanObject(const std::string& stationId, double timestamp = 0.0, int bonusPercent = 0);
 
   int getScannedCount() const;
   int getTotalCount() const;

@@ -6,9 +6,11 @@
 #include <glm/glm.hpp>
 
 #include "Camera.h"
+#include "ColonySystem.h"
 #include "Catalog.h"
 #include "Cubemap.h"
 #include "Mesh.h"
+#include "ObjModel.h"
 #include "PostFX.h"
 #include "Shader.h"
 #include "SolarSystem.h"
@@ -159,6 +161,7 @@ class SceneManager {
   bool showBelt() const { return m_showBelt; }
   void setShowPlanets(bool on) { m_showPlanets = on; }
   bool showPlanets() const { return m_showPlanets; }
+  bool voyagerRelicReady() const { return m_voyagerRelic.ready(); }
   void bindEarthMap();
 
   // === Ship survival === (v3.3.0): low-shield postfx amounts (0 = off;
@@ -356,6 +359,8 @@ class SceneManager {
   std::vector<std::string> m_colonies;     // основанные (id)
   const std::vector<ColonySite>& colonySites() const { return m_colonySites; }
   void setColonies(const std::vector<std::string>& ids) { m_colonies = ids; }
+  void setColonyStages(const ColonyStages& stages) { m_colonyStages = stages; }
+  ColonyStages m_colonyStages;
   bool hasColony(const std::string& id) const;
   // === Orbital Stations & Docks === (v3.11.0)
   struct DockSite {
@@ -391,6 +396,10 @@ class SceneManager {
   std::unique_ptr<Shader> m_planetShader;
   unsigned int m_earthMapTex = 0;
   bool m_earthMapTried = false;
+  // Kuiper-belt Voyager 1 relic: the mesh replaces the placeholder sphere, so
+  // the body loop needs to know whether it is loaded before that loop runs.
+  ObjModel m_voyagerRelic;
+  bool m_voyagerRelicTried = false;
   std::unique_ptr<Shader> m_ringShader;
   std::unique_ptr<Shader> m_cometShader;
   std::unique_ptr<Shader> m_skyShader;
