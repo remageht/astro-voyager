@@ -510,6 +510,14 @@ int colonyMilestonesReached(int stage) {
   return reached;
 }
 
+int colonyMilestoneReward(int previousStage, int newStage) {
+  int reward = 0;
+  for (const auto& m : colonyTerraformMilestones()) {
+    if (m.stage > previousStage && m.stage <= newStage) reward += m.rewardRP;
+  }
+  return reward;
+}
+
 int colonyStructureCount(const std::string& worldId, int stage) {
   int total = 0;
   for (const auto& entry : colonyBuildPlan(worldId, stage)) total += entry.second;

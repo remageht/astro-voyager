@@ -107,6 +107,10 @@ struct ColonyMilestone {
 const std::vector<ColonyMilestone>& colonyTerraformMilestones();
 void colonyTerraformState(int stage, float& atmosphere, float& biosphere);
 int colonyMilestonesReached(int stage);
+// RP granted by the milestones crossed when a world moves from `previousStage`
+// to `newStage`. Each milestone is paid once, so re-entering an already crossed
+// stage must yield zero.
+int colonyMilestoneReward(int previousStage, int newStage);
 
 int colonyStructureCount(const std::string& worldId, int stage);
 // Unit surface normal where this world's settlement sits. Shared by the scene

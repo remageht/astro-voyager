@@ -1775,7 +1775,7 @@ bool AppGL::foundColony(const std::string& id) {
 }
 
 bool AppGL::upgradeColony(const std::string& id) {
-  const int milestonesBefore = colonyMilestonesReached(colonyStage(m_colonyStages, id));
+  const int stageBefore = colonyStage(m_colonyStages, id);
   int points = m_codex.getTotalResearchPoints();
   const int before = points;
   if (advanceColony(m_colonyStages, id, m_codex.getScannedCount(), points) != ColonyUpgradeResult::Success)
@@ -1785,13 +1785,11 @@ bool AppGL::upgradeColony(const std::string& id) {
 
   // World-development milestones pay out once the stage crosses them.
   const int stage = colonyStage(m_colonyStages, id);
-  const int milestonesNow = colonyMilestonesReached(stage);
-  if (milestonesNow > milestonesBefore) {
-    int reward = 0;
+  const int reward = colonyMilestoneReward(stageBefore, stage);
+  if (reward > 0) {
     std::string lastRu, lastEn;
     for (const auto& m : colonyTerraformMilestones()) {
-      if (m.stage <= milestonesBefore || m.stage > stage) continue;
-      reward += m.rewardRP;
+      if (m.stage <= stageBefore || m.stage > stage) continue;
       lastRu = m.nameRu;
       lastEn = m.nameEn;
     }

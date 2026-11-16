@@ -319,6 +319,15 @@ int main() {
       std::cerr << "Test 8 failed: a stage-24 world should be a full biosphere\n";
       return 1;
     }
+    int totalReward = 0;
+    for (const auto& m : ms) totalReward += m.rewardRP;
+    if (colonyMilestoneReward(0, 0) != 0 || colonyMilestoneReward(kColonyStageCount, kColonyStageCount) != 0 ||
+        colonyMilestoneReward(ms[0].stage, ms[0].stage + 1) != 0 ||
+        colonyMilestoneReward(ms[0].stage - 1, ms[0].stage) != ms[0].rewardRP ||
+        colonyMilestoneReward(0, kColonyStageCount) != totalReward) {
+      std::cerr << "Test 8 failed: milestone rewards must be paid once, inside the crossed window only\n";
+      return 1;
+    }
     std::cout << "PASS: Test 8 world-development milestones\n";
   }
 
