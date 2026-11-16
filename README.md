@@ -20,10 +20,17 @@
 
 Готовые к запуску официальные сборки не требуют компиляции и работают «из коробки»:
 - 🎮 **Windows (x86_64)**: [astro-voyager-v5.0.0-windows-x86_64.zip](https://github.com/remageht/astro-voyager/releases/latest) (портативный архив) или инсталлятор `AstroVoyager-setup.exe`.
-- 🐧 **Linux (x86_64)**: [astro-voyager-x86_64.AppImage](https://github.com/remageht/astro-voyager/releases/latest) (запуск в один клик: `chmod +x *.AppImage && ./*.AppImage`).
+- 🐧 **Linux (x86_64)**: [astro-voyager-x86_64.AppImage](https://github.com/remageht/astro-voyager/releases/latest) (запуск в один клик: `chmod +x *.AppImage && ./*.AppImage`) **или** `astro-voyager-*-linux-x86_64-portable.tar.gz` — обычный архив, работает без FUSE и без установки.
 - 🍏 **macOS (Apple Silicon arm64)**: [astro-voyager-macos-arm64.tar.gz](https://github.com/remageht/astro-voyager/releases/latest) (нативная сборка OpenGL 3.3 Core).
 
 *Минимальные требования*: Видеокарта с поддержкой OpenGL 3.3 Core Profile (Intel HD Graphics 4000+, NVIDIA GeForce GTX 600+, AMD Radeon HD 7000+).
+
+### Если игра не запускается или сцена выглядит пустой
+
+- `astro-voyager.exe --diagnostics` — печатает версию OpenGL, видеокарту и драйвер. Пришлите этот вывод, если что-то не так.
+- Лог запуска (`astro-voyager.log`) создаётся рядом с exe — в нём видно, какой ассет или шейдер не загрузился.
+- `astro-voyager.exe --safe` — облегчённый режим (меньше лучей в луч-маршинге, без FXAA) для слабых или старых видеокарт.
+- Игра никогда не падает из-за одного шейдера: не собравшийся шейдер заменяется аварийным, а его имя пишется в лог.
 
 ---
 
