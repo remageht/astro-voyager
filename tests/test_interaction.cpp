@@ -446,6 +446,54 @@ int main() {
         return 1;
       }
     }
+    // Перк колоний: перезарядка варпа (Charge + Cooldown) короче, кинематика — нет.
+    {
+      WarpJump plain;
+      plain.start("sol", 1.0f);
+      WarpJump he3;
+      he3.start("sol", 1.0f, 0.25f);
+      if (plain.dur(JumpPhase::Charge) != WarpJump::kChargeDur ||
+          plain.dur(JumpPhase::Cooldown) != WarpJump::kCooldownDur) {
+        std::cerr << "boost-free jump must keep the baseline phase durations\n";
+        return 1;
+      }
+      const float chargeWant = WarpJump::kChargeDur / 1.25f;
+      const float coolWant = WarpJump::kCooldownDur / 1.25f;
+      if (he3.dur(JumpPhase::Charge) > chargeWant + 1e-5f ||
+          he3.dur(JumpPhase::Charge) < chargeWant - 1e-5f ||
+          he3.dur(JumpPhase::Cooldown) > coolWant + 1e-5f) {
+        std::cerr << "lunar He-3 must cut charge and cooldown by 1/1.25\n";
+        return 1;
+      }
+      if (he3.dur(JumpPhase::Travel) != WarpJump::kTravelDur) {
+        std::cerr << "the perk must not rush the tunnel itself\n";
+        return 1;
+      }
+      WarpJump negative;
+      negative.start("sol", 1.0f, -0.5f);
+      if (negative.dur(JumpPhase::Charge) != WarpJump::kChargeDur) {
+        std::cerr << "a negative boost must clamp to no change\n";
+        return 1;
+      }
+
+      auto fullJumpTime = [](float boost) {
+        WarpJump j;
+        j.start("m13", 1.0f, boost);
+        float t = 0.0f;
+        for (int i = 0; i < 400 && j.active(); ++i) {
+          j.update(0.05f);
+          t += 0.05f;
+        }
+        return t;
+      };
+      const float base = fullJumpTime(0.0f);
+      const float faster = fullJumpTime(0.25f);
+      const float saved = (WarpJump::kChargeDur + WarpJump::kCooldownDur) * (1.0f - 1.0f / 1.25f);
+      if (!(faster < base && base - faster > saved - 0.11f && base - faster < saved + 0.11f)) {
+        std::cerr << "jump wall time must drop by the recharge saving only\n";
+        return 1;
+      }
+    }
   }
 
   // Test 20 (v4.6.2): Docking corridor kinematics & orbital co-movement (Issue #63)

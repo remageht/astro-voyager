@@ -39,6 +39,8 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build --config Release
+      - name: Run unit tests (ctest)
+        run: ctest --test-dir build -C Release --output-on-failure
       - name: Smoke CLI
         shell: pwsh
         run: |
@@ -89,6 +91,8 @@ jobs:
         run: |
           cmake -S . -B build-gl -DCMAKE_BUILD_TYPE=Release -DASTROVOYAGER_ENABLE_GL=ON
           cmake --build build-gl -j3
+      - name: Run unit tests (ctest)
+        run: ctest --test-dir build-gl -C Release --output-on-failure
       - name: Smoke CLI of the GL binary
         run: |
           ./build-gl/astro-voyager --version
@@ -164,6 +168,8 @@ jobs:
         run: |
           cmake -S . -B build-gl -DASTROVOYAGER_ENABLE_GL=ON
           cmake --build build-gl --config Release
+      - name: Run unit tests (ctest)
+        run: ctest --test-dir build-gl -C Release --output-on-failure
       - name: Smoke CLI and embedded shader table
         shell: pwsh
         run: |
@@ -287,6 +293,8 @@ jobs:
         run: |
           cmake -S . -B build-gl -DCMAKE_BUILD_TYPE=Release -DASTROVOYAGER_ENABLE_GL=ON
           cmake --build build-gl -j"$(nproc)"
+      - name: Run unit tests (ctest)
+        run: ctest --test-dir build-gl -C Release --output-on-failure
       - name: Build AppImage
         run: bash packaging/build-appimage.sh "$PWD/dist"
       - name: Smoke test inside AppImage (headless CLI)

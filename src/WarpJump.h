@@ -57,7 +57,9 @@ class WarpJump {
   // Старт прыжка к станции target. Пустой target = остаться в Idle.
   // astRoll01 — детерминированный ролл астероидного поля (0..1; поле
   // стартует при значении < kAstChance). Дефолт 1.0 = поля нет.
-  void start(const std::string& target, float astRoll01 = 1.0f);
+  // rechargeBoost — доля ускорения перезарядки (перк колоний, напр. гелий-3
+  // Луны = 0.25): укорачивает Charge и Cooldown, фазы кинематики не трогает.
+  void start(const std::string& target, float astRoll01 = 1.0f, float rechargeBoost = 0.0f);
   // Мгновенное прерывание (ESC): всегда в Idle, зацикливаний нет.
   void stop();
 
@@ -75,6 +77,10 @@ class WarpJump {
   float phaseT01() const;
   // Длительность фазы в секундах (Idle = 0).
   static float phaseDur(JumpPhase p);
+  // Длительность с учётом перезарядки этого прыжка: Charge/Cooldown укорачиваются
+  // в (1 + rechargeBoost) раз, остальные фазы — как phaseDur().
+  float dur(JumpPhase p) const;
+  float rechargeBoost() const { return m_rechargeBoost; }
 
   // Продвинуть state machine на dt секунд (dt клампится в [0, 0.5]).
   // Idle = no-op. switchStation возвращается ровно одним событием за пролёт
@@ -94,6 +100,7 @@ class WarpJump {
  private:
   JumpPhase m_phase = JumpPhase::Idle;
   float m_t = 0.0f;
+  float m_rechargeBoost = 0.0f;  // перк колоний на этом прыжке (Charge/Cooldown)
   std::string m_target;
   bool m_switched = false;  // switchStation уже выдан за этот пролёт
 

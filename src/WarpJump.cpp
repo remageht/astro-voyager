@@ -4,7 +4,7 @@
 
 namespace astro {
 
-void WarpJump::start(const std::string& target, float astRoll01) {
+void WarpJump::start(const std::string& target, float astRoll01, float rechargeBoost) {
   if (target.empty()) {
     stop();
     return;
@@ -13,6 +13,7 @@ void WarpJump::start(const std::string& target, float astRoll01) {
   m_phase = JumpPhase::Charge;
   m_t = 0.0f;
   m_switched = false;
+  m_rechargeBoost = rechargeBoost > 0.0f ? rechargeBoost : 0.0f;
   // v3.6.0: пасс D — астероидное поле на этот прыжок (детерминированный
   // роул от вызывающего: тест / AppGL).
   m_astField = (astRoll01 < kAstChance);
@@ -26,6 +27,7 @@ void WarpJump::start(const std::string& target, float astRoll01) {
 void WarpJump::stop() {
   m_phase = JumpPhase::Idle;
   m_t = 0.0f;
+  m_rechargeBoost = 0.0f;
   m_target.clear();
   m_switched = false;
   m_astField = false;
@@ -56,8 +58,15 @@ float WarpJump::phaseDur(JumpPhase p) {
   return 0.0f;
 }
 
+float WarpJump::dur(JumpPhase p) const {
+  const float d = phaseDur(p);
+  if (m_rechargeBoost <= 0.0f || d <= 0.0f) return d;
+  if (p != JumpPhase::Charge && p != JumpPhase::Cooldown) return d;
+  return d / (1.0f + m_rechargeBoost);
+}
+
 float WarpJump::phaseT01() const {
-  const float d = phaseDur(m_phase);
+  const float d = dur(m_phase);
   if (d <= 0.0f) return 0.0f;
   float t = m_t / d;
   if (t < 0.0f) t = 0.0f;
@@ -80,7 +89,7 @@ JumpEvent WarpJump::update(float dt) {
     case JumpPhase::Idle:
       break;
     case JumpPhase::Charge:
-      if (m_t >= kChargeDur) {
+      if (m_t >= dur(JumpPhase::Charge)) {
         m_phase = JumpPhase::Pullback;
         m_t = 0.0f;
       }
@@ -147,7 +156,7 @@ JumpEvent WarpJump::update(float dt) {
       }
       break;
     case JumpPhase::Cooldown:
-      if (m_t >= kCooldownDur) {
+      if (m_t >= dur(JumpPhase::Cooldown)) {
         ev.finished = true;
         stop();  // конец sequence: всегда в Idle, повторов и циклов нет
       }

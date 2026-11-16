@@ -1,7 +1,19 @@
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include "Zettelkasten.h"
+
+// assert() выключен в Release (/DNDEBUG): классифицированный архив проверяется
+// макросом, который валит процесс в любой конфигурации.
+#define REQUIRE(cond)                                                          \
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      std::cerr << "[FAIL] " << #cond << " at " << __FILE__ << ":" << __LINE__ \
+                << "\n";                                                       \
+      std::exit(1);                                                            \
+    }                                                                          \
+  } while (0)
 
 using namespace astro;
 
@@ -308,7 +320,7 @@ static void test_custom_notes_and_grand_synthesis() {
   assert(!zgGrand.isAllMasterNodesSynthesized());
   zgGrand.synthesizeNote("z_master_solar_dawn");
   zgGrand.synthesizeNote("z_master_stasis_bastion");
-  zgGrand.synthesizeNote("z_master_eden_spring");
+  zgGrand.synthesizeNote("z_master_eden_cradle");
   assert(!zgGrand.isAllMasterNodesSynthesized());
   zgGrand.synthesizeNote("z_master_omni_nexus");
   assert(zgGrand.isAllMasterNodesSynthesized());
@@ -341,6 +353,40 @@ static void test_backlinks_and_hypotheses() {
   std::cout << "PASS: test_backlinks_and_hypotheses\n";
 }
 
+static void test_classified_hypotheses() {
+  ZettelGraph zg;
+  // Два досье под грифом, и они под грифом, пока архив не открыт.
+  REQUIRE(zg.hiddenHypothesisCount() == 2);
+  bool sawTachyon = false, sawMetric = false;
+  for (const auto& h : zg.getHypotheses()) {
+    if (h.id == kHypothesisRelicTachyon) {
+      sawTachyon = true;
+      REQUIRE(h.hidden);
+    }
+    if (h.id == kHypothesisPrecursorMetric) {
+      sawMetric = true;
+      REQUIRE(h.hidden);
+    }
+  }
+  REQUIRE(sawTachyon && sawMetric);
+
+  const size_t notesBefore = zg.getNotes().size();
+  REQUIRE(zg.revealHiddenHypotheses() == 2);
+  REQUIRE(zg.hiddenHypothesisCount() == 0);
+  REQUIRE(zg.revealHiddenHypotheses() == 0);  // повторное открытие ничего не делает
+  REQUIRE(zg.getNotes().size() == notesBefore);  // снятие грифа - не новая заметка
+
+  REQUIRE(zg.resolveHypothesis(kHypothesisRelicTachyon));
+  REQUIRE(!zg.resolveHypothesis(kHypothesisRelicTachyon));
+
+  // Элитный контракт отдаёт файл напрямую: гриф падает вместе с наградой.
+  ZettelGraph fresh;
+  REQUIRE(fresh.hiddenHypothesisCount() == 2);
+  REQUIRE(fresh.resolveHypothesis(kHypothesisPrecursorMetric));
+  REQUIRE(fresh.hiddenHypothesisCount() == 1);
+  std::cout << "PASS: test_classified_hypotheses\n";
+}
+
 int main() {
   test_init();
   test_refresh_discovery();
@@ -351,6 +397,7 @@ int main() {
   test_master_layering_and_serialization();
   test_custom_notes_and_grand_synthesis();
   test_backlinks_and_hypotheses();
-  std::cout << "\nAll 9 Zettelkasten tests passed successfully.\n";
+  test_classified_hypotheses();
+  std::cout << "\nAll 10 Zettelkasten tests passed successfully.\n";
   return 0;
 }

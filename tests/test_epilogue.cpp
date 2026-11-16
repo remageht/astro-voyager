@@ -14,10 +14,12 @@ void testSolarRebirthTrueEnding() {
   zg.init();
   // Discover and synthesize solar notes to unlock true ending
   zg.discoverSeed("z_paris_rain");
-  zg.discoverSeed("z_casimir_sun");
+  zg.discoverSeed("z_casimir_metric");
+  zg.discoverSeed("z_solar_injection");
   zg.synthesizeNote("z_paris_rain");
-  zg.synthesizeNote("z_casimir_sun");
-  zg.triggerSynthesisRecipe("recipe_solar_rekindle");
+  zg.synthesizeNote("z_casimir_metric");
+  zg.synthesizeNote("z_solar_injection");
+  zg.triggerSynthesisRecipe("recipe_solar_dawn");
 
   assert(zg.isClusterTrueEndingUnlocked(kClusterSolar));
 
@@ -49,11 +51,13 @@ void testEdenColonyTrueEnding() {
   std::cout << "[Test 2] Eden Colony True Ending (kClusterEden unlocked)... ";
   ZettelGraph zg;
   zg.init();
-  zg.discoverSeed("z_spores_titan");
-  zg.discoverSeed("z_greenhouse_nomad");
-  zg.synthesizeNote("z_spores_titan");
-  zg.synthesizeNote("z_greenhouse_nomad");
-  zg.triggerSynthesisRecipe("recipe_eden_genesis");
+  zg.discoverSeed("z_mia_promise");
+  zg.discoverSeed("z_m13_biosphere");
+  zg.discoverSeed("z_nomad_citadel");
+  zg.synthesizeNote("z_mia_promise");
+  zg.synthesizeNote("z_m13_biosphere");
+  zg.synthesizeNote("z_nomad_citadel");
+  zg.triggerSynthesisRecipe("recipe_eden_cradle");
 
   assert(zg.isClusterTrueEndingUnlocked(kClusterEden));
 
@@ -79,11 +83,13 @@ void testMultiverseTrueEnding() {
   std::cout << "[Test 3] Multiverse True Ending (kClusterMultiverse unlocked)... ";
   ZettelGraph zg;
   zg.init();
-  zg.discoverSeed("z_egorka_six_echo");
-  zg.discoverSeed("z_cauchy_horizon");
-  zg.synthesizeNote("z_egorka_six_echo");
-  zg.synthesizeNote("z_cauchy_horizon");
-  zg.triggerSynthesisRecipe("recipe_multiverse_bridge");
+  zg.discoverSeed("z_sixth_resonance");
+  zg.discoverSeed("z_phase_shard");
+  zg.discoverSeed("z_loop_transcend");
+  zg.synthesizeNote("z_sixth_resonance");
+  zg.synthesizeNote("z_phase_shard");
+  zg.synthesizeNote("z_loop_transcend");
+  zg.triggerSynthesisRecipe("recipe_omni_nexus");
 
   assert(zg.isClusterTrueEndingUnlocked(kClusterMultiverse));
 
@@ -106,11 +112,13 @@ void testStasisAllianceTrueEnding() {
   std::cout << "[Test 4] Stasis Alliance True Ending (kClusterStasis unlocked)... ";
   ZettelGraph zg;
   zg.init();
-  zg.discoverSeed("z_stasis_trauma");
-  zg.discoverSeed("z_fifth_accord");
-  zg.synthesizeNote("z_stasis_trauma");
-  zg.synthesizeNote("z_fifth_accord");
-  zg.triggerSynthesisRecipe("recipe_stasis_harmony");
+  zg.discoverSeed("z_stasis_dampener");
+  zg.discoverSeed("z_universe5_collapse");
+  zg.discoverSeed("z_sgra_tidal");
+  zg.synthesizeNote("z_stasis_dampener");
+  zg.synthesizeNote("z_universe5_collapse");
+  zg.synthesizeNote("z_sgra_tidal");
+  zg.triggerSynthesisRecipe("recipe_stasis_bastion");
 
   assert(zg.isClusterTrueEndingUnlocked(kClusterStasis));
 

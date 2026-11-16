@@ -540,6 +540,50 @@ int colonyResearchBonus(const ColonyStages& stages) {
   return bonus;
 }
 
+float colonyWarpRechargeBoost(const ColonyStages& stages) {
+  float best = 0.0f;
+  for (const auto& entry : stages) {
+    if (colonyStage(stages, entry.first) <= 0) continue;
+    const auto* w = colonyWorld(entry.first);
+    if (w) best = std::max(best, w->perk.warpRechargeBonus);
+  }
+  return best;
+}
+
+float colonyShieldBoost(const ColonyStages& stages) {
+  float best = 0.0f;
+  for (const auto& entry : stages) {
+    if (colonyStage(stages, entry.first) <= 0) continue;
+    const auto* w = colonyWorld(entry.first);
+    if (w) best = std::max(best, w->perk.shieldBonus);
+  }
+  return best;
+}
+
+int colonyMaxStage(const ColonyStages& stages) {
+  int best = 0;
+  for (const auto& entry : stages) {
+    best = std::max(best, colonyStage(stages, entry.first));
+  }
+  return best;
+}
+
+bool colonyUnlocksEliteContracts(const ColonyStages& stages) {
+  return colonyMaxStage(stages) >= kColonyEliteContractStage;
+}
+
+bool colonyRevealsHiddenHypotheses(const ColonyStages& stages) {
+  return colonyMaxStage(stages) >= kColonyHiddenHypothesisStage;
+}
+
+bool colonyUnlocksGalacticVector(const ColonyStages& stages) {
+  return colonyMaxStage(stages) >= kColonyGalacticVectorStage;
+}
+
+bool colonyGalacticVectorRoute(const ColonyStages& stages, const std::string& stationId) {
+  return colonyUnlocksGalacticVector(stages) && stationId == kColonyGalacticVectorStation;
+}
+
 int colonyTotalPopulation(const ColonyStages& stages) {
   int total = 0;
   for (const auto& entry : stages) {

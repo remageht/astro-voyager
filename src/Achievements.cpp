@@ -64,6 +64,13 @@ std::vector<std::string> achievementsCheck(const AchievementState& s) {
     result.push_back("debris_dancer");
   }
 
+  // 11. planetary_triumph: любая колония довезена до 24 стадии (Цивилизация).
+  // Пород совпадает с kColonyGalacticVectorStage в ColonySystem; держим тут
+  // литералом, чтобы модуль ачивок остался без зависимостей.
+  if (s.maxColonyStage >= 24) {
+    result.push_back("planetary_triumph");
+  }
+
   return result;
 }
 
@@ -78,6 +85,7 @@ const char* achievementTitle(const std::string& id) {
   if (id == "colonist") return "Первопроходец";
   if (id == "architect") return "Архитектор сети";
   if (id == "debris_dancer") return "Танцор обломков";
+  if (id == "planetary_triumph") return "Планетарный Триумф";
   return "";
 }
 
@@ -92,6 +100,7 @@ const char* achievementDescription(const std::string& id) {
   if (id == "colonist") return "Основать первую колонию";
   if (id == "architect") return "Основать колонии на обеих планетах";
   if (id == "debris_dancer") return "Пройти маневром полосу обломков";
+  if (id == "planetary_triumph") return "Довести колонию до 24 стадии: планетарная цивилизация и вектор на M13";
   return "";
 }
 
@@ -106,7 +115,8 @@ const std::vector<std::string>& allAchievementIds() {
     "cartographer",
     "colonist",
     "architect",
-    "debris_dancer"
+    "debris_dancer",
+    "planetary_triumph"
   };
   return kIds;
 }

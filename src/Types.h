@@ -73,6 +73,7 @@ constexpr float kStarFuelRange = 10.0f;     // star proximity counted from cente
 constexpr float kStarFuelPerSec = 2.0f;
 constexpr float kLowShieldChroma = 30.0f;   // chromatic aberration gate
 constexpr float kLowShieldStatic = 10.0f;   // interference noise gate
+constexpr float kShieldCapacity = 100.0f;   // baseline deflector capacity
 constexpr float kRespawnShield = 50.0f;     // after death, back at sol
 constexpr float kRespawnFuel = 30.0f;
 constexpr float kRespawnHull = 100.0f;      // v4.0.0: rebuilt at Sol
@@ -233,6 +234,13 @@ inline void applyRadiation(ShipState& s, float dt, bool inZone, float dmgK = 1.0
 }
 
 inline bool isDead(const ShipState& s) { return s.shield <= 0.0f; }
+
+// Colony shield perk: deflector arrays fed by Mercury's sun or the M13
+// resonance raise the capacity above the baseline, so the same radiation
+// drain leaves the pilot margin instead of simply dying sooner.
+inline float shieldCapacity(float boostPercent) {
+  return kShieldCapacity * (1.0f + (boostPercent > 0.0f ? boostPercent : 0.0f));
+}
 
 inline void respawn(ShipState& s) {
   s.shield = kRespawnShield;

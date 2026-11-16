@@ -123,6 +123,30 @@ int colonyUpgradeCost(int currentStage);
 int colonyUpgradeCost(const ColonyStages& stages, const std::string& worldId, int currentStage);
 bool colonyCanResupply(const ColonyStages& stages, const std::string& worldId);
 
+// === Colony perks in the live simulation ===
+// Stage and perk texts promise more than science income: helium-3 logistics
+// speed up warp recharge, solar and magnetospheric arrays hold a tougher
+// shield, and the late epochs unlock elite contracts, classified hypotheses
+// and the galactic warp vector. Each aggregator folds the per-world tables the
+// same way colonyResearchBonus() does - the best developed world wins - so
+// physics, missions and the journal read one number instead of parsing text.
+float colonyWarpRechargeBoost(const ColonyStages& stages);
+float colonyShieldBoost(const ColonyStages& stages);
+int colonyMaxStage(const ColonyStages& stages);
+
+constexpr int kColonyEliteContractStage = 16;
+constexpr int kColonyHiddenHypothesisStage = 23;
+constexpr int kColonyGalacticVectorStage = 24;
+
+bool colonyUnlocksEliteContracts(const ColonyStages& stages);
+bool colonyRevealsHiddenHypotheses(const ColonyStages& stages);
+bool colonyUnlocksGalacticVector(const ColonyStages& stages);
+
+// The stage-24 beacon is a route, not a stat: once the civilization epoch is
+// complete on any world, the jump to this station burns no fuel.
+constexpr const char* kColonyGalacticVectorStation = "m13";
+bool colonyGalacticVectorRoute(const ColonyStages& stages, const std::string& stationId);
+
 enum class ColonyUpgradeResult {
   Success,
   UnknownWorld,

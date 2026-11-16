@@ -1,4 +1,5 @@
 #include "ColonySystem.h"
+#include "Types.h"
 
 #include <cassert>
 #include <iostream>
@@ -331,6 +332,74 @@ int main() {
     std::cout << "PASS: Test 8 world-development milestones\n";
   }
 
-  std::cout << "[test_colony] ALL 7 TESTS PASSED!\n";
+  // Test 9: perks feed the simulation, not only the panel text
+  {
+    auto near = [](float a, float b) { return a > b - 0.01f && a < b + 0.01f; };
+
+    ColonyStages empty;
+    if (colonyWarpRechargeBoost(empty) != 0.0f || colonyShieldBoost(empty) != 0.0f ||
+        colonyMaxStage(empty) != 0 || colonyUnlocksEliteContracts(empty) ||
+        colonyRevealsHiddenHypotheses(empty) || colonyGalacticVectorRoute(empty, "m13")) {
+      std::cerr << "Test 9 failed: an empty federation must grant nothing\n";
+      return 1;
+    }
+
+    // Founding is enough to light the world perk, same as scienceMultiplier.
+    ColonyStages moon;
+    moon["moon"] = 1;
+    if (!near(colonyWarpRechargeBoost(moon), 0.25f) || colonyShieldBoost(moon) != 0.0f) {
+      std::cerr << "Test 9 failed: lunar He-3 must speed warp recharge only\n";
+      return 1;
+    }
+    if (!near(ship::shieldCapacity(colonyShieldBoost(moon)), 100.0f)) {
+      std::cerr << "Test 9 failed: no shield perk means baseline capacity\n";
+      return 1;
+    }
+
+    // The best developed world wins, so Mercury outclasses the M13 anchor.
+    ColonyStages shielded;
+    shielded["mercury"] = 5;
+    shielded["hercules-b"] = 5;
+    if (!near(colonyShieldBoost(shielded), 0.20f) ||
+        !near(ship::shieldCapacity(colonyShieldBoost(shielded)), 120.0f)) {
+      std::cerr << "Test 9 failed: shield perk must raise capacity to 120\n";
+      return 1;
+    }
+
+    // Stage gates promised by the tech text, checked on both sides.
+    ColonyStages gates;
+    gates["mars"] = kColonyEliteContractStage - 1;
+    if (colonyUnlocksEliteContracts(gates)) {
+      std::cerr << "Test 9 failed: elite contracts need stage 16\n";
+      return 1;
+    }
+    gates["mars"] = kColonyEliteContractStage;
+    if (!colonyUnlocksEliteContracts(gates) || colonyRevealsHiddenHypotheses(gates)) {
+      std::cerr << "Test 9 failed: elite stage must not open the archive\n";
+      return 1;
+    }
+    gates["mars"] = kColonyHiddenHypothesisStage;
+    if (!colonyRevealsHiddenHypotheses(gates) ||
+        colonyGalacticVectorRoute(gates, "m13")) {
+      std::cerr << "Test 9 failed: archive opens at 23, the vector not before 24\n";
+      return 1;
+    }
+    gates["mars"] = kColonyGalacticVectorStage;
+    if (!colonyUnlocksGalacticVector(gates) || !colonyGalacticVectorRoute(gates, "m13")) {
+      std::cerr << "Test 9 failed: stage 24 must open the M13 route\n";
+      return 1;
+    }
+    if (colonyGalacticVectorRoute(gates, "sol")) {
+      std::cerr << "Test 9 failed: the beacon is a route to M13, not a free ride\n";
+      return 1;
+    }
+    if (colonyMaxStage(gates) != kColonyStageCount) {
+      std::cerr << "Test 9 failed: max stage must follow the federation\n";
+      return 1;
+    }
+    std::cout << "PASS: Test 9 perks applied to warp, shields, unlocks and routes\n";
+  }
+
+  std::cout << "[test_colony] ALL 9 TESTS PASSED!\n";
   return 0;
 }
