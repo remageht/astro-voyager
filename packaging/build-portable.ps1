@@ -67,11 +67,17 @@ if (Test-Path (Join-Path $repoRoot 'shaders')) {
   Copy-Item -LiteralPath (Join-Path $repoRoot 'shaders') -Destination (Join-Path $OutputDir 'shaders') -Recurse
 }
 
-# Ресурсы: звук (лёгкий) + текстуры + модели (тяжёлые).
-foreach ($sub in @('audio', 'textures')) {
+# Ресурсы: звук, текстуры, сюжетные иллюстрации, видео меню, каталоги.
+foreach ($sub in @('audio', 'textures', 'story', 'video')) {
   $src = Join-Path $repoRoot "res\$sub"
   if (Test-Path $src) {
     Copy-Item -LiteralPath $src -Destination (Join-Path $OutputDir "res\$sub") -Recurse
+  }
+}
+foreach ($resFile in @('catalog.json', 'constellations.json', 'icon.png')) {
+  $src = Join-Path $repoRoot "res\$resFile"
+  if (Test-Path $src) {
+    Copy-Item -LiteralPath $src -Destination (Join-Path $OutputDir "res\$resFile")
   }
 }
 if (-not $SkipModels) {
@@ -121,9 +127,9 @@ $sizeMb = [math]::Round((Get-ChildItem -LiteralPath $OutputDir -Recurse -File | 
 Write-Host "    ready: $OutputDir ($sizeMb MB)"
 
 if ($Zip) {
-  $zip = "$OutputDir.zip"
-  if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-  Compress-Archive -Path (Join-Path $OutputDir '*') -DestinationPath $zip -Force
-  $zipMb = [math]::Round((Get-Item -LiteralPath $zip).Length / 1MB, 1)
-  Write-Host "    zip:   $zip ($zipMb MB)"
+  $zipPath = "$OutputDir.zip"
+  if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+  Compress-Archive -Path (Join-Path $OutputDir '*') -DestinationPath $zipPath -Force
+  $zipMb = [math]::Round((Get-Item -LiteralPath $zipPath).Length / 1MB, 1)
+  Write-Host "    zip:   $zipPath ($zipMb MB)"
 }
