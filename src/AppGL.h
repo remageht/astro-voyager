@@ -103,6 +103,8 @@ class AppGL {
   void drawColonies();
   bool foundColony(const std::string& id);
   bool upgradeColony(const std::string& id);
+  // Снимает гриф с засекреченных гипотез, когда мир дорастает до стадии 23.
+  void applyColonyArchiveReveal();
   void updateColonyEconomy(float dt);
   void drawBridgeCommsToast();
   void checkBridgeCommsTriggers(const std::string& stationId);
@@ -597,6 +599,13 @@ class AppGL {
   float m_warpStateT = 0.0f;  // таймер Charging/Jump/Cooldown
   std::string m_warpJumpTarget;
   int m_warpJumpFromFactor = 1;
+  // === Colony perks в симуляции ===
+  // Гелий-3 и криохимия (perk.warpRechargeBonus) укорачивают перезарядку,
+  // солнечная и резонансная матрицы (perk.shieldBonus) поднимают ёмкость щита,
+  // а маяк стадии 24 превращает прыжок к M13 в маршрут без топлива.
+  float warpRechargeScale() const;  // 1 / (1 + boost), 1.0 без колоний
+  float jumpFuelCostK(const std::string& targetId) const;  // сложность + Казимир + конденсаторы + маяк
+  float m_shieldMax = 100.0f;  // ship::shieldCapacity(boost), пересчитывается в sim
   int m_warpSel = 0;  // выбор пункта в варп-панели
   int m_shipStyle = 0;  // корпус корабля: 0 Dart, 1 Ring Ship v2, 2 Shuttle, 3 Model (OBJ)
   // === Orbital Shipyard & Station Docking (v3.11.0) ===

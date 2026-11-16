@@ -745,13 +745,6 @@ Check 'native menu regression verifies scenic motion, ship immobility and repeat
 Check 'menu backdrop and disk mask retain aspect-ratio cover crop' (($menuFrag -match 'uniform\s+float\s+u_BgAspect\s*;') -and ($menuFrag -match '\bvec2\s+coverScale\s*=') -and ($menuFrag -match '\bimageUv\s*=[^;]*\bcoverScale\b') -and ($menuFrag -match 'texture\s*\(\s*u_BgTex\s*,\s*imageUv\s*\)'))
 Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenuActive\(m_inMenu\)')
 
-if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
-Write-Output ''
-Write-Output 'All checks passed.'
-
-
-
-
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
 Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and ($sceneCpp -match 'colonyAnchorNormal')) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
 Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
@@ -766,3 +759,22 @@ Check 'shared atlas module' (((Read-File 'blender/scripts/asset_atlas.py') -matc
 $ciStray = (((Read-File '.github/workflows/build.yml') -split "`n") | Where-Object { $_ -match '^[^\s#]' -and $_ -notmatch '^(name|on|permissions|jobs|env|concurrency|defaults):' }).Count
 Check 'ci workflow yaml indent' ($ciStray -eq 0)
 Check 'v5.0.5 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
+
+# --- Colony 2.0 perks wired into the simulation (not panel text only) ---
+Check 'colony perk warp recharge in sim' ((((Read-File 'src/WarpJump.cpp') -match 'dur\(JumpPhase::Charge\)') -and ($appCpp -match 'colonyWarpRechargeBoost\(m_colonyStages\)')) -and ((($appCpp -match '3\.0f \* warpRechargeScale\(\)') -and ($appCpp -match '2\.0f \* warpRechargeScale\(\)')) -and ($appCpp -match 'm_jump\.dur\(JumpPhase::Cooldown\)')))
+Check 'colony perk shield capacity in sim' ((((Read-File 'src/Types.h') -match 'inline float shieldCapacity') -and ($appCpp -match 'm_shieldMax = ship::shieldCapacity\(colonyShieldBoost')) -and ($appCpp -notmatch 'm_ship\.shield = 100\.0f'))
+Check 'elite colony contracts gated' ((((Read-File 'src/MissionSystem.h') -match 'MissionTier') -and ((Read-File 'src/MissionSystem.cpp') -match 'eliteTier')) -and ($appCpp -match 'colonyUnlocksEliteContracts\(m_colonyStages\)'))
+Check 'elite contract prize persists' ((((Read-File 'src/MissionSystem.cpp') -match '"tier"') -and ((Read-File 'src/MissionSystem.cpp') -match '"rewardHypothesisId"')) -and ((Read-File 'tests/test_mission.cpp') -match 'Elite colony contracts'))
+Check 'classified hypothesis archive' ((((Read-File 'src/Zettelkasten.cpp') -match 'revealHiddenHypotheses') -and ((Read-File 'src/Zettelkasten.h') -match 'bool hidden')) -and (($appCpp -match 'applyColonyArchiveReveal') -and ($appCpp -match 'hiddenHypothesisCount')))
+Check 'planetary triumph achievement' ((((Read-File 'src/Achievements.cpp') -match 'planetary_triumph') -and ((Read-File 'src/Achievements.h') -match 'maxColonyStage')) -and ($appCpp -match 'st\.maxColonyStage = static_cast<size_t>\(colonyMaxStage'))
+Check 'm13 beacon route skips fuel' ((((Read-File 'src/ColonySystem.cpp') -match 'colonyGalacticVectorRoute') -and ($appCpp -match 'beaconK')) -and ((Read-File 'tests/test_colony.cpp') -match 'M13 route'))
+Check 'achievements counter not hardcoded' (($appCpp -notmatch 'Achievements: %d/[0-9]') -and ($appCpp -match 'allAchievementIds\(\)\.size'))
+
+# --- Issue #187: Active assertions in tests and CI ctest gate ---
+Check 'ci workflow runs ctest' (((Read-File '.github/workflows/build.yml') -match 'ctest --test-dir build\b') -and ((Read-File '.github/workflows/build.yml') -match 'ctest --test-dir build-gl\b'))
+Check 'cmake test targets undefine ndebug' (((Read-File 'CMakeLists.txt') -match '/UNDEBUG') -and ((Read-File 'CMakeLists.txt') -match '-UNDEBUG'))
+
+if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
+Write-Output ''
+Write-Output 'All checks passed.'
+

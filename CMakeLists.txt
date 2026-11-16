@@ -653,6 +653,43 @@ if(TARGET test_colony)
   add_test(NAME test_colony COMMAND test_colony)
 endif()
 
+# Preserve assert() in tests even in Release configurations (Issue #187).
+# MSVC passes /DNDEBUG by default in Release; /UNDEBUG undefines it.
+# Clang/GCC use -UNDEBUG.
+set(ASTRO_TEST_TARGETS
+  test_interaction
+  test_journey
+  test_achievements
+  test_save
+  test_story
+  test_expedition
+  test_rkf45
+  test_warp_geodesic
+  test_cockpit
+  test_kerr
+  test_audio_voice
+  test_planet_lod
+  test_cinematography
+  test_science
+  test_landing
+  test_zettelkasten
+  test_epilogue
+  test_benchmark
+  test_atmosphere
+  test_mission
+  test_gamepad
+  test_loading
+  test_colony
+)
+foreach(t ${ASTRO_TEST_TARGETS})
+  if(TARGET ${t})
+    target_compile_options(${t} PRIVATE
+      $<$<CXX_COMPILER_ID:MSVC>:/UNDEBUG>
+      $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-UNDEBUG>
+    )
+  endif()
+endforeach()
+
 # Runtime resources next to the binary (double-click launch support):
 # the app loads shaders/ and res/ via relative paths, so they must sit
 # beside the exe, not only in the source tree. Guarded: minimal source

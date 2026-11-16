@@ -28,11 +28,22 @@ enum class MissionStatus {
   Expired = 4     // Timer elapsed or contract abandoned
 };
 
+// Contract grade. Elite directives only appear on the board once a colony
+// reaches the HighTech epoch (stage 16), pay far more RP and carry a
+// classified Zettelkasten hypothesis as the real prize.
+enum class MissionTier {
+  Standard = 0,
+  Elite = 1
+};
+
 // Procedural contract definition
 struct MissionContract {
   std::string id;
   MissionType type = MissionType::SpectralSurvey;
   MissionStatus status = MissionStatus::Available;
+  MissionTier tier = MissionTier::Standard;
+
+  bool elite() const { return tier == MissionTier::Elite; }
 
   std::string titleRu;
   std::string titleEn;
@@ -65,8 +76,11 @@ class MissionManager {
  public:
   MissionManager();
 
-  // Procedurally populates available contracts for the docked station
-  void generateBoard(const std::string& currentStationId, int count = 4, uint32_t seed = 0);
+  // Procedurally populates available contracts for the docked station.
+  // eliteTier >= 1 posts one HighTech-grade directive in the last slot: bigger
+  // payout, a clock on untimed archetypes and a classified hypothesis as prize.
+  void generateBoard(const std::string& currentStationId, int count = 4, uint32_t seed = 0,
+                     int eliteTier = 0);
 
   const std::vector<MissionContract>& getAvailableContracts() const { return m_available; }
   const std::vector<MissionContract>& getActiveContracts() const { return m_active; }

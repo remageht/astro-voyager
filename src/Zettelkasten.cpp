@@ -1201,11 +1201,33 @@ bool ZettelGraph::resolveHypothesis(const std::string& id) {
   for (auto& h : m_hypotheses) {
     if (h.id == id && !h.resolved) {
       h.resolved = true;
+      // Награда за элитный контракт одновременно снимает гриф: dossier
+      // рассекречен, раз его отдали пилоту.
+      h.hidden = false;
       addCustomNote(h.titleRu, h.descriptionRu, "Эврика", 10.0f, 10.0f);
       return true;
     }
   }
   return false;
+}
+
+int ZettelGraph::hiddenHypothesisCount() const {
+  int sealed = 0;
+  for (const auto& h : m_hypotheses) {
+    if (h.hidden && !h.resolved) ++sealed;
+  }
+  return sealed;
+}
+
+int ZettelGraph::revealHiddenHypotheses() {
+  int revealed = 0;
+  for (auto& h : m_hypotheses) {
+    if (h.hidden) {
+      h.hidden = false;
+      ++revealed;
+    }
+  }
+  return revealed;
 }
 
 void ZettelGraph::checkHypothesesProgression(const std::string& currentStation,
@@ -1246,6 +1268,34 @@ void ZettelGraph::seedDefaultHypotheses() {
   h2.sourceNoteB = "z_m87_jet";
   h2.rewardPoints = 350;
   m_hypotheses.push_back(h2);
+
+  // Два засекреченных досье: гриф снимает колония стадии 23 или элитный
+  // контракт Колониального Корпуса M13 (см. MissionSystem::generateBoard).
+  ZettelHypothesis h3;
+  h3.id = kHypothesisRelicTachyon;
+  h3.titleRu = "Тахионная решётка M13";
+  h3.titleEn = "Tachyon Lattice of M13";
+  h3.descriptionRu = "Скол биосферы M13 + цитадель Кочевника -> тахионная решётка дальнего действия.";
+  h3.descriptionEn = "M13 biosphere shard + Nomad citadel -> long-range tachyon lattice.";
+  h3.requiredStationId = "m13";
+  h3.sourceNoteA = "z_m13_biosphere";
+  h3.sourceNoteB = "z_nomad_citadel";
+  h3.rewardPoints = 600;
+  h3.hidden = true;
+  m_hypotheses.push_back(h3);
+
+  ZettelHypothesis h4;
+  h4.id = kHypothesisPrecursorMetric;
+  h4.titleRu = "Метрика Предтеч";
+  h4.titleEn = "Precursor Spacetime Metric";
+  h4.descriptionRu = "Приливный след Sgr A* + фазовый осколок -> метрика Предтеч.";
+  h4.descriptionEn = "Sgr A* tidal trace + phase shard -> the Precursor metric.";
+  h4.requiredStationId = "sgra";
+  h4.sourceNoteA = "z_sgra_tidal";
+  h4.sourceNoteB = "z_phase_shard";
+  h4.rewardPoints = 600;
+  h4.hidden = true;
+  m_hypotheses.push_back(h4);
 }
 
 void ZettelGraph::maybeGenerateHypotheses(const std::string& idA, const std::string& idB) {

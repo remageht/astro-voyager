@@ -4,6 +4,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -229,6 +230,75 @@ void testEnsureStarterQuests() {
 
 }  // namespace
 
+// assert() выключен в Release (/DNDEBUG), а эти проверки обязаны валить
+// процесс в любой конфигурации - иначе регрессий в элите не видно.
+#define REQUIRE(cond)                                                          \
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      std::cerr << "[FAIL] " << #cond << " at " << __FILE__ << ":" << __LINE__ \
+                << "\n";                                                       \
+      std::exit(1);                                                            \
+    }                                                                          \
+  } while (0)
+
+void testEliteContracts() {
+  // Обычная доска не знает про элиту и не прячет в себе гипотезы.
+  astro::MissionManager plain;
+  plain.generateBoard("sol", 4, 42, 0);
+  REQUIRE(plain.getAvailableContracts().size() == 4);
+  for (const auto& c : plain.getAvailableContracts()) {
+    REQUIRE(!c.elite());
+    REQUIRE(c.rewardHypothesisId.empty());
+  }
+
+  astro::MissionManager mgr;
+  mgr.generateBoard("sol", 4, 42, 1);
+  const auto& avail = mgr.getAvailableContracts();
+  REQUIRE(avail.size() == 4);
+  astro::MissionContract elite;
+  int eliteCount = 0;
+  for (const auto& c : avail) {
+    if (!c.elite()) {
+      REQUIRE(c.rewardRP <= 700);
+      REQUIRE(c.rewardHypothesisId.empty());
+      continue;
+    }
+    elite = c;
+    ++eliteCount;
+  }
+  REQUIRE(eliteCount == 1);
+  REQUIRE(!elite.id.empty());
+  REQUIRE(elite.rewardRP >= 650);  // x2 + 250 поверх базовой награды архетипа
+  REQUIRE(elite.timeLimitSec > 0.0);
+  REQUIRE(elite.clientRu == "Колониальный Корпус M13");
+  REQUIRE(elite.titleRu.rfind("Элита", 0) == 0);
+  REQUIRE(elite.rewardHypothesisId == astro::kHypothesisRelicTachyon ||
+          elite.rewardHypothesisId == astro::kHypothesisPrecursorMetric);
+
+  const std::string eliteId = elite.id;
+  REQUIRE(mgr.acceptContract(eliteId));
+  REQUIRE(mgr.getActiveContracts().size() == 1);
+  mgr.getActiveContractsMut()[0].status = astro::MissionStatus::Completed;
+
+  // Гриф и награда переживают запись сейва.
+  const std::string json = mgr.serialize();
+  astro::MissionManager re;
+  REQUIRE(re.deserialize(json));
+  REQUIRE(re.getActiveContracts().size() == 1);
+  REQUIRE(re.getActiveContracts()[0].elite());
+  REQUIRE(re.getActiveContracts()[0].rewardHypothesisId == elite.rewardHypothesisId);
+
+  astro::ZettelGraph zg;
+  REQUIRE(zg.hiddenHypothesisCount() == 2);
+  astro::ScienceCodex codex;
+  astro::BridgeComms comms;
+  REQUIRE(codex.getTotalResearchPoints() == 0);
+  REQUIRE(re.claimReward(eliteId, codex, &comms, &zg));
+  REQUIRE(codex.getTotalResearchPoints() == elite.rewardRP);
+  REQUIRE(zg.hiddenHypothesisCount() == 1);  // сданный файл рассекречен
+  std::cout << "[PASS] Elite colony contracts, persistence and hypothesis prize\n";
+}
+
 int main() {
   std::cout << "=== Running Astro-Voyager Mission System Tests ===\n";
   testBoardGeneration();
@@ -238,6 +308,7 @@ int main() {
   testGravitationalProbeAndDeepSpace();
   testSerializationRoundTrip();
   testEnsureStarterQuests();
+  testEliteContracts();
   std::cout << "mission tests: ALL PASS\n";
   return 0;
 }

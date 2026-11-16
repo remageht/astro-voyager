@@ -88,11 +88,11 @@ int main() {
     }
   }
 
-  // Test 8: metadata check for all 10 achievements
+  // Test 8: metadata check for all achievements
   {
     const auto& ids = astro::allAchievementIds();
-    if (ids.size() != 10) {
-      std::cerr << "Test 8 failed: expected 10 achievement IDs\n";
+    if (ids.size() != 11) {
+      std::cerr << "Test 8 failed: expected 11 achievement IDs\n";
       return 1;
     }
     for (const auto& id : ids) {
@@ -148,6 +148,29 @@ int main() {
     std::vector<std::string> expected = {"colonist"};
     if (res == expected) {
       std::cerr << "Test 12 failed: empty state must not unlock colonist\n";
+      return 1;
+    }
+  }
+
+  // Test 13: stage 24 колонии -> planetary_triumph, раньше - ничего
+  {
+    astro::AchievementState s;
+    s.maxColonyStage = 23;
+    auto res = astro::achievementsCheck(s);
+    if (!res.empty()) {
+      std::cerr << "Test 13 failed: stage 23 must not earn Planetary Triumph\n";
+      return 1;
+    }
+    s.maxColonyStage = 24;
+    res = astro::achievementsCheck(s);
+    std::vector<std::string> expected = {"planetary_triumph"};
+    if (res != expected) {
+      std::cerr << "Test 13 failed: expected planetary_triumph\n";
+      return 1;
+    }
+    if (std::string(astro::achievementTitle("planetary_triumph")).empty() ||
+        std::string(astro::achievementDescription("planetary_triumph")).empty()) {
+      std::cerr << "Test 13 failed: Planetary Triumph metadata missing\n";
       return 1;
     }
   }

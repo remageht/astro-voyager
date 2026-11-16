@@ -1808,13 +1808,31 @@ bool AppGL::upgradeColony(const std::string& id) {
     m_toasts.push_back(mt);
     m_audio.playChime();
   }
+  applyColonyArchiveReveal();
   saveProfileNow(true);
   return true;
+}
+
+void AppGL::applyColonyArchiveReveal() {
+  if (!colonyRevealsHiddenHypotheses(m_colonyStages)) return;
+  const int revealed = m_zettelkasten.revealHiddenHypotheses();
+  if (revealed <= 0) return;
+  Toast t;
+  t.title = uiRu("Архив рассекречен", "Archive declassified");
+  char body[96];
+  std::snprintf(body, sizeof(body),
+                uiRu("Снято грифов: %d", "Classified dossiers opened: %d"), revealed);
+  t.desc = body;
+  t.time = static_cast<float>(glfwGetTime());
+  m_toasts.push_back(t);
 }
 
 void AppGL::updateColonyEconomy(float dt) {
   (void)dt;
   const double now = glfwGetTime();
+  // Deflector capacity follows the shield perk of the best developed world, so
+  // the same radiation drain leaves margin instead of a quicker death.
+  m_shieldMax = ship::shieldCapacity(colonyShieldBoost(m_colonyStages));
   if (m_lastPassiveColonyTime == 0.0) {
     m_lastPassiveColonyTime = now;
   }
@@ -1844,8 +1862,8 @@ void AppGL::updateColonyEconomy(float dt) {
         if (m_ship.fuel < 100.0f) {
           m_ship.fuel = std::min(100.0f, m_ship.fuel + 15.0f * dt);
         }
-        if (m_ship.shield < 100.0f) {
-          m_ship.shield = std::min(100.0f, m_ship.shield + 20.0f * dt);
+        if (m_ship.shield < m_shieldMax) {
+          m_ship.shield = std::min(m_shieldMax, m_ship.shield + 20.0f * dt);
         }
         if (m_ship.hull < 100.0f) {
           m_ship.hull = std::min(100.0f, m_ship.hull + 5.0f * dt);
@@ -1923,6 +1941,23 @@ void AppGL::drawColonies() {
                 uiRu("Население Федерации", "Civilization pop"), colonyTotalPopulation(m_colonyStages),
                 uiRu("Пассивный доход", "Passive rate"), colonyPassiveRatePerMin(m_colonyStages),
                 uiRu("мин", "min"));
+
+    // Что перки сети колоний делают симуляции прямо сейчас, а не только в тексте.
+    {
+      char perkBuf[256];
+      std::snprintf(perkBuf, sizeof(perkBuf),
+                    uiRu("Перки в симуляции: перезарядка варпа -%.0f%%, ёмкость щита +%.0f%%, %s, %s, %s",
+                         "Perks in sim: warp recharge -%.0f%%, shield capacity +%.0f%%, %s, %s, %s"),
+                    colonyWarpRechargeBoost(m_colonyStages) * 100.0f,
+                    colonyShieldBoost(m_colonyStages) * 100.0f,
+                    uiRu(colonyUnlocksEliteContracts(m_colonyStages) ? "элитные контракты" : "без элиты",
+                         colonyUnlocksEliteContracts(m_colonyStages) ? "elite contracts" : "no elite"),
+                    uiRu(colonyRevealsHiddenHypotheses(m_colonyStages) ? "архив рассекречен" : "архив закрыт",
+                         colonyRevealsHiddenHypotheses(m_colonyStages) ? "archive open" : "archive sealed"),
+                    uiRu(colonyUnlocksGalacticVector(m_colonyStages) ? "вектор на M13" : "вектор закрыт",
+                         colonyUnlocksGalacticVector(m_colonyStages) ? "M13 vector" : "vector sealed"));
+      ImGui::TextColored(ImVec4(0.62f, 0.95f, 0.72f, 1.0f), "* %s", perkBuf);
+    }
 
     // Progress bar across the 24 stages
     ImGui::Spacing();
@@ -5208,6 +5243,10 @@ void AppGL::drawMissionHud() {
             case MissionType::CargoExpress: typeBadge = uiRu("[КУРЬЕР]", "[CARGO]"); break;
           }
           ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.95f, 1.0f), "%s", typeBadge);
+          if (c.elite()) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.25f, 1.0f), "%s", uiRu("[ЭЛИТА]", "[ELITE]"));
+          }
           ImGui::SameLine();
           ImGui::TextColored(ImVec4(0.40f, 0.90f, 0.60f, 1.0f), "+%d RP", c.rewardRP);
 
@@ -6649,7 +6688,7 @@ void AppGL::drawContextualFlightHud() {
     dl->PathArcTo(ctr, arcR, minAng, maxAng, 16);
     dl->PathStroke(IM_COL32(15, 25, 45, a120), 0, 3.0f);
 
-    float sh = std::clamp(m_ship.shield / 100.0f, 0.0f, 1.0f);
+    float sh = std::clamp(m_ship.shield / m_shieldMax, 0.0f, 1.0f);
     float shAng = minAng + (maxAng - minAng) * sh;
     ImU32 shCol = (sh < 0.25f) ? IM_COL32(239, 68, 68, a255) : IM_COL32(56, 189, 248, a255);
     dl->PathArcTo(ctr, arcR, minAng, shAng, 16);
@@ -7155,6 +7194,28 @@ void AppGL::drawUnifiedShipTerminal() {
       }
       ImGui::EndChild();
 
+      // Гипотезы: часть досье под грифом, пока колония стадии 23 не откроет
+      // архив — или пока элитный контракт Колониального Корпуса не отдаст файл.
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.85f, 0.90f, 0.98f, 1.0f), "%s: %d",
+                         uiRu("Гипотезы (под грифом)", "Hypotheses (classified)"),
+                         m_zettelkasten.hiddenHypothesisCount());
+      for (const auto& h : m_zettelkasten.getHypotheses()) {
+        if (h.hidden) {
+          ImGui::TextColored(ImVec4(0.55f, 0.58f, 0.66f, 0.9f), "# %s",
+                             uiRu(h.titleRu.c_str(), h.titleEn.c_str()));
+          continue;
+        }
+        ImGui::TextColored(h.resolved ? ImVec4(0.35f, 0.95f, 0.55f, 1.0f)
+                                      : ImVec4(0.65f, 0.85f, 1.0f, 1.0f),
+                           "%s %s (%d RP)", h.resolved ? "*" : "-",
+                           uiRu(h.titleRu.c_str(), h.titleEn.c_str()), h.rewardPoints);
+        if (!h.resolved) {
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.75f, 1.0f), "[%s]", h.requiredStationId.c_str());
+        }
+      }
+
       ImGui::Spacing();
       // Cassette Player
       drawCassetteDeckControls();
@@ -7200,8 +7261,8 @@ void AppGL::drawUnifiedShipTerminal() {
       ImGui::ProgressBar(m_ship.fuel / maxFuel, ImVec2(260.0f, 16.0f), buf);
 
       ImGui::TextUnformatted(uiRu("Щиты:", "Shields:"));
-      std::snprintf(buf, sizeof(buf), "%.0f / 100", m_ship.shield);
-      ImGui::ProgressBar(m_ship.shield / 100.0f, ImVec2(260.0f, 16.0f), buf);
+      std::snprintf(buf, sizeof(buf), "%.0f / %.0f", m_ship.shield, m_shieldMax);
+      ImGui::ProgressBar(m_ship.shield / m_shieldMax, ImVec2(260.0f, 16.0f), buf);
 
       ImGui::TextUnformatted(uiRu("Корпус:", "Hull:"));
       std::snprintf(buf, sizeof(buf), "%.0f / 100", m_ship.hull);
@@ -7443,7 +7504,7 @@ void AppGL::drawCenterReticleHud() {
   }
 
   // Right arch: shield/fuel segmented bars
-  float sh = std::clamp(m_ship.shield / 100.0f, 0.0f, 1.0f);
+  float sh = std::clamp(m_ship.shield / m_shieldMax, 0.0f, 1.0f);
   float fu = std::clamp(m_ship.fuel / 100.0f, 0.0f, 1.0f);
   auto drawBar = [&](ImVec2 p, float v, ImU32 col, const char* label) {
     dl->AddRectFilled(p, ImVec2(p.x + 90.0f, p.y + 8.0f), IM_COL32(10, 15, 25, 200));
@@ -8390,7 +8451,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   ImGui::Spacing();
   // === ModernUI ===: заголовок секции 20px.
   ImGui::SetWindowFontScale(1.5f);
-  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Achievements: %d/10", static_cast<int>(m_unlockedIds.size()));
+  ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Achievements: %d/%d", static_cast<int>(m_unlockedIds.size()),
+                     static_cast<int>(allAchievementIds().size()));
   ImGui::SetWindowFontScale(1.15f);
   for (const auto& achId : allAchievementIds()) {
     bool unlocked = (m_unlockedIds.find(achId) != m_unlockedIds.end());
@@ -8639,7 +8701,7 @@ void AppGL::updateShip(float deltaTime) {
 
     const float p = std::clamp(1.0f - (m_dockAnimTimer / 1.0f), 0.0f, 1.0f);
     m_ship.fuel = m_dockInitialFuel + (100.0f - m_dockInitialFuel) * p;
-    m_ship.shield = m_dockInitialShield + (100.0f - m_dockInitialShield) * p;
+    m_ship.shield = m_dockInitialShield + (m_shieldMax - m_dockInitialShield) * p;
     m_ship.hull = m_dockInitialHull + (100.0f - m_dockInitialHull) * p;
 
     if (m_dockAnimTimer <= 0.0f) {
@@ -9030,7 +9092,7 @@ void AppGL::drawShipHud() {
                           ImVec4(0.25f, 0.6f, 1.0f, 1.0f));
     std::snprintf(buf, sizeof(buf), "%s %.0f", uiRu("Щиты", "Shields"),
                   m_ship.shield);
-    ImGui::ProgressBar(m_ship.shield / 100.0f, ImVec2(180.0f, 12.0f), buf);
+    ImGui::ProgressBar(m_ship.shield / m_shieldMax, ImVec2(180.0f, 12.0f), buf);
     ImGui::PopStyleColor();
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
                           ImVec4(0.55f, 0.85f, 0.45f, 1.0f));
@@ -9260,7 +9322,7 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
                              m_warpOn,
                              warpCharge,
                              m_ship.hull / 100.0f,
-                             m_ship.shield / 100.0f,
+                             m_ship.shield / m_shieldMax,
                              targetName,
                              targetPos,
                              sunVis,
@@ -9592,6 +9654,7 @@ void AppGL::applySaveGame(const SaveGame& g) {
   normalizeColonies(m_colonies, m_colonyStages);
   m_sceneManager->setColonies(m_colonies);
   m_sceneManager->setColonyStages(m_colonyStages);
+  applyColonyArchiveReveal();  // сейв со стадией 23+ восстанавливает рассекреченный архив
   m_codex.init();
   // v3.7.0: жизненный счётчик уклонений.
   m_asteroidDodges = g.progress.asteroidDodges;
@@ -9799,6 +9862,7 @@ void AppGL::checkAchievements() {
   st.imported = m_journeyImported;
   // v3.7.0: колонии + уклонения от обломков.
   st.colonyCount = m_colonies.size();
+  st.maxColonyStage = static_cast<size_t>(colonyMaxStage(m_colonyStages));
   st.asteroidDodged = (m_asteroidDodges > 0);
 
   // === StoryJournal === (v3.5.0): журнал обновляется из того же снапшота
@@ -14264,6 +14328,19 @@ void AppGL::setShipStyleNow(int style) {
   }
 }
 
+float AppGL::warpRechargeScale() const {
+  return 1.0f / (1.0f + colonyWarpRechargeBoost(m_colonyStages));
+}
+
+float AppGL::jumpFuelCostK(const std::string& targetId) const {
+  const DifficultyTuning jtune = difficultyTuning(m_difficulty);
+  const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
+  const float capK = ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel);
+  // Stage-24 subspace beacon makes M13 an established route: no fuel burned.
+  const float beaconK = colonyGalacticVectorRoute(m_colonyStages, targetId) ? 0.0f : 1.0f;
+  return jtune.jumpCostK * casimirK * capK * beaconK;
+}
+
 void AppGL::startWarpJump(const std::string& id) {
   const Station* cur = m_sceneManager->getCurrentStation();
   if (!m_warpOn || m_warpStatus != 1) return;  // только из Cruise
@@ -14281,15 +14358,12 @@ void AppGL::startWarpJump(const std::string& id) {
   // v3.6.0: цена зависит от сложности (Hard x1.6, Easy x0.6).
   // v4.2: Асимметричный резонатор Казимира (Орион) — скидка 50% на прыжки.
   // v4.7: Warp Coil Capacitors (spool speed + fuel economy)
-  const DifficultyTuning jtune = difficultyTuning(m_difficulty);
-  const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
-  const float capK = ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel);
-  if (!ship::canJump(m_ship, jtune.jumpCostK * casimirK * capK)) {
+  if (!ship::canJump(m_ship, jumpFuelCostK(id))) {
     char need[64];
     std::snprintf(need, sizeof(need),
                   uiRu("Недостаточно топлива (нужно %.0f)",
                        "Not enough fuel (%.0f needed)"),
-                  static_cast<double>(ship::kJumpFuelCost * jtune.jumpCostK * casimirK));
+                  static_cast<double>(ship::kJumpFuelCost * jumpFuelCostK(id)));
     m_shipNotice = need;
     m_shipNoticeT = 3.0f;
     return;
@@ -14313,7 +14387,7 @@ void AppGL::startWarpJump(const std::string& id) {
   // ролл от локального генератора; логика полосы живёт в WarpJump.
   static std::mt19937 s_astRng(std::random_device{}());
   static std::uniform_real_distribution<float> s_astRoll01(0.0f, 1.0f);
-  m_jump.start(id, s_astRoll01(s_astRng));
+  m_jump.start(id, s_astRoll01(s_astRng), colonyWarpRechargeBoost(m_colonyStages));
   m_jumpPrevPhase = JumpPhase::Idle;
   m_jumpCine = true;
 }
@@ -14371,7 +14445,7 @@ bool AppGL::updateWarp(float deltaTime) {
   if (m_warpOn) {
     if (m_warpStatus == 2) {  // Charging: обратный отсчёт 3-2-1
       m_warpStateT += deltaTime;
-      if (m_warpStateT >= 3.0f) {
+      if (m_warpStateT >= 3.0f * warpRechargeScale()) {
         m_warpStatus = 3;  // Jump
         m_warpStateT = 0.0f;
         m_warpJumpFromFactor = m_warpFactor;
@@ -14388,8 +14462,7 @@ bool AppGL::updateWarp(float deltaTime) {
         const std::string tgt = m_warpJumpTarget;
         m_warpJumpTarget.clear();
         teleportToStation(tgt);  // штатный телепорт под вспышкой
-        const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
-        ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK * casimirK * ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel));
+        ship::spendJumpFuel(m_ship, jumpFuelCostK(tgt));
         m_warpStatus = 4;        // Cooldown
         m_warpStateT = 0.0f;
         m_warpFlash = 0.5f;  // v3.6.0: мягкая вспышка прибытия (комфорт для глаз)
@@ -14397,7 +14470,7 @@ bool AppGL::updateWarp(float deltaTime) {
       }
     } else if (m_warpStatus == 4) {  // Cooldown 2с
       m_warpStateT += deltaTime;
-      if (m_warpStateT >= 2.0f) {
+      if (m_warpStateT >= 2.0f * warpRechargeScale()) {
         m_warpStatus = 1;  // Cruise
         m_warpStateT = 0.0f;
       }
@@ -14652,8 +14725,7 @@ bool AppGL::updateJumpCine(float deltaTime) {
     m_jumpDidTeleport = true;
     m_warpStatus = 3;
     teleportToStation(m_jumpTarget, false);  // v3.8.0: свой телепорт внутри катсцены
-    const float casimirK = (m_discoveredConstellations.count("ori") > 0) ? 0.5f : 1.0f;
-    ship::spendJumpFuel(m_ship, difficultyTuning(m_difficulty).jumpCostK * casimirK * ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel));
+    ship::spendJumpFuel(m_ship, jumpFuelCostK(m_jumpTarget));
     m_jumpShipPos = m_camera.position;
     m_jumpShipDir = m_camera.forward();
     m_jumpFpPos = m_camera.position;
@@ -14840,7 +14912,7 @@ void AppGL::drawWarpPanel() {
   ImGui::Text("Speed: %g ly/s (showcase)", warpSpeedLY(m_warpFactor));
 
   if (m_warpStatus == 2) {
-    const int n = 3 - static_cast<int>(m_warpStateT);
+    const int n = 3 - static_cast<int>(m_warpStateT / warpRechargeScale());
     ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Jump in %d...",
                        (n < 1 ? 1 : n));
   } else if (m_warpStatus == 3) {
@@ -14848,7 +14920,7 @@ void AppGL::drawWarpPanel() {
                        4.0 - static_cast<double>(m_warpStateT));
   } else if (m_warpStatus == 4) {
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Cooldown %.1fs",
-                       2.0 - static_cast<double>(m_warpStateT));
+                       2.0 * warpRechargeScale() - static_cast<double>(m_warpStateT));
   }
 
   // Выбор пункта прыжка (каталог не трогаем, только читаем).
@@ -14923,7 +14995,7 @@ void AppGL::drawWarpPanel() {
       if (jp == JumpPhase::Charge || jp == JumpPhase::Pullback) {
         float toPeak = WarpJump::kBurstDur * 0.5f;
         if (jp == JumpPhase::Charge) {
-          toPeak += (WarpJump::kChargeDur - m_jump.phaseTime()) +
+          toPeak += (m_jump.dur(JumpPhase::Charge) - m_jump.phaseTime()) +
                     WarpJump::kPullbackDur;
         } else {
           toPeak += (WarpJump::kPullbackDur - m_jump.phaseTime());
@@ -14968,7 +15040,7 @@ void AppGL::drawWarpPanel() {
     switch (m_jump.phase()) {
       case JumpPhase::Charge:
         ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Charging %.1fs",
-                           WarpJump::kChargeDur - static_cast<double>(jt));
+                           m_jump.dur(JumpPhase::Charge) - static_cast<double>(jt));
         break;
       case JumpPhase::Pullback:
         ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.28f, 1.0f), "Pullback %.1fs",
@@ -14990,13 +15062,13 @@ void AppGL::drawWarpPanel() {
         break;
       case JumpPhase::Cooldown:
         ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Cooldown %.1fs",
-                           WarpJump::kCooldownDur - static_cast<double>(jt));
+                           m_jump.dur(JumpPhase::Cooldown) - static_cast<double>(jt));
         break;
       case JumpPhase::Idle:
         break;
     }
   } else if (m_warpStatus == 2) {
-        const int n = 3 - static_cast<int>(m_warpStateT);
+        const int n = 3 - static_cast<int>(m_warpStateT / warpRechargeScale());
         char buf[16];
         std::snprintf(buf, sizeof(buf), "T-%d", (n < 1 ? 1 : n));
         const ImVec2 sz = font->CalcTextSizeA(64.0f, FLT_MAX, 0.0f, buf);
@@ -16239,7 +16311,7 @@ void AppGL::dockAtStation(const std::string& dockId) {
   m_ship.isDocked = true;
   m_ship.dockedStationId = dockId;
   m_ship.fuel = 100.0f;
-  m_ship.shield = 100.0f;
+  m_ship.shield = m_shieldMax;
   m_ship.hull = 100.0f;
   m_shipVel = Vec3();
   m_ship.gravVel = Vec3();
@@ -16263,7 +16335,7 @@ void AppGL::dockAtStation(const std::string& dockId) {
   if (m_expedition.chapterIndex > expBefore) m_shipyardOpen = false;
   m_missions.onStationDocked(dockId);
   if (m_missions.getAvailableContracts().empty()) {
-    m_missions.generateBoard(dockId);
+    m_missions.generateBoard(dockId, 4, 0, colonyUnlocksEliteContracts(m_colonyStages) ? 1 : 0);
   }
   saveProfileNow(false);
 }
@@ -16584,7 +16656,7 @@ void AppGL::drawShipyard() {
         ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "%s",
                            uiRu("Статус систем корабля:", "Ship Diagnostic Status:"));
         ImGui::BulletText("%s: %.0f / 100", uiRu("Топливо", "Fuel"), m_ship.fuel);
-        ImGui::BulletText("%s: %.0f / 100", uiRu("Щиты", "Shields"), m_ship.shield);
+        ImGui::BulletText("%s: %.0f / %.0f", uiRu("Щиты", "Shields"), m_ship.shield, m_shieldMax);
         ImGui::BulletText("%s: %.0f / 100", uiRu("Корпус", "Hull"), m_ship.hull);
         ImGui::BulletText("%s: %s", uiRu("Статус дока", "Dock Status"),
                           m_ship.isDocked ? uiRu("Состыкован", "Docked") : uiRu("Свободный дрейф", "Free Flight"));
@@ -16595,7 +16667,7 @@ void AppGL::drawShipyard() {
         }
         ImGui::SameLine();
         if (ImGui::Button(uiRu("Восстановление щитов (100%)", "Recharge Shields (100%)"), ImVec2(220.0f, 28.0f))) {
-          m_ship.shield = 100.0f;
+          m_ship.shield = m_shieldMax;
         }
         ImGui::Spacing();
         if (ImGui::Button(uiRu("Ремонт корпуса (100%)", "Restore Hull (100%)"), ImVec2(220.0f, 28.0f))) {
@@ -16822,7 +16894,7 @@ void AppGL::drawShipyard() {
         ImGui::SameLine();
         if (ImGui::Button(uiRu("Обновить пул", "Refresh Board"))) {
           std::string curId = m_ship.dockedStationId.empty() ? "sol" : m_ship.dockedStationId;
-          m_missions.generateBoard(curId, 4);
+          m_missions.generateBoard(curId, 4, 0, colonyUnlocksEliteContracts(m_colonyStages) ? 1 : 0);
         }
 
         ImGui::Separator();

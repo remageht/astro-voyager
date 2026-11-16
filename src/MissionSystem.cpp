@@ -91,7 +91,8 @@ MissionManager::MissionManager() {
   generateBoard("sol", 4, 1337);
 }
 
-void MissionManager::generateBoard(const std::string& currentStationId, int count, uint32_t seed) {
+void MissionManager::generateBoard(const std::string& currentStationId, int count, uint32_t seed,
+                                   int eliteTier) {
   if (seed == 0) {
     seed = m_lastSeed + 17u;
   }
@@ -107,6 +108,9 @@ void MissionManager::generateBoard(const std::string& currentStationId, int coun
     const uint32_t typeRoll = stepLcg(rng) % 5;
     c.type = static_cast<MissionType>(typeRoll);
     c.status = MissionStatus::Available;
+    // HighTech колонии держат одно элитное задание на доске (последний слот).
+    const bool elite = eliteTier > 0 && i == count - 1;
+    if (elite) c.tier = MissionTier::Elite;
 
     const ClientInfo& client = kClients[stepLcg(rng) % kClientCount];
     c.clientRu = client.ru;
@@ -194,6 +198,23 @@ void MissionManager::generateBoard(const std::string& currentStationId, int coun
         c.descEn = "Courier quantum crystal telemetry pack to station " + pair.second + " before the timer expires.";
         break;
       }
+    }
+
+    if (elite) {
+      // Элитное задание оставляет выполнимый архетип, но поднимает награду,
+      // ставит час туда, где его не было, и приписывает засекреченную
+      // гипотезу настоящим призом (она раскроется при сдаче отчёта).
+      c.rewardRP = c.rewardRP * 2 + 250;
+      if (c.timeLimitSec <= 0.0) {
+        c.timeLimitSec = 420.0;
+        c.timeRemainingSec = 420.0;
+      }
+      c.clientRu = "Колониальный Корпус M13";
+      c.clientEn = "M13 Colonial Corps";
+      c.rewardHypothesisId = (rng & 1u) ? kHypothesisRelicTachyon : kHypothesisPrecursorMetric;
+      c.titleRu = "Элита: " + c.titleRu;
+      c.titleEn = "Elite: " + c.titleEn;
+      c.id = c.id + "_elite";
     }
 
     // Avoid adding duplicates of already active contracts
@@ -441,6 +462,7 @@ std::string MissionManager::serialize() const {
        << "      \"id\": \"" << escapeJson(c.id) << "\",\n"
        << "      \"type\": " << static_cast<int>(c.type) << ",\n"
        << "      \"status\": " << static_cast<int>(c.status) << ",\n"
+       << "      \"tier\": " << static_cast<int>(c.tier) << ",\n"
        << "      \"titleRu\": \"" << escapeJson(c.titleRu) << "\",\n"
        << "      \"titleEn\": \"" << escapeJson(c.titleEn) << "\",\n"
        << "      \"clientRu\": \"" << escapeJson(c.clientRu) << "\",\n"
@@ -454,6 +476,7 @@ std::string MissionManager::serialize() const {
        << "      \"targetValue\": " << c.targetValue << ",\n"
        << "      \"currentValue\": " << c.currentValue << ",\n"
        << "      \"rewardRP\": " << c.rewardRP << ",\n"
+       << "      \"rewardHypothesisId\": \"" << escapeJson(c.rewardHypothesisId) << "\",\n"
        << "      \"timeLimitSec\": " << c.timeLimitSec << ",\n"
        << "      \"timeRemainingSec\": " << c.timeRemainingSec << "\n"
        << "    }" << (i + 1 < m_active.size() ? ",\n" : "\n");
@@ -498,6 +521,7 @@ bool MissionManager::deserialize(const std::string& json) {
     c.id = readStr("id");
     c.type = static_cast<MissionType>(readInt("type", 0));
     c.status = static_cast<MissionStatus>(readInt("status", 1));
+    c.tier = static_cast<MissionTier>(readInt("tier", 0));
     c.titleRu = readStr("titleRu");
     c.titleEn = readStr("titleEn");
     c.clientRu = readStr("clientRu");
@@ -511,6 +535,7 @@ bool MissionManager::deserialize(const std::string& json) {
     c.targetValue = readFloat("targetValue", 0.0f);
     c.currentValue = readFloat("currentValue", 0.0f);
     c.rewardRP = readInt("rewardRP", 200);
+    c.rewardHypothesisId = readStr("rewardHypothesisId");
     c.timeLimitSec = static_cast<double>(readFloat("timeLimitSec", 0.0f));
     c.timeRemainingSec = static_cast<double>(readFloat("timeRemainingSec", 0.0f));
 

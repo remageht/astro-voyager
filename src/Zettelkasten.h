@@ -59,8 +59,14 @@ struct ZettelHypothesis {
   std::string sourceNoteA;
   std::string sourceNoteB;
   bool resolved = false;
+  // Classified dossiers: sealed until a stage-23 colony opens the archive or an
+  // elite colonial contract hands the file over as its prize (claimReward).
+  bool hidden = false;
   int rewardPoints = 350;
 };
+
+constexpr const char* kHypothesisRelicTachyon = "hyp_relic_tachyon";
+constexpr const char* kHypothesisPrecursorMetric = "hyp_precursor_metric";
 
 // Recipe defining the synthesis of a new breakthrough Master Node
 struct ZettelSynthesisRecipe {
@@ -109,6 +115,10 @@ class ZettelGraph {
   const std::vector<ZettelHypothesis>& getHypotheses() const;
   std::vector<ZettelHypothesis>& getHypotheses();
   bool resolveHypothesis(const std::string& id);
+  // Сколько дел ещё под грифом; раскрытие ничего не добавляет в заметки,
+  // оно только снимает гриф — так что счётчик заметок остаётся стабильным.
+  int hiddenHypothesisCount() const;
+  int revealHiddenHypotheses();
   void checkHypothesesProgression(const std::string& currentStation, bool isLanded,
                                   int researchPoints);
 

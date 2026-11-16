@@ -15,6 +15,7 @@ struct AchievementState {
   bool capturedHorizon = false;      // PH: camera crossed rs*1.05 (event-horizon capture)
   size_t colonyCount = 0;            // v3.7.0: m_colonies.size()
   bool asteroidDodged = false;       // v3.7.0: lifetime successful debris dodge
+  size_t maxColonyStage = 0;         // v5.0.x: colonyMaxStage() по всем мирам
 };
 
 std::vector<std::string> achievementsCheck(const AchievementState& s);
