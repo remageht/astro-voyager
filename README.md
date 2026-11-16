@@ -19,7 +19,7 @@
 ## Скачать и играть / Download & Play
 
 Готовые к запуску официальные сборки не требуют компиляции и работают «из коробки»:
-- 🎮 **Windows (x86_64)**: [astro-voyager-v5.0.0-windows-x86_64.zip](https://github.com/remageht/astro-voyager/releases/latest) (портативный архив) или инсталлятор `AstroVoyager-setup.exe`.
+- 🎮 **Windows (x86_64)**: [astro-voyager-v5.0.0-windows-x86_64-portable.zip](https://github.com/remageht/astro-voyager/releases/latest) (полный автономный портативный архив со всеми 3D-моделями, текстурами и звуком — распаковать и играть, установка не требуется).
 - 🐧 **Linux (x86_64)**: [astro-voyager-x86_64.AppImage](https://github.com/remageht/astro-voyager/releases/latest) (запуск в один клик: `chmod +x *.AppImage && ./*.AppImage`) **или** `astro-voyager-*-linux-x86_64-portable.tar.gz` — обычный архив, работает без FUSE и без установки.
 - 🍏 **macOS (Apple Silicon arm64)**: [astro-voyager-macos-arm64.tar.gz](https://github.com/remageht/astro-voyager/releases/latest) (нативная сборка OpenGL 3.3 Core).
 
