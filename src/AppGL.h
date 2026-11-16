@@ -77,6 +77,11 @@ class AppGL {
   void enableBenchmarkMode(float durationSec, const std::string& outPath,
                            const std::string& comparePath);
 
+  // === Безопасный режим (--safe) ===
+  // Слабый GPU (старые AMD): меньше лучей на луч, без FXAA, без тяжёлых
+  // эффектов. Вызывается сразу после создания AppGL.
+  void applySafeMode();
+
  private:
   void processInput(float deltaTime);
   void processMouse();

@@ -1337,6 +1337,21 @@ void AppGL::enableBenchmarkMode(float durationSec, const std::string& outPath,
   teleportToStation(kRoute[0]);
 }
 
+// === Безопасный режим (--safe) ===
+// Для слабых GPU (например, старые карты AMD, где игра показывала белый
+// экран и закрывалась): минимальный пресет рендера, без FXAA и тяжёлых
+// пост-эффектов. Пользователь может потом поднять настройки вручную.
+void AppGL::applySafeMode() {
+  if (m_sceneManager) {
+    m_sceneManager->applyPreset(PerfPreset::Low);
+  }
+  m_aaMode = 0;
+  if (m_sceneManager) {
+    m_sceneManager->setFxaa(false);
+  }
+  m_userOverrodePreset = true;
+}
+
 void AppGL::updateBenchmark(float deltaTime, const std::string& currentStationId) {
   if (!m_benchmarkMode || m_benchmarkDone) return;
   m_benchmarkElapsed += deltaTime;

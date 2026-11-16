@@ -653,6 +653,10 @@ $kerrCpp = Read-File 'src/Kerr.cpp'
 $cockpitCpp = Read-File 'src/CockpitController.cpp'
 $saveCpp = Read-File 'src/SaveGame.cpp'
 $geodesicCpp = Read-File 'src/Geodesic.cpp'
+$launchCpp = Read-File 'src/LaunchDiagnostics.cpp'
+$windowCpp = Read-File 'src/Window.cpp'
+$shaderCpp = Read-File 'src/Shader.cpp'
+$mainCpp = Read-File 'src/main.cpp'
 Check 'audio voice age computed in signed type' ($audioCpp -match 'static_cast<int64_t>\(now\) -')
 Check 'audio voice pcm shared ownership in snapshot' ($audioH -match 'std::shared_ptr<const std::vector<float>> pcm')
 Check 'audio voice duration table with static_assert' ($audioCpp -match 'voiceDurationTable must have one entry per VoiceType')
@@ -665,6 +669,18 @@ Check 'savegame rename does not remove the original' ($saveCpp -notmatch 'std::f
 Check 'expedition save uses atomic writer' (($appCpp -match 'saveWriteFile\(expeditionFilePathFor\(dir\), text, err\)') -and ($appCpp -notmatch 'std::ofstream f\(expeditionFilePathFor'))
 Check 'test_kerr exists' (Test-Path (Join-Path $root 'tests/test_kerr.cpp'))
 Check 'test_audio_voice exists' (Test-Path (Join-Path $root 'tests/test_audio_voice.cpp'))
+
+# Stage 5 / Release 1.0: Launch compatibility & diagnostics (Issue #165)
+Check 'launch diagnostics module exists' (Test-Path (Join-Path $root 'src/LaunchDiagnostics.cpp'))
+Check 'launch diagnostics writes a log file' ($launchCpp -match 'astro-voyager\.log')
+Check 'launch diagnostics reports GL capabilities' ($launchCpp -match 'glGetString\(GL_RENDERER\)')
+Check 'fatal error is shown to the user' ($launchCpp -match 'MessageBoxA')
+Check 'window falls back to older GL contexts' ($windowCpp -match '3\.3 compatibility')
+Check 'window does not request a debug context' ($windowCpp -notmatch 'GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE')
+Check 'shader failure degrades instead of killing the game' ($shaderCpp -match 'kFallbackFrag')
+Check 'shader error names the failing file' ($shaderCpp -match 'Shaders: ')
+Check 'cli exposes diagnostics and safe mode' (($mainCpp -match '"--diagnostics"') -and ($mainCpp -match '"--safe"'))
+Check 'safe mode applies low preset' ($appCpp -match 'void AppGL::applySafeMode')
 Check 'egorka_voice_player.html removed from root' (-not (Test-Path (Join-Path $root 'egorka_voice_player.html')))
 Check 'AppGL has drawVoiceCatalogPage declaration' ((Read-File 'src/AppGL.h') -match 'void drawVoiceCatalogPage\(float areaH\)')
 Check 'AppGL implements drawVoiceCatalogPage' ($appCpp -match 'void AppGL::drawVoiceCatalogPage\(float areaH\)')

@@ -405,6 +405,7 @@ if(ASTROVOYAGER_ENABLE_GL)
   target_sources(astro-voyager PRIVATE
     src/Window.cpp
     src/Shader.cpp
+    src/LaunchDiagnostics.cpp
     src/Mesh.cpp
     src/ObjModel.cpp
     src/Cubemap.cpp

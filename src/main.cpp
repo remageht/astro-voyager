@@ -14,6 +14,8 @@
 
 #ifdef ASTROVOYAGER_ENABLE_GL
 #include "AppGL.h"
+#include "LaunchDiagnostics.h"
+#include "Window.h"
 #endif
 
 namespace {
@@ -44,7 +46,7 @@ void printUsage() {
   std::cout << "Usage: astro-voyager [--list | --info <id> | "
                "--demo-geodesic | --demo-binet | --demo-rkf45 | --demo-kerr | --demo-warp | --test-interaction | --version";
 #ifdef ASTROVOYAGER_ENABLE_GL
-  std::cout << " | --gl | --screenshot-all [--disk]"
+  std::cout << " | --gl | --safe | --diagnostics | --screenshot-all [--disk]"
                " | --capture-station <png> | --capture-dragon <png> | --capture-zettel <png>"
                " | --capture-hud <png> | --capture-terminal <png> | --capture-menu <dir>"
                " | --capture-earth <dir>"
@@ -62,6 +64,26 @@ int main(int argc, char** argv) {
     std::cout << astro::kAppName << " " << astro::kVersion << "\n";
     return 0;
   }
+#ifdef ASTROVOYAGER_ENABLE_GL
+  // Лог запуска нужен всегда: без него фатальная ошибка на чужой машине
+  // выглядит как «белый экран и закрылось».
+  astro::initLaunchLog(argc > 0 ? argv[0] : nullptr);
+  if (arg == "--safe") {
+    astro::setSafeModeRequested(true);
+  }
+  if (arg == "--diagnostics") {
+    // Диагностика для поддержки: версии GL/драйвера и путь к логу.
+    try {
+      astro::Window probe(320, 240, "Astro Voyager diagnostics", false);
+      std::cout << astro::glCapabilitiesString();
+      std::cout << "Log file: " << astro::launchLogPath() << "\n";
+      return 0;
+    } catch (const std::exception& e) {
+      astro::reportFatalError(std::string("Diagnostics failed: ") + e.what());
+      return 1;
+    }
+  }
+#endif
   if (arg == "--list") {
     for (const auto& s : astro::builtinCatalog()) {
       std::cout << s.id << " [" << astro::typeToString(s.type) << "] "
@@ -821,18 +843,28 @@ int main(int argc, char** argv) {
     try {
       astro::AppGL app;
       app.enableBenchmarkMode(durationSec, outPath, comparePath);
+      if (astro::safeModeRequested()) {
+        app.applySafeMode();
+      }
       return app.run();
     } catch (const std::exception& e) {
-      std::cerr << "GL Error: " << e.what() << "\n";
+      astro::reportFatalError(std::string("GL Error: ") + e.what());
       return 1;
     }
   }
   if (arg == "--gl" || arg.empty()) {
     try {
       astro::AppGL app;
+      if (astro::safeModeRequested()) {
+        // --safe: низкий пресет без FXAA — для слабых GPU (старые AMD).
+        app.applySafeMode();
+        astro::logLaunch("[Launch] safe mode enabled (low preset, FXAA off)");
+      }
       return app.run();
     } catch (const std::exception& e) {
-      std::cerr << "GL Error: " << e.what() << "\n";
+      // Раньше ошибка уходила только в stderr, которого в оконном exe не
+      // видно: игра просто исчезала. Теперь — в лог, в консоль и в диалог.
+      astro::reportFatalError(std::string("GL Error: ") + e.what());
       return 1;
     }
   }
