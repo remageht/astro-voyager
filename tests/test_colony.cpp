@@ -187,6 +187,141 @@ int main() {
     std::cout << "PASS: Test 6 deep engineering lore, tech unlocks, and environmental telemetry\n";
   }
 
-  std::cout << "[test_colony] ALL 6 TESTS PASSED!\n";
+  // Test 7: surface build-out plans and per-world power plants
+  {
+    static const char* kKnownAssets[] = {"dome", "factory", "pad", "nuclear",
+                                         "hydro", "thermal", "datacenter"};
+    const auto isKnown = [](const std::string& asset) {
+      for (const char* known : kKnownAssets)
+        if (asset == known) return true;
+      return false;
+    };
+
+    // Every stage contributes at least one structure, so progression is visible.
+    const auto& plan = colonyStagePlan();
+    for (size_t i = 0; i < plan.size(); ++i) {
+      int items = 0;
+      for (int s = 0; s < kColonyPlanSlots; ++s) {
+        const ColonyStructure& entry = plan[i][s];
+        if (entry.count <= 0) continue;
+        ++items;
+        const bool known = entry.asset == std::string(kColonyPowerAsset) ||
+                           std::string(entry.asset) == "dome" ||
+                           std::string(entry.asset) == "factory" ||
+                           std::string(entry.asset) == "pad" ||
+                           std::string(entry.asset) == "datacenter";
+        if (!known) {
+          std::cerr << "Test 7 failed: stage " << i + 1 << " uses unknown asset "
+                    << entry.asset << "\n";
+          return 1;
+        }
+      }
+      if (items == 0) {
+        std::cerr << "Test 7 failed: stage " << i + 1 << " builds nothing\n";
+        return 1;
+      }
+    }
+
+    // Airless bodies run fission, icy worlds hydro, Mercury/Titan thermal.
+    if (std::string(colonyEnergyAsset("mars")) != "nuclear" ||
+        std::string(colonyEnergyAsset("moon")) != "nuclear" ||
+        std::string(colonyEnergyAsset("europa")) != "hydro" ||
+        std::string(colonyEnergyAsset("hercules-b")) != "hydro" ||
+        std::string(colonyEnergyAsset("mercury")) != "thermal" ||
+        std::string(colonyEnergyAsset("titan")) != "thermal") {
+      std::cerr << "Test 7 failed: world power plant mapping\n";
+      return 1;
+    }
+
+    // The "power" placeholder must be resolved, never rendered literally.
+    const auto stage3 = colonyBuildPlan("europa", 3);
+    for (const auto& entry : stage3) {
+      if (entry.first == kColonyPowerAsset || !isKnown(entry.first)) {
+        std::cerr << "Test 7 failed: unresolved asset " << entry.first << "\n";
+        return 1;
+      }
+    }
+
+    // Build-out grows monotonically and merges duplicates per asset.
+    int previous = -1;
+    for (int stage = 1; stage <= kColonyStageCount; ++stage) {
+      const auto buildPlan = colonyBuildPlan("mars", stage);
+      int total = 0;
+      for (const auto& entry : buildPlan) {
+        total += entry.second;
+        for (const auto& other : buildPlan) {
+          if (&entry == &other) continue;
+          if (entry.first == other.first) {
+            std::cerr << "Test 7 failed: duplicate asset rows at stage " << stage << "\n";
+            return 1;
+          }
+        }
+      }
+      if (total != colonyStructureCount("mars", stage)) {
+        std::cerr << "Test 7 failed: structure count mismatch at stage " << stage << "\n";
+        return 1;
+      }
+      if (total <= previous) {
+        std::cerr << "Test 7 failed: build-out did not grow at stage " << stage << "\n";
+        return 1;
+      }
+      previous = total;
+    }
+
+    // Stage 24 must show the full civilization footprint.
+    const auto capital = colonyBuildPlan("mars", kColonyStageCount);
+    bool hasPower = false, hasData = false, hasDome = false;
+    for (const auto& entry : capital) {
+      if (entry.first == "nuclear") hasPower = true;
+      if (entry.first == "datacenter") hasData = true;
+      if (entry.first == "dome") hasDome = true;
+    }
+    if (!hasPower || !hasData || !hasDome) {
+      std::cerr << "Test 7 failed: capital build-out incomplete\n";
+      return 1;
+    }
+
+    std::cout << "PASS: Test 7 surface build-out plans and per-world power plants\n";
+  }
+
+  // Test 8: world-development milestones
+  {
+    const auto& ms = colonyTerraformMilestones();
+    if (ms.size() < 8) {
+      std::cerr << "Test 8 failed: expected a full terraforming ladder\n";
+      return 1;
+    }
+    int lastStage = 0;
+    float lastAtmo = -1.0f, lastBio = -1.0f;
+    for (const auto& m : ms) {
+      if (m.stage <= lastStage || m.stage > kColonyStageCount || m.rewardRP <= 0 ||
+          m.atmosphere < lastAtmo || m.biosphere < lastBio) {
+        std::cerr << "Test 8 failed: milestones must rise monotonically\n";
+        return 1;
+      }
+      lastStage = m.stage;
+      lastAtmo = m.atmosphere;
+      lastBio = m.biosphere;
+    }
+    if (colonyMilestonesReached(0) != 0 || colonyMilestonesReached(4) != 1 ||
+        colonyMilestonesReached(kColonyStageCount) != static_cast<int>(ms.size())) {
+      std::cerr << "Test 8 failed: milestone counting\n";
+      return 1;
+    }
+    float atmo = 1.0f, bio = 1.0f;
+    colonyTerraformState(0, atmo, bio);
+    if (atmo != 0.0f || bio != 0.0f) {
+      std::cerr << "Test 8 failed: barren world must have no atmosphere or life\n";
+      return 1;
+    }
+    colonyTerraformState(kColonyStageCount, atmo, bio);
+    if (atmo < 0.99f || bio < 0.99f) {
+      std::cerr << "Test 8 failed: a stage-24 world should be a full biosphere\n";
+      return 1;
+    }
+    std::cout << "PASS: Test 8 world-development milestones\n";
+  }
+
+  std::cout << "[test_colony] ALL 7 TESTS PASSED!\n";
   return 0;
 }

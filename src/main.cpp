@@ -51,6 +51,7 @@ void printUsage() {
                " | --capture-hud <png> | --capture-terminal <png> | --capture-menu <dir>"
                " | --capture-earth <dir>"
                " | --capture-fleet <dir>"
+               " | --capture-colony <dir>"
                " | --benchmark [--benchmark-duration <sec>]"
                " [--benchmark-out <path>] [--benchmark-compare <baseline.json>]";
 #endif
@@ -805,6 +806,10 @@ int main(int argc, char** argv) {
   if (arg == "--capture-fleet") {
     std::string outDir = (argc > 2) ? argv[2] : "docs/screens/fleet_ingame";
     return astro::AppGL::captureFleetCheck(outDir);
+  }
+  if (arg == "--capture-colony") {
+    std::string outDir = (argc > 2) ? argv[2] : "docs/screens/colony_ingame";
+    return astro::AppGL::captureColonyCheck(outDir);
   }
   if (arg == "--capture-zettel") {
     std::string outPng = (argc > 2) ? argv[2] : "docs/screens/zettelkasten_mind_map.png";

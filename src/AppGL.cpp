@@ -413,6 +413,9 @@ int AppGL::run() {
     updateDynamicHudAlphas(simDt);
     // === Planetary Landing & Surface Operations === (v4.6.1)
     updateLandingOperations(simDt);
+    // === Colonies === (v5.1.0): passive RP and spaceport servicing run from the
+    // simulation step, so they keep working with the HUD hidden (F2/photo mode).
+    updateColonyEconomy(simDt);
     // === MissionSystem === (Stage 7 / Roadmap #5)
     {
       const std::string curStation = (m_sceneManager && m_sceneManager->getCurrentStation()) ?
@@ -1772,12 +1775,41 @@ bool AppGL::foundColony(const std::string& id) {
 }
 
 bool AppGL::upgradeColony(const std::string& id) {
+  const int milestonesBefore = colonyMilestonesReached(colonyStage(m_colonyStages, id));
   int points = m_codex.getTotalResearchPoints();
   const int before = points;
   if (advanceColony(m_colonyStages, id, m_codex.getScannedCount(), points) != ColonyUpgradeResult::Success)
     return false;
   m_codex.spendResearchPoints(before - points);
   m_sceneManager->setColonyStages(m_colonyStages);
+
+  // World-development milestones pay out once the stage crosses them.
+  const int stage = colonyStage(m_colonyStages, id);
+  const int milestonesNow = colonyMilestonesReached(stage);
+  if (milestonesNow > milestonesBefore) {
+    int reward = 0;
+    std::string lastRu, lastEn;
+    for (const auto& m : colonyTerraformMilestones()) {
+      if (m.stage <= milestonesBefore || m.stage > stage) continue;
+      reward += m.rewardRP;
+      lastRu = m.nameRu;
+      lastEn = m.nameEn;
+    }
+    m_codex.addResearchPoints(reward);
+    float atmo = 0.0f, bio = 0.0f;
+    colonyTerraformState(stage, atmo, bio);
+    Toast mt;
+    mt.title = uiRu("Освоение мира", "World development");
+    char body[256];
+    std::snprintf(body, sizeof(body),
+                  uiRu("%s — +%d RP. Атмосфера %.0f%%, биосфера %.0f%%",
+                       "%s — +%d RP. Atmosphere %.0f%%, biosphere %.0f%%"),
+                  uiRu(lastRu.c_str(), lastEn.c_str()), reward, atmo * 100.0f, bio * 100.0f);
+    mt.desc = body;
+    mt.time = static_cast<float>(glfwGetTime());
+    m_toasts.push_back(mt);
+    m_audio.playChime();
+  }
   saveProfileNow(true);
   return true;
 }
@@ -1902,6 +1934,67 @@ void AppGL::drawColonies() {
                   stage, kColonyStageCount,
                   uiRu(colonyEpochNameRu(epoch), colonyEpochNameEn(epoch)));
     ImGui::ProgressBar(static_cast<float>(stage) / kColonyStageCount, ImVec2(-1, 24), progressBuf);
+
+    // What actually stands on the surface right now, and which power plant the
+    // world runs on (fission / hydro / thermal depending on the body).
+    if (stage > 0) {
+      const auto buildPlan = colonyBuildPlan(m_selectedColony, stage);
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.72f, 0.86f, 1.0f, 1.0f), "%s (%s): %d",
+                         uiRu("Построено объектов", "Built structures"),
+                         uiRu(selected->nameRu, selected->nameEn),
+                         colonyStructureCount(m_selectedColony, stage));
+      ImGui::SameLine();
+      const char* power = colonyEnergyAsset(m_selectedColony);
+      ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.35f, 1.0f), "| %s: %s",
+                         uiRu("Энергетика", "Power base"),
+                         std::string(power) == "nuclear"
+                             ? uiRu("АЭС (гиперболоидные градирни)", "Nuclear plant (hyperboloid towers)")
+                             : std::string(power) == "hydro"
+                                   ? uiRu("ГЭС (дамба и водосброс)", "Hydro station (dam and spillway)")
+                                   : uiRu("ГРЭС (котлооборот и градирни воздуха)",
+                                          "Condensing station (boiler house and ACC)"));
+      static const struct { const char* key; const char* ru; const char* en; } kAssetNames[] = {
+          {"dome", "купола", "domes"}, {"factory", "заводы", "plants"},
+          {"pad", "площадки", "pads"}, {"datacenter", "дата-центры", "data campuses"},
+          {"nuclear", "АЭС", "nuclear plants"}, {"hydro", "ГЭС", "hydro stations"},
+          {"thermal", "ГРЭС", "condensing stations"}};
+      std::string summary;
+      for (const auto& entry : buildPlan) {
+        for (const auto& named : kAssetNames) {
+          if (entry.first == named.key) {
+            if (!summary.empty()) summary += ", ";
+            summary += std::to_string(entry.second) + " " + uiRu(named.ru, named.en);
+            break;
+          }
+        }
+      }
+      if (!summary.empty()) ImGui::TextWrapped("  %s", summary.c_str());
+
+      // Terraforming ladder: elements -> atmosphere -> organics -> life.
+      float atmo = 0.0f, bio = 0.0f;
+      colonyTerraformState(stage, atmo, bio);
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.75f, 1.0f), "%s: %s %.0f%% | %s %.0f%%",
+                         uiRu("Освоение мира", "World development"),
+                         uiRu("атмосфера", "atmosphere"), atmo * 100.0f,
+                         uiRu("биосфера", "biosphere"), bio * 100.0f);
+      ImGui::ProgressBar(atmo, ImVec2(-1, 16), uiRu("Атмосфера", "Atmosphere"));
+      ImGui::ProgressBar(bio, ImVec2(-1, 16), uiRu("Биосфера", "Biosphere"));
+      for (const auto& m : colonyTerraformMilestones()) {
+        const bool reached = stage >= m.stage;
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              reached ? ImVec4(0.45f, 1.0f, 0.62f, 1.0f)
+                                      : ImVec4(0.55f, 0.60f, 0.70f, 0.85f));
+        ImGui::Text("%s  %s", reached ? "[+]" : "[ ]", uiRu(m.nameRu, m.nameEn));
+        ImGui::PopStyleColor();
+        if (reached) {
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.62f, 0.72f, 0.82f, 0.9f));
+          ImGui::TextWrapped("    %s", uiRu(m.detailRu, m.detailEn));
+          ImGui::PopStyleColor();
+        }
+      }
+    }
 
     // Active project / Next project construction box
     ImGui::Spacing();
@@ -7611,7 +7704,6 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (m_storyOpen && !m_inMenu) drawStoryPanel();
   // === Orbital Shipyard === (v3.11.0): верфь и кастомизация кораблей.
   if (m_shipyardOpen && !m_inMenu) drawShipyard();
-  if (!m_inMenu) updateColonyEconomy(ImGui::GetIO().DeltaTime);
   if (m_coloniesOpen && !m_inMenu) drawColonies();
   // === Constellation Alignment Minigame ===
   if (m_constellationAlignOpen && !m_inMenu) drawConstellationAlignment();
@@ -13003,6 +13095,137 @@ int AppGL::captureFleetCheck(const std::string& outDir) {
   }
 
   std::cout << "Fleet capture checks: " << shotChecks + 2 << "\n";
+  return ok ? 0 : 1;
+}
+
+int AppGL::captureColonyCheck(const std::string& outDir) {
+  s_harnessPinFps = true;
+  warpdrive::setDockSitesVisible(true);
+  warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+  std::filesystem::create_directories(outDir);
+
+  std::unique_ptr<AppGL> appPtr;
+  try {
+    appPtr = std::make_unique<AppGL>(1280, 720, false);
+  } catch (...) {
+    return 1;
+  }
+  AppGL& app = *appPtr;
+  app.m_sceneManager->teleportTo("sol", app.m_camera);
+
+  int fbWidth = 1280, fbHeight = 720;
+  app.m_window->getFramebufferSize(fbWidth, fbHeight);
+  glViewport(0, 0, fbWidth, fbHeight);
+  app.m_sceneManager->getSettings().fovDegrees = 42.0f;
+  app.m_sceneManager->setShowOrbits(false);
+  app.m_sceneManager->setShowBelt(false);
+
+  // Four worlds at four different epochs: dome+pad only, full industry with a
+  // condensing plant, fission station on Mars, and a hydro-powered campus world.
+  const struct Case {
+    const char* world;
+    int stage;
+    const char* file;
+  } cases[] = {
+      {"moon", 5, "colony_moon_stage5.png"},
+      {"titan", 8, "colony_titan_stage8.png"},
+      {"mars", 14, "colony_mars_stage14.png"},
+      {"europa", 22, "colony_europa_stage22.png"}};
+
+  const auto setStages = [&](bool built) {
+    std::vector<std::string> ids;
+    ColonyStages stages;
+    if (built) {
+      for (const auto& c : cases) {
+        ids.push_back(c.world);
+        stages[c.world] = c.stage;
+      }
+    }
+    app.m_colonies = ids;
+    app.m_colonyStages = stages;
+    app.m_sceneManager->setColonies(ids);
+    app.m_sceneManager->setColonyStages(stages);
+  };
+
+  const int boxX0 = fbWidth / 2 - 200, boxX1 = fbWidth / 2 + 200;
+  const int boxY0 = fbHeight / 2 - 200, boxY1 = fbHeight / 2 + 200;
+  auto grabCentre = [&]() {
+    std::vector<unsigned char> pixels(static_cast<size_t>(fbWidth) * fbHeight * 3u);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, fbWidth, fbHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    std::vector<unsigned char> crop(static_cast<size_t>(boxX1 - boxX0) * (boxY1 - boxY0) * 3u);
+    for (int y = boxY0; y < boxY1; ++y) {
+      memcpy(&crop[static_cast<size_t>(y - boxY0) * (boxX1 - boxX0) * 3],
+             &pixels[(static_cast<size_t>(y) * fbWidth + boxX0) * 3],
+             static_cast<size_t>(boxX1 - boxX0) * 3);
+    }
+    return crop;
+  };
+
+  bool ok = true;
+  int checks = 0;
+  for (const auto& c : cases) {
+    ++checks;
+    setStages(true);
+    app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+
+    const SceneManager::ColonySite* site = nullptr;
+    for (const auto& s : app.m_sceneManager->colonySites()) {
+      if (s.id == c.world && s.stationId == "sol") {
+        site = &s;
+        break;
+      }
+    }
+    if (!site) {
+      std::cout << "Colony " << c.world << ": FAIL (site missing)\n";
+      ok = false;
+      continue;
+    }
+
+    const float* n = colonyAnchorNormal(c.world);
+    const Vec3 anchor(site->pos.x + n[0] * site->radius,
+                      site->pos.y + n[1] * site->radius,
+                      site->pos.z + n[2] * site->radius);
+    const float standOff = std::max(site->radius * 3.1f, 0.55f);
+    app.m_camera.position = Vec3(anchor.x + n[0] * standOff,
+                                 anchor.y + n[1] * standOff,
+                                 anchor.z + n[2] * standOff);
+    app.computeLookYawPitch(app.m_camera.position, anchor,
+                            app.m_camera.yaw, app.m_camera.pitch);
+
+    for (int frame = 0; frame < 6; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      if (frame < 5) {
+        app.m_window->swapBuffers();
+        app.m_window->pollEvents();
+      }
+    }
+    const auto built = grabCentre();
+    const bool saved = app.saveScreenshot(outDir + "/" + c.file);
+
+    // Same camera with every colony removed: the settlement must disappear.
+    setStages(false);
+    for (int frame = 0; frame < 3; ++frame) {
+      app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+      app.m_window->swapBuffers();
+      app.m_window->pollEvents();
+    }
+    const auto bare = grabCentre();
+
+    int changed = 0;
+    for (size_t i = 0; i < built.size(); i += 3) {
+      if (built[i] != bare[i] || built[i + 1] != bare[i + 1] || built[i + 2] != bare[i + 2])
+        ++changed;
+    }
+    const int expected = colonyStructureCount(c.world, c.stage);
+    const bool pass = saved && changed > 400 && expected > 0;
+    std::cout << "Colony " << c.world << " stage " << c.stage << ": structures="
+              << expected << ", centre-changed=" << changed << (pass ? " PASS" : " FAIL") << "\n";
+    ok = pass && ok;
+  }
+
+  setStages(true);
+  std::cout << "Colony capture checks: " << checks << "\n";
   return ok ? 0 : 1;
 }
 

@@ -392,7 +392,7 @@ Check 'fx amplitudes softened' (((Read-File 'shaders/post_comp.frag') -match '0\
 Check 'colony sites catalog' (($sceneCpp -match '"mars", "Mars", "sol"') -and ($sceneCpp -match '"hercules-b", "Hercules b", "m13"'))
 Check 'm13 system detail' (($sceneCpp -match '5200') -and ($sceneCpp -match 'Hercules Prime') -and ($sceneCpp -match 'm_clusterBright'))
 Check 'colony saved in profile' (((Read-File 'src/SaveGame.h') -match 'colonies') -and ((Read-File 'src/SaveGame.cpp') -match '"colonies"'))
-Check 'colonization hotkey' (($appCpp -match 'm_keyColony') -and ($appCpp -match 'Основать колонию') -and ($appCpp -match 'm_colonyHintId'))
+Check 'colonization hotkey' (($appCpp -match 'm_keyColony') -and ($appCpp -match 'foundColony') -and ($appCpp -match 'm_colonyHintId'))
 Check 'colony marker ring' (($sceneCpp -match 'hasColony\("hercules-b"\)') -and ($sceneCpp -match 'hasColony\("mars"\)'))
 Check 'colony save round-trip test' ((Read-File 'tests/test_save.cpp') -match 'progress\.colonies = \{"mars", "hercules-b"\}')
 
@@ -749,3 +749,15 @@ Write-Output 'All checks passed.'
 
 
 
+
+# --- v5.0.5 colony development stages, infrastructure and terraforming ---
+Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and ($sceneCpp -match 'colonyAnchorNormal')) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
+Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
+Check 'colony infrastructure assets loaded' (($sceneCpp -match 'colony_nuclear\.obj') -and ($sceneCpp -match 'colony_hydro\.obj') -and ($sceneCpp -match 'colony_thermal\.obj') -and ($sceneCpp -match 'colony_datacenter\.obj') -and ($sceneCpp -match 'colony_factory\.obj'))
+Check 'colony terraforming milestones' ((($sceneCpp -match 'colonyTerraformState') -and ($appCpp -match 'colonyTerraformMilestones')) -and ((Read-File 'src/ColonySystem.cpp') -match 'colonyMilestonesReached'))
+Check 'colony milestones reward rp' (((Read-File 'src/ColonySystem.h') -match 'int rewardRP') -and ($appCpp -match 'm\.rewardRP'))
+Check 'colony passive income outside ui' ((($appCpp -match 'updateColonyEconomy\(simDt\)') -and ($appCpp -notmatch 'updateColonyEconomy\(ImGui')) -and ((Read-File 'src/ScienceSystem.cpp') -match 'clamp\(bonusPercent, 0, 120\)'))
+Check 'colony capture harness' (((Read-File 'src/main.cpp') -match '--capture-colony') -and ($appCpp -match 'captureColonyCheck') -and ((Read-File 'src/AppGL.h') -match 'captureColonyCheck'))
+Check 'colony stage and rp saved' (((Read-File 'src/SaveGame.cpp') -match 'colonyStages') -and ((Read-File 'src/SaveGame.cpp') -match 'researchPoints') -and ((Read-File 'tests/test_save.cpp') -match 'colonyStages'))
+Check 'shared atlas module' (((Read-File 'blender/scripts/asset_atlas.py') -match 'GRID - 1 - gy') -and ((Read-File 'blender/scripts/generate_colony_assets.py') -match 'import asset_atlas') -and ((Read-File 'blender/scripts/generate_own_craft.py') -match 'import asset_atlas') -and ((Read-File 'blender/scripts/generate_station_aurora.py') -match 'import asset_atlas'))
+Check 'v5.0.5 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))

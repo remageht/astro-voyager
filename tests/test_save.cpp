@@ -558,6 +558,76 @@ int main() {
     std::filesystem::remove_all(std::filesystem::u8path(testDir), ec);
   }
 
+  // Test 18 (v5.1.0): colony stages and the RP balance survive a round-trip.
+  {
+    astro::SaveGame g;
+    g.mode = astro::SaveMode::Sandbox;
+    g.progress.colonies = {"mars", "moon", "europa"};
+    g.progress.colonyStages = {{"mars", 14}, {"moon", 3}, {"europa", 22}};
+    g.progress.researchPoints = 1234;
+
+    const std::string text = astro::saveSerialize(g);
+    astro::SaveGame out;
+    std::string err;
+    if (!astro::saveDeserialize(text, out, err)) {
+      std::cerr << "Test 18 failed: " << err << '\n';
+      return 1;
+    }
+    if (out.progress.researchPoints != 1234) {
+      std::cerr << "Test 18 failed: RP balance lost, got "
+                << out.progress.researchPoints << '\n';
+      return 1;
+    }
+    if (out.progress.colonyStages.size() != 3 ||
+        astro::colonyStage(out.progress.colonyStages, "mars") != 14 ||
+        astro::colonyStage(out.progress.colonyStages, "moon") != 3 ||
+        astro::colonyStage(out.progress.colonyStages, "europa") != 22) {
+      std::cerr << "Test 18 failed: colony stages lost\n";
+      return 1;
+    }
+    if (out.progress.colonies.size() != 3) {
+      std::cerr << "Test 18 failed: colony list size "
+                << out.progress.colonies.size() << '\n';
+      return 1;
+    }
+
+    // Legacy profiles carry only the id list: every old colony must come back
+    // as stage 1, and unknown ids must be dropped rather than trusted.
+    astro::SaveGame legacy;
+    legacy.progress.colonies = {"mars", "phobos", "mars"};
+    const std::string legacyText = astro::saveSerialize(legacy);
+    astro::SaveGame legacyOut;
+    if (!astro::saveDeserialize(legacyText, legacyOut, err)) {
+      std::cerr << "Test 18 failed: legacy parse " << err << '\n';
+      return 1;
+    }
+    if (legacyOut.progress.colonies.size() != 1 ||
+        astro::colonyStage(legacyOut.progress.colonyStages, "mars") != 1) {
+      std::cerr << "Test 18 failed: legacy colony normalization\n";
+      return 1;
+    }
+    if (legacyOut.progress.researchPoints != -1) {
+      std::cerr << "Test 18 failed: absent RP must stay a sentinel, got "
+                << legacyOut.progress.researchPoints << '\n';
+      return 1;
+    }
+
+    // Out-of-range stages clamp instead of corrupting the build-out.
+    astro::SaveGame wild;
+    wild.progress.colonies = {"titan"};
+    wild.progress.colonyStages = {{"titan", 999}};
+    astro::SaveGame clamped;
+    std::string wildErr;
+    if (!astro::saveDeserialize(astro::saveSerialize(wild), clamped, wildErr) ||
+        astro::colonyStage(clamped.progress.colonyStages, "titan") !=
+            astro::kColonyStageCount) {
+      std::cerr << "Test 18 failed: stage clamp\n";
+      return 1;
+    }
+
+    std::cout << "Test 18 OK: colony stages, RP balance and legacy migration\n";
+  }
+
   std::cout << "save tests: ALL PASS\n";
   return 0;
   } catch (const std::exception& e) {

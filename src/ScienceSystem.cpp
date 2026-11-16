@@ -435,7 +435,8 @@ bool ScienceCodex::scanObject(const std::string& stationId, double timestamp, in
       if (!e.scanned) {
         e.scanned = true;
         e.scannedTimestamp = timestamp;
-        m_totalPoints += e.researchPoints * (100 + std::clamp(bonusPercent, 0, 50)) / 100;
+        // Late colony epochs promise up to +120%, so the clamp has to cover them.
+        m_totalPoints += e.researchPoints * (100 + std::clamp(bonusPercent, 0, 120)) / 100;
         return true;  // Newly scanned!
       }
       return false;  // Already scanned before
