@@ -686,6 +686,8 @@ Check 'safe mode applies low preset' ($appCpp -match 'void AppGL::applySafeMode'
 Check 'portable build script exists' (Test-Path (Join-Path $root 'packaging/build-portable.ps1'))
 Check 'asset pack builder exists' (Test-Path (Join-Path $root 'packaging/build-asset-pack.ps1'))
 Check 'asset pack fetcher exists' (Test-Path (Join-Path $root 'packaging/fetch-assets.ps1'))
+$pkgDangling = (((Read-File 'packaging/fetch-assets.ps1') -split "`n") | Where-Object { $_ -match '--(jq|json|pattern)\s*$' }).Count
+Check 'packaging gh flags complete' ($pkgDangling -eq 0)
 Check 'portable script ships res folder' ((Read-File 'packaging/build-portable.ps1') -match 'res\\models')
 Check 'workflow fetches game assets in CI' ($ci -match 'fetch-assets\.ps1')
 Check 'workflow builds linux portable tarball' ($ci -match 'linux-x86_64-portable\.tar\.gz')

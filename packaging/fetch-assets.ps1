@@ -48,8 +48,8 @@ try {
 if (-not $ok) {
   # Пробуем самый свежий релиз с пакетом — модели одинаковые для всех версий.
   try {
-    $latest = gh release list -R $Repo --limit 20 --json tagName,assets --jq
-      '[.[] | select(any(.assets[]?; .name | startswith("astro-voyager-assets-"))) | .tagName] | first // empty'
+    $latestFilter = '[.[] | select(any(.assets[]?; .name | startswith("astro-voyager-assets-"))) | .tagName] | first // empty'
+    $latest = gh release list -R $Repo --limit 20 --json tagName,assets --jq $latestFilter
     if ($latest) {
       $latestPattern = "astro-voyager-assets-$latest.zip"
       Write-Host "    trying latest release with assets: $latest"
