@@ -233,6 +233,56 @@ bool MissionManager::abandonContract(const std::string& contractId) {
   return true;
 }
 
+void MissionManager::ensureStarterQuests(const std::string& currentStationId) {
+  if (!m_active.empty()) return;
+
+  if (m_available.empty()) {
+    generateBoard(currentStationId.empty() ? "sol" : currentStationId, 4, 42);
+  }
+
+  // Accept up to 2 initial contracts from available board
+  while (m_active.size() < 2 && !m_available.empty()) {
+    acceptContract(m_available.front().id);
+  }
+
+  // Fallback: If board had no suitable contracts, construct canonical starter directives
+  if (m_active.empty()) {
+    MissionContract c1;
+    c1.id = "starter_spectrometry_mars";
+    c1.type = MissionType::SpectralSurvey;
+    c1.status = MissionStatus::Active;
+    c1.clientRu = "Земной Научный Директорат";
+    c1.clientEn = "Earth Scientific Directorate";
+    c1.titleRu = "Спектрометрия: Марс";
+    c1.titleEn = "Spectrometry: Mars";
+    c1.descRu = "Проведите спектральный анализ атмосферы Марса с орбиты и зарегистрируйте спектральные линии.";
+    c1.descEn = "Perform spectrometry analysis of Mars atmosphere from orbit and log spectral lines.";
+    c1.targetStationId = "mars";
+    c1.targetStationName = "Марс";
+    c1.targetValue = 1.0f;
+    c1.currentValue = 0.0f;
+    c1.rewardRP = 250;
+    m_active.push_back(c1);
+
+    MissionContract c2;
+    c2.id = "starter_core_moon";
+    c2.type = MissionType::SurfaceSampling;
+    c2.status = MissionStatus::Active;
+    c2.clientRu = "Академия Экзофизики и Релятивизма";
+    c2.clientEn = "Exophysics & Relativistic Academy";
+    c2.titleRu = "Георазведка: Керн Луны (20 см)";
+    c2.titleEn = "Core Sampling: Moon (20 cm)";
+    c2.descRu = "Совершите посадку на Луну и произведите забор образца реголита буром CoreSampler на глубину от 20 см.";
+    c2.descEn = "Execute a touchdown on the Moon and extract regolith core sample to depth >= 20 cm.";
+    c2.targetStationId = "moon";
+    c2.targetStationName = "Луна";
+    c2.targetValue = 20.0f;
+    c2.currentValue = 0.0f;
+    c2.rewardRP = 300;
+    m_active.push_back(c2);
+  }
+}
+
 void MissionManager::update(double dt, const std::string& currentStationId,
                             double shipDistToTarget, bool isDocked, float shipSpeed) {
   (void)currentStationId;

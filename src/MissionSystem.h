@@ -75,6 +75,7 @@ class MissionManager {
   // Contract management (max 3 concurrent active contracts)
   bool acceptContract(const std::string& contractId);
   bool abandonContract(const std::string& contractId);
+  void ensureStarterQuests(const std::string& currentStationId = "sol");
 
   // Time and proximity update loop
   void update(double dt, const std::string& currentStationId, double shipDistToTarget,

@@ -311,6 +311,9 @@ class AppGL {
   int m_slideAnimIdx = -1;
   double m_slideTextStart = 0.0;
   double m_slideShownAt = 0.0;
+  bool m_slideAutoPlay = true;        // Cinematic auto-advancing slides toggle (Tab / A)
+  double m_slideAutoPlayDelay = 4.5;  // Base reading delay after text is typed
+  bool m_questHudCollapsed = false;   // Collapsed / expanded state of in-flight HUD quest tracker
   static unsigned int uploadRgba(const unsigned char* px, int w, int h);
   void invalidateVideoSlide();
 
@@ -743,6 +746,7 @@ class AppGL {
   // === Orbital Cruise (v5.3.0 Alpha): кеплерово курсирование по орбите планет и звёзд (клавиша R)
   bool m_orbitCruiseActive = false;
   bool m_prevRPressed = false;
+  bool m_prevUPressed = false;  // U: toggle Quest tracker collapse in flight HUD
   ship::OrbitalCruiseTelemetry m_orbitTelem;
   void toggleOrbitalCruise();
   void updateOrbitalCruise(float deltaTime, double throttleAdjust);

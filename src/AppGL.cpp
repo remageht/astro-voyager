@@ -728,6 +728,13 @@ void AppGL::processInput(float deltaTime) {
   }
   m_prevNPressed = nDown;
 
+  // === Quest HUD ===: U — свернуть / развернуть трекер квестов в HUD.
+  const bool uDown = (glfwGetKey(win, GLFW_KEY_U) == GLFW_PRESS);
+  if (uDown && !m_prevUPressed && !io.WantCaptureKeyboard && !m_inMenu && m_slidesCurrent.empty()) {
+    m_questHudCollapsed = !m_questHudCollapsed;
+  }
+  m_prevUPressed = uDown;
+
   const bool pDown = (glfwGetKey(win, GLFW_KEY_P) == GLFW_PRESS);
   if (pDown && !m_prevPPressed && !io.WantCaptureKeyboard) {
     m_sceneManager->togglePause();
@@ -3957,6 +3964,8 @@ void AppGL::startNewAdventure() {
   m_finaleChoiceOpen = false;
   m_pendingFinaleChoice = false;
   m_slideAnimIdx = -1;
+  m_missions.ensureStarterQuests("sol");
+  saveMissionsFileNow();
   saveExpeditionFileNow();
   invalidateVideoSlide();
 }
@@ -4382,6 +4391,11 @@ void AppGL::drawSlidesOverlay() {
   const bool videoDone = hasVideo && m_videoFrames > 0 &&
                          vTime * 12.0 >= static_cast<double>(m_videoFrames);
 
+  // Auto-advance toggle hotkey (Tab or A)
+  if (ImGui::IsKeyPressed(ImGuiKey_Tab, false) || ImGui::IsKeyPressed(ImGuiKey_A, false)) {
+    m_slideAutoPlay = !m_slideAutoPlay;
+  }
+
   const bool advancePressed =
       ImGui::IsKeyPressed(ImGuiKey_Space, false) ||
       ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
@@ -4413,10 +4427,12 @@ void AppGL::drawSlidesOverlay() {
   }
   const double printDoneAt =
       m_slideTextStart + static_cast<double>(bodyChars) / kSlideCharsPerSec;
+  const double readingDuration = std::max(3.2, 1.5 + 0.024 * static_cast<double>(bodyChars));
+  const double timeSinceDone = now - printDoneAt;
   const bool autoAdvance =
-      playerLayout && !s_harnessPinFps && m_slidesAdv && !hasVideo &&
+      playerLayout && !s_harnessPinFps && m_slideAutoPlay && !hasVideo &&
       bodyChars > 0 && textDone &&
-      (now - printDoneAt) >= kSlideAutoAdvanceDelay;
+      timeSinceDone >= readingDuration;
 
   if (m_slidesIntro && (advance || skip || videoDone || autoAdvance)) {
     // Пролог: Space/клик листают, Esc досматривает до конца; конец ==
@@ -4440,7 +4456,7 @@ void AppGL::drawSlidesOverlay() {
     invalidateVideoSlide();
     return;
   }
-  if (skip || advance) {
+  if (skip || advance || (autoAdvance && !m_slidesIntro)) {
     if (!skip && m_slidesIdx + 1 < static_cast<int>(m_slidesCurrent.size())) {
       ++m_slidesIdx;
       invalidateVideoSlide();
@@ -4737,14 +4753,62 @@ void AppGL::drawSlidesOverlay() {
       }
     }
 
-    const char* hint =
-        m_slidesIntro
-            ? uiRu("Пробел / Enter - далее, Esc - пропуск целиком",
-                   "Space / Enter - next, Esc - skip all")
-            : uiRu("Пробел / клик - продолжить", "Space / click - continue");
-    const float hintW = font->CalcTextSizeA(hintPx, FLT_MAX, 0.0f, hint).x;
-    dl->AddText(font, hintPx, ImVec2((disp.x - hintW) * 0.5f, hintY),
-                IM_COL32(140, 140, 153, 255), hint);
+    if (playerLayout && m_slideAutoPlay && textDone && !hasVideo) {
+      const float barW = std::min(420.0f * ui, disp.x * 0.5f);
+      const float barH = 3.0f * ui;
+      const ImVec2 bMin((disp.x - barW) * 0.5f, hintY - 14.0f * ui);
+      const ImVec2 bMax(bMin.x + barW, bMin.y + barH);
+      dl->AddRectFilled(bMin, bMax, IM_COL32(255, 255, 255, 25), 2.0f);
+      const float fillRatio = std::clamp(static_cast<float>(timeSinceDone / readingDuration), 0.0f, 1.0f);
+      dl->AddRectFilled(bMin, ImVec2(bMin.x + barW * fillRatio, bMax.y), IM_COL32(56, 189, 248, 220), 2.0f);
+    }
+
+    char hintBuf[256];
+    if (playerLayout) {
+      if (m_slideAutoPlay && !hasVideo) {
+        double rem = std::max(0.0, readingDuration - timeSinceDone);
+        snprintf(hintBuf, sizeof(hintBuf), "%s  |  %s [%.1fs] (%s)",
+                 m_slidesIntro ? uiRu("Пробел - далее, Esc - пропуск", "Space - next, Esc - skip")
+                               : uiRu("Пробел - продолжить", "Space - continue"),
+                 uiRu("Автопрокрутка: ВКЛ", "Auto-advance: ON"),
+                 textDone ? rem : readingDuration,
+                 uiRu("Tab: пауза", "Tab: pause"));
+      } else if (!hasVideo) {
+        snprintf(hintBuf, sizeof(hintBuf), "%s  |  %s (%s)",
+                 m_slidesIntro ? uiRu("Пробел - далее, Esc - пропуск", "Space - next, Esc - skip")
+                               : uiRu("Пробел - продолжить", "Space - continue"),
+                 uiRu("Автопрокрутка: ПАУЗА", "Auto-advance: PAUSED"),
+                 uiRu("Tab: вкл", "Tab: resume"));
+      } else {
+        snprintf(hintBuf, sizeof(hintBuf), "%s",
+                 m_slidesIntro ? uiRu("Пробел / Enter - далее, Esc - пропуск целиком",
+                                      "Space / Enter - next, Esc - skip all")
+                               : uiRu("Пробел / клик - продолжить", "Space / click - continue"));
+      }
+    } else {
+      snprintf(hintBuf, sizeof(hintBuf), "%s",
+               m_slidesIntro ? uiRu("Пробел / Enter - далее, Esc - пропуск целиком",
+                                    "Space / Enter - next, Esc - skip all")
+                             : uiRu("Пробел / клик - продолжить", "Space / click - continue"));
+    }
+    const float hintW = font->CalcTextSizeA(hintPx, FLT_MAX, 0.0f, hintBuf).x;
+    const ImVec2 hintPos((disp.x - hintW) * 0.5f, hintY);
+    dl->AddText(font, hintPx, hintPos,
+                (playerLayout && m_slideAutoPlay) ? IM_COL32(170, 215, 250, 255)
+                                                  : IM_COL32(140, 140, 153, 255),
+                hintBuf);
+
+    if (playerLayout && !hasVideo) {
+      ImGui::SetCursorScreenPos(ImVec2(hintPos.x - 15.0f, hintPos.y - 4.0f));
+      ImGui::InvisibleButton("##autoPlayToggleBtn", ImVec2(hintW + 30.0f, hintPx + 10.0f));
+      if (ImGui::IsItemClicked()) {
+        m_slideAutoPlay = !m_slideAutoPlay;
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", uiRu("Нажмите для переключения автопрокрутки (горячая клавиша: Tab или A)",
+                                     "Click to toggle auto-advance (hotkey: Tab or A)"));
+      }
+    }
   }
 
   ImGui::End();
@@ -4924,23 +4988,27 @@ void AppGL::drawExpeditionHud() {
 }
 
 void AppGL::drawMissionHud() {
-  const MissionContract* primary = m_missions.getPrimaryActiveContract();
-  if (!primary || m_inMenu || m_slidesOpen || m_hideUI) return;
+  if (m_inMenu || m_slidesOpen || m_hideUI) return;
+
+  const auto& active = m_missions.getActiveContracts();
+  const ExpeditionChapter* ch = m_expedition.current();
+  if (active.empty() && (!ch || m_expedition.finished())) return;
 
   const bool fontPushed = modernPushFont();
   ImGuiIO& io = ImGui::GetIO();
+  const float panelW = m_questHudCollapsed ? 210.0f : 340.0f;
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 20.0f, 60.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-  ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(panelW, 0.0f), ImGuiCond_Always);
 
   AccessiblePalette pal = getAccessiblePalette(m_colorblindMode);
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(static_cast<float>(pal.background.x),
                                                   static_cast<float>(pal.background.y),
-                                                  static_cast<float>(pal.background.z), 0.88f));
+                                                  static_cast<float>(pal.background.z), 0.90f));
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(static_cast<float>(pal.primary.x),
                                                 static_cast<float>(pal.primary.y),
-                                                static_cast<float>(pal.primary.z), 0.70f));
+                                                static_cast<float>(pal.primary.z), 0.75f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 6.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
 
   ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
@@ -4963,30 +5031,101 @@ void AppGL::drawMissionHud() {
     dl->AddLine(ImVec2(pMax.x - brkLen, pMax.y), pMax, brkCol, 1.5f);
     dl->AddLine(ImVec2(pMax.x, pMax.y - brkLen), pMax, brkCol, 1.5f);
 
-    ImGui::TextColored(ImVec4(static_cast<float>(pal.warning.x),
-                              static_cast<float>(pal.warning.y),
-                              static_cast<float>(pal.warning.z), 1.0f),
-                       "[%s]", uiRu("АКТИВНЫЙ КОНТРАКТ", "MISSION DIRECTIVE"));
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "+%d RP", primary->rewardRP);
+    // Header with collapse toggle
+    ImGui::TextColored(ImVec4(static_cast<float>(pal.primary.x),
+                              static_cast<float>(pal.primary.y),
+                              static_cast<float>(pal.primary.z), 1.0f),
+                       "%s", uiRu("✦ ЖУРНАЛ КВЕСТОВ", "✦ QUEST DIRECTIVES"));
+    ImGui::SameLine(ImGui::GetWindowWidth() - 36.0f);
+    if (ImGui::SmallButton(m_questHudCollapsed ? "[+]" : "[-]")) {
+      m_questHudCollapsed = !m_questHudCollapsed;
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", uiRu("Свернуть / развернуть журнал квестов [U]",
+                                   "Collapse / expand quest tracker [U]"));
+    }
 
-    ImGui::TextUnformatted(uiRu(primary->titleRu.c_str(), primary->titleEn.c_str()));
-
-    if (primary->status == MissionStatus::Completed) {
-      ImGui::TextColored(ImVec4(static_cast<float>(pal.success.x),
-                                static_cast<float>(pal.success.y),
-                                static_cast<float>(pal.success.z), 1.0f),
-                         "%s", uiRu("ЦЕЛЬ ДОСТИГНУТА! Сдайте в Доке [E]", "OBJECTIVE MET! Claim at Dock [E]"));
+    if (m_questHudCollapsed) {
+      int count = static_cast<int>(active.size()) + ((ch && !m_expedition.finished()) ? 1 : 0);
+      ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 0.9f), "%s: %d",
+                         uiRu("Активных задач", "Active tasks"), count);
     } else {
-      float progress = (primary->targetValue > 0.0f) ? (primary->currentValue / primary->targetValue) : 0.0f;
-      progress = std::clamp(progress, 0.0f, 1.0f);
-      char pBuf[32];
-      snprintf(pBuf, sizeof(pBuf), "%.0f%%", progress * 100.0f);
-      ImGui::ProgressBar(progress, ImVec2(-1.0f, 12.0f), pBuf);
-      if (primary->timeLimitSec > 0.0) {
-        ImGui::TextColored(ImVec4(0.85f, 0.65f, 0.25f, 1.0f), "%s: %.0fs",
-                           uiRu("Время", "Timer"), primary->timeRemainingSec);
+      // 1. Campaign Story Goal
+      if (ch && !m_expedition.finished()) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "[%s]",
+                           uiRu("СЮЖЕТНАЯ ЭКСПЕДИЦИЯ", "STORY EXPEDITION"));
+        ImGui::TextUnformatted(uiRu(ch->titleRu.c_str(), ch->titleEn.c_str()));
+        ImGui::SetWindowFontScale(0.85f);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 310.0f);
+        ImGui::TextColored(ImVec4(0.68f, 0.72f, 0.80f, 1.0f), "%s",
+                           uiRu(ch->goalRu.c_str(), ch->goalEn.c_str()));
+        ImGui::PopTextWrapPos();
+        ImGui::SetWindowFontScale(1.0f);
       }
+
+      // 2. Scientific & Exploration Contracts
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(static_cast<float>(pal.warning.x),
+                                static_cast<float>(pal.warning.y),
+                                static_cast<float>(pal.warning.z), 1.0f),
+                         "[%s]", uiRu("НАУЧНЫЕ КОНТРАКТЫ", "ACTIVE CONTRACTS"));
+      ImGui::SameLine();
+      ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 0.8f), "(%d/3)", static_cast<int>(active.size()));
+
+      if (active.empty()) {
+        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 0.8f), "%s",
+                           uiRu("Нет контрактов. Возьмите на Верфи [E]",
+                                "No contracts. Accept at Shipyard [E]"));
+      } else {
+        for (size_t ci = 0; ci < active.size(); ++ci) {
+          const auto& c = active[ci];
+          if (ci > 0) {
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+          }
+
+          // Type badge
+          const char* typeBadge = "[SCAN]";
+          switch (c.type) {
+            case MissionType::SpectralSurvey: typeBadge = uiRu("[СПЕКТР]", "[SPECT]"); break;
+            case MissionType::SurfaceSampling: typeBadge = uiRu("[КЕРН]", "[CORE]"); break;
+            case MissionType::GravitationalProbe: typeBadge = uiRu("[ГРАВИТАЦИЯ]", "[GRAV]"); break;
+            case MissionType::DeepSpaceProbe: typeBadge = uiRu("[ЗОНД]", "[PROBE]"); break;
+            case MissionType::CargoExpress: typeBadge = uiRu("[КУРЬЕР]", "[CARGO]"); break;
+          }
+          ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.95f, 1.0f), "%s", typeBadge);
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.40f, 0.90f, 0.60f, 1.0f), "+%d RP", c.rewardRP);
+
+          ImGui::TextUnformatted(uiRu(c.titleRu.c_str(), c.titleEn.c_str()));
+
+          if (c.status == MissionStatus::Completed) {
+            ImGui::TextColored(ImVec4(static_cast<float>(pal.success.x),
+                                      static_cast<float>(pal.success.y),
+                                      static_cast<float>(pal.success.z), 1.0f),
+                               "%s", uiRu("✔ ВЫПОЛНЕНО: Сдайте в Доке [E]", "✔ MET: Claim at Dock [E]"));
+          } else {
+            float progress = (c.targetValue > 0.0f) ? (c.currentValue / c.targetValue) : 0.0f;
+            progress = std::clamp(progress, 0.0f, 1.0f);
+            char pBuf[32];
+            snprintf(pBuf, sizeof(pBuf), "%.0f%%", progress * 100.0f);
+            ImGui::ProgressBar(progress, ImVec2(-1.0f, 11.0f), pBuf);
+            if (c.timeLimitSec > 0.0) {
+              ImGui::TextColored(ImVec4(0.85f, 0.65f, 0.25f, 1.0f), "%s: %.0fs",
+                                 uiRu("Таймер", "Timer"), c.timeRemainingSec);
+            }
+          }
+        }
+      }
+
+      ImGui::Spacing();
+      ImGui::TextDisabled("%s", uiRu("Клавиша [U]: свернуть трекер", "Key [U]: collapse tracker"));
     }
   }
   ImGui::End();
@@ -6805,12 +6944,12 @@ void AppGL::drawUnifiedShipTerminal() {
 
       const std::vector<Station>& cat = builtinCatalog();
       std::string q = m_searchBuf;
-      std::transform(q.begin(), q.end(), q.begin(), ::tolower);
+      std::transform(q.begin(), q.end(), q.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 
       ImGui::BeginChild("##StationTableChild", ImVec2(0.0f, 320.0f), true);
       for (const auto& st : cat) {
         std::string nLow = st.name;
-        std::transform(nLow.begin(), nLow.end(), nLow.begin(), ::tolower);
+        std::transform(nLow.begin(), nLow.end(), nLow.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
         if (!q.empty() && nLow.find(q) == std::string::npos && st.id.find(q) == std::string::npos) {
           continue;
         }
