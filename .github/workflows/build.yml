@@ -338,18 +338,20 @@ jobs:
           if [ -d res/models ]; then cp -r res/models "$stage/res/models"; fi
           if [ -d res/textures ]; then cp -r res/textures "$stage/res/textures"; fi
           if [ -d res/audio ]; then cp -r res/audio "$stage/res/audio"; fi
-          if [ -d res/catalog.json ]; then cp res/catalog.json "$stage/res/"; fi
+          if [ -f res/catalog.json ]; then cp res/catalog.json "$stage/res/"; fi
           cp -r shaders "$stage/shaders"
           cp README.md LICENSE "$stage/" 2>/dev/null || true
-          cat > "$stage/PORTABLE-README.txt" <<'EOF'
-ASTRO-VOYAGER - PORTABLE BUILD (Linux)
-=====================================
-Установка НЕ нужна: распакуйте архив, chmod +x astro-voyager, запустите.
-Если сцена не запускается или выглядит пустой:
-  ./astro-voyager --diagnostics   # покажет версию OpenGL и видеокарту
-  ./astro-voyager --safe          # облегчённый режим для слабых GPU
-Лог запуска: astro-voyager.log (пришлите его, если что-то не работает).
-EOF
+          # Heredoc bodies at column 0 break the YAML block scalar, so the
+          # portable note is written line by line instead.
+          printf '%s\n' \
+            'ASTRO-VOYAGER - PORTABLE BUILD (Linux)' \
+            '=====================================' \
+            'Установка НЕ нужна: распакуйте архив, chmod +x astro-voyager, запустите.' \
+            'Если сцена не запускается или выглядит пустой:' \
+            '  ./astro-voyager --diagnostics   # покажет версию OpenGL и видеокарту' \
+            '  ./astro-voyager --safe          # облегчённый режим для слабых GPU' \
+            'Лог запуска: astro-voyager.log (пришлите его, если что-то не работает).' \
+            > "$stage/PORTABLE-README.txt"
           ( cd "$stage" && sha256sum astro-voyager > CHECKSUMS.txt )
           tar -czf "dist/astro-voyager-v$ver-linux-x86_64-portable.tar.gz" -C "$stage" .
           sha256sum "dist/astro-voyager-v$ver-linux-x86_64-portable.tar.gz"

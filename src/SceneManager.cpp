@@ -1670,12 +1670,21 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_planetShader->setUniform1i("u_Type", def->type);
       m_planetShader->setUniform1i("u_Body", def->detail);
       m_planetShader->setUniform1f("u_Seed", def->seed);
-      m_planetShader->setUniform3f("u_ColA", static_cast<float>(def->colA.x),
-                                   static_cast<float>(def->colA.y),
-                                   static_cast<float>(def->colA.z));
-      m_planetShader->setUniform3f("u_ColB", static_cast<float>(def->colB.x),
-                                   static_cast<float>(def->colB.y),
-                                   static_cast<float>(def->colB.z));
+      glm::vec3 colA = glm::vec3(static_cast<float>(def->colA.x),
+                                 static_cast<float>(def->colA.y),
+                                 static_cast<float>(def->colA.z));
+      glm::vec3 colB = glm::vec3(static_cast<float>(def->colB.x),
+                                 static_cast<float>(def->colB.y),
+                                 static_cast<float>(def->colB.z));
+      // Terraformed worlds visibly greening and gaining open water.
+      {
+        float atmo = 0.0f, bio = 0.0f;
+        colonyTerraformState(colonyStage(m_colonyStages, def->id), atmo, bio);
+        colA = glm::mix(colA, glm::vec3(0.22f, 0.46f, 0.24f), bio * 0.75f);
+        colB = glm::mix(colB, glm::vec3(0.08f, 0.30f, 0.58f), atmo * 0.70f);
+      }
+      m_planetShader->setUniform3f("u_ColA", colA.x, colA.y, colA.z);
+      m_planetShader->setUniform3f("u_ColB", colB.x, colB.y, colB.z);
       m_planetShader->setUniform1f("u_Spot", def->id == "jupiter" ? 1.0f : 0.0f);
       m_planetShader->setUniform1f("u_Clouds", def->id == "earth" ? 0.55f : 0.0f);
       m_planetShader->setUniform1f("u_SpinAngle", def->spinRate * m_simTime);
@@ -2234,9 +2243,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         auto drawStationObjModel = [&](ObjModel* siteModel, const glm::mat4& stModel,
                                        float customMetal, float customRough,
                                        const glm::vec3& emOverride, float keyMult = 16.5f,
-                                       float isStationPbr = 1.0f) {
+                                       float isStationPbr = 1.0f,
+                                       const glm::vec3& keyDir = glm::vec3(0.55f, 0.45f, 0.70f)) {
           if (!siteModel || !siteModel->ready() || !s_shipShader) return;
-          const glm::vec3 stKeyDir = glm::normalize(glm::vec3(0.55f, 0.45f, 0.70f));
+          const glm::vec3 stKeyDir = glm::normalize(keyDir);
           s_shipShader->bind();
           s_shipShader->setUniformMat4f("u_MVP", mvp);
           s_shipShader->setUniformMat4f("u_Model", stModel);
@@ -2674,6 +2684,10 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_colonyDomeModel;
           static ObjModel s_colonyFactoryModel;
           static ObjModel s_colonyPadModel;
+          static ObjModel s_colonyNuclearModel;
+          static ObjModel s_colonyHydroModel;
+          static ObjModel s_colonyThermalModel;
+          static ObjModel s_colonyDatacenterModel;
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2737,6 +2751,14 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_colonyFactoryModel.loadTextures("res/models/colony_factory");
             s_colonyPadModel.load("res/models/colony_pad.obj");
             s_colonyPadModel.loadTextures("res/models/colony_pad");
+            s_colonyNuclearModel.load("res/models/colony_nuclear.obj");
+            s_colonyNuclearModel.loadTextures("res/models/colony_nuclear");
+            s_colonyHydroModel.load("res/models/colony_hydro.obj");
+            s_colonyHydroModel.loadTextures("res/models/colony_hydro");
+            s_colonyThermalModel.load("res/models/colony_thermal.obj");
+            s_colonyThermalModel.loadTextures("res/models/colony_thermal");
+            s_colonyDatacenterModel.load("res/models/colony_datacenter.obj");
+            s_colonyDatacenterModel.loadTextures("res/models/colony_datacenter");
           }
 
           glEnable(GL_DEPTH_TEST);
@@ -3219,76 +3241,98 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             }
           }
 
-          // === v5.2.0: 3D Planetary Colony Surface Infrastructure ===
+          // === Colony surface infrastructure ===
+          // Every completed stage adds real buildings to the world: domes,
+          // refineries, pads, the power plant that fits that world and, later,
+          // data campuses. Layout is a golden-angle spiral from the site anchor,
+          // so the same stage always produces the same settlement.
           const glm::mat4 ownUpToY(glm::rotate(glm::mat4(1.0f), -1.5707963f,
                                                glm::vec3(1.0f, 0.0f, 0.0f)));
+          auto colonyAsset = [&](const std::string& key) -> ObjModel* {
+            if (key == "dome") return &s_colonyDomeModel;
+            if (key == "factory") return &s_colonyFactoryModel;
+            if (key == "pad") return &s_colonyPadModel;
+            if (key == "nuclear") return &s_colonyNuclearModel;
+            if (key == "hydro") return &s_colonyHydroModel;
+            if (key == "thermal") return &s_colonyThermalModel;
+            if (key == "datacenter") return &s_colonyDatacenterModel;
+            return nullptr;
+          };
+          // Footprint of each structure as a fraction of the planet radius, and
+          // the length our generators normalized that mesh to. The two together
+          // give the model-matrix scale, so a refinery reads the same relative
+          // size on Mars and on Europa instead of dwarfing both.
+          auto colonyAssetSize = [](const std::string& key, float& footprint,
+                                    float& modelLength) {
+            if (key == "dome") { footprint = 0.100f; modelLength = 3.0f; return true; }
+            if (key == "pad") { footprint = 0.110f; modelLength = 3.2f; return true; }
+            if (key == "factory") { footprint = 0.140f; modelLength = 3.4f; return true; }
+            if (key == "datacenter") { footprint = 0.150f; modelLength = 4.2f; return true; }
+            if (key == "nuclear") { footprint = 0.170f; modelLength = 4.2f; return true; }
+            if (key == "thermal") { footprint = 0.170f; modelLength = 4.6f; return true; }
+            if (key == "hydro") { footprint = 0.190f; modelLength = 4.6f; return true; }
+            return false;
+          };
           for (const auto& site : m_colonySites) {
             if (!m_currentStation || site.stationId != m_currentStation->id) continue;
-            const int st = colonyStage(m_colonyStages, site.id);
-            if (st <= 0 && !hasColony(site.id)) continue;
-
-            const int activeStage = std::max(st, 1);
-            const ColonyEpoch ep = colonyEpoch(activeStage);
+            const int stage = colonyStage(m_colonyStages, site.id);
+            if (stage <= 0) continue;
 
             const glm::vec3 planetPos(static_cast<float>(site.pos.x),
                                       static_cast<float>(site.pos.y),
                                       static_cast<float>(site.pos.z));
-            const float planetRadius = static_cast<float>(site.radius);
+            const float planetRadius = std::max(static_cast<float>(site.radius), 0.02f);
 
-            // Iconic anchor surface normal for each colonized world
-            glm::vec3 surfNormal(0.0f, 1.0f, 0.0f);
-            if (site.id == "mars") surfNormal = glm::normalize(glm::vec3(0.55f, 0.45f, 0.70f));
-            else if (site.id == "moon") surfNormal = glm::normalize(glm::vec3(0.15f, 0.85f, 0.50f));
-            else if (site.id == "europa") surfNormal = glm::normalize(glm::vec3(-0.60f, 0.35f, 0.72f));
-            else if (site.id == "titan") surfNormal = glm::normalize(glm::vec3(0.40f, 0.20f, -0.89f));
-            else if (site.id == "mercury") surfNormal = glm::normalize(glm::vec3(0.70f, 0.65f, 0.28f));
-            else if (site.id == "ganymede") surfNormal = glm::normalize(glm::vec3(-0.50f, 0.70f, -0.51f));
-            else if (site.id == "callisto") surfNormal = glm::normalize(glm::vec3(0.30f, -0.60f, 0.74f));
-            else surfNormal = glm::normalize(glm::vec3(0.0f, 0.707f, 0.707f));
+            // Settlement anchor from the shared colony data, so the capture
+            // harness and the renderer always agree on where the town is.
+            const float* anchorN = colonyAnchorNormal(site.id);
+            const glm::vec3 anchor(anchorN[0], anchorN[1], anchorN[2]);
 
-            const glm::vec3 surfPos = planetPos + surfNormal * planetRadius;
-            const float camDist = glm::length(eye - surfPos);
+            const glm::vec3 upRef = std::abs(anchor.y) < 0.90f ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                                               : glm::vec3(1.0f, 0.0f, 0.0f);
+            const glm::vec3 tangentU = glm::normalize(glm::cross(anchor, upRef));
+            const glm::vec3 tangentV = glm::normalize(glm::cross(anchor, tangentU));
 
-            // Readable scaling both in close approach and orbital perspective
-            const float baseScale = std::max(0.025f, planetRadius * 0.10f);
-            float lodScale = 1.0f;
-            if (camDist > 1.8f) {
-              const float t = glm::clamp((camDist - 1.8f) / 4.0f, 0.0f, 1.0f);
-              lodScale = glm::mix(1.0f, 0.20f, t * t * (3.0f - 2.0f * t));
-            }
-            const float effScale = baseScale * lodScale;
+            const auto plan = colonyBuildPlan(site.id, stage);
+            int placed = 0;
+            for (const auto& entry : plan) {
+              ObjModel* model = colonyAsset(entry.first);
+              float footprint = 0.0f, modelLength = 1.0f;
+              if (!model || !model->ready()) continue;
+              if (!colonyAssetSize(entry.first, footprint, modelLength)) continue;
+              const float worldSize = planetRadius * footprint;
+              for (int i = 0; i < entry.second; ++i, ++placed) {
+                // Golden-angle spiral: neighbour spacing stays around one
+                // footprint, so buildings neither merge nor overlap.
+                const float phi = placed * 2.39996323f;
+                const float theta = std::min(0.160f * std::sqrt(static_cast<float>(placed + 1)), 1.15f);
+                const glm::vec3 dir = glm::normalize(
+                    anchor * std::cos(theta) +
+                    (tangentU * std::cos(phi) + tangentV * std::sin(phi)) * std::sin(theta));
+                const glm::vec3 foot = planetPos + dir * (planetRadius - worldSize * 0.16f);
 
-            // Surface tangent space
-            const glm::vec3 upRef = std::abs(surfNormal.y) < 0.90f ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
-            const glm::vec3 tangentU = glm::normalize(glm::cross(surfNormal, upRef));
-            const glm::vec3 tangentV = glm::normalize(glm::cross(surfNormal, tangentU));
+                const float camDist = glm::length(eye - foot);
+                float lodScale = 1.0f;
+                if (camDist > 1.8f) {
+                  const float t = glm::clamp((camDist - 1.8f) / 6.0f, 0.0f, 1.0f);
+                  lodScale = glm::mix(1.0f, 0.42f, t * t * (3.0f - 2.0f * t));
+                }
+                const float eff = (worldSize / modelLength) * lodScale;
 
-            glm::mat4 alignMat(1.0f);
-            alignMat[0] = glm::vec4(tangentU, 0.0f);
-            alignMat[1] = glm::vec4(surfNormal, 0.0f);
-            alignMat[2] = glm::vec4(tangentV, 0.0f);
+                const glm::vec3 localUp = std::abs(dir.y) < 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                                                : glm::vec3(1.0f, 0.0f, 0.0f);
+                const glm::vec3 bx = glm::normalize(glm::cross(dir, localUp));
+                const glm::vec3 by = glm::cross(dir, bx);
+                glm::mat4 align(1.0f);
+                align[0] = glm::vec4(bx, 0.0f);
+                align[1] = glm::vec4(by, 0.0f);
+                align[2] = glm::vec4(dir, 0.0f);
 
-            // Epoch I+: Geodesic Bio-Dome
-            if (s_colonyDomeModel.ready()) {
-              const glm::mat4 mDome = glm::translate(glm::mat4(1.0f), surfPos) * alignMat * ownUpToY *
-                                      glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
-              drawStationObjModel(&s_colonyDomeModel, mDome, 0.70f, 0.35f, glm::vec3(0.0f));
-            }
-
-            // Epoch II+: Heavy Industrial Smelting Plant
-            if (ep >= ColonyEpoch::Industry && s_colonyFactoryModel.ready()) {
-              const glm::vec3 factPos = surfPos + tangentU * (effScale * 2.8f);
-              const glm::mat4 mFact = glm::translate(glm::mat4(1.0f), factPos) * alignMat * ownUpToY *
-                                      glm::scale(glm::mat4(1.0f), glm::vec3(effScale * 0.88f));
-              drawStationObjModel(&s_colonyFactoryModel, mFact, 0.82f, 0.28f, glm::vec3(0.0f));
-            }
-
-            // Epoch III+: Octagonal Planetary Spaceport
-            if (ep >= ColonyEpoch::Society && s_colonyPadModel.ready()) {
-              const glm::vec3 padPos = surfPos + tangentV * (effScale * 3.4f);
-              const glm::mat4 mPad = glm::translate(glm::mat4(1.0f), padPos) * alignMat * ownUpToY *
-                                     glm::scale(glm::mat4(1.0f), glm::vec3(effScale * 0.95f));
-              drawStationObjModel(&s_colonyPadModel, mPad, 0.78f, 0.32f, glm::vec3(0.0f));
+                const glm::mat4 m = glm::translate(glm::mat4(1.0f), foot) * align * ownUpToY *
+                                    glm::rotate(glm::mat4(1.0f), phi, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                    glm::scale(glm::mat4(1.0f), glm::vec3(eff));
+                drawStationObjModel(model, m, 0.62f, 0.42f, glm::vec3(0.0f));
+              }
             }
           }
         } // end if (warpdrive::dockSitesVisible())

@@ -67,6 +67,7 @@ class AppGL {
   static int captureStationCheck(const std::string& outPath);
   static int captureDragonCheck(const std::string& outPath);
   static int captureFleetCheck(const std::string& outDir);
+  static int captureColonyCheck(const std::string& outDir);
   static int captureZettelCheck(const std::string& outPath);
   static int captureHudCheck(const std::string& outPath);
   static int captureTerminalCheck(const std::string& outPath);

@@ -1,6 +1,7 @@
 #include "ColonySystem.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace astro {
 
@@ -350,6 +351,177 @@ void normalizeColonies(std::vector<std::string>& founded, ColonyStages& stages) 
   for (const auto& id : valid) normalized[id] = std::max(1, colonyStage(stages, id));
   founded = std::move(valid);
   stages = std::move(normalized);
+}
+
+const std::array<std::array<ColonyStructure, kColonyPlanSlots>, kColonyStageCount>&
+colonyStagePlan() {
+  // What actually appears on the surface when each stage completes. "power" is
+  // resolved per world (fission / hydro / thermal), so the same stage reads
+  // differently on the Moon and on Europa.
+  static const ColonyStructure rows[kColonyStageCount][kColonyPlanSlots] = {
+      {{"pad", 1}, {"", 0}, {"", 0}},                       // 1 touchdown
+      {{"dome", 1}, {"", 0}, {"", 0}},                      // 2 relay mast
+      {{kColonyPowerAsset, 1}, {"", 0}, {"", 0}},           // 3 power grid
+      {{"dome", 1}, {"", 0}, {"", 0}},                      // 4 water loop
+      {{"dome", 2}, {"", 0}, {"", 0}},                      // 5 bio-domes I
+      {{"dome", 2}, {"", 0}, {"", 0}},                      // 6 agro complex
+      {{"factory", 1}, {"", 0}, {"", 0}},                   // 7 excavation yard
+      {{"factory", 1}, {kColonyPowerAsset, 1}, {"", 0}},    // 8 arc smelter
+      {{"factory", 1}, {"", 0}, {"", 0}},                   // 9 module fab plant
+      {{"pad", 1}, {"factory", 1}, {"", 0}},                // 10 maglev/logistics
+      {{"dome", 2}, {"", 0}, {"", 0}},                      // 11 medical centre
+      {{"datacenter", 1}, {"dome", 1}, {"", 0}},            // 12 laboratories
+      {{"dome", 3}, {"", 0}, {"", 0}},                      // 13 township
+      {{"pad", 2}, {"", 0}, {"", 0}},                       // 14 spaceport
+      {{"datacenter", 1}, {"dome", 1}, {"", 0}},            // 15 research campus
+      {{"dome", 4}, {"", 0}, {"", 0}},                      // 16 metropolis arcology
+      {{"datacenter", 1}, {kColonyPowerAsset, 2}, {"", 0}}, // 17 quantum plasma
+      {{"pad", 2}, {"", 0}, {"", 0}},                       // 18 space elevator
+      {{kColonyPowerAsset, 2}, {"", 0}, {"", 0}},           // 19 deep energy grid
+      {{"factory", 3}, {"", 0}, {"", 0}},                   // 20 replicator foundry
+      {{"factory", 2}, {"dome", 2}, {"", 0}},               // 21 atmosphere processors
+      {{kColonyPowerAsset, 2}, {"pad", 1}, {"", 0}},        // 22 magnetosphere shield
+      {{"datacenter", 2}, {"dome", 1}, {"", 0}},            // 23 synthesis institute
+      {{"dome", 4}, {"pad", 2}, {"datacenter", 1}},         // 24 civilization capital
+  };
+  // Nested std::array brace initializers are brittle on MSVC, so the table is
+  // copied into the typed array once on first use.
+  static const std::array<std::array<ColonyStructure, kColonyPlanSlots>, kColonyStageCount> plan =
+      [] {
+        std::array<std::array<ColonyStructure, kColonyPlanSlots>, kColonyStageCount> p{};
+        for (int i = 0; i < kColonyStageCount; ++i)
+          for (int s = 0; s < kColonyPlanSlots; ++s) p[i][s] = rows[i][s];
+        return p;
+      }();
+  return plan;
+}
+
+const char* colonyEnergyAsset(const std::string& worldId) {
+  if (worldId == "moon" || worldId == "mars") return "nuclear";
+  if (worldId == "mercury" || worldId == "titan") return "thermal";
+  return "hydro";  // europa, ganymede, callisto, hercules-b: ice/ocean worlds
+}
+
+std::vector<std::pair<std::string, int>> colonyBuildPlan(const std::string& worldId,
+                                                        int stage) {
+  std::vector<std::pair<std::string, int>> out;
+  const auto merge = [&](const std::string& asset, int count) {
+    if (asset.empty() || count <= 0) return;
+    for (auto& entry : out) {
+      if (entry.first == asset) {
+        entry.second += count;
+        return;
+      }
+    }
+    out.emplace_back(asset, count);
+  };
+  const auto& plan = colonyStagePlan();
+  const int top = std::clamp(stage, 0, kColonyStageCount);
+  for (int i = 0; i < top; ++i) {
+    for (int s = 0; s < kColonyPlanSlots; ++s) {
+      const ColonyStructure& item = plan[i][s];
+      const std::string asset =
+          (std::string(item.asset) == kColonyPowerAsset) ? colonyEnergyAsset(worldId)
+                                                         : std::string(item.asset);
+      merge(asset, item.count);
+    }
+  }
+  return out;
+}
+
+const float* colonyAnchorNormal(const std::string& worldId) {
+  static const float kDefault[3] = {0.0f, 0.7071f, 0.7071f};
+  struct Anchor { const char* id; float n[3]; };
+  static const Anchor anchors[] = {
+      {"mars", {0.55f, 0.45f, 0.70f}},
+      {"moon", {0.15f, 0.85f, 0.50f}},
+      {"europa", {-0.60f, 0.35f, 0.72f}},
+      {"titan", {0.40f, 0.20f, -0.89f}},
+      {"mercury", {0.70f, 0.65f, 0.28f}},
+      {"ganymede", {-0.50f, 0.70f, -0.51f}},
+      {"callisto", {0.30f, -0.60f, 0.74f}},
+      {"hercules-b", {0.0f, 0.7071f, 0.7071f}},
+  };
+  for (const auto& a : anchors) {
+    if (worldId == a.id) {
+      const float length = std::sqrt(a.n[0] * a.n[0] + a.n[1] * a.n[1] + a.n[2] * a.n[2]);
+      static thread_local float out[3];
+      out[0] = a.n[0] / length;
+      out[1] = a.n[1] / length;
+      out[2] = a.n[2] / length;
+      return out;
+    }
+  }
+  return kDefault;
+}
+
+const std::vector<ColonyMilestone>& colonyTerraformMilestones() {
+  // Ordered by stage. Rewards are one-off RP grants, paid when the player
+  // crosses the milestone by building a stage.
+  static const std::vector<ColonyMilestone> milestones = {
+      {4, "Извлечение льда и воды", "Ice and water extraction",
+       "Шнековые скважины дают воду и кислород для электролиза",
+       "Auger wells supply water and oxygen for electrolysis", 0.05f, 0.0f, 60},
+      {8, "Первичные элементы в грунте", "Primary elements released",
+       "Детектируются O2, CO2, CH4 и летучие сульфиды",
+       "O2, CO2, CH4 and volatile sulfides detected", 0.15f, 0.05f, 80},
+      {11, "Химическая дифференциация", "Chemical differentiation",
+       "Выветривание обогащает реголит Fe, Ni, Si, Mg и фосфатами",
+       "Weathering enriches regolith with Fe, Ni, Si, Mg and phosphates", 0.25f, 0.10f, 100},
+      {14, "Плотная атмосфера", "Dense atmosphere",
+       "0.3 атм, устойчивый парниковый цикл и перенос влаги",
+       "0.3 atm, stable greenhouse cycle and moisture transport", 0.45f, 0.15f, 140},
+      {16, "Абиогенная органика", "Abiogenic organics",
+       "Аминокислоты и липиды в тёплых мелководьях",
+       "Amino acids and lipids in shallow warm seas", 0.55f, 0.30f, 170},
+      {18, "Цианобактерии и фотосинтез", "Cyanobacteria and photosynthesis",
+       "Строматолитовые маты начинают насыщать атмосферу кислородом",
+       "Stromatolite mats begin oxygenating the air", 0.65f, 0.50f, 200},
+      {20, "Лишайники и первичная почва", "Lichens and proto-soil",
+       "Появляется гумус, круговорот азота и углерода",
+       "Humus, nitrogen and carbon cycles appear", 0.75f, 0.65f, 240},
+      {22, "Высшие растения", "Vascular plants",
+       "Леса, испарение и полноценный гидрологический цикл",
+       "Forests, transpiration and a full water cycle", 0.85f, 0.80f, 300},
+      {23, "Животные и пищевые сети", "Animals and food webs",
+       "Опылители, травоядные и хищники замыкают трофические цепи",
+       "Pollinators, herbivores and predators close the trophic chains", 0.90f, 0.90f, 360},
+      {24, "Самподдерживающаяся биосфера", "Self-sustaining biosphere",
+       "Мир больше не требует terraforming-поддержки",
+       "The world no longer needs terraforming support", 1.0f, 1.0f, 450}};
+  return milestones;
+}
+
+void colonyTerraformState(int stage, float& atmosphere, float& biosphere) {
+  atmosphere = 0.0f;
+  biosphere = 0.0f;
+  for (const auto& m : colonyTerraformMilestones()) {
+    if (stage < m.stage) break;
+    atmosphere = std::max(atmosphere, m.atmosphere);
+    biosphere = std::max(biosphere, m.biosphere);
+  }
+}
+
+int colonyMilestonesReached(int stage) {
+  int reached = 0;
+  for (const auto& m : colonyTerraformMilestones()) {
+    if (stage >= m.stage) ++reached;
+  }
+  return reached;
+}
+
+int colonyMilestoneReward(int previousStage, int newStage) {
+  int reward = 0;
+  for (const auto& m : colonyTerraformMilestones()) {
+    if (m.stage > previousStage && m.stage <= newStage) reward += m.rewardRP;
+  }
+  return reward;
+}
+
+int colonyStructureCount(const std::string& worldId, int stage) {
+  int total = 0;
+  for (const auto& entry : colonyBuildPlan(worldId, stage)) total += entry.second;
+  return total;
 }
 
 int colonyResearchBonus(const ColonyStages& stages) {
