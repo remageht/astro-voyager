@@ -11,6 +11,10 @@
 #include <string>
 #include <system_error>
 
+#if defined(__linux__)
+#include <unistd.h>
+#endif
+
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -47,6 +51,14 @@ std::string executableDir(const char* argv0) {
   char buf[4096] = {0};
   uint32_t size = sizeof(buf);
   if (_NSGetExecutablePath(buf, &size) == 0) {
+    const std::filesystem::path p(buf);
+    return p.parent_path().string();
+  }
+#elif defined(__linux__)
+  char buf[4096] = {0};
+  const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+  if (n > 0) {
+    buf[n] = '\0';
     const std::filesystem::path p(buf);
     return p.parent_path().string();
   }
@@ -176,5 +188,30 @@ void reportFatalError(const std::string& message) {
 
 void setSafeModeRequested(bool value) { g_safeMode = value; }
 bool safeModeRequested() { return g_safeMode; }
+
+std::string resolveAssetPath(const std::string& relativePath) {
+  if (relativePath.empty()) return relativePath;
+  std::error_code ec;
+  // 1) Относительно текущего каталога - обычный случай (запуск из корня проекта).
+  if (std::filesystem::exists(std::filesystem::u8path(relativePath), ec)) {
+    return relativePath;
+  }
+  // 2) Относительно каталога с exe - портативный запуск из любого места.
+  static const std::string exeDir = executableDir(nullptr);
+  if (!exeDir.empty()) {
+    const std::filesystem::path pExe(exeDir);
+    const std::filesystem::path candidate = pExe / std::filesystem::u8path(relativePath);
+    if (std::filesystem::exists(candidate, ec)) {
+      return candidate.string();
+    }
+    // 3) Разработка: exe лежит в build-gl/Release, ассеты — в корне репозитория (../../).
+    const std::filesystem::path devCandidate =
+        pExe.parent_path().parent_path() / std::filesystem::u8path(relativePath);
+    if (std::filesystem::exists(devCandidate, ec)) {
+      return devCandidate.string();
+    }
+  }
+  return relativePath;  // не нашли - сообщение об ошибке остаётся понятным
+}
 
 }  // namespace astro

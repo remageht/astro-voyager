@@ -2,6 +2,7 @@
 #include "Constellation.h"
 
 #include "GLCompat.h"
+#include "LaunchDiagnostics.h"
 #include "ObjModel.h"
 #include <stb_image.h>
 #include <stb_image_write.h>
@@ -260,7 +261,8 @@ void SceneManager::bindEarthMap() {
   if (!m_earthMapTried) {
     m_earthMapTried = true;
     int width = 0, height = 0;
-    unsigned char* pixels = stbi_load("res/textures/earth_daymap.jpg", &width, &height, nullptr, 4);
+    const std::string resolved = resolveAssetPath("res/textures/earth_daymap.jpg");
+    unsigned char* pixels = stbi_load(resolved.c_str(), &width, &height, nullptr, 4);
     if (pixels && width == 2 * height && width >= 2048 && width <= 8192) {
       for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
         unsigned char* p = pixels + i * 4;

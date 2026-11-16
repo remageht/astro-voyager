@@ -525,7 +525,10 @@ void AudioEngine::playFile(const std::string& path, float db) {
   ma_decoder_config dcfg =
       ma_decoder_config_init(ma_format_f32, 1, kSampleRate);
   ma_decoder dec;
-  if (ma_decoder_init_file(path.c_str(), &dcfg, &dec) != MA_SUCCESS) return;
+  if (ma_decoder_init_file(path.c_str(), &dcfg, &dec) != MA_SUCCESS) {
+    const std::string fallback = "../" + path;
+    if (ma_decoder_init_file(fallback.c_str(), &dcfg, &dec) != MA_SUCCESS) return;
+  }
   std::vector<float> buf;
   float chunk[4096];
   for (;;) {

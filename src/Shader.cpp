@@ -135,7 +135,8 @@ int Shader::getUniformLocation(const std::string& name) {
 }
 
 std::string Shader::readFile(const std::string& filepath) {
-  std::ifstream file(filepath);
+  const std::string resolved = resolveAssetPath(filepath);
+  std::ifstream file(resolved);
   if (!file.is_open()) {
     // Try with res/ prefix or relative to executable
     std::string fallback = "../" + filepath;

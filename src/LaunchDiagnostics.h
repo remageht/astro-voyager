@@ -28,4 +28,10 @@ void reportFatalError(const std::string& message);
 void setSafeModeRequested(bool value);
 bool safeModeRequested();
 
+// Путь к ассету: сначала относительно текущего каталога, затем —
+// относительно каталога с exe. Без этого портативная сборка «ломается»,
+// если её запустили не из того каталога (ярлык, другой рабочий каталог,
+// запуск из архива): ассеты просто не находятся, и сцена остаётся пустой.
+std::string resolveAssetPath(const std::string& relativePath);
+
 }  // namespace astro

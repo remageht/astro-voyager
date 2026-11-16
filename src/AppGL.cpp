@@ -27,6 +27,7 @@
 #include "Constellation.h"
 #include "Interaction.h"
 #include "Journey.h"
+#include "LaunchDiagnostics.h"
 #include "Achievements.h"
 #include "Mesh.h"
 #include "Shader.h"
@@ -4059,7 +4060,8 @@ unsigned int AppGL::loadUiTexture(const std::string& rel, int* w, int* h) {
     return it->second.id;
   }
   UiTex t;
-  unsigned char* px = stbi_load(rel.c_str(), &t.w, &t.h, nullptr, 4);
+  const std::string resolved = resolveAssetPath(rel);
+  unsigned char* px = stbi_load(resolved.c_str(), &t.w, &t.h, nullptr, 4);
   if (px) {
     t.id = uploadRgba(px, t.w, t.h);
     stbi_image_free(px);
@@ -10140,7 +10142,8 @@ unsigned int AppGL::updateMenuVideo(double time) {
     for (int i = 0; i < frameCount; ++i) {
       char path[80];
       std::snprintf(path, sizeof(path), "res/video/menu/frame%03d.jpg", i);
-      std::ifstream file(path, std::ios::binary | std::ios::ate);
+      const std::string resolved = resolveAssetPath(path);
+      std::ifstream file(resolved, std::ios::binary | std::ios::ate);
       if (!file) {
         m_menuVideoFrames.clear();
         break;
@@ -10187,8 +10190,10 @@ unsigned int AppGL::updateMenuVideo(double time) {
 }
 
 unsigned int AppGL::loadMenuBackgroundTexture(const char* path) {
+  if (!path) return 0;
+  const std::string resolved = resolveAssetPath(path);
   int w = 0, h = 0;
-  unsigned char* px = stbi_load(path, &w, &h, nullptr, 4);
+  unsigned char* px = stbi_load(resolved.c_str(), &w, &h, nullptr, 4);
   if (!px) return 0;
   const unsigned int tex = uploadRgba(px, w, h);
   stbi_image_free(px);
@@ -13188,7 +13193,8 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
   app.m_menuProceduralDisk = false;
   app.audioEnsureOnFirstInput();
   int maskWidth = 0, maskHeight = 0;
-  unsigned char* mask = stbi_load("res/textures/main_menu_disk_mask.png", &maskWidth, &maskHeight, nullptr, 1);
+  const std::string maskPath = resolveAssetPath("res/textures/main_menu_disk_mask.png");
+  unsigned char* mask = stbi_load(maskPath.c_str(), &maskWidth, &maskHeight, nullptr, 1);
   if (!mask || maskWidth != 1376 || maskHeight != 768) {
     stbi_image_free(mask);
     return 1;

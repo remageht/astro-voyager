@@ -20,6 +20,7 @@
 #endif
 
 #include "ObjModel.h"
+#include "LaunchDiagnostics.h"
 
 #include "GLCompat.h"
 #include <GLFW/glfw3.h>
@@ -170,9 +171,10 @@ unsigned int makeTexture(const std::vector<unsigned char>& rgb, int w, int h) {
 }
 
 unsigned int loadTextureFile(const std::string& path) {
+  const std::string resolved = resolveAssetPath(path);
   std::vector<unsigned char> rgb;
   int w = 0, h = 0;
-  if (!loadBmp(path.c_str(), rgb, w, h)) return 0;
+  if (!loadBmp(resolved.c_str(), rgb, w, h)) return 0;
   return makeTexture(rgb, w, h);
 }
 
@@ -203,11 +205,13 @@ ObjModel::~ObjModel() {
 }
 
 bool ObjModel::load(const std::string& path) {
+  // Путь ищем и рядом с exe (портативный запуск из любого каталога).
+  const std::string resolved = resolveAssetPath(path);
   FILE* f = nullptr;
 #ifdef _MSC_VER
-  fopen_s(&f, path.c_str(), "rb");
+  fopen_s(&f, resolved.c_str(), "rb");
 #else
-  f = std::fopen(path.c_str(), "rb");
+  f = std::fopen(resolved.c_str(), "rb");
 #endif
   if (!f) return false;
 
@@ -396,6 +400,7 @@ bool ObjModel::load(const std::string& path) {
 
 bool ObjModel::loadTextures(const std::string& base) {
   if (m_sharedTex) return true;
+  // Пути к текстурам формируются от базового имени; loadTextureFile разрешит их через resolveAssetPath.
   const std::string albedo = base + "_albedo.bmp";
   const std::string normal = base + "_normal.bmp";
   const std::string rough = base + "_rough.bmp";

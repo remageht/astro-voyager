@@ -92,8 +92,9 @@ struct GLContextConfig {
 const GLContextConfig kGLConfigs[] = {
     {3, 3, GLFW_OPENGL_CORE_PROFILE, "3.3 core"},
     {3, 3, GLFW_OPENGL_COMPAT_PROFILE, "3.3 compatibility"},
-    {3, 0, GLFW_OPENGL_CORE_PROFILE, "3.0 core"},
-    {3, 0, GLFW_OPENGL_COMPAT_PROFILE, "3.0 compatibility"},
+    {3, 2, GLFW_OPENGL_CORE_PROFILE, "3.2 core"},
+    {3, 2, GLFW_OPENGL_COMPAT_PROFILE, "3.2 compatibility"},
+    {3, 0, GLFW_OPENGL_ANY_PROFILE, "3.0 any"},
 };
 
 }  // namespace
@@ -114,7 +115,9 @@ Window::Window(int width, int height, const char* title, bool visible) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, cfg.minor);
     glfwWindowHint(GLFW_OPENGL_PROFILE, cfg.profile);
 #ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    if (cfg.major > 3 || (cfg.major == 3 && cfg.minor >= 2)) {
+      glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    }
 #endif
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_FALSE);
     glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
@@ -130,7 +133,7 @@ Window::Window(int width, int height, const char* title, bool visible) {
     glfwTerminate();
     throw std::runtime_error(
         "Failed to create GLFW window: no OpenGL context could be created "
-        "(tried 3.3 core / 3.3 compatibility / 3.0 core / 3.0 compatibility). "
+        "(tried 3.3 core / 3.3 compat / 3.2 core / 3.2 compat / 3.0 any). "
         "The game needs OpenGL 3.3 and an up-to-date graphics driver.");
   }
   logLaunch(std::string("[Window] OpenGL context: ") + usedConfig);
@@ -186,6 +189,13 @@ Window::Window(int width, int height, const char* title, bool visible) {
 
   // Clear any benign GLEW error
   glGetError();
+
+  // Сразу очищаем окно в глубокий тёмный космический цвет и делаем первый swap:
+  // без этого на Windows (особенно на AMD) окно первые 2-3 секунды висит белым
+  // холстом DWM, пока грузятся текстуры, 3D-модели и компилируются шейдеры («белый экран»).
+  glClearColor(0.01f, 0.02f, 0.04f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glfwSwapBuffers(m_window);
 
   // Диагностика для поддержки: версии GL и драйвера пишем в лог рядом с
   // exe — по нему видно, какой GPU/драйвер у игрока и почему сцена падает.
