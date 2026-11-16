@@ -1,5 +1,5 @@
 {
-  "version": "5.0.0",
+  "version": "5.1.0",
   "stations": [
     {
       "id": "sgra",
@@ -70,7 +70,7 @@
       "id": "sol",
       "type": "solar_system",
       "name": "Solar System",
-      "description": "Sun + 8 planets + Moon, rings, belt.",
+      "description": "Sun + 8 planets + Moon, rings, belt. Orbital fleet: Aurora Ring Station, Gateway Shipyard, SpaceX Crew Dragon, Soyuz MS-25, Webb Observatory, O'Neill ring colony and solar sail; Perseverance on Mars, Artemis lander at the Moon, Voyager 1 relic in the Kuiper belt.",
       "spawnDistanceRs": 70.0,
       "mass": 0.0
     },

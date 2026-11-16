@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "Types.h"
+#include "ColonySystem.h"
 
 namespace astro {
 
@@ -49,6 +50,8 @@ struct SaveSettings {
   int colorblindMode = 0;            // 0 Default, 1 Protanopia, 2 Deuteranopia, 3 Tritanopia, 4 HighContrast
   bool audioProximityCue = true;     // звуковой сигнал при сближении со станцией/посадке
   bool highContrastReticle = false;  // утолщённый высококонтрастный прицел
+  int menuBackground = 0;            // 0 animated black hole, 1..4 scenic stills
+  bool menuProceduralDisk = true;    // v5.1.0: процедурный GPU-шейдер диска по умолчанию (0% CPU)
 };
 
 struct SaveCustom {
@@ -70,7 +73,9 @@ struct SaveProgress {
   std::vector<std::string> unlocked;  // открытые ачивки (id)
   std::vector<std::string> route;     // история маршрута
   // === v3.6.0: колонии ===
-  std::vector<std::string> colonies;  // id колонизированных тел (mars, hercules-b)
+  std::vector<std::string> colonies;
+  ColonyStages colonyStages;
+  int researchPoints = -1;  // Older profiles reconstruct the balance from scanned entries.
   double minBhDistance = 1e9;
   bool exported = false;
   bool imported = false;

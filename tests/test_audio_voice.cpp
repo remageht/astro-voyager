@@ -65,6 +65,25 @@ struct AudioTestAccess {
   static void setActiveCue(AudioEngine& e, int cue) {
     e.m_activeEgorkaCue.store(cue);
   }
+  // These callback-owned fields are inspected only when no render is running.
+  static double menuBlend(const AudioEngine& e) { return e.m_menuBlend; }
+  static void setSamples(AudioEngine& e, uint64_t sample) {
+    e.m_samples.store(sample);
+  }
+  static void enableGameplayLayers(AudioEngine& e) {
+    e.m_warpCurrent.store(0.8f);
+    e.m_engineCurrent.store(0.7f);
+    e.m_tensionCurrent.store(0.6f);
+    e.m_atmoCurrent.store(0.5f);
+    e.m_radioStaticCurrent.store(0.4f);
+    e.setCassetteTape(static_cast<int>(AudioEngine::CassetteTape::PulsarBeat));
+    e.setCassetteVolume(0.4f);
+    e.m_cassetteGainCurrent.store(1.0f);
+    e.m_drillCurrent.store(0.8f);
+    e.m_weatherType.store(1);
+    e.m_weatherIntensityCurrent.store(0.7f);
+    e.m_weatherWindCurrent.store(0.015f);
+  }
 };
 
 }  // namespace astro
@@ -83,6 +102,12 @@ void check(bool ok, const char* what) {
     std::cerr << "FAIL: " << what << "\n";
     ++g_fail;
   }
+}
+
+std::vector<float> renderAudio(AudioEngine& eng, unsigned frames) {
+  std::vector<float> out(frames * AudioEngine::kChannels);
+  AudioTestAccess::render(eng, out.data(), frames);
+  return out;
 }
 
 }  // namespace
@@ -227,6 +252,206 @@ int main() {
     check(!eng.isEgorkaVoicePlaying(), "isEgorkaVoicePlaying is false after stopCurrentVoiceCue()");
     check(eng.currentEgorkaVoiceCue() < 0, "currentEgorkaVoiceCue is -1 after stopCurrentVoiceCue()");
     check(AudioTestAccess::voiceCount(eng) == 0, "all EgorkaVoice instances erased by stop");
+  }
+
+  // 7. Menu fades are callback-owned, sample-wise, and reversible mid-fade.
+  {
+    AudioEngine eng;
+    eng.setVolume(1.0f);
+    bool smooth = true;
+    float last[2] = {};
+    auto renderSmooth = [&](unsigned frames) {
+      const auto out = renderAudio(eng, frames);
+      for (unsigned i = 0; i < frames; ++i) {
+        for (int ch = 0; ch < 2; ++ch) {
+          const float sample = out[i * 2 + ch];
+          smooth = smooth && std::isfinite(sample) &&
+                   std::abs(sample - last[ch]) < 0.01f;
+          last[ch] = sample;
+        }
+      }
+    };
+    renderSmooth(2048);
+    check(AudioTestAccess::menuBlend(eng) == 0.0,
+          "menu ambient is inactive by default");
+    eng.setMenuActive(true);
+    check(!eng.isInitialized() && AudioTestAccess::menuBlend(eng) == 0.0,
+          "setMenuActive is safe before init and only changes the target");
+    renderSmooth(8820);  // 0.2 s, one quarter of the 0.8 s ramp
+    check(std::abs(AudioTestAccess::menuBlend(eng) - 0.25) < 1e-9,
+          "menu fade advances per sample over 0.8 seconds");
+    eng.setMenuActive(true);  // repeated audioUpdate calls must not restart it
+    renderSmooth(8820);
+    check(std::abs(AudioTestAccess::menuBlend(eng) - 0.5) < 1e-9,
+          "repeated menu target does not reset the fade");
+    eng.setMenuActive(false);
+    check(std::abs(AudioTestAccess::menuBlend(eng) - 0.5) < 1e-9,
+          "leaving menu does not abruptly switch the blend");
+    renderSmooth(4410);
+    check(std::abs(AudioTestAccess::menuBlend(eng) - 0.375) < 1e-9,
+          "mid-fade reversal continues from the current blend");
+    eng.setMenuActive(true);
+    renderSmooth(22051);
+    check(AudioTestAccess::menuBlend(eng) == 1.0,
+          "menu fade reaches full ambient");
+    eng.setMenuActive(false);
+    renderSmooth(17640);
+    check(std::abs(AudioTestAccess::menuBlend(eng) - 0.5) < 1e-9,
+          "menu fade-out has the same 0.8 second duration");
+    renderSmooth(17641);
+    check(AudioTestAccess::menuBlend(eng) == 0.0,
+          "menu fade-out fully restores gameplay");
+    check(smooth, "fades and reversals have no abrupt sample or block jumps");
+  }
+
+  // 8. Settled menu audio is quiet, finite, nonzero, and genuinely stereo.
+  {
+    AudioEngine eng;
+    eng.setVolume(1.0f);
+    eng.setMenuActive(true);
+    renderAudio(eng, AudioEngine::kSampleRate);
+    const auto out = renderAudio(eng, AudioEngine::kSampleRate);
+    bool bounded = true;
+    double energyL = 0.0, energyR = 0.0, stereoEnergy = 0.0;
+    for (size_t i = 0; i < out.size(); i += 2) {
+      bounded = bounded && std::isfinite(out[i]) && std::isfinite(out[i + 1]) &&
+                std::abs(out[i]) < 0.03f && std::abs(out[i + 1]) < 0.03f;
+      energyL += out[i] * out[i];
+      energyR += out[i + 1] * out[i + 1];
+      const double side = out[i] - out[i + 1];
+      stereoEnergy += side * side;
+    }
+    check(bounded, "menu ambient is finite and bounded below 0.03 at full volume");
+    check(energyL > 0.1 && energyR > 0.1 && stereoEnergy > 0.01,
+          "menu ambient has nonzero left/right energy and stereo separation");
+    check(eng.cassetteTape() == 0, "menu ambient does not enable a cassette");
+
+    // Neither the 32 s music loop nor callback block boundaries reset its phase.
+    AudioTestAccess::setSamples(eng, 32ULL * AudioEngine::kSampleRate - 128);
+    const auto boundary = renderAudio(eng, 256);
+    bool continuous = true;
+    for (size_t i = 2; i < boundary.size(); ++i) {
+      continuous = continuous && std::abs(boundary[i] - boundary[i - 2]) < 0.004f;
+    }
+    check(continuous, "menu oscillator phase is continuous across the music loop");
+  }
+
+  // 9. Fade and oscillator results must not depend on callback block sizes.
+  {
+    AudioEngine whole, split;
+    const unsigned chunks[] = {1, 17, 127, 512};
+    bool identical = true;
+    for (bool active : {true, false, true}) {
+      whole.setMenuActive(active);
+      split.setMenuActive(active);
+      const auto expected = renderAudio(whole, AudioEngine::kSampleRate);
+      std::vector<float> actual(expected.size());
+      unsigned done = 0, chunk = 0;
+      while (done < AudioEngine::kSampleRate) {
+        unsigned frames = chunks[chunk++ % 4];
+        const unsigned remaining = AudioEngine::kSampleRate - done;
+        if (frames > remaining) frames = remaining;
+        AudioTestAccess::render(split, actual.data() + done * 2, frames);
+        done += frames;
+      }
+      identical = identical && expected == actual &&
+                  AudioTestAccess::menuBlend(whole) == AudioTestAccess::menuBlend(split);
+    }
+    check(identical, "menu entry/exit/re-entry are independent of callback block size");
+    check(AudioTestAccess::samples(whole) == 3ULL * AudioEngine::kSampleRate &&
+              AudioTestAccess::samples(split) == AudioTestAccess::samples(whole),
+          "menu transitions never reset the absolute sample clock");
+  }
+
+  // 10. Preserve existing master gain and soft clipping, including exact silence.
+  {
+    AudioEngine full, half, zero, muted;
+    full.setVolume(1.0f);
+    half.setVolume(0.5f);
+    zero.setVolume(0.0f);
+    muted.setVolume(1.0f);
+    muted.toggleMute();
+    bool scaled = true, silent = true;
+    double energy = 0.0;
+    for (bool active : {true, true, false}) {
+      for (AudioEngine* eng : {&full, &half, &zero, &muted}) eng->setMenuActive(active);
+      const auto a = renderAudio(full, AudioEngine::kSampleRate);
+      const auto b = renderAudio(half, AudioEngine::kSampleRate);
+      const auto c = renderAudio(zero, AudioEngine::kSampleRate);
+      const auto d = renderAudio(muted, AudioEngine::kSampleRate);
+      for (size_t i = 0; i < a.size(); ++i) {
+        // Master gain precedes the existing tanh limiter, so undo it to compare.
+        const double expected = std::tanh(std::atanh(static_cast<double>(a[i])) * 0.5);
+        scaled = scaled && std::isfinite(a[i]) && std::abs(b[i] - expected) < 1e-6;
+        silent = silent && c[i] == 0.0f && d[i] == 0.0f;
+        energy += a[i] * a[i];
+      }
+    }
+    check(energy > 0.1 && scaled, "master volume scales menu and fading gameplay gain");
+    check(silent, "mute and zero master volume give exact silence during all fades");
+    muted.toggleMute();
+    zero.setVolume(1.0f);
+    const auto resumed = renderAudio(full, 256);
+    check(renderAudio(muted, 256) == resumed && renderAudio(zero, 256) == resumed,
+          "silent rendering keeps phase continuous when master audio resumes");
+  }
+
+  // 11. Crossfade every continuous layer, without altering cassette controls/state.
+  {
+    AudioEngine ambient, busy, gameplay;
+    for (AudioEngine* eng : {&ambient, &busy, &gameplay}) eng->setVolume(1.0f);
+    AudioTestAccess::enableGameplayLayers(busy);
+    AudioTestAccess::enableGameplayLayers(gameplay);
+    ambient.setMenuActive(true);
+    busy.setMenuActive(true);
+    for (AudioEngine* eng : {&ambient, &busy, &gameplay}) renderAudio(*eng, AudioEngine::kSampleRate);
+    const auto menu = renderAudio(ambient, 512);
+    check(renderAudio(busy, 512) == menu,
+          "full menu blend suppresses music, warp, engine, tension, atmosphere, radio, cassette, drill, weather");
+    renderAudio(gameplay, 512);
+    check(busy.cassetteTape() == static_cast<int>(AudioEngine::CassetteTape::PulsarBeat) &&
+              busy.cassetteVolume() == 0.4f,
+          "entering menu preserves cassette selection and volume");
+    busy.setMenuActive(false);
+    renderAudio(busy, AudioEngine::kSampleRate);
+    renderAudio(gameplay, AudioEngine::kSampleRate);
+    check(renderAudio(busy, 512) == renderAudio(gameplay, 512),
+          "leaving menu restores unchanged gameplay and continuously running cassette state");
+    check(busy.cassetteTape() == static_cast<int>(AudioEngine::CassetteTape::PulsarBeat) &&
+              busy.cassetteVolume() == 0.4f,
+          "leaving menu preserves cassette selection and volume");
+  }
+
+  // 12. UI clicks and PCM voice cues remain outside the menu/gameplay crossfade.
+  {
+    AudioEngine ambient, click, voice;
+    for (AudioEngine* eng : {&ambient, &click, &voice}) {
+      eng->setVolume(1.0f);
+      eng->setMenuActive(true);
+      renderAudio(*eng, AudioEngine::kSampleRate);
+    }
+    AudioTestAccess::useNullBackend(click);
+    click.playClick();
+    auto pcm = std::make_shared<std::vector<float>>(4096, 0.2f);
+    AudioTestAccess::pushVoice(voice, AudioTestAccess::VoiceType::EgorkaVoice, pcm,
+                               AudioTestAccess::samples(voice));
+    const auto base = renderAudio(ambient, 256);
+    const auto ui = renderAudio(click, 256);
+    const auto speech = renderAudio(voice, 256);
+    constexpr double pi = 3.14159265358979323846;
+    bool clickIntact = true, voiceIntact = true;
+    for (size_t i = 0; i < base.size(); ++i) {
+      const double age = static_cast<double>(i / 2) / AudioEngine::kSampleRate;
+      const double expectedClick = std::sin(2.0 * pi * 1900.0 * age) *
+                                   std::exp(-age * 90.0) * 0.7 * std::sqrt(0.5) * 1.1;
+      clickIntact = clickIntact &&
+          std::abs(std::atanh(ui[i]) - std::atanh(base[i]) - expectedClick) < 2e-6;
+      voiceIntact = voiceIntact &&
+          std::abs(std::atanh(speech[i]) - std::atanh(base[i]) -
+                   0.2 * std::sqrt(0.5) * 1.1) < 2e-6;
+    }
+    check(clickIntact, "UI click SFX retain full gain in menu");
+    check(voiceIntact, "PCM voice cues retain full gain in menu");
   }
 
   if (g_fail > 0) {

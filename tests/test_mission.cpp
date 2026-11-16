@@ -203,6 +203,30 @@ void testSerializationRoundTrip() {
   std::cout << "[PASS] Mission state serialization & round-trip\n";
 }
 
+void testEnsureStarterQuests() {
+  astro::MissionManager mgr;
+  assert(mgr.getActiveContracts().empty());
+
+  // Calling on fresh manager should populate up to 2 active starter quests
+  mgr.ensureStarterQuests("sol");
+  assert(!mgr.getActiveContracts().empty());
+  assert(mgr.getActiveContracts().size() <= 2);
+  for (const auto& c : mgr.getActiveContracts()) {
+    assert(c.status == astro::MissionStatus::Active);
+    assert(!c.titleRu.empty());
+    assert(c.rewardRP > 0);
+    (void)c;
+  }
+
+  // Calling again when contracts already active should not add duplicates or exceed kMaxActive
+  size_t countBefore = mgr.getActiveContracts().size();
+  mgr.ensureStarterQuests("sol");
+  assert(mgr.getActiveContracts().size() == countBefore);
+  (void)countBefore;
+
+  std::cout << "[PASS] Ensure starter quests initialization\n";
+}
+
 }  // namespace
 
 int main() {
@@ -213,6 +237,7 @@ int main() {
   testSurfaceSamplingLifecycle();
   testGravitationalProbeAndDeepSpace();
   testSerializationRoundTrip();
+  testEnsureStarterQuests();
   std::cout << "mission tests: ALL PASS\n";
   return 0;
 }

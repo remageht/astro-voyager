@@ -1,6 +1,7 @@
 #include "Cubemap.h"
 
 #include "GLCompat.h"
+#include "LaunchDiagnostics.h"
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -71,7 +72,8 @@ void Cubemap::unbind() const {
 }
 
 bool Cubemap::loadHdrSkybox(const std::string& path) {
-  std::ifstream f(path, std::ios::binary);
+  const std::string resolved = resolveAssetPath(path);
+  std::ifstream f(resolved, std::ios::binary);
   if (!f.is_open()) {
     std::string fallback = "../" + path;
     f.open(fallback, std::ios::binary);
@@ -82,7 +84,7 @@ bool Cubemap::loadHdrSkybox(const std::string& path) {
   f.close();
 
   int width = 0, height = 0, nrComponents = 0;
-  float* data = stbi_loadf(path.c_str(), &width, &height, &nrComponents, 0);
+  float* data = stbi_loadf(resolved.c_str(), &width, &height, &nrComponents, 0);
   if (!data) {
     return false;
   }

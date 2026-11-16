@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 5.0.0 LANGUAGES CXX)
+project(astro-voyager VERSION 5.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,7 @@ add_executable(astro-voyager
   src/SaveGame.cpp  # === SaveGame === (v3.4.0): JSON-профиль, чистый C++17
   src/StoryJournal.cpp  # === StoryJournal === (v3.5.0): бортовой журнал, чистый C++17
   src/Expedition.cpp  # === Expedition === (v3.5.0): сюжетная арка, чистый C++17
+  src/ColonySystem.cpp
   src/ScienceSystem.cpp  # === ScienceSystem === (v4.6.0): спектрометрия, кодекс и радиопереговоры
   src/LandingSystem.cpp  # === LandingSystem === (v4.7.0): посадка на планеты, шасси и отчёты
   src/Zettelkasten.cpp  # === Zettelkasten === (v4.8.0): Второй Мозг Егорки, граф мыслей и истинные концовки
@@ -100,6 +101,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_save.cpp")
   add_executable(test_save
     tests/test_save.cpp
     src/SaveGame.cpp
+    src/ColonySystem.cpp
   )
   target_include_directories(test_save PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
@@ -403,6 +405,7 @@ if(ASTROVOYAGER_ENABLE_GL)
   target_sources(astro-voyager PRIVATE
     src/Window.cpp
     src/Shader.cpp
+    src/LaunchDiagnostics.cpp
     src/Mesh.cpp
     src/ObjModel.cpp
     src/Cubemap.cpp
@@ -633,6 +636,23 @@ if(TARGET test_loading)
   add_test(NAME test_loading COMMAND test_loading)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_colony.cpp")
+  add_executable(test_colony
+    tests/test_colony.cpp
+    src/ColonySystem.cpp
+  )
+  target_include_directories(test_colony PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_colony PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_colony PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_colony)
+  add_test(NAME test_colony COMMAND test_colony)
+endif()
+
 # Runtime resources next to the binary (double-click launch support):
 # the app loads shaders/ and res/ via relative paths, so they must sit
 # beside the exe, not only in the source tree. Guarded: minimal source
@@ -643,5 +663,14 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/shaders")
       "${CMAKE_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:astro-voyager>/shaders"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
       "${CMAKE_SOURCE_DIR}/res" "$<TARGET_FILE_DIR:astro-voyager>/res"
+  )
+endif()
+
+# The root-level astro-voyager.exe is the double-click entry point, so it must
+# track the freshly built target rather than whatever was last copied by hand.
+# If the user is currently running the game, ignore lock and continue.
+if(WIN32)
+  add_custom_command(TARGET astro-voyager POST_BUILD
+    COMMAND powershell -NoProfile -Command "try { Copy-Item -LiteralPath '$<TARGET_FILE:astro-voyager>' -Destination '${CMAKE_SOURCE_DIR}/astro-voyager.exe' -Force -ErrorAction Stop } catch { Write-Host 'Note: root astro-voyager.exe in use, skipping' }"
   )
 endif()

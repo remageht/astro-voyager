@@ -1,6 +1,7 @@
 #include "Window.h"
 
 #include "GLCompat.h"
+#include "LaunchDiagnostics.h"
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 
@@ -75,25 +76,67 @@ static void GLAPIENTRY openGlDebugCallback(GLenum source,
 
 namespace astro {
 
+namespace {
+
+// Конфигурации контекста по убыванию требований. Раньше жёстко требовался
+// OpenGL 3.3 core: на старых драйверах AMD и на некоторых сборках Mesa
+// такой контекст не создаётся, и игра падала (у пользователя — белый экран
+// и закрытие). Теперь перебираем варианты и в лог пишем, какой сработал.
+struct GLContextConfig {
+  int major;
+  int minor;
+  int profile;  // GLFW_OPENGL_CORE_PROFILE / GLFW_OPENGL_COMPAT_PROFILE
+  const char* label;
+};
+
+const GLContextConfig kGLConfigs[] = {
+    {3, 3, GLFW_OPENGL_CORE_PROFILE, "3.3 core"},
+    {3, 3, GLFW_OPENGL_COMPAT_PROFILE, "3.3 compatibility"},
+    {3, 2, GLFW_OPENGL_CORE_PROFILE, "3.2 core"},
+    {3, 2, GLFW_OPENGL_COMPAT_PROFILE, "3.2 compatibility"},
+    {3, 0, GLFW_OPENGL_ANY_PROFILE, "3.0 any"},
+};
+
+}  // namespace
+
 Window::Window(int width, int height, const char* title, bool visible) {
   if (!glfwInit()) {
     throw std::runtime_error("Failed to initialize GLFW");
   }
 
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  // Отладочный контекст запрашиваем только как пожелание: на некоторых
+  // драйверах (AMD) сам запрос debug-контекста приводит к отказу создать
+  // окно. Ниже флаг всё равно проверяется по GL_CONTEXT_FLAGS.
+  m_window = nullptr;
+  std::string usedConfig;
+  for (const GLContextConfig& cfg : kGLConfigs) {
+    glfwDefaultWindowHints();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, cfg.major);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, cfg.minor);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, cfg.profile);
 #ifdef __APPLE__
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    if (cfg.major > 3 || (cfg.major == 3 && cfg.minor >= 2)) {
+      glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    }
 #endif
-  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-  glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_FALSE);
+    glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
+    glfwWindowHint(GLFW_AUTO_ICONIFY, GLFW_FALSE);
 
-  m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+    m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+    if (m_window) {
+      usedConfig = cfg.label;
+      break;
+    }
+  }
   if (!m_window) {
     glfwTerminate();
-    throw std::runtime_error("Failed to create GLFW window");
+    throw std::runtime_error(
+        "Failed to create GLFW window: no OpenGL context could be created "
+        "(tried 3.3 core / 3.3 compat / 3.2 core / 3.2 compat / 3.0 any). "
+        "The game needs OpenGL 3.3 and an up-to-date graphics driver.");
   }
+  logLaunch(std::string("[Window] OpenGL context: ") + usedConfig);
 
   // Window/taskbar icon. Windows takes the icon resource already embedded in
   // the exe (packaging/app.ico, resource id 1), so the window icon matches the
@@ -147,6 +190,17 @@ Window::Window(int width, int height, const char* title, bool visible) {
   // Clear any benign GLEW error
   glGetError();
 
+  // Сразу очищаем окно в глубокий тёмный космический цвет и делаем первый swap:
+  // без этого на Windows (особенно на AMD) окно первые 2-3 секунды висит белым
+  // холстом DWM, пока грузятся текстуры, 3D-модели и компилируются шейдеры («белый экран»).
+  glClearColor(0.01f, 0.02f, 0.04f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glfwSwapBuffers(m_window);
+
+  // Диагностика для поддержки: версии GL и драйвера пишем в лог рядом с
+  // exe — по нему видно, какой GPU/драйвер у игрока и почему сцена падает.
+  logLaunch("[Window] OpenGL capabilities:\n" + glCapabilitiesString());
+
 #ifndef __APPLE__
   GLint flags = 0;
   glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
@@ -169,6 +223,8 @@ Window::Window(int width, int height, const char* title, bool visible) {
 
 Window::~Window() {
   if (m_window) {
+    glfwHideWindow(m_window);
+    glfwPollEvents();
     glfwDestroyWindow(m_window);
     m_window = nullptr;
   }

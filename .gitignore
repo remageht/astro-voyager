@@ -32,6 +32,9 @@ routes/
 
 # Blender previews/models are local build artifacts (scripts live in blender/scripts/)
 blender/out/
+# Downloaded third-party reference imagery and local capture scratch: never commit
+blender/ref/
+vibe_videos/
 
 # Certificates / private keys: never commit
 *.pfx

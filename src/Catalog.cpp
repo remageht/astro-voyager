@@ -26,7 +26,7 @@ const std::vector<Station>& builtinCatalog() {
       {"m1", StationType::Nebula, "Crab Nebula (M1)",
        "Pulsar Wind Nebula (PWN) supernova remnant: relativistic termination shock, equatorial synchrotron torus, dynamic wisps, and filamentary cage.", 60.0, {}, 0.0, 0.0, 6500.0},
       {"sol", StationType::SolarSystem, "Solar System",
-       "Sun + 8 planets + Moon, rings, belt.", 70.0, {}, 0.0, 0.0, 0.0},
+       "Sun + 8 planets + Moon, rings, belt. Orbital fleet: Aurora Ring Station, Gateway Shipyard, SpaceX Crew Dragon, Soyuz MS-25, Webb Observatory, O'Neill ring colony and solar sail; Perseverance on Mars, Artemis lander at the Moon, Voyager 1 relic in the Kuiper belt.", 70.0, {}, 0.0, 0.0, 0.0},
       {"m87", StationType::BlackHole, "M87*",
        "Supermassive black hole with relativistic jet.", 14.0,
        {1.5, 30.0, 0.05, 600}, 1.575, 60.0, 53.5e6},

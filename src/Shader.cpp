@@ -2,6 +2,7 @@
 
 #include "EmbeddedShaders.h"  // v3.6.0: шейдеры, вшитые в бинарник
 #include "GLCompat.h"
+#include "LaunchDiagnostics.h"
 #include <glm/gtc/type_ptr.hpp>
 
 #include <fstream>
@@ -12,10 +13,51 @@
 
 namespace astro {
 
+namespace {
+
+// Аварийные шейдеры: если исходный не компилируется (экзотический драйвер,
+// например старый AMD), игра продолжает работать — объект рисуется
+// простым цветом или не рисуется вовсе. Раньше любая такая ошибка
+// уничтожала процесс: игрок видел белый экран и закрытие.
+const char* kFallbackFrag = R"(#version 330 core
+// Аварийный фрагментный шейдер: ровный тёмный цвет вместо эффекта.
+out vec4 fragColor;
+void main() { fragColor = vec4(0.04, 0.06, 0.10, 1.0); }
+)";
+
+const char* kFallbackVert = R"(#version 330 core
+// Аварийный вершинный шейдер: геометрия уходит за пределы NDC и
+// отсекается — объект не виден, но сцена продолжает рисоваться.
+layout(location = 0) in vec3 position;
+void main() { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); }
+)";
+
+}  // namespace
+
 Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath) {
   std::string vertexSource = readFile(vertexPath);
   std::string fragmentSource = readFile(fragmentPath);
-  m_rendererId = createProgram(vertexSource, fragmentSource);
+  try {
+    m_rendererId = createProgram(vertexSource, fragmentSource);
+  } catch (const std::exception& e) {
+    // Мягкая деградация: падать нельзя — иначе у игрока белый экран и
+    // закрытие игры. Имя файла в сообщении: без него не понять, какой
+    // шейдер не собрался (у разных драйверов отваливаются разные).
+    const std::string detail = std::string(e.what()) +
+                               "\nShaders: " + vertexPath + " + " + fragmentPath;
+    logLaunch("[Shader] FALLBACK (" + fragmentPath + "): " + detail);
+    try {
+      // Сначала пробуем оставить рабочий вершинный шейдер и подменить
+      // только фрагментный — геометрия останется на месте.
+      m_rendererId = createProgram(vertexSource, kFallbackFrag);
+    } catch (...) {
+      try {
+        m_rendererId = createProgram(kFallbackVert, kFallbackFrag);
+      } catch (...) {
+        throw std::runtime_error(detail);
+      }
+    }
+  }
 }
 
 Shader::~Shader() {
@@ -93,7 +135,8 @@ int Shader::getUniformLocation(const std::string& name) {
 }
 
 std::string Shader::readFile(const std::string& filepath) {
-  std::ifstream file(filepath);
+  const std::string resolved = resolveAssetPath(filepath);
+  std::ifstream file(resolved);
   if (!file.is_open()) {
     // Try with res/ prefix or relative to executable
     std::string fallback = "../" + filepath;

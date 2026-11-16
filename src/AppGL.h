@@ -66,13 +66,21 @@ class AppGL {
   static int captureAllScreenshots(const std::string& outDir = "docs/screens", bool diskOn = false);
   static int captureStationCheck(const std::string& outPath);
   static int captureDragonCheck(const std::string& outPath);
+  static int captureFleetCheck(const std::string& outDir);
   static int captureZettelCheck(const std::string& outPath);
   static int captureHudCheck(const std::string& outPath);
   static int captureTerminalCheck(const std::string& outPath);
+  static int captureMenuCheck(const std::string& outDir);
+  static int captureEarthCheck(const std::string& outDir);
 
   // === Perf Benchmark Harness === (Stage 4, public entry for CLI)
   void enableBenchmarkMode(float durationSec, const std::string& outPath,
                            const std::string& comparePath);
+
+  // === Безопасный режим (--safe) ===
+  // Слабый GPU (старые AMD): меньше лучей на луч, без FXAA, без тяжёлых
+  // эффектов. Вызывается сразу после создания AppGL.
+  void applySafeMode();
 
  private:
   void processInput(float deltaTime);
@@ -81,6 +89,7 @@ class AppGL {
   void drawMenu();
   void drawMainMenuHero(float screenW, float screenH);
   void drawMainMenuBackground(float screenW, float screenH);
+  void drawFlightBriefingCard(int hoveredOption, float cardW, const Station* curSt);
   void drawVoiceCatalogPage(float areaH);
   void drawHelpContent();
   void drawHelpOverlay();
@@ -90,6 +99,10 @@ class AppGL {
   // === Science & Radio Chatter === (v4.6.0)
   void drawSpectrometer();
   void drawCodex();
+  void drawColonies();
+  bool foundColony(const std::string& id);
+  bool upgradeColony(const std::string& id);
+  void updateColonyEconomy(float dt);
   void drawBridgeCommsToast();
   void checkBridgeCommsTriggers(const std::string& stationId);
   // === Planetary Landing & Surface Operations === (v4.6.1)
@@ -303,6 +316,9 @@ class AppGL {
   int m_slideAnimIdx = -1;
   double m_slideTextStart = 0.0;
   double m_slideShownAt = 0.0;
+  bool m_slideAutoPlay = true;        // Cinematic auto-advancing slides toggle (Tab / A)
+  double m_slideAutoPlayDelay = 4.5;  // Base reading delay after text is typed
+  bool m_questHudCollapsed = false;   // Collapsed / expanded state of in-flight HUD quest tracker
   static unsigned int uploadRgba(const unsigned char* px, int w, int h);
   void invalidateVideoSlide();
 
@@ -386,7 +402,20 @@ class AppGL {
   unsigned int m_menuBgTex = 0;
   int m_menuBgW = 0;
   int m_menuBgH = 0;
-  float m_menuCameraFloatTimer = 0.0f;
+  int m_menuBackground = 0;
+  int m_loadedMenuBackground = -1;
+  unsigned int m_menuMotionMaskTex = 0;
+  void ensureMenuBackground();
+  unsigned int loadMenuBackgroundTexture(const char* path);
+  std::vector<std::vector<unsigned char>> m_menuVideoFrames;
+  unsigned int m_menuVideoTex = 0;
+  int m_menuVideoIdx = -1;
+  bool m_menuVideoTried = false;
+  double m_menuVideoStart = -1.0;
+  unsigned int m_menuDiskMaskTex = 0;
+  bool m_menuProceduralDisk = true;
+  unsigned int updateMenuVideo(double time);
+  void renderMenuBackdrop(int width, int height, double time);
   bool m_hasStartedFlight = false;
   void requestCloseMenu();
 
@@ -427,9 +456,13 @@ class AppGL {
   // сайта включает подсказку [C], колония сохраняется в профиль и горит
   // кольцом-маркером в сцене.
   std::vector<std::string> m_colonies;
+  ColonyStages m_colonyStages;
+  bool m_coloniesOpen = false;
+  std::string m_selectedColony = "mars";
   bool m_prevCPressed = false;
   std::string m_colonyHint;    // имя сайта в радиусе посадки ("" = нет)
   std::string m_colonyHintId;  // id сайта для hotkey
+  double m_lastPassiveColonyTime = 0.0;
   // === Science & Radio Chatter === (v4.6.0)
   ScienceCodex m_codex;
   BridgeComms m_bridgeComms;
@@ -718,6 +751,7 @@ class AppGL {
   // === Orbital Cruise (v5.3.0 Alpha): кеплерово курсирование по орбите планет и звёзд (клавиша R)
   bool m_orbitCruiseActive = false;
   bool m_prevRPressed = false;
+  bool m_prevUPressed = false;  // U: toggle Quest tracker collapse in flight HUD
   ship::OrbitalCruiseTelemetry m_orbitTelem;
   void toggleOrbitalCruise();
   void updateOrbitalCruise(float deltaTime, double throttleAdjust);
