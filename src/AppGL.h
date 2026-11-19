@@ -555,6 +555,8 @@ class AppGL {
   void drawUnifiedShipTerminal();
   void tryEngageWarp();  // #135: общий вход в варп-круиз (X-хоткей + кнопки HUD)
   void toggleLandingGear(); // v5.5.0: управление шасси с голосовым оповещением
+  bool closeTopModal();
+  bool isAnyModalOpen() const;
 
   // === Egorka Voice Announcer === (v5.5.0, Issue #137)
   float m_lastFuelWarnT = -100.0f;
@@ -565,6 +567,7 @@ class AppGL {
 
   // === 3D Holographic Star Map / Orrery (v5.5.0, Issue #141) ===
   bool m_orreryMapOpen = false;
+  bool m_orrerySidebarsCollapsed = false;
   float m_orreryPitch = 0.58f;
   float m_orreryYaw = 0.35f;
   float m_orreryZoom = 5.0f;
