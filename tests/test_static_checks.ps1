@@ -794,6 +794,9 @@ Check 'dreadnought generator uses fleet axis' ((($dreadPy -match 'rotation_euler
 Check 'dreadnought captured in hud harness' (($appCpp -match 'ship_dreadnought\.png') -and ($appCpp -match 'warpdrive::setShipStyle\(4\)'))
 Check 'dreadnought documented' (($readme -match 'Mining Dreadnought \(4\)') -and ($readme -match 'mining_dreadnought_showcase\.png'))
 
+# --- Dreadnought detail pass (follow-up to #195) ---
+Check 'dreadnought detail pass wired' ((($dreadPy -match 'def add_dreadnought_details\(\)') -and ($dreadPy -match 'add_dreadnought_details\(\)')) -and (($dreadPy -match 'Fleet axis convention \(#195\)') -and ($dreadPy -match 'target_scale = 2\.30')))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

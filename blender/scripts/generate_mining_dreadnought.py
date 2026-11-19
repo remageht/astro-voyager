@@ -146,6 +146,373 @@ def add_hex_pod(center, radius, length, slot=2):
                      radius * 1.08, length * 0.08, axis="Y", sides=6, slot=0, bevel=0.002)
 
 
+def add_dreadnought_details():
+    """Reference-driven relief pass for the Heavy Mining Dreadnought.
+
+    Everything below is authored in the builder frame (+Y forward, +Z up,
+    +X starboard) and is real geometry, not texture tricks: reinforcement
+    banding, weld seams, keel and dorsal stringers and outrigger trusses on the
+    spinal chassis; a bridge visor with mullions, sun shade, handrails, masts,
+    sensor horns and dish feed; crusher teeth, hinge knuckles, hydraulic rams,
+    ring vanes, emitter lenses and boom cable runs on the mining rig; pod
+    straps, manifold piping and hazard-striped end frames on the cargo rack;
+    fin arrays and edge rails on the radiator panels; and bell throats, gimbal
+    rings, feed mains, RCS clusters, a service crane and berthing hardware in
+    the engine room.
+
+    Nothing floats: each piece is either buried in a hull surface or welded to
+    hardware that is. Rule of thumb used throughout - protrude by at least
+    0.02 and embed by at least 0.01, so no face lands coplanar with an existing
+    one (that is what z-fights in the atlas bake).
+    """
+    # Radial placement helpers. The primitives in this file only aim on the
+    # X/Y/Z axes, so anything that has to point off-axis is built from an
+    # axis="X" cylinder plus a single Euler component:
+    #   rot=(0, -a, 0) -> aims along the outward radial (cos a, 0, sin a) of
+    #                     the +Y spine (used by the rig, pods, engines)
+    def radial_spine(center, radius, length, azim, sides=10, slot=1, bevel=0.0):
+        add_cylinder(center, radius, length, axis="X", rot=(0.0, -azim, 0.0),
+                     sides=sides, slot=slot, bevel=bevel)
+
+    def spoke(center, dims, azim, slot=1, bevel=0.0):
+        """Box whose dims read (radial, fore-aft, tangential) at azimuth azim."""
+        add_box(center, dims, slot=slot, rot=(0.0, -azim, 0.0), bevel=bevel)
+
+    def nozzle_aft(center, r=0.024, flare=0.055, length=0.11, slot=7):
+        """Nozzle bell opening aft (-Y): narrow at +Y, flared at -Y."""
+        add_cone(center, r, flare, length, axis="Y", sides=10, slot=slot)
+
+    def nozzle_side(center, outboard, r=0.022, flare=0.050, length=0.10, slot=7):
+        """Nozzle bell opening outboard along +-X."""
+        add_cone(center,
+                 r if outboard > 0 else flare,
+                 flare if outboard > 0 else r,
+                 length, axis="X", sides=10, slot=slot)
+
+    # ------------------------------------------------------------------
+    # A. SPINAL CHASSIS: banding, weld seams, stringers, trusses
+    # ------------------------------------------------------------------
+    # Transverse reinforcement bands around the spine (X +-0.55, Z +-0.375)
+    for y_band in (-1.95, -1.55, 1.30, 1.70, 2.00):
+        add_box((0.0, y_band, 0.0), (1.17, 0.11, 0.83), slot=1, bevel=0.005)
+    # Matching band plates struck across the lateral skirts (X +-0.925 face)
+    for y_band in (-1.55, 1.30, 1.70):
+        for side in (-1, 1):
+            add_box((side * 0.94, y_band, -0.05), (0.05, 0.13, 0.62), slot=6, bevel=0.0)
+
+    # Longitudinal weld seams along the spine sides and the dorsal ridge. The
+    # skirts occupy X +-0.575..0.925 / Z -0.325..0.225, so the seams have to
+    # ride above and below that band or they vanish into the gap.
+    for side in (-1, 1):
+        for z_seam in (0.31, -0.34):
+            add_box((side * 0.56, -0.1, z_seam), (0.04, 4.05, 0.05), slot=6, bevel=0.0)
+        add_box((side * 0.36, -0.2, 0.59), (0.05, 3.40, 0.05), slot=6, bevel=0.0)
+
+    # Keel stringers plus cross ties (keel armour bottom is Z = -0.625)
+    for side in (-1, 1):
+        add_box((side * 0.30, 0.15, -0.645), (0.10, 3.55, 0.08), slot=1, bevel=0.004)
+    for y_tie in (-1.5, -0.9, -0.3, 0.3, 0.9, 1.5):
+        add_box((0.0, y_tie, -0.645), (0.62, 0.10, 0.08), slot=6, bevel=0.0)
+
+    # Dorsal ridge stringers and transverse ribs
+    for side in (-1, 1):
+        add_box((side * 0.24, -0.2, 0.585), (0.07, 3.45, 0.06), slot=1, bevel=0.003)
+    for y_rib in (-1.85, -1.45, 0.15, 0.55, 1.45):
+        add_box((0.0, y_rib, 0.585), (0.66, 0.09, 0.05), slot=6, bevel=0.0)
+
+    # Skirt-to-keel structural struts and outboard armour patches
+    for side in (-1, 1):
+        for y_strut in (-1.5, -0.5, 0.5, 1.5):
+            add_box((side * 0.55, y_strut, -0.50), (0.30, 0.13, 0.24), slot=1, bevel=0.003)
+        for y_patch in (-1.15, -0.35, 0.50, 0.95):
+            add_box((side * 0.935, y_patch, -0.05), (0.05, 0.52, 0.40), slot=0, bevel=0.0)
+        # access ladder rungs on the skirt outer face
+        for k in range(6):
+            add_box((side * 0.94, -1.70 + k * 0.16, -0.20), (0.06, 0.08, 0.025),
+                    slot=1, bevel=0.0)
+
+    # ------------------------------------------------------------------
+    # B. BRIDGE: visor, mullions, sun shade, rails, masts, sensors
+    # ------------------------------------------------------------------
+    # Armored visor band carried forward of the canopy face (canopy: Y -0.925
+    # .. -0.075, X +-0.325, Z 0.94 .. 1.16) - the original window box sits
+    # inside the canopy, so this is what actually reads as glass.
+    add_box((0.0, -0.055, 1.055), (0.60, 0.08, 0.15), slot=4, bevel=0.002)
+    for x_mull in (-0.24, -0.12, 0.0, 0.12, 0.24):
+        add_box((x_mull, -0.04, 1.055), (0.028, 0.05, 0.17), slot=1, bevel=0.0)
+    # Sun shade: horizontal lip off the canopy nose plus a drooped tip plate
+    add_box((0.0, 0.0, 1.155), (0.68, 0.20, 0.05), slot=1, bevel=0.003)
+    add_box((0.0, 0.115, 1.13), (0.68, 0.07, 0.035), slot=2,
+            rot=(-0.55, 0.0, 0.0), bevel=0.0)
+    # Mullion ribs standing proud of the side observation slits (X +-0.35)
+    for side in (-1, 1):
+        for y_slit in (-0.72, -0.5, -0.28):
+            add_box((side * 0.355, y_slit, 1.06), (0.04, 0.06, 0.13), slot=1, bevel=0.0)
+
+    # Walkway handrail on the exposed citadel roof (deck Z = 1.005)
+    for side in (-1, 1):
+        add_box((side * 0.42, -0.62, 1.115), (0.022, 1.02, 0.022), slot=2, bevel=0.0)
+        for y_post in (-1.10, -0.86, -0.62, -0.38, -0.14):
+            add_box((side * 0.42, y_post, 1.055), (0.02, 0.02, 0.13), slot=1, bevel=0.0)
+    add_box((0.0, -1.12, 1.115), (0.86, 0.022, 0.022), slot=2, bevel=0.0)
+    for x_post in (-0.30, 0.0, 0.30):
+        add_box((x_post, -1.12, 1.055), (0.02, 0.02, 0.13), slot=1, bevel=0.0)
+
+    # Bridge wing platforms with edge kerbs, gussets and wingtip lights
+    for side in (-1, 1):
+        add_box((side * 0.51, -0.60, 0.93), (0.20, 0.46, 0.045), slot=0, bevel=0.003)
+        add_box((side * 0.60, -0.60, 0.965), (0.02, 0.44, 0.05), slot=2, bevel=0.0)
+        add_box((side * 0.55, -0.42, 0.88), (0.10, 0.05, 0.10), slot=1,
+                rot=(0.0, 0.0, side * 0.6), bevel=0.0)
+        add_box((side * 0.58, -0.60, 0.975), (0.05, 0.10, 0.06), slot=4, bevel=0.0)
+
+    # Whip antennas and an aft blade mast off the canopy roof
+    for side in (-1, 1):
+        add_cylinder((side * 0.27, -0.86, 1.42), 0.013, 0.55, axis="Z", sides=8, slot=1)
+        add_cone((side * 0.27, -0.86, 1.715), 0.013, 0.001, 0.06, axis="Z", sides=8, slot=6)
+    add_cylinder((0.0, -0.90, 1.32), 0.022, 0.36, axis="Z", sides=8, slot=1)
+    add_box((0.0, -0.90, 1.54), (0.012, 0.16, 0.12), slot=1, rot=(0.0, 0.25, 0.0), bevel=0.0)
+    add_box((0.0, -0.90, 1.42), (0.14, 0.03, 0.03), slot=6, bevel=0.0)
+
+    # Sensor horn cluster and lens banks on the citadel nose and flanks
+    for side in (-1, 1):
+        add_cone((side * 0.33, 0.0, 0.78), 0.10, 0.035, 0.16, axis="Y", sides=12, slot=6)
+        for y_lens, slot_lens in ((-0.30, 4), (-0.62, 7), (-0.94, 4)):
+            add_cylinder((side * 0.435, y_lens, 0.80), 0.05, 0.04, axis="X",
+                         sides=12, slot=slot_lens, bevel=0.0)
+
+    # Comm mast foot: the stock mast starts 0.045 above the citadel deck, so
+    # pedestal it down before rebuilding the dish on top of it.
+    add_box((0.0, -1.0, 1.02), (0.20, 0.22, 0.12), slot=1, bevel=0.003)
+    # Radar dish: mouth rim, feed rod, three stanchions, spreader and horn
+    add_cylinder((0.0, -1.0, 1.50), 0.305, 0.04, axis="Z", sides=20, slot=5, bevel=0.002)
+    add_cylinder((0.0, -1.0, 1.62), 0.030, 0.34, axis="Z", sides=10, slot=6)
+    for k in range(3):
+        ang = k * math.tau / 3.0 + 0.4
+        add_cylinder((0.22 * math.cos(ang), -1.0 + 0.22 * math.sin(ang), 1.64),
+                     0.012, 0.30, axis="Z", sides=6, slot=1)
+    add_cylinder((0.0, -1.0, 1.775), 0.23, 0.03, axis="Z", sides=18, slot=1, bevel=0.0)
+    add_cone((0.0, -1.0, 1.83), 0.07, 0.02, 0.10, axis="Z", sides=12, slot=6)
+
+    # ------------------------------------------------------------------
+    # C. CARGO RACK: straps, bolts, manifold piping, hazard end frames
+    # ------------------------------------------------------------------
+    pod_ys = (1.0, 0.2, -0.6, -1.4)
+    for y_pod in pod_ys:
+        for side in (-1, 1):
+            # strap bands over the hex shells (radius 0.28, Z centre -0.05)
+            for y_off in (-0.20, 0.20):
+                add_cylinder((side * 1.25, y_pod + y_off, -0.05), 0.31, 0.055,
+                             axis="Y", sides=12, slot=1, bevel=0.0)
+                # strap bolt blocks top and bottom
+                for z_bolt in (0.24, -0.34):
+                    add_box((side * 1.25, y_pod + y_off, z_bolt), (0.12, 0.08, 0.05),
+                            slot=2, bevel=0.0)
+
+    # Fore-aft manifold headers on the skirt outer lower edge, with a drop
+    # leg into every canister and two crossovers under the keel.
+    for side in (-1, 1):
+        add_cylinder((side * 0.95, -0.2, -0.26), 0.038, 3.20, axis="Y",
+                     sides=12, slot=5, bevel=0.002)
+        for y_pod in pod_ys:
+            add_cylinder((side * 1.12, y_pod, -0.26), 0.028, 0.30, axis="X",
+                         sides=10, slot=5, bevel=0.0)
+            add_box((side * 0.99, y_pod, -0.26), (0.06, 0.07, 0.09), slot=1, bevel=0.0)
+    # Crossover lines slung under the keel with a riser to each header
+    for y_xover in (0.6, -1.0):
+        add_cylinder((0.0, y_xover, -0.645), 0.034, 1.95, axis="X", sides=12,
+                     slot=5, bevel=0.0)
+        for side in (-1, 1):
+            add_cylinder((side * 0.95, y_xover, -0.45), 0.030, 0.42, axis="Z",
+                         sides=10, slot=5, bevel=0.0)
+
+    # Hazard-striped end frames: outer posts bite into the canister ends,
+    # inner posts land on the skirts, rails close the hoop.
+    for y_frame in (1.46, -1.82):
+        for side in (-1, 1):
+            add_box((side * 1.40, y_frame, -0.05), (0.10, 0.12, 0.80), slot=2, bevel=0.004)
+            add_box((side * 0.90, y_frame, 0.15), (0.10, 0.12, 0.30), slot=2, bevel=0.0)
+            add_box((side * 0.90, y_frame, -0.30), (0.10, 0.12, 0.26), slot=2, bevel=0.0)
+        add_box((0.0, y_frame, 0.30), (2.90, 0.11, 0.07), slot=2, bevel=0.003)
+        add_box((0.0, y_frame, -0.42), (2.90, 0.11, 0.07), slot=2, bevel=0.003)
+        # corner strobes on both ends of the frame
+        for side in (-1, 1):
+            add_box((side * 1.40, y_frame, 0.345), (0.08, 0.09, 0.06), slot=7, bevel=0.0)
+    # Rack handrails tying the two end frames together
+    for side in (-1, 1):
+        add_box((side * 1.40, -0.18, 0.335), (0.06, 3.30, 0.05), slot=1, bevel=0.0)
+        add_box((side * 1.40, -0.18, -0.455), (0.06, 3.30, 0.05), slot=1, bevel=0.0)
+
+    # ------------------------------------------------------------------
+    # D. MINING RIG: teeth, hinge knuckles, rams, ring vanes, cables
+    # ------------------------------------------------------------------
+    # Pulveriser drum collar at the maw root (cone runs Y 2.325 .. 2.975)
+    add_cylinder((0.0, 2.36, 0.0), 0.50, 0.14, axis="Y", sides=20, slot=1, bevel=0.003)
+    # Tooth ring on the forward rim
+    for k in range(12):
+        ang = k * math.tau / 12.0
+        spoke((0.46 * math.cos(ang), 2.90, 0.46 * math.sin(ang)),
+              (0.14, 0.17, 0.11), ang, slot=6, bevel=0.002)
+    # Breaker spikes in three rows down the tapered flank
+    for y_row, r_row in ((2.50, 0.30), (2.65, 0.35), (2.80, 0.41)):
+        for k in range(8):
+            ang = k * math.tau / 8.0 + (0.2 if y_row == 2.65 else 0.0)
+            radial_spine(((r_row + 0.02) * math.cos(ang), y_row, (r_row + 0.02) * math.sin(ang)),
+                         0.030, 0.20, ang, sides=8, slot=7)
+
+    for side in (-1, 1):
+        x = side * 0.95
+        # Boom shoulder and emitter hinge knuckles
+        add_cylinder((x, 2.55, 0.1), 0.10, 0.52, axis="X", sides=16, slot=1, bevel=0.003)
+        add_cylinder((x, 3.62, 0.1), 0.075, 0.46, axis="X", sides=14, slot=1, bevel=0.002)
+        # Hydraulic ram: shoulder top to boom flank, barrel + rod + clevises
+        ram_tilt = -0.38
+        add_box((x, 2.12, 0.36), (0.14, 0.12, 0.10), slot=1, bevel=0.0)
+        add_cylinder((x, 2.31, 0.29), 0.058, 0.42, axis="Y", sides=12, slot=6,
+                     rot=(ram_tilt, 0.0, 0.0), bevel=0.002)
+        add_cylinder((x, 2.58, 0.18), 0.027, 0.36, axis="Y", sides=10, slot=5,
+                     rot=(ram_tilt, 0.0, 0.0), bevel=0.0)
+        add_box((x, 2.72, 0.12), (0.12, 0.10, 0.09), slot=1, bevel=0.0)
+        # Rigid underside brace from the shoulder into the boom belly, with a
+        # jack pad block that the boom can grip on to.
+        add_cylinder((x, 2.75, -0.075), 0.045, 0.80, axis="Y", sides=10, slot=6,
+                     rot=(0.062, 0.0, 0.0), bevel=0.002)
+        add_box((x, 3.02, -0.10), (0.12, 0.10, 0.12), slot=1, bevel=0.0)
+
+        # Focusing-ring collars, cooling vanes and emitter hardware
+        for y_ring, r_ring in ((3.70, 0.27), (3.95, 0.25)):
+            add_cylinder((x, y_ring + 0.05, 0.1), r_ring + 0.035, 0.05, axis="Y",
+                         sides=18, slot=1, bevel=0.002)
+            for k in range(4):
+                ang = k * math.tau / 4.0 + math.pi / 4.0
+                spoke((x + (r_ring + 0.05) * math.cos(ang), y_ring,
+                       0.1 + (r_ring + 0.05) * math.sin(ang)),
+                      (0.09, 0.09, 0.05), ang, slot=7, bevel=0.0)
+        # Emitter nose collar, lens and four-prong guard cage
+        add_cylinder((x, 4.20, 0.1), 0.205, 0.05, axis="Y", sides=16, slot=1, bevel=0.002)
+        add_cylinder((x, 4.245, 0.1), 0.10, 0.06, axis="Y", sides=14, slot=7, bevel=0.0)
+        for k in range(4):
+            ang = k * math.tau / 4.0 + math.pi / 4.0
+            spoke((x + 0.175 * math.cos(ang), 4.30, 0.1 + 0.175 * math.sin(ang)),
+                  (0.05, 0.24, 0.05), ang, slot=6, bevel=0.0)
+
+        # Cable runs and conduit clamps along both boom faces
+        for x_off, z_off in ((0.10, 0.18), (-0.16, 0.0)):
+            add_cylinder((x + side * x_off, 3.05, 0.1 + z_off), 0.030, 1.15, axis="Y",
+                         sides=10, slot=6, bevel=0.0)
+            for y_clamp in (2.62, 2.95, 3.28, 3.61):
+                add_box((x + side * x_off, y_clamp, 0.1 + z_off), (0.07, 0.05, 0.07),
+                        slot=1, bevel=0.0)
+        # Junction box on the shoulder top, bracketed to the boom cable tray
+        add_box((x, 2.44, 0.39), (0.16, 0.14, 0.12), slot=6, bevel=0.002)
+        add_box((x + side * 0.055, 2.50, 0.31), (0.21, 0.14, 0.10), slot=6, bevel=0.0)
+
+    # Prospector probe mast on the maw face - the pulveriser drum swallows
+    # anything axially short, so the probe has to clear Y = 2.975.
+    add_box((0.0, 2.98, 0.0), (0.22, 0.10, 0.16), slot=1, bevel=0.002)
+    add_cylinder((0.0, 3.04, 0.0), 0.060, 0.05, axis="Y", sides=12, slot=4, bevel=0.0)
+    add_cylinder((0.0, 3.06, 0.0), 0.055, 0.30, axis="Y", sides=12, slot=1, bevel=0.002)
+    add_cone((0.0, 3.28, 0.0), 0.008, 0.055, 0.16, axis="Y", sides=12, slot=6)
+
+    # Bow RCS blocks on the bulkhead corners
+    for side in (-1, 1):
+        for z_rcs in (0.28, -0.28):
+            add_box((side * 0.50, 2.44, z_rcs), (0.14, 0.14, 0.14), slot=6, bevel=0.002)
+            for y_noz in (2.40, 2.50):
+                nozzle_aft((side * 0.50, y_noz, z_rcs))
+
+    # ------------------------------------------------------------------
+    # E. RADIATORS: fin arrays, edge rails, tip weights
+    # ------------------------------------------------------------------
+    # Dorsal panels: (0, 0.6 + i*0.3, 0.65), 0.04 x 0.22 x 0.45
+    for i in range(5):
+        y_fin = 0.6 + i * 0.3
+        for side in (-1, 1):
+            add_box((side * 0.024, y_fin, 0.655), (0.025, 0.24, 0.47), slot=1, bevel=0.0)
+        for z_slat in (0.50, 0.66, 0.82):
+            add_box((0.0, y_fin, z_slat), (0.15, 0.05, 0.028), slot=5, bevel=0.0)
+        add_box((0.0, y_fin, 0.885), (0.06, 0.24, 0.04), slot=1, bevel=0.0)
+
+    # Ventral panels: (0, -0.2 + i*0.35, -0.75), 0.04 x 0.24 x 0.35
+    for i in range(4):
+        y_fin = -0.2 + i * 0.35
+        for side in (-1, 1):
+            add_box((side * 0.024, y_fin, -0.745), (0.025, 0.26, 0.37), slot=1, bevel=0.0)
+        for z_slat in (-0.86, -0.74, -0.62):
+            add_box((0.0, y_fin, z_slat), (0.14, 0.05, 0.026), slot=5, bevel=0.0)
+        add_box((0.0, y_fin, -0.93), (0.07, 0.26, 0.04), slot=1, bevel=0.0)
+
+    # ------------------------------------------------------------------
+    # F. ENGINE ROOM: throats, gimbals, feeds, RCS, berthing, crane
+    # ------------------------------------------------------------------
+    thruster_offsets = ((-0.48, 0.26), (0.48, 0.26), (-0.48, -0.26), (0.48, -0.26))
+    for tx, tz in thruster_offsets:
+        # Expanding throat bolted onto the existing bell rim (r 0.22 at Y -3.125)
+        add_cone((tx, -3.22, tz), 0.22, 0.345, 0.30, axis="Y", sides=24, slot=6)
+        add_cylinder((tx, -3.34, tz), 0.355, 0.045, axis="Y", sides=20, slot=5, bevel=0.002)
+        # Gimbal ring plus lugs between cowl and block
+        add_cylinder((tx, -2.74, tz), 0.29, 0.07, axis="Y", sides=18, slot=1, bevel=0.002)
+        for k in range(4):
+            ang = k * math.tau / 4.0 + math.pi / 4.0
+            spoke((tx + 0.30 * math.cos(ang), -2.74, tz + 0.30 * math.sin(ang)),
+                  (0.10, 0.12, 0.09), ang, slot=6, bevel=0.0)
+        # Outboard feed line running aft to the cowl
+        add_cylinder((tx + (0.22 if tx > 0 else -0.22), -2.45, tz), 0.035, 0.55,
+                    axis="Y", sides=10, slot=5, bevel=0.0)
+        # Auger/pump casing on top of each cowl
+        add_box((tx, -2.42, tz + (0.24 if tz > 0 else -0.24)), (0.20, 0.30, 0.10),
+                slot=0, bevel=0.002)
+
+    # Transverse propellant mains across the aft bell cluster
+    for tz in (0.26, -0.26):
+        add_cylinder((0.0, -2.56, tz), 0.042, 1.50, axis="X", sides=12, slot=5, bevel=0.002)
+
+    # Berthing port on the engine block aft face (Y = -2.525)
+    add_cylinder((0.0, -2.57, 0.0), 0.19, 0.16, axis="Y", sides=20, slot=1, bevel=0.003)
+    add_cylinder((0.0, -2.58, 0.0), 0.12, 0.20, axis="Y", sides=16, slot=6, bevel=0.0)
+    for k in range(4):
+        ang = k * math.tau / 4.0 + math.pi / 4.0
+        spoke((0.21 * math.cos(ang), -2.60, 0.21 * math.sin(ang)),
+              (0.08, 0.12, 0.07), ang, slot=2, bevel=0.0)
+        add_box((0.20 * math.cos(k * math.tau / 4.0), -2.645,
+                 0.20 * math.sin(k * math.tau / 4.0)), (0.05, 0.05, 0.05), slot=4, bevel=0.0)
+
+    # Aft RCS clusters on the skirt tails plus midship lateral blocks
+    for side in (-1, 1):
+        for y_rcs, z_rcs in ((-1.86, 0.10), (-1.05, -0.20)):
+            add_box((side * 0.85, y_rcs, z_rcs), (0.18, 0.18, 0.15), slot=6, bevel=0.002)
+            nozzle_aft((side * 0.85, y_rcs - 0.10, z_rcs))
+            nozzle_side((side * 0.96, y_rcs, z_rcs), side)
+        add_box((side * 0.94, 0.35, 0.05), (0.12, 0.20, 0.18), slot=6, bevel=0.002)
+        nozzle_side((side * 0.99, 0.35, 0.05), side)
+        # The stock lateral RCS blocks (X +-1.05, Z 0.35) hang in mid-air off
+        # the skirt corner - give each one a mounting pylon back to the skirt.
+        for y_pylon in (-1.8, 1.8):
+            add_box((side * 0.97, y_pylon, 0.24), (0.12, 0.22, 0.22), slot=1, bevel=0.003)
+
+    # Service crane on the aft deck for ore-hauler berthing duty
+    add_cylinder((0.30, -2.10, 0.59), 0.075, 0.36, axis="Z", sides=12, slot=1, bevel=0.002)
+    add_cylinder((0.30, -2.10, 0.44), 0.11, 0.06, axis="Z", sides=14, slot=6, bevel=0.0)
+    add_box((0.30, -2.36, 0.79), (0.08, 0.62, 0.06), slot=2, bevel=0.002)
+    add_box((0.30, -2.64, 0.73), (0.07, 0.07, 0.12), slot=1, bevel=0.0)
+    add_cylinder((0.30, -2.64, 0.66), 0.030, 0.10, axis="Z", sides=8, slot=6, bevel=0.0)
+
+    # Aft engineering grilles and access panels on the block flanks
+    for side in (-1, 1):
+        for k in range(4):
+            add_box((side * 0.665, -2.45 + k * 0.16, 0.30), (0.03, 0.10, 0.20),
+                    slot=6, bevel=0.0)
+        add_box((side * 0.665, -2.10, -0.20), (0.03, 0.55, 0.30), slot=0, bevel=0.0)
+
+    # ------------------------------------------------------------------
+    # G. NAV LIGHTS AND MARKERS
+    # ------------------------------------------------------------------
+    add_box((0.0, -1.0, 1.80), (0.06, 0.06, 0.05), slot=7, bevel=0.0)
+    for side in (-1, 1):
+        add_box((side * 0.50, 2.40, 0.33), (0.08, 0.08, 0.06), slot=4, bevel=0.0)
+        add_box((side * 0.94, -1.86, 0.20), (0.05, 0.08, 0.06), slot=7, bevel=0.0)
+
+
 def build_mining_dreadnought():
     """Assembles all industrial components of the mining dreadnought."""
     # Coordinates convention *inside this builder*: +Y is Forward, +Z is Up,
@@ -278,6 +645,11 @@ def build_mining_dreadnought():
         for y_rcs in (-1.8, 1.8):
             add_box((side * 1.05, y_rcs, 0.35), (0.16, 0.2, 0.16), slot=6, bevel=0.002)
             add_cone((side * 1.15, y_rcs, 0.35), 0.06, 0.02, 0.08, axis="X", sides=8, slot=7)
+
+    # -------------------------------------------------------------
+    # 7. REFERENCE-DRIVEN RELIEF PASS (banding, rig hardware, RCS, piping)
+    # -------------------------------------------------------------
+    add_dreadnought_details()
 
 
 def setup_showcase_camera_and_lighting(scene, target_size=5.0):
