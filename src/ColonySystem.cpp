@@ -359,30 +359,30 @@ colonyStagePlan() {
   // resolved per world (fission / hydro / thermal), so the same stage reads
   // differently on the Moon and on Europa.
   static const ColonyStructure rows[kColonyStageCount][kColonyPlanSlots] = {
-      {{"pad", 1}, {"", 0}, {"", 0}},                       // 1 touchdown
-      {{"dome", 1}, {"", 0}, {"", 0}},                      // 2 relay mast
-      {{kColonyPowerAsset, 1}, {"", 0}, {"", 0}},           // 3 power grid
-      {{"dome", 1}, {"", 0}, {"", 0}},                      // 4 water loop
-      {{"dome", 2}, {"", 0}, {"", 0}},                      // 5 bio-domes I
-      {{"dome", 2}, {"", 0}, {"", 0}},                      // 6 agro complex
-      {{"factory", 1}, {"", 0}, {"", 0}},                   // 7 excavation yard
-      {{"factory", 1}, {kColonyPowerAsset, 1}, {"", 0}},    // 8 arc smelter
-      {{"factory", 1}, {"", 0}, {"", 0}},                   // 9 module fab plant
-      {{"pad", 1}, {"factory", 1}, {"", 0}},                // 10 maglev/logistics
-      {{"dome", 2}, {"", 0}, {"", 0}},                      // 11 medical centre
-      {{"datacenter", 1}, {"dome", 1}, {"", 0}},            // 12 laboratories
-      {{"dome", 3}, {"", 0}, {"", 0}},                      // 13 township
-      {{"pad", 2}, {"", 0}, {"", 0}},                       // 14 spaceport
-      {{"datacenter", 1}, {"dome", 1}, {"", 0}},            // 15 research campus
-      {{"dome", 4}, {"", 0}, {"", 0}},                      // 16 metropolis arcology
-      {{"datacenter", 1}, {kColonyPowerAsset, 2}, {"", 0}}, // 17 quantum plasma
-      {{"pad", 2}, {"", 0}, {"", 0}},                       // 18 space elevator
-      {{kColonyPowerAsset, 2}, {"", 0}, {"", 0}},           // 19 deep energy grid
-      {{"factory", 3}, {"", 0}, {"", 0}},                   // 20 replicator foundry
-      {{"factory", 2}, {"dome", 2}, {"", 0}},               // 21 atmosphere processors
-      {{kColonyPowerAsset, 2}, {"pad", 1}, {"", 0}},        // 22 magnetosphere shield
-      {{"datacenter", 2}, {"dome", 1}, {"", 0}},            // 23 synthesis institute
-      {{"dome", 4}, {"pad", 2}, {"datacenter", 1}},         // 24 civilization capital
+      {{"pad", 1}, {"", 0}, {"", 0}, {"", 0}, {"", 0}, {"", 0}},                    // 1 touchdown
+      {{"dome", 1}, {"", 0}, {"", 0}, {"", 0}, {"", 0}, {"", 0}},                   // 2 relay mast
+      {{kColonyPowerAsset, 1}, {"diesel", 1}, {"", 0}, {"", 0}, {"", 0}, {"", 0}},  // 3 power grid
+      {{"dome", 1}, {"pipeline", 1}, {"", 0}, {"", 0}, {"", 0}, {"", 0}},           // 4 water loop
+      {{"dome", 2}, {"houses", 1}, {"", 0}, {"", 0}, {"", 0}, {"", 0}},             // 5 bio-domes I
+      {{"dome", 2}, {"houses", 1}, {"solar", 1}, {"", 0}, {"", 0}, {"", 0}},        // 6 agro complex
+      {{"factory", 1}, {"warehouse", 1}, {"", 0}, {"", 0}, {"", 0}, {"", 0}},       // 7 excavation yard
+      {{"factory", 1}, {kColonyPowerAsset, 1}, {"powerline", 1}, {"", 0}, {"", 0}, {"", 0}},  // 8 arc smelter
+      {{"factory", 1}, {"warehouse", 1}, {"houses", 1}, {"", 0}, {"", 0}, {"", 0}}, // 9 module fab plant
+      {{"pad", 1}, {"factory", 1}, {"warehouse", 1}, {"pipeline", 1}, {"", 0}, {"", 0}},      // 10 maglev/logistics
+      {{"dome", 2}, {"townhall", 1}, {"", 0}, {"", 0}, {"", 0}, {"", 0}},           // 11 medical centre
+      {{"datacenter", 1}, {"dome", 1}, {"police", 1}, {"", 0}, {"", 0}, {"", 0}},   // 12 laboratories
+      {{"dome", 3}, {"houses", 2}, {"apartments", 1}, {"", 0}, {"", 0}, {"", 0}},   // 13 township
+      {{"pad", 2}, {"warehouse", 1}, {"powerline", 1}, {"", 0}, {"", 0}, {"", 0}},  // 14 spaceport
+      {{"datacenter", 1}, {"dome", 1}, {"apartments", 1}, {"solar", 1}, {"", 0}, {"", 0}},    // 15 research campus
+      {{"dome", 4}, {"apartments", 2}, {"townhall", 1}, {"wind", 1}, {"", 0}, {"", 0}},       // 16 metropolis arcology
+      {{"datacenter", 1}, {kColonyPowerAsset, 2}, {"inverter", 1}, {"", 0}, {"", 0}, {"", 0}},// 17 quantum plasma
+      {{"pad", 2}, {"apartments", 1}, {"military", 1}, {"", 0}, {"", 0}, {"", 0}},  // 18 space elevator
+      {{kColonyPowerAsset, 2}, {"wind", 1}, {"inverter", 1}, {"powerline", 1}, {"", 0}, {"", 0}},  // 19 deep energy grid
+      {{"factory", 3}, {"warehouse", 2}, {"diesel", 1}, {"", 0}, {"", 0}, {"", 0}}, // 20 replicator foundry
+      {{"factory", 2}, {"dome", 2}, {"parliament", 1}, {"", 0}, {"", 0}, {"", 0}},  // 21 atmosphere processors
+      {{kColonyPowerAsset, 2}, {"pad", 1}, {"military", 1}, {"inverter", 1}, {"", 0}, {"", 0}},    // 22 magnetosphere shield
+      {{"datacenter", 2}, {"dome", 1}, {"parliament", 1}, {"apartments", 1}, {"", 0}, {"", 0}},    // 23 synthesis institute
+      {{"dome", 4}, {"pad", 2}, {"datacenter", 1}, {"parliament", 1}, {"townhall", 1}, {"military", 1}},  // 24 civilization capital
   };
   // Nested std::array brace initializers are brittle on MSVC, so the table is
   // copied into the typed array once on first use.

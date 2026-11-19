@@ -4180,7 +4180,7 @@ void AppGL::invalidateVideoSlide() {
 
 unsigned int AppGL::loadUiTexture(const std::string& rel, int* w, int* h) {
   auto it = m_uiTex.find(rel);
-  if (it != m_uiTex.end()) {
+  if (it != m_uiTex.end() && it->second.id != 0 && glIsTexture(it->second.id) == GL_TRUE) {
     if (w) *w = it->second.w;
     if (h) *h = it->second.h;
     return it->second.id;
@@ -4191,8 +4191,10 @@ unsigned int AppGL::loadUiTexture(const std::string& rel, int* w, int* h) {
   if (px) {
     t.id = uploadRgba(px, t.w, t.h);
     stbi_image_free(px);
+    m_uiTex[rel] = t;
+  } else {
+    m_uiTex.erase(rel);
   }
-  m_uiTex[rel] = t;
   if (w) *w = t.w;
   if (h) *h = t.h;
   return t.id;
@@ -10370,7 +10372,17 @@ void AppGL::ensureMenuBackground() {
       "res/textures/main_menu_motion_emerald.png",
       "res/textures/main_menu_motion_violet.png"};
   const int background = std::clamp(m_menuBackground, 0, 4);
-  if (m_menuBgTex != 0 && m_loadedMenuBackground == background) return;
+  if (m_menuBgTex != 0 && glIsTexture(m_menuBgTex) == GL_TRUE &&
+      m_loadedMenuBackground == background &&
+      (background == 0 || (m_menuMotionMaskTex != 0 && glIsTexture(m_menuMotionMaskTex) == GL_TRUE))) {
+    return;
+  }
+  if (m_menuBgTex != 0 && glIsTexture(m_menuBgTex) == GL_TRUE &&
+      m_loadedMenuBackground == background && background > 0 &&
+      (m_menuMotionMaskTex == 0 || glIsTexture(m_menuMotionMaskTex) != GL_TRUE)) {
+    m_menuMotionMaskTex = loadUiTexture(motionPaths[background], nullptr, nullptr);
+    return;
+  }
   unsigned int nextTexture = loadMenuBackgroundTexture(paths[background]);
   if (nextTexture == 0 && background != 0) {
     nextTexture = loadMenuBackgroundTexture(paths[0]);
@@ -13614,6 +13626,7 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
   std::vector<std::vector<unsigned char>> reference(5);
   auto captureAt = [&](double time) {
     app.renderMenuBackdrop(1280, 720, time);
+    glFinish();
     std::vector<unsigned char> pixels(1280u * 720u * 3u);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, 1280, 720, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
@@ -13635,8 +13648,9 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
   for (int background = 1; background <= 4; ++background) {
     app.m_menuBackground = background;
     int motionWidth = 0, motionHeight = 0;
+    const std::string resolvedMotion = resolveAssetPath(motionPaths[background]);
     unsigned char* motion =
-        stbi_load(motionPaths[background], &motionWidth, &motionHeight, nullptr, 1);
+        stbi_load(resolvedMotion.c_str(), &motionWidth, &motionHeight, nullptr, 1);
     if (!motion || motionWidth != 1792 || motionHeight != 1024) {
       stbi_image_free(motion);
       std::cout << "Scenic backdrop " << background << ": FAIL (motion mask)\n";
@@ -13644,6 +13658,8 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
       ++scenicBackdropChecks;
       continue;
     }
+    app.renderMenuBackdrop(1280, 720, 0.0);
+    glFinish();
     const auto first = captureAt(2.0);
     const auto second = captureAt(5.0);
     const auto loop = captureAt(26.0);

@@ -2688,6 +2688,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_colonyHydroModel;
           static ObjModel s_colonyThermalModel;
           static ObjModel s_colonyDatacenterModel;
+          // Civic / housing / utility meshes: one slot per plan key, loaded once.
+          static ObjModel s_colonyCivicModels[13];
+          static const char* kColonyCivicKeys[13] = {
+              "townhall", "parliament", "police", "warehouse", "military",
+              "houses", "apartments", "pipeline", "powerline", "solar",
+              "diesel", "inverter", "wind"};
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2759,6 +2765,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_colonyThermalModel.loadTextures("res/models/colony_thermal");
             s_colonyDatacenterModel.load("res/models/colony_datacenter.obj");
             s_colonyDatacenterModel.loadTextures("res/models/colony_datacenter");
+            for (int i = 0; i < 13; ++i) {
+              const std::string base = std::string("res/models/colony_") + kColonyCivicKeys[i];
+              s_colonyCivicModels[i].load(base + ".obj");
+              s_colonyCivicModels[i].loadTextures(base);
+            }
           }
 
           glEnable(GL_DEPTH_TEST);
@@ -3256,6 +3267,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             if (key == "hydro") return &s_colonyHydroModel;
             if (key == "thermal") return &s_colonyThermalModel;
             if (key == "datacenter") return &s_colonyDatacenterModel;
+            for (int i = 0; i < 13; ++i)
+              if (key == kColonyCivicKeys[i]) return &s_colonyCivicModels[i];
             return nullptr;
           };
           // Footprint of each structure as a fraction of the planet radius, and
@@ -3271,6 +3284,16 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             if (key == "nuclear") { footprint = 0.170f; modelLength = 4.2f; return true; }
             if (key == "thermal") { footprint = 0.170f; modelLength = 4.6f; return true; }
             if (key == "hydro") { footprint = 0.190f; modelLength = 4.6f; return true; }
+            static const struct { const char* key; float fp; float len; } kCivicSizes[13] = {
+                {"townhall", 0.160f, 3.6f}, {"parliament", 0.180f, 4.0f},
+                {"police", 0.150f, 3.6f}, {"warehouse", 0.170f, 4.2f},
+                {"military", 0.190f, 4.2f}, {"houses", 0.160f, 3.8f},
+                {"apartments", 0.150f, 4.2f}, {"pipeline", 0.200f, 4.4f},
+                {"powerline", 0.200f, 4.4f}, {"solar", 0.190f, 4.4f},
+                {"diesel", 0.150f, 4.0f}, {"inverter", 0.150f, 4.0f},
+                {"wind", 0.200f, 4.4f}};
+            for (const auto& e : kCivicSizes)
+              if (key == e.key) { footprint = e.fp; modelLength = e.len; return true; }
             return false;
           };
           for (const auto& site : m_colonySites) {
@@ -3312,6 +3335,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 const glm::vec3 foot = planetPos + dir * (planetRadius - worldSize * 0.16f);
 
                 const float camDist = glm::length(eye - foot);
+                // A civilization capital holds 80+ meshes; past this range the
+                // whole settlement is a speck, so skip the draw entirely.
+                if (camDist > 24.0f) continue;
                 float lodScale = 1.0f;
                 if (camDist > 1.8f) {
                   const float t = glm::clamp((camDist - 1.8f) / 6.0f, 0.0f, 1.0f);

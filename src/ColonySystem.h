@@ -69,7 +69,7 @@ struct ColonyStructure {
   int count;
 };
 
-constexpr int kColonyPlanSlots = 3;
+constexpr int kColonyPlanSlots = 6;
 constexpr const char* kColonyPowerAsset = "power";
 
 const std::array<ColonyWorld, 8>& colonyWorlds();

@@ -269,8 +269,271 @@ def bake_pbr_set(obj, base_path, tex_size=2048):
 
 
 # ---------------------------------------------------------------------------
+# Detail pass helpers: small primitives used to build real surface structure
+# (slats, seals, tiles, nozzles, gear, RCS) instead of relying on texture only.
+# Frame convention of both hulls: -Z is the nose, +Z aft, +Y up, X spanwise.
+# ---------------------------------------------------------------------------
+def p_box(name, loc, dims, rot=(0.0, 0.0, 0.0), mat=None, parts=None):
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc)
+    o = bpy.context.active_object
+    o.name = name
+    o.scale = dims
+    if any(rot):
+        o.rotation_euler = rot
+    bpy.ops.object.transform_apply(scale=True, rotation=True)
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def p_cyl(name, loc, r, depth, rot=(0.0, 0.0, 0.0), segs=24, mat=None, parts=None):
+    bpy.ops.mesh.primitive_cylinder_add(vertices=segs, radius=r, depth=depth,
+                                        location=loc, rotation=rot)
+    o = bpy.context.active_object
+    o.name = name
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def p_cone(name, loc, r1, r2, depth, rot=(0.0, 0.0, 0.0), segs=24, mat=None, parts=None):
+    bpy.ops.mesh.primitive_cone_add(vertices=segs, radius1=r1, radius2=r2,
+                                    depth=depth, location=loc, rotation=rot)
+    o = bpy.context.active_object
+    o.name = name
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def p_torus(name, loc, major, minor, rot=(0.0, 0.0, 0.0), segs=24, sides=8, mat=None, parts=None):
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor,
+                                     major_segments=segs, minor_segments=sides,
+                                     location=loc, rotation=rot)
+    o = bpy.context.active_object
+    o.name = name
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def p_sphere(name, loc, r, scale=(1.0, 1.0, 1.0), mat=None, parts=None, segs=20, rings=12):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=segs, ring_count=rings, radius=r,
+                                         location=loc)
+    o = bpy.context.active_object
+    o.name = name
+    o.scale = scale
+    bpy.ops.object.transform_apply(scale=True)
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def p_nozzle(name, loc, r_throat, r_exit, depth, mat, plasma=None, parts=None, segs=28):
+    """Bell nozzle with throat ring and an optional glow disc inside.
+    Identity rotation keeps the bell on the hull's fore-aft axis."""
+    p_cone(name, loc, r_throat, r_exit, depth, segs=segs, mat=mat, parts=parts)
+    p_torus(name + "_lip", (loc[0], loc[1], loc[2] + depth / 2), r_exit, r_exit * 0.10,
+            segs=segs, sides=6, mat=mat, parts=parts)
+    if plasma is not None:
+        p_cyl(name + "_glow", (loc[0], loc[1], loc[2] + depth * 0.30),
+              r_throat * 0.92, depth * 0.35, segs=segs, mat=plasma, parts=parts)
+
+
+def p_rcs_quad(name, loc, mat, parts, r=0.014, d=0.030):
+    """Four attitude-control bells in a diamond on the hull skin."""
+    half = math.pi / 2
+    for k, rot in enumerate(((-half, 0.0, 0.0), (half, 0.0, 0.0),
+                             (0.0, half, 0.0), (0.0, -half, 0.0))):
+        off = ((0.0, 0.028, 0.0), (0.0, -0.028, 0.0), (0.028, 0.0, 0.0),
+               (-0.028, 0.0, 0.0))[k]
+        p_cone(f"{name}_{k}", (loc[0] + off[0], loc[1] + off[1], loc[2] + off[2]),
+               r * 0.55, r, d, rot=rot, segs=12, mat=mat, parts=parts)
+
+
+def p_missile(name, loc, length, r, mat_body, mat_dark, parts):
+    p_cyl(name, loc, r, length, segs=16, mat=mat_body, parts=parts)
+    p_cone(name + "_nose", (loc[0], loc[1], loc[2] - length / 2 - r * 1.6),
+           r, 0.001, r * 3.2, rot=(math.pi, 0.0, 0.0), segs=16, mat=mat_dark, parts=parts)
+    for k in range(4):
+        a = k * math.tau / 4
+        p_box(f"{name}_fin_{k}", (loc[0] + r * 1.4 * math.cos(a),
+                                  loc[1] + r * 1.4 * math.sin(a),
+                                  loc[2] + length * 0.36),
+              (0.006, 0.030, 0.045), rot=(0.0, 0.0, a), mat=mat_dark, parts=parts)
+
+
+# ---------------------------------------------------------------------------
 # Geometry Builder: Dart (Style 0)
 # ---------------------------------------------------------------------------
+# Cylinder/cone/torus primitives are born on their local Z, so in the frame
+# above rot=(0,0,0) already aims them fore-aft; (half,0,0) tips them DOWN,
+# (-half,0,0) UP and (0,+-half,0) out the sides. Getting this wrong is #189.
+def dart_details(parts, M):
+    """Reference pass for a sleek interceptor: control surfaces, intake and
+    nozzle hardware, TPS tiles, gear doors, RCS, hardpoints and canopy framing.
+    Everything here is geometry, so the silhouette survives without textures."""
+    hull, accent, graphite = M["hull"], M["accent"], M["graphite"]
+    cockpit, engine, plasma = M["cockpit"], M["engine"], M["plasma"]
+    half = math.pi / 2
+
+    # 1. Fuselage reinforcement bands and keel line
+    for z, xw, yt, yb in ((-0.80, 0.115, 0.045, -0.035), (-0.55, 0.115, 0.080, -0.055),
+                          (-0.25, 0.145, 0.110, -0.070), (0.10, 0.140, 0.105, -0.065),
+                          (0.45, 0.130, 0.095, -0.055), (0.68, 0.105, 0.080, -0.045)):
+        p_box(f"DartArt_band_{z:+.2f}", (0.0, (yt + yb) * 0.5, z),
+              (2 * xw + 0.010, yt - yb + 0.010, 0.010), mat=graphite, parts=parts)
+    p_box("DartArt_keel", (0.0, -0.075, 0.05), (0.012, 0.014, 1.05), mat=accent, parts=parts)
+
+    # 2. Belly thermal tiles (real relief, not a texture trick)
+    for iz, z in enumerate((-0.62, -0.44, -0.26, -0.08, 0.10, 0.28, 0.46)):
+        for ix in range(-2, 3):
+            p_box(f"DartArt_tile_{iz}_{ix}", (ix * 0.042, -0.078 + abs(ix) * 0.006, z),
+                  (0.034, 0.008, 0.052), mat=graphite, parts=parts)
+
+    # 3. Ventral strakes and intake splitters
+    for side in (-1.0, 1.0):
+        tag = "L" if side < 0 else "R"
+        p_box(f"DartArt_strake_{tag}", (side * 0.085, -0.078, 0.12),
+              (0.014, 0.030, 0.72), rot=(0.0, 0.0, side * 0.04), mat=accent, parts=parts)
+        p_box(f"DartArt_splitter_{tag}", (side * 0.105, -0.058, -0.34),
+              (0.050, 0.012, 0.30), rot=(0.06 * side, side * 0.16, 0.0),
+              mat=hull, parts=parts)
+        p_box(f"DartArt_divider_{tag}", (side * 0.105, -0.052, -0.30),
+              (0.008, 0.026, 0.26), rot=(0.0, side * 0.16, 0.0), mat=graphite, parts=parts)
+        p_torus(f"DartArt_lip_{tag}", (side * 0.105, -0.052, -0.44), 0.032, 0.007,
+                rot=(0.0, 0.0, side * 0.16), segs=20, sides=6, mat=engine, parts=parts)
+
+    # 4. Twin engine cowlings with fan faces and burner petals
+    for side in (-1.0, 1.0):
+        tag = "L" if side < 0 else "R"
+        cx = side * 0.155
+        p_cyl(f"DartArt_cowl_{tag}", (cx, 0.012, 0.72), 0.072, 0.34,
+              segs=28, mat=hull, parts=parts)
+        p_torus(f"DartArt_cowlLip_{tag}", (cx, 0.012, 0.555), 0.072, 0.009,
+                segs=28, sides=6, mat=graphite, parts=parts)
+        p_cyl(f"DartArt_fan_{tag}", (cx, 0.012, 0.575), 0.062, 0.012,
+              segs=24, mat=engine, parts=parts)
+        for k in range(10):
+            a = k * math.tau / 10
+            p_box(f"DartArt_blade_{tag}_{k}",
+                  (cx + 0.032 * math.cos(a), 0.012 + 0.032 * math.sin(a), 0.578),
+                  (0.050, 0.008, 0.004), rot=(0.0, 0.0, a), mat=graphite, parts=parts)
+        p_cone(f"DartArt_plug_{tag}", (cx, 0.012, 0.66), 0.014, 0.030, 0.10,
+               segs=18, mat=engine, parts=parts)
+        for k in range(8):
+            a = k * math.tau / 8
+            p_box(f"DartArt_petal_{tag}_{k}",
+                  (cx + 0.052 * math.cos(a), 0.012 + 0.052 * math.sin(a), 0.865),
+                  (0.020, 0.012, 0.052), rot=(0.22, 0.0, a), mat=graphite, parts=parts)
+        p_nozzle(f"DartArt_bell_{tag}", (cx, 0.012, 0.90), 0.046, 0.066, 0.14,
+                 engine, plasma=plasma, parts=parts)
+        p_torus(f"DartArt_ctv_{tag}", (cx, 0.012, 0.955), 0.066, 0.006,
+                segs=24, sides=6, mat=accent, parts=parts)
+
+    # 5. Wing slats, flaps, fences, tip rails and hardpoints
+    for side in (-1.0, 1.0):
+        tag = "L" if side < 0 else "R"
+        le_ry = -side * 0.75
+        p_box(f"DartArt_slat_{tag}", (side * 0.46, 0.004, 0.02),
+              (0.62, 0.014, 0.052), rot=(0.0, le_ry, 0.0), mat=accent, parts=parts)
+        for k, (fx, fz) in enumerate(((0.30, 0.44), (0.60, 0.40))):
+            p_box(f"DartArt_flap_{tag}_{k}", (side * fx, 0.0, fz),
+                  (0.26, 0.012, 0.042), rot=(0.0, side * 0.10, 0.0), mat=hull, parts=parts)
+            p_box(f"DartArt_hinge_{tag}_{k}", (side * fx, 0.008, fz - 0.022),
+                  (0.26, 0.005, 0.006), mat=graphite, parts=parts)
+        for k, fx in enumerate((0.30, 0.52)):
+            p_box(f"DartArt_fence_{tag}_{k}", (side * fx, 0.020, -0.02 + fx * 0.42),
+                  (0.008, 0.030, 0.13), rot=(0.0, side * 0.75, 0.0), mat=graphite, parts=parts)
+        p_box(f"DartArt_rail_{tag}", (side * 0.795, 0.02, 0.20),
+              (0.018, 0.014, 0.16), mat=graphite, parts=parts)
+        p_missile(f"DartArt_store_{tag}", (side * 0.42, -0.030, 0.10), 0.30, 0.022,
+                  hull, accent, parts)
+        p_box(f"DartArt_pylon_{tag}", (side * 0.42, -0.018, 0.10),
+              (0.012, 0.026, 0.09), mat=graphite, parts=parts)
+        p_missile(f"DartArt_store_in_{tag}", (side * 0.60, -0.026, 0.22), 0.24, 0.019,
+                  hull, accent, parts)
+        p_box(f"DartArt_pylon_in_{tag}", (side * 0.60, -0.016, 0.22),
+              (0.011, 0.022, 0.08), mat=graphite, parts=parts)
+
+    # 6. Canopy framing, HUD and seat
+    for k, z in enumerate((-0.56, -0.44, -0.32, -0.22)):
+        p_box(f"DartArt_canopyRib_{k}", (0.0, 0.098, z), (0.105 - k * 0.006, 0.052, 0.010),
+              rot=(0.10, 0.0, 0.0), mat=graphite, parts=parts)
+    p_box("DartArt_hud", (0.0, 0.086, -0.60), (0.052, 0.004, 0.030),
+          rot=(-0.35, 0.0, 0.0), mat=cockpit, parts=parts)
+    p_box("DartArt_seat", (0.0, 0.062, -0.40), (0.044, 0.030, 0.060), mat=graphite, parts=parts)
+    p_box("DartArt_seatBack", (0.0, 0.070, -0.33), (0.042, 0.016, 0.062),
+          rot=(0.18, 0.0, 0.0), mat=graphite, parts=parts)
+    p_torus("DartArt_hoop", (0.0, 0.086, -0.30), 0.030, 0.006,
+            segs=18, sides=6, mat=accent, parts=parts)
+
+    # 7. Spine avionics, antennas and pitot boom
+    for k, z in enumerate((-0.05, 0.16, 0.38)):
+        p_box(f"DartArt_blister_{k}", (0.0, 0.126, z), (0.030, 0.020, 0.10),
+              mat=graphite, parts=parts)
+    p_box("DartArt_bladeAnt", (0.0, 0.150, 0.30), (0.005, 0.048, 0.010),
+          rot=(0.0, 0.25, 0.0), mat=accent, parts=parts)
+    for side in (-1.0, 1.0):
+        p_box(f"DartArt_rwr_{side:+.0f}", (side * 0.055, 0.118, 0.60),
+              (0.022, 0.014, 0.030), rot=(0.0, 0.0, side * 0.30), mat=graphite, parts=parts)
+    p_cyl("DartArt_pitot", (0.0, -0.020, -1.18), 0.007, 0.26,
+          segs=12, mat=graphite, parts=parts)
+    p_cone("DartArt_pitotTip", (0.0, -0.020, -1.32), 0.007, 0.001, 0.03,
+           rot=(math.pi, 0.0, 0.0), segs=12, mat=accent, parts=parts)
+    p_cyl("DartArt_tailMast", (0.0, 0.135, 0.70), 0.006, 0.12, rot=(half, 0.0, 0.0),
+          segs=10, mat=graphite, parts=parts)
+
+    # 8. RCS clusters: nose, tail and wingtips
+    p_rcs_quad("DartArt_rcs_nose", (0.0, 0.030, -0.95), engine, parts, r=0.011, d=0.024)
+    p_rcs_quad("DartArt_rcs_tail", (0.0, 0.030, 0.80), engine, parts, r=0.012, d=0.026)
+    for side in (-1.0, 1.0):
+        p_rcs_quad(f"DartArt_rcs_tip_{side:+.0f}", (side * 0.775, 0.026, 0.30),
+                   engine, parts, r=0.009, d=0.020)
+
+    # 9. Landing gear bays with doors and hinges
+    p_box("DartArt_gearDoorN", (0.0, -0.082, -0.62), (0.048, 0.008, 0.16),
+          mat=graphite, parts=parts)
+    for k in range(3):
+        p_box(f"DartArt_gearDoorNHinge_{k}", (0.0, -0.086, -0.69 + k * 0.07),
+              (0.050, 0.004, 0.006), mat=accent, parts=parts)
+    for side in (-1.0, 1.0):
+        p_box(f"DartArt_gearDoorM_{side:+.0f}", (side * 0.20, -0.070, 0.16),
+              (0.056, 0.008, 0.20), mat=graphite, parts=parts)
+        p_cyl(f"DartArt_gearBay_{side:+.0f}", (side * 0.20, -0.062, 0.16), 0.026, 0.16,
+              segs=16, mat=engine, parts=parts)
+
+    # 10. Formation lights, strobes and fin detailing
+    for side in (-1.0, 1.0):
+        p_box(f"DartArt_formation_{side:+.0f}", (side * 0.40, 0.016, 0.06),
+              (0.30, 0.004, 0.012), rot=(0.0, side * 0.75, 0.0), mat=plasma, parts=parts)
+        p_cyl(f"DartArt_strobe_{side:+.0f}", (side * 0.795, 0.030, 0.28), 0.020, 0.014,
+              rot=(0.0, half, 0.0), segs=14, mat=graphite, parts=parts)
+    p_box("DartArt_finLE", (0.0, 0.075, 0.44), (0.030, 0.012, 0.42),
+          rot=(0.42, 0.0, 0.0), mat=accent, parts=parts)
+    for k, z in enumerate((0.30, 0.48, 0.66)):
+        p_box(f"DartArt_rudderHinge_{k}", (0.0, 0.20 + k * 0.05, z),
+              (0.026, 0.004, 0.006), rot=(0.42, 0.0, 0.0), mat=graphite, parts=parts)
+    p_cyl("DartArt_finAnt", (0.0, 0.365, 0.74), 0.005, 0.09, rot=(0.35, 0.0, 0.0),
+          segs=8, mat=graphite, parts=parts)
+
+    # 11. Tail heat ring between the bells
+    p_torus("DartArt_tailRing", (0.0, 0.012, 0.80), 0.150, 0.012,
+            segs=32, sides=6, mat=graphite, parts=parts)
+    p_cone("DartArt_tailCone", (0.0, 0.012, 0.86), 0.030, 0.004, 0.12,
+           segs=18, mat=engine, parts=parts)
+
+
 def build_dart():
     print("\n================ Building Dart (Style 0) ================")
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -444,7 +707,7 @@ def build_dart():
         parts.append(subfin)
 
     # 7. Main Engine Nozzle
-    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.09, radius2=0.118, depth=0.36, location=(0.0, 0.0, 0.94), rotation=(math.pi/2, 0.0, 0.0))
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.09, radius2=0.118, depth=0.36, location=(0.0, 0.0, 0.94))
     nozzle = bpy.context.active_object
     nozzle.name = "Dart_MainNozzle"
     nozzle.data.materials.append(m_engine)
@@ -461,7 +724,7 @@ def build_dart():
     # Twin Secondary Thrusters
     for side in (-1.0, 1.0):
         tag = "L" if side < 0 else "R"
-        bpy.ops.mesh.primitive_cone_add(vertices=16, radius1=0.035, radius2=0.046, depth=0.20, location=(side * 0.12, 0.015, 0.88), rotation=(math.pi/2, 0.0, 0.0))
+        bpy.ops.mesh.primitive_cone_add(vertices=16, radius1=0.035, radius2=0.046, depth=0.20, location=(side * 0.12, 0.015, 0.88))
         aux_noz = bpy.context.active_object
         aux_noz.name = f"Dart_AuxNozzle_{tag}"
         aux_noz.data.materials.append(m_engine)
@@ -473,6 +736,10 @@ def build_dart():
         aux_pla.scale = (1.0, 1.0, 0.2)
         aux_pla.data.materials.append(m_plasma)
         parts.append(aux_pla)
+
+    # 8. Reference-driven detail pass
+    dart_details(parts, {"hull": m_hull, "accent": m_accent, "graphite": m_graphite,
+                         "cockpit": m_cockpit, "engine": m_engine, "plasma": m_plasma})
 
     # Join All Parts
     for obj in parts:
@@ -527,6 +794,174 @@ def build_dart():
 # ---------------------------------------------------------------------------
 # Geometry Builder: Shuttle (Style 2)
 # ---------------------------------------------------------------------------
+def shuttle_details(parts, M):
+    """Reference pass for a heavy tactical shuttle: real TPS tile field, bridge
+    framing, cargo bay with rails/arm/payload, deployed radiators, full engine
+    cluster with feed plumbing, elevons, gear and RCS."""
+    hull, accent, tiles = M["hull"], M["accent"], M["tiles"]
+    cargo, cockpit, engine, plasma = M["cargo"], M["cockpit"], M["engine"], M["plasma"]
+    half = math.pi / 2
+
+    # 1. Thermal protection tile field on the belly and nose underside
+    for iz, z in enumerate((-1.00, -0.80, -0.60, -0.40, -0.20, 0.00, 0.20, 0.40, 0.60)):
+        for ix in range(-6, 7):
+            x = ix * 0.108
+            if abs(x) > 0.36 - abs(z) * 0.10:
+                continue
+            p_box(f"ShutArt_tile_{iz}_{ix}", (x, -0.122, z), (0.094, 0.012, 0.094),
+                  mat=tiles, parts=parts)
+    for k in range(3):
+        p_box(f"ShutArt_tileSeam_{k}", (0.0, -0.128, -0.60 + k * 0.60),
+              (0.66, 0.006, 0.012), mat=hull, parts=parts)
+
+    # 2. Nose: sensor radome, pitot boom, formation lights, cargo seam
+    p_sphere("ShutArt_radome", (0.0, -0.030, -1.16), 0.055, scale=(1.0, 1.0, 0.7),
+             mat=tiles, parts=parts)
+    p_cyl("ShutArt_pitot", (0.0, -0.030, -1.34), 0.008, 0.30,
+          segs=12, mat=engine, parts=parts)
+    for side in (-1.0, 1.0):
+        p_box(f"ShutArt_noseLight_{side:+.0f}", (side * 0.14, 0.020, -1.02),
+              (0.030, 0.010, 0.010), rot=(0.0, 0.0, side * 0.4), mat=plasma, parts=parts)
+        p_box(f"ShutArt_formation_{side:+.0f}", (side * 0.20, 0.108, -0.10),
+              (0.28, 0.006, 0.012), rot=(0.0, side * 0.10, 0.0), mat=accent, parts=parts)
+
+    # 3. Bridge framing: mullions, sun visor, side window frames, lamps
+    for k, z in enumerate((-0.92, -0.82, -0.72, -0.62)):
+        p_box(f"ShutArt_mullion_{k}", (0.0, 0.112, z), (0.30 - k * 0.02, 0.012, 0.012),
+              rot=(-0.30, 0.0, 0.0), mat=hull, parts=parts)
+    p_box("ShutArt_visor", (0.0, 0.128, -0.98), (0.40, 0.050, 0.014),
+          rot=(-0.42, 0.0, 0.0), mat=accent, parts=parts)
+    for side in (-1.0, 1.0):
+        for k in range(3):
+            p_box(f"ShutArt_sideFrame_{side:+.0f}_{k}", (side * 0.30, 0.085, -0.86 + k * 0.10),
+                  (0.008, 0.030, 0.070), rot=(0.0, side * 0.22, 0.0), mat=hull, parts=parts)
+        p_cyl(f"ShutArt_lamp_{side:+.0f}", (side * 0.20, 0.060, -1.10), 0.022, 0.014,
+              segs=14, mat=plasma, parts=parts)
+
+    # 4. Cargo bay: rails, crates, robotic arm, latches, docking bolts, payload
+    for side in (-1.0, 1.0):
+        p_box(f"ShutArt_bayRail_{side:+.0f}", (side * 0.30, 0.150, 0.18),
+              (0.020, 0.016, 1.06), mat=engine, parts=parts)
+    for k, (cz, cl) in enumerate(((0.02, 0.30), (0.34, 0.24))):
+        p_box(f"ShutArt_crate_{k}", (0.0, 0.168, cz), (0.42, 0.052, cl),
+              mat=cargo, parts=parts)
+        for j in range(3):
+            p_box(f"ShutArt_crateRib_{k}_{j}", (0.0, 0.196, cz - cl * 0.35 + j * cl * 0.35),
+                  (0.43, 0.008, 0.014), mat=accent, parts=parts)
+    arm_base = (0.26, 0.160, 0.56)
+    p_cyl("ShutArt_armBase", arm_base, 0.030, 0.050, rot=(-half, 0.0, 0.0),
+          mat=engine, parts=parts)
+    p_torus("ShutArt_armJoint1", (arm_base[0], 0.185, arm_base[2]), 0.026, 0.010,
+            rot=(0.0, half, 0.0), segs=18, sides=6, mat=accent, parts=parts)
+    p_box("ShutArt_armUpper", (0.30, 0.230, 0.44), (0.022, 0.110, 0.022),
+          rot=(0.0, 0.0, 0.35), mat=hull, parts=parts)
+    p_box("ShutArt_armFore", (0.40, 0.290, 0.28), (0.018, 0.090, 0.018),
+          rot=(0.55, 0.0, 0.20), mat=hull, parts=parts)
+    p_box("ShutArt_armTool", (0.455, 0.315, 0.155), (0.014, 0.050, 0.014),
+          rot=(0.9, 0.0, 0.2), mat=engine, parts=parts)
+    for k in range(12):
+        a = k * math.tau / 12
+        p_cyl(f"ShutArt_bolt_{k}", (0.095 * math.cos(a), 0.172, 0.52 + 0.095 * math.sin(a)),
+              0.008, 0.018, rot=(half, 0.0, 0.0), segs=8, mat=engine, parts=parts)
+    for k in range(4):
+        p_box(f"ShutArt_latch_{k}", (-0.16 + (k % 2) * 0.32, 0.158, 0.02 + (k // 2) * 0.32),
+              (0.030, 0.010, 0.014), mat=accent, parts=parts)
+    p_box("ShutArt_payloadBus", (0.0, 0.205, 0.18), (0.14, 0.110, 0.14), mat=cargo, parts=parts)
+    for side in (-1.0, 1.0):
+        p_box(f"ShutArt_payloadPanel_{side:+.0f}", (side * 0.28, 0.205, 0.18),
+              (0.34, 0.006, 0.13), rot=(0.0, side * 0.12, 0.0), mat=cockpit, parts=parts)
+        for j in range(4):
+            p_box(f"ShutArt_panelRib_{side:+.0f}_{j}", (side * (0.14 + j * 0.09), 0.212, 0.18),
+                  (0.006, 0.006, 0.13), mat=hull, parts=parts)
+
+    # 5. Deployed radiator panels with fin arrays
+    for side in (-1.0, 1.0):
+        p_box(f"ShutArt_radStrut_{side:+.0f}", (side * 0.50, 0.105, 0.42),
+              (0.020, 0.140, 0.020), rot=(0.0, side * 0.5, 0.0), mat=engine, parts=parts)
+        p_box(f"ShutArt_radPanel_{side:+.0f}", (side * 0.66, 0.175, 0.42),
+              (0.30, 0.010, 0.44), rot=(0.0, side * 0.25, 0.0), mat=cargo, parts=parts)
+        for j in range(9):
+            p_box(f"ShutArt_radFin_{side:+.0f}_{j}", (side * 0.66, 0.186, 0.22 + j * 0.05),
+                  (0.30, 0.026, 0.008), rot=(0.0, side * 0.25, 0.0), mat=hull, parts=parts)
+
+    # 6. Engine cluster: three main bells, gimbal rings, feed plumbing, OMS
+    for k, (ex, ey) in enumerate(((-0.16, -0.03), (0.16, -0.03), (0.0, -0.07))):
+        p_nozzle(f"ShutArt_mainBell_{k}", (ex, ey, 0.90), 0.055, 0.095, 0.26,
+                 engine, plasma=plasma, parts=parts, segs=28)
+        p_torus(f"ShutArt_gimbal_{k}", (ex, ey, 0.78), 0.062, 0.010,
+                segs=24, sides=6, mat=accent, parts=parts)
+        p_cyl(f"ShutArt_feed_{k}", (ex, ey - 0.055, 0.66), 0.016, 0.30,
+              segs=12, mat=cargo, parts=parts)
+    for side in (-1.0, 1.0):
+        p_box(f"ShutArt_omsPod_{side:+.0f}", (side * 0.24, -0.020, 0.72),
+              (0.140, 0.070, 0.20), mat=hull, parts=parts)
+        for k in (-1, 1):
+            p_nozzle(f"ShutArt_omsBell_{side:+.0f}_{k}", (side * 0.24 + k * 0.04, -0.020, 0.86),
+                     0.022, 0.036, 0.10, engine, plasma=plasma, parts=parts, segs=18)
+        p_rcs_quad(f"ShutArt_omsRcs_{side:+.0f}", (side * 0.30, -0.020, 0.62),
+                   engine, parts, r=0.012, d=0.026)
+
+    # 7. Wing surfaces: slats, elevons, keel strakes, body flap, tip verticals
+    for side in (-1.0, 1.0):
+        p_box(f"ShutArt_slat_{side:+.0f}", (side * 0.52, 0.010, -0.10),
+              (0.62, 0.016, 0.070), rot=(0.0, side * 0.30, 0.0), mat=tiles, parts=parts)
+        for k, (fx, fz) in enumerate(((0.40, 0.44), (0.66, 0.50))):
+            p_box(f"ShutArt_elevon_{side:+.0f}_{k}", (side * fx, 0.004, fz),
+                  (0.24, 0.014, 0.050), rot=(0.0, side * 0.08, 0.0), mat=hull, parts=parts)
+            p_box(f"ShutArt_elevonHinge_{side:+.0f}_{k}", (side * fx, 0.014, fz - 0.026),
+                  (0.24, 0.005, 0.007), mat=engine, parts=parts)
+        p_box(f"ShutArt_keelStrake_{side:+.0f}", (side * 0.22, -0.100, -0.30),
+              (0.020, 0.026, 0.50), rot=(0.0, side * 0.25, 0.0), mat=tiles, parts=parts)
+        p_box(f"ShutArt_tipVert_{side:+.0f}", (side * 0.72, 0.045, 0.50),
+              (0.014, 0.050, 0.14), rot=(0.35, side * 0.20, 0.0), mat=accent, parts=parts)
+        p_sphere(f"ShutArt_tipNav_{side:+.0f}", (side * 0.735, 0.070, 0.56), 0.014,
+                 mat=M["nav_red"] if side < 0 else M["nav_green"], parts=parts,
+                 segs=12, rings=8)
+    p_box("ShutArt_bodyFlap", (0.0, 0.030, 0.86), (0.44, 0.014, 0.20),
+          rot=(0.0, 0.22, 0.0), mat=hull, parts=parts)
+
+    # 8. Fuselage bands, cabin windows, handrails, dish, camera pods
+    for z, xw in ((-0.55, 0.38), (-0.15, 0.44), (0.25, 0.44), (0.55, 0.40)):
+        p_box(f"ShutArt_band_{z:+.2f}", (0.0, 0.012, z), (2 * xw + 0.012, 0.246, 0.012),
+              mat=cargo, parts=parts)
+    for k in range(6):
+        p_box(f"ShutArt_cabinWin_{k}", (-0.30, 0.055, -0.40 + k * 0.13),
+              (0.010, 0.030, 0.060), rot=(0.0, 0.28, 0.0), mat=cockpit, parts=parts)
+        p_box(f"ShutArt_cabinWinR_{k}", (0.30, 0.055, -0.40 + k * 0.13),
+              (0.010, 0.030, 0.060), rot=(0.0, -0.28, 0.0), mat=cockpit, parts=parts)
+    for side in (-1.0, 1.0):
+        p_cyl(f"ShutArt_handrail_{side:+.0f}", (side * 0.34, 0.148, 0.18), 0.006, 0.70,
+              segs=10, mat=engine, parts=parts)
+    p_cyl("ShutArt_dishMast", (0.20, 0.150, -0.20), 0.008, 0.10, rot=(-half, 0.0, 0.0),
+          mat=engine, parts=parts)
+    p_cone("ShutArt_dish", (0.20, 0.150, -0.14), 0.004, 0.070, 0.045,
+           rot=(-0.5, 0.0, 0.0), segs=20, mat=cargo, parts=parts)
+    for k in range(2):
+        p_box(f"ShutArt_camPod_{k}", (-0.26 + k * 0.52, 0.120, -0.68),
+              (0.040, 0.030, 0.040), mat=engine, parts=parts)
+
+    # 9. Landing gear: nose strut with wheel, two mains with fairings
+    p_box("ShutArt_noseStrut", (0.0, -0.150, -0.86), (0.018, 0.018, 0.16),
+          mat=engine, parts=parts)
+    p_cyl("ShutArt_noseWheel", (0.0, -0.245, -0.86), 0.045, 0.030,
+          rot=(0.0, half, 0.0), segs=18, mat=tiles, parts=parts)
+    for side in (-1.0, 1.0):
+        p_box(f"ShutArt_mainStrut_{side:+.0f}", (side * 0.26, -0.150, 0.06),
+              (0.020, 0.020, 0.18), rot=(0.0, side * 0.18, 0.0), mat=engine, parts=parts)
+        p_cyl(f"ShutArt_mainWheel_{side:+.0f}", (side * 0.28, -0.250, 0.02), 0.055, 0.036,
+              rot=(0.0, half, 0.0), segs=20, mat=tiles, parts=parts)
+        p_box(f"ShutArt_mainFairing_{side:+.0f}", (side * 0.27, -0.190, 0.04),
+              (0.060, 0.050, 0.100), mat=hull, parts=parts)
+        p_box(f"ShutArt_gearDoor_{side:+.0f}", (side * 0.26, -0.128, 0.14),
+              (0.070, 0.008, 0.18), rot=(0.0, side * 0.10, 0.0), mat=cargo, parts=parts)
+
+    # 10. Nose and tail RCS diamonds
+    p_rcs_quad("ShutArt_rcs_nose", (0.0, 0.060, -1.06), engine, parts, r=0.013, d=0.028)
+    for side in (-1.0, 1.0):
+        p_rcs_quad(f"ShutArt_rcs_tail_{side:+.0f}", (side * 0.40, 0.020, 0.74),
+                   engine, parts, r=0.011, d=0.024)
+
+
 def build_shuttle():
     print("\n================ Building Shuttle (Style 2) ================")
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -624,7 +1059,7 @@ def build_shuttle():
     parts.append(cargo)
 
     # Airlock Docking Ring
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.085, depth=0.035, location=(0.0, 0.155, 0.52))
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.085, depth=0.035, location=(0.0, 0.155, 0.52), rotation=(math.pi/2, 0.0, 0.0))
     airlock = bpy.context.active_object
     airlock.name = "Shuttle_Airlock"
     airlock.data.materials.append(m_engine)
@@ -642,14 +1077,14 @@ def build_shuttle():
         parts.append(pylon)
 
         # Nacelle Body
-        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.115, depth=1.10, location=(side * 0.58, 0.015, 0.25), rotation=(math.pi/2, 0.0, 0.0))
+        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.115, depth=1.10, location=(side * 0.58, 0.015, 0.25))
         nac = bpy.context.active_object
         nac.name = f"Shuttle_Nacelle_{tag}"
         nac.data.materials.append(m_accent)
         parts.append(nac)
 
         # Nacelle Ram-Air Intake Cowl (Front)
-        bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.12, radius2=0.095, depth=0.18, location=(side * 0.58, 0.015, -0.36), rotation=(-math.pi/2, 0.0, 0.0))
+        bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.12, radius2=0.095, depth=0.18, location=(side * 0.58, 0.015, -0.36))
         cowl = bpy.context.active_object
         cowl.name = f"Shuttle_IntakeCowl_{tag}"
         cowl.data.materials.append(m_engine)
@@ -664,7 +1099,7 @@ def build_shuttle():
         parts.append(int_rec)
 
         # Heavy Main Rocket Nozzle (Rear)
-        bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.085, radius2=0.125, depth=0.32, location=(side * 0.58, 0.015, 0.95), rotation=(math.pi/2, 0.0, 0.0))
+        bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.085, radius2=0.125, depth=0.32, location=(side * 0.58, 0.015, 0.95))
         noz = bpy.context.active_object
         noz.name = f"Shuttle_Nozzle_{tag}"
         noz.data.materials.append(m_engine)
@@ -687,7 +1122,7 @@ def build_shuttle():
         parts.append(nav)
 
     # 6. Center Transom Engine & OMS Pods
-    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.065, radius2=0.095, depth=0.22, location=(0.0, -0.015, 0.85), rotation=(math.pi/2, 0.0, 0.0))
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.065, radius2=0.095, depth=0.22, location=(0.0, -0.015, 0.85))
     center_noz = bpy.context.active_object
     center_noz.name = "Shuttle_CenterNozzle"
     center_noz.data.materials.append(m_engine)
@@ -724,6 +1159,12 @@ def build_shuttle():
     obj_fin = bpy.data.objects.new('Shuttle_Fin', me_fin)
     obj_fin.data.materials.append(m_accent)
     parts.append(obj_fin)
+
+    # 8. Reference-driven detail pass
+    shuttle_details(parts, {"hull": m_hull, "accent": m_accent, "tiles": m_tiles,
+                            "cargo": m_cargo, "cockpit": m_cockpit, "engine": m_engine,
+                            "plasma": m_plasma, "nav_red": m_nav_red,
+                            "nav_green": m_nav_green})
 
     # Join All Parts
     for obj in parts:
