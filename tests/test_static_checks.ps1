@@ -783,6 +783,14 @@ $shipsVertical = @(($shipsPy -split "`n" | Where-Object { $_ -match 'rotation=\(
 Check 'ship engine axis convention' (($shipsVertical -eq 1) -and ($shipsPy -match 'p_cone\(name, loc, r_throat, r_exit, depth, segs=segs') -and ($shipsPy -notmatch 'depth=0\.36, location=\(0\.0, 0\.0, 0\.94\), rotation'))
 Check 'ship detail pass frame comment' (($shipsPy -match '\(half,0,0\) tips them DOWN') -and ($shipsPy -match 'Getting this wrong is #189'))
 
+# --- Issue #197 / #199: ring_ship detail pass, axis fix and spin-band guard ---
+$ringPy = Read-File 'blender/scripts/generate_ring_ship.py'
+$ringVert = Read-File 'shaders/ship.vert'
+Check 'ring ship detail pass wired' ((($ringPy -match 'def ring_ship_details\(parts, M\)') -and ($ringPy -match 'ring_ship_details\(parts, \{"hull": m_hull')) -and ($ringPy -match 'RingArt_coilCollarA'))
+Check 'ring ship nozzle axis fixed' ((($ringPy -notmatch 'Ring_MainNozzle[\s\S]{0,80}rotation=\(math\.pi/2') -and ($ringPy -notmatch 'depth=0\.18, location=\(0\.0, 0\.0, 0\.82\), rotation')) -and (($ringPy -notmatch 'depth=0\.12, location=\(cx, cy, 0\.78\), rotation') -and ($ringPy -match '#199')))
+Check 'ring spin slab guard in generator' ((($ringPy -match 'spin_slabs = \(\(-0\.36, -0\.10\), \(0\.14, 0\.31\), \(0\.57, 0\.76\)\)') -and ($ringPy -match 'raise RuntimeError')) -and ($ringPy -match 'Ring spin slabs: all three rings inside'))
+Check 'ring spin slab guard matches shader' ((($ringVert -match 'step\(-0\.36, z\) \* step\(z, -0\.10\)') -and ($ringVert -match 'step\(0\.14, z\) \* step\(z, 0\.31\)')) -and ($ringVert -match 'step\(0\.57, z\) \* step\(z, 0\.76\)'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

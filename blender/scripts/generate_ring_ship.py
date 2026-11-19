@@ -265,6 +265,211 @@ def bake_pbr_set(obj, base_path, tex_size=2048):
 # ---------------------------------------------------------------------------
 # Geometry Builder: Ring Ship (Style 1)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Detail pass primitives (same contract as generate_ships.py after #189).
+# Frame of this hull: -Z is the nose, +Z aft, +Y up, X spanwise. Cylinder, cone
+# and torus primitives are born on their local Z, so rot=(0,0,0) already aims
+# them fore-aft; (half,0,0) tips them DOWN, (-half,0,0) UP, (0,+-half,0) out
+# the sides.
+#
+# Ring Ship has one constraint the other hulls do not: shaders/ship.vert spins
+# only vertices with length(xy) >= 0.372, and only inside three z-slabs of the
+# NORMALIZED mesh ([-0.36,-0.10], [0.14,0.31], [0.57,0.76]) - the three rings.
+# Anything outboard of r=0.366 therefore has to stay within +-0.09 of a ring
+# centre (-0.44, 0.0, +0.44 pre-normalize) or the ring tears; everything else
+# must stay inboard of 0.366 so the static pylons keep their grip.
+# ---------------------------------------------------------------------------
+def r_box(name, loc, dims, rot=(0.0, 0.0, 0.0), mat=None, parts=None):
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc)
+    o = bpy.context.active_object
+    o.name = name
+    o.scale = dims
+    if any(rot):
+        o.rotation_euler = rot
+    bpy.ops.object.transform_apply(scale=True, rotation=True)
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def r_cyl(name, loc, r, depth, rot=(0.0, 0.0, 0.0), segs=24, mat=None, parts=None):
+    bpy.ops.mesh.primitive_cylinder_add(vertices=segs, radius=r, depth=depth,
+                                        location=loc, rotation=rot)
+    o = bpy.context.active_object
+    o.name = name
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def r_cone(name, loc, r1, r2, depth, rot=(0.0, 0.0, 0.0), segs=24, mat=None, parts=None):
+    bpy.ops.mesh.primitive_cone_add(vertices=segs, radius1=r1, radius2=r2,
+                                    depth=depth, location=loc, rotation=rot)
+    o = bpy.context.active_object
+    o.name = name
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def r_torus(name, loc, major, minor, rot=(0.0, 0.0, 0.0), segs=48, sides=12,
+            mat=None, parts=None):
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor,
+                                     major_segments=segs, minor_segments=sides,
+                                     location=loc, rotation=rot)
+    o = bpy.context.active_object
+    o.name = name
+    if mat:
+        o.data.materials.append(mat)
+    if parts is not None:
+        parts.append(o)
+    return o
+
+
+def ring_ship_details(parts, M):
+    """Reference pass for the Alcubierre tri-ring cruiser: hull banding, sensor
+    and deflector hardware, cupola framing, conduit clamps, radiator field,
+    per-ring coil and braking hardware and a full stern cluster. Everything is
+    real geometry, so the silhouette survives without textures."""
+    hull, accent, coil = M["hull"], M["accent"], M["coil"]
+    emitter, cockpit, engine, plasma = M["emitter"], M["cockpit"], M["engine"], M["plasma"]
+    half = math.pi / 2
+    ring_z = (-0.44, 0.0, 0.44)
+
+    # 1. Fuselage banding and keel stringers (inboard, static)
+    for z, r in ((-1.05, 0.036), (-0.80, 0.070), (-0.55, 0.094), (-0.25, 0.104),
+                 (0.00, 0.107), (0.25, 0.104), (0.45, 0.097), (0.60, 0.090),
+                 (0.72, 0.078)):
+        r_torus(f"RingArt_band_{z:+.2f}", (0.0, 0.0, z), r + 0.004, 0.006,
+                segs=32, sides=6, mat=accent, parts=parts)
+    for side in (-1.0, 1.0):
+        r_box(f"RingArt_keel_{side:+.0f}", (side * 0.086, 0.0, 0.02),
+              (0.006, 0.012, 1.10), mat=accent, parts=parts)
+
+    # 2. Nose: pitot boom, sensor louvres, forward mast
+    # The pitot stays inside the original nose tip (z=-1.42) and the stern plug
+    # inside the old aux-plasma extent (z=+0.849): normalization divides by the
+    # bounding-box length, so detail that sticks out at either end slides all
+    # three rings out of the spin slabs in shaders/ship.vert. Checked below.
+    r_cyl("RingArt_pitot", (0.0, 0.0, -1.30), 0.006, 0.24, segs=10, mat=accent, parts=parts)
+    r_cone("RingArt_pitotTip", (0.0, 0.0, -1.40), 0.006, 0.001, 0.04,
+           rot=(math.pi, 0.0, 0.0), segs=10, mat=hull, parts=parts)
+    for k, z in enumerate((-1.16, -1.02, -0.90)):
+        r_box(f"RingArt_sensorVane_{k}", (0.0, 0.0, z), (0.052 - k * 0.006, 0.004, 0.030),
+              mat=accent, parts=parts)
+    for side in (-1.0, 1.0):
+        r_cyl(f"RingArt_noseAnt_{side:+.0f}", (side * 0.030, -0.030, -0.98), 0.004, 0.16,
+              rot=(0.0, side * 0.30, 0.0), segs=8, mat=accent, parts=parts)
+
+    # 3. Forward deflector collar: lip, vanes and focusing ring
+    r_torus("RingArt_deflLip", (0.0, 0.0, -0.855), 0.086, 0.010, segs=28, sides=8,
+            mat=coil, parts=parts)
+    for k in range(10):
+        a = k * math.tau / 10
+        r_box(f"RingArt_deflVane_{k}", (0.082 * math.cos(a), 0.082 * math.sin(a), -0.80),
+              (0.020, 0.006, 0.050), rot=(0.0, 0.0, a), mat=accent, parts=parts)
+    r_torus("RingArt_deflField", (0.0, 0.0, -0.88), 0.062, 0.005, segs=24, sides=6,
+            mat=emitter, parts=parts)
+
+    # 4. Cockpit cupola: frame ribs, sill and sunshade
+    for k, z in enumerate((-0.50, -0.42, -0.34, -0.28)):
+        r_box(f"RingArt_cupolaRib_{k}", (0.0, 0.086, z), (0.058 - k * 0.004, 0.040, 0.006),
+              mat=accent, parts=parts)
+    r_box("RingArt_cupolaSill", (0.0, 0.062, -0.545), (0.070, 0.020, 0.010),
+          mat=hull, parts=parts)
+    r_box("RingArt_cupolaVisor", (0.0, 0.090, -0.575), (0.062, 0.030, 0.008),
+          rot=(0.42, 0.0, 0.0), mat=accent, parts=parts)
+
+    # 5. Spine conduit clamps and ventral radiator field (inboard, static)
+    for side_y in (1.0, -1.0):
+        tag = "D" if side_y > 0 else "V"
+        for k, z in enumerate((-0.24, -0.08, 0.08, 0.24)):
+            r_box(f"RingArt_conduitClamp_{tag}_{k}", (0.0, side_y * 0.112, z),
+                  (0.034, 0.008, 0.014), mat=accent, parts=parts)
+    for side in (-1.0, 1.0):
+        for k in range(5):
+            z = -0.10 + k * 0.11
+            r_box(f"RingArt_radiator_{side:+.0f}_{k}", (side * 0.150, -0.020, z),
+                  (0.130, 0.004, 0.070), rot=(0.0, side * 0.18, 0.0), mat=accent,
+                  parts=parts)
+            r_box(f"RingArt_radFin_{side:+.0f}_{k}", (side * 0.150, -0.020, z),
+                  (0.130, 0.014, 0.006), rot=(0.0, side * 0.18, 0.0), mat=hull,
+                  parts=parts)
+
+    # 6. Per-ring hardware. Coil collars, braking calipers and node caps all sit
+    # within +-0.09 of the ring centre so the shader spin band keeps them rigid.
+    for r_idx, rz in enumerate(ring_z):
+        tag = f"R{r_idx + 1}"
+        r_torus(f"RingArt_coilCollarA_{tag}", (0.0, 0.0, rz - 0.030), 0.42, 0.014,
+                segs=56, sides=8, mat=coil, parts=parts)
+        r_torus(f"RingArt_coilCollarB_{tag}", (0.0, 0.0, rz + 0.030), 0.42, 0.014,
+                segs=56, sides=8, mat=coil, parts=parts)
+        for k in range(16):
+            a = k * math.tau / 16
+            r_box(f"RingArt_coilWinding_{tag}_{k}",
+                  (0.42 * math.cos(a), 0.42 * math.sin(a), rz),
+                  (0.014, 0.014, 0.062), rot=(0.0, 0.0, a), mat=accent, parts=parts)
+        # Braking calipers grip the ring from inside at r=0.358 (< 0.366 static)
+        for k in range(8):
+            a = k * math.tau / 8 + math.tau / 16
+            r_box(f"RingArt_brake_{tag}_{k}",
+                  (0.358 * math.cos(a), 0.358 * math.sin(a), rz),
+                  (0.026, 0.026, 0.020), rot=(0.0, 0.0, a), mat=hull, parts=parts)
+        # Node caps turn each bare cylinder into a tuned emitter head
+        for k in range(8):
+            a = k * math.pi / 4.0
+            nx, ny = 0.42 * math.cos(a), 0.42 * math.sin(a)
+            r_cyl(f"RingArt_nodeCap_{tag}_{k}", (nx, ny, rz + 0.038), 0.020, 0.012,
+                  segs=14, mat=emitter, parts=parts)
+            r_cyl(f"RingArt_nodeBase_{tag}_{k}", (nx, ny, rz - 0.038), 0.022, 0.010,
+                  segs=14, mat=accent, parts=parts)
+
+    # 7. Aft ring service bridge and strobes (inside slab 3, so it spins with R3)
+    r_torus("RingArt_aftServiceRing", (0.0, 0.0, 0.44), 0.376, 0.006,
+            segs=48, sides=6, mat=accent, parts=parts)
+    for side in (-1.0, 1.0):
+        r_box(f"RingArt_strobe_{side:+.0f}", (side * 0.435, 0.0, 0.485),
+              (0.014, 0.020, 0.010), mat=plasma, parts=parts)
+
+    # 8. Stern cluster: gimbal, feed lines, CTV rings, tail cone and RCS
+    r_torus("RingArt_mainGimbal", (0.0, 0.0, 0.74), 0.070, 0.008, segs=24, sides=6,
+            mat=accent, parts=parts)
+    for k in range(3):
+        a = k * math.tau / 3
+        r_cyl(f"RingArt_feedLine_{k}", (0.052 * math.cos(a), 0.052 * math.sin(a), 0.70),
+              0.010, 0.16, segs=10, mat=accent, parts=parts)
+    for k in range(6):
+        a = k * math.tau / 6
+        cx, cy = 0.088 * math.cos(a), 0.088 * math.sin(a)
+        r_torus(f"RingArt_auxCTV_{k}", (cx, cy, 0.845), 0.034, 0.004, segs=16, sides=6,
+                mat=accent, parts=parts)
+    r_cone("RingArt_tailPlug", (0.0, 0.0, 0.80), 0.020, 0.040, 0.10, segs=18,
+           mat=engine, parts=parts)
+    for side in (-1.0, 1.0):
+        r_cyl(f"RingArt_omsPod_{side:+.0f}", (side * 0.115, 0.0, 0.66), 0.028, 0.14,
+              segs=16, mat=hull, parts=parts)
+        r_cone(f"RingArt_omsBell_{side:+.0f}", (side * 0.115, 0.0, 0.76), 0.014, 0.024,
+               0.06, segs=14, mat=engine, parts=parts)
+    for z in (0.30, 0.52):
+        for side in (-1.0, 1.0):
+            r_cone(f"RingArt_rcs_{z:+.2f}_{side:+.0f}", (side * 0.098, 0.060, z),
+                   0.008, 0.016, 0.030, rot=(-half, 0.0, 0.0), segs=10, mat=engine,
+                   parts=parts)
+    r_cyl("RingArt_aftMast", (0.0, 0.118, 0.58), 0.005, 0.14, rot=(-half, 0.0, 0.0),
+          segs=8, mat=accent, parts=parts)
+
+    # 9. Formation lights along the spine and ventral strip
+    for z in (-0.30, 0.02, 0.34):
+        r_box(f"RingArt_formationD_{z:+.2f}", (0.0, 0.122, z), (0.050, 0.004, 0.010),
+              mat=plasma, parts=parts)
+
+
 def build_ring_ship():
     print("\n================ Building Ring Ship (Style 1) ================")
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -439,14 +644,17 @@ def build_ring_ship():
 
     # 7. Stern Sublight Propulsion Cluster
     # 7a. Central Main Engine Nozzle
-    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.065, radius2=0.095, depth=0.18, location=(0.0, 0.0, 0.82), rotation=(math.pi/2, 0.0, 0.0))
+    # Identity rotation: the fuselage length is the Z axis (nose at -Z), so a
+    # bell born on local Z already points aft. The old rotation=(pi/2,0,0) aimed
+    # it down instead - same defect class as #189, caught here by #199.
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.065, radius2=0.095, depth=0.18, location=(0.0, 0.0, 0.82))
     main_noz = bpy.context.active_object
     main_noz.name = "Ring_MainNozzle"
     main_noz.data.materials.append(m_engine)
     parts.append(main_noz)
 
     # Main Engine Plasma Disc
-    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.058, depth=0.02, location=(0.0, 0.0, 0.88), rotation=(math.pi/2, 0.0, 0.0))
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.058, depth=0.02, location=(0.0, 0.0, 0.88))
     main_pla = bpy.context.active_object
     main_pla.name = "Ring_MainPlasma"
     main_pla.data.materials.append(m_plasma)
@@ -458,7 +666,7 @@ def build_ring_ship():
         cx = 0.088 * math.cos(a)
         cy = 0.088 * math.sin(a)
         
-        bpy.ops.mesh.primitive_cone_add(vertices=16, radius1=0.022, radius2=0.034, depth=0.12, location=(cx, cy, 0.78), rotation=(math.pi/2, 0.0, 0.0))
+        bpy.ops.mesh.primitive_cone_add(vertices=16, radius1=0.022, radius2=0.034, depth=0.12, location=(cx, cy, 0.78))
         aux_noz = bpy.context.active_object
         aux_noz.name = f"Ring_AuxNozzle_{k}"
         aux_noz.data.materials.append(m_engine)
@@ -470,6 +678,11 @@ def build_ring_ship():
         aux_pla.scale = (1.0, 1.0, 0.2)
         aux_pla.data.materials.append(m_plasma)
         parts.append(aux_pla)
+
+    # 8. Reference-driven detail pass (#197)
+    ring_ship_details(parts, {"hull": m_hull, "accent": m_accent, "coil": m_coil,
+                              "emitter": m_emitter, "cockpit": m_cockpit,
+                              "engine": m_engine, "plasma": m_plasma})
 
     # -----------------------------------------------------------------------
     # Join All Parts into Unified Hero Mesh
@@ -504,6 +717,23 @@ def build_ring_ship():
     center = Vector(((min_x + max_x) * 0.5, (min_y + max_y) * 0.5, (min_z + max_z) * 0.5))
     ship.location = -center
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    # Spin-band guard. shaders/ship.vert rotates only vertices with
+    # length(xy) >= 0.372 and only inside three z-slabs of THIS normalized mesh.
+    # Normalization divides by the bounding-box length, so any detail that
+    # extends the nose or stern slides the rings out of their slabs and the
+    # drive silently stops spinning - or tears, at the smoothstep edges. Fail
+    # the build here rather than shipping a ring ship that only looks right
+    # in a still frame.
+    spin_slabs = ((-0.36, -0.10), (0.14, 0.31), (0.57, 0.76))
+    for rz, slab in zip(ring_positions, spin_slabs):
+        z_norm = rz * scale_fac - center.z
+        if not (slab[0] <= z_norm <= slab[1]):
+            raise RuntimeError(
+                f"ring at pre-normalize z={rz:+.2f} lands at z={z_norm:+.3f}, "
+                f"outside shader spin slab {slab}. Detail geometry has moved the "
+                f"hull bounding box; pull it back inside nose/stern limits.")
+    print("Ring spin slabs: all three rings inside their shader bands.", flush=True)
 
     # Smooth shading and crisp edge split
     for poly in ship.data.polygons:
