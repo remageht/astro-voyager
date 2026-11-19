@@ -112,7 +112,14 @@ inline bool canJump(const ShipState& s, float costK = 1.0f) {
 
 // v3.6.0: варп-роли корпусов. v4.0.0: варп-двигатель несут только Ring Ship
 // (1) и Model OBJ (3); Dart (0) и Shuttle (2) — досветовые корпуса.
-inline bool styleCanWarp(int style) { return style == 1 || style == 3; }
+// v5.0.6: Mining Dreadnought (4) — тяжёлый колониальный транспорт с варпом.
+// Список корпусов держится в одном месте: kShipStyleCount = 5, из него же
+// считаются оба hull-селектора, чтобы массивы и clamp не разъезжались (#195).
+constexpr int kShipStyleCount = 5;
+constexpr const char* kShipStyleNames[kShipStyleCount] = {
+    "Dart", "Ring Ship", "Shuttle", "Model (OBJ)", "Mining Dreadnought"};
+
+inline bool styleCanWarp(int style) { return style == 1 || style == 3 || style == 4; }
 
 // v4.0.0: форсаж досветовых корпусов ограничен. У Dart и Shuttle нет
 // варп-двигателя, поэтому и разгон у них «досветовый»: x1.35 / x1.20 вместо
@@ -121,6 +128,7 @@ inline float styleBoostSpeedMult(int style) {
   switch (style) {
     case 0: return 1.35f;  // Dart: лёгкий перехватчик
     case 2: return 1.20f;  // Shuttle: тяжёлый челнок
+    case 4: return 1.10f;  // Mining Dreadnought: гружёный транспортник
     default: return kBoostSpeedMultiplier;
   }
 }
@@ -129,6 +137,7 @@ inline float styleBoostRespMult(int style) {
   switch (style) {
     case 0: return 1.45f;
     case 2: return 1.30f;
+    case 4: return 1.70f;  // самый инерционный корпус флота
     default: return kBoostRespMultiplier;
   }
 }

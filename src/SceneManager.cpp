@@ -1,5 +1,6 @@
 #include "SceneManager.h"
 #include "Constellation.h"
+#include "Types.h"  // ship::kShipStyleCount - единый список корпусов (#195)
 
 #include "GLCompat.h"
 #include "LaunchDiagnostics.h"
@@ -85,7 +86,7 @@ float shipX() { return g_shipPos[0]; }
 float shipY() { return g_shipPos[1]; }
 float shipZ() { return g_shipPos[2]; }
 float shipYaw() { return g_shipYaw; }
-void setShipStyle(int s) { g_shipStyle = (s < 0 || s > 3) ? 0 : s; }
+void setShipStyle(int s) { g_shipStyle = (s < 0 || s >= ship::kShipStyleCount) ? 0 : s; }
 void setShipCustomization(const ShipCustomization& c) { g_shipCustomization = c; }
 const ShipCustomization& shipCustomization() { return g_shipCustomization; }
 void setDockSitesVisible(bool v) { g_dockSitesVisible = v; }
@@ -2500,6 +2501,20 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             if (s_ringShipModel.ready()) {
               activeModel = &s_ringShipModel;
               modelRingSpin = spinPhase;
+            }
+          } else if (style == 4) {
+            // Mining Dreadnought (тяжёлый колониальный транспорт):
+            // меш из res/models/mining_dreadnought.obj. Длина на Z, нос на -Z -
+            // та же конвенция, что у dart/shuttle/ring_ship (#195).
+            static ObjModel s_dreadnoughtModel;
+            static bool s_dreadnoughtTried = false;
+            if (!s_dreadnoughtTried) {
+              s_dreadnoughtTried = true;
+              s_dreadnoughtModel.load("res/models/mining_dreadnought.obj");
+              s_dreadnoughtModel.loadTextures("res/models/mining_dreadnought");
+            }
+            if (s_dreadnoughtModel.ready()) {
+              activeModel = &s_dreadnoughtModel;
             }
           } else if (style == 2) {
             // Shuttle explorer: меш из res/models/shuttle.obj

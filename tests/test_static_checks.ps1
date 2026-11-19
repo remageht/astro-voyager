@@ -783,6 +783,17 @@ $shipsVertical = @(($shipsPy -split "`n" | Where-Object { $_ -match 'rotation=\(
 Check 'ship engine axis convention' (($shipsVertical -eq 1) -and ($shipsPy -match 'p_cone\(name, loc, r_throat, r_exit, depth, segs=segs') -and ($shipsPy -notmatch 'depth=0\.36, location=\(0\.0, 0\.0, 0\.94\), rotation'))
 Check 'ship detail pass frame comment' (($shipsPy -match '\(half,0,0\) tips them DOWN') -and ($shipsPy -match 'Getting this wrong is #189'))
 
+# --- Issue #195: mining dreadnought is a fleet hull, not an orphan asset ---
+$typesH = Read-File 'src/Types.h'
+$appH = Read-File 'src/AppGL.h'
+$dreadPy = Read-File 'blender/scripts/generate_mining_dreadnought.py'
+Check 'dreadnought hull loaded in scene' (($sceneCpp -match 'mining_dreadnought\.obj') -and ($sceneCpp -match 'loadTextures\("res/models/mining_dreadnought"\)'))
+Check 'ship style list has single source of truth' ((($typesH -match 'constexpr int kShipStyleCount = 5') -and ($typesH -match 'Mining Dreadnought') -and ($sceneCpp -match 's >= ship::kShipStyleCount') -and ($sceneCpp -notmatch 's > 3')) -and (($appCpp -match 'ship::kShipStyleCount - 1') -and ($appCpp -match 'n < ship::kShipStyleCount')))
+Check 'dreadnought warp role and handling' ((($typesH -match 'style == 1 \|\| style == 3 \|\| style == 4') -and ($typesH -match 'case 4: return 1\.10f')) -and (($typesH -match 'case 4: return 1\.70f') -and ($appH -match '4 Mining Dreadnought')))
+Check 'dreadnought generator uses fleet axis' ((($dreadPy -match 'rotation_euler = \(-math\.pi / 2, 0\.0, 0\.0\)') -and ($dreadPy -match 'target_scale = 2\.30')) -and (($dreadPy -match '#195') -and ($dreadPy -notmatch 'target_scale = 4\.5')))
+Check 'dreadnought captured in hud harness' (($appCpp -match 'ship_dreadnought\.png') -and ($appCpp -match 'warpdrive::setShipStyle\(4\)'))
+Check 'dreadnought documented' (($readme -match 'Mining Dreadnought \(4\)') -and ($readme -match 'mining_dreadnought_showcase\.png'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

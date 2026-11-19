@@ -11365,9 +11365,11 @@ void AppGL::drawMenu() {
         if (ImGui::BeginTabItem(uiRu("Корабль", "Ship"))) {
           ImGui::Spacing();
           ImGui::SeparatorText(uiRu("Корпус и двигатели", "Ship"));
-          const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle", "Model (OBJ)"};
+          const char* hullNames[] = {ship::kShipStyleNames[0], ship::kShipStyleNames[1],
+                                     ship::kShipStyleNames[2], ship::kShipStyleNames[3],
+                                     ship::kShipStyleNames[4]};
           int hullSel = m_shipStyle;
-          if (ImGui::Combo("Hull", &hullSel, hullNames, 4)) {
+          if (ImGui::Combo("Hull", &hullSel, hullNames, ship::kShipStyleCount)) {
             setShipStyleNow(hullSel);
           }
           const char* engineNames[] = {"Red", "Ion", "Emerald", "Plasma"};
@@ -14300,6 +14302,30 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
         std::cout << "Captured screenshot: " << ringFile << "\n";
       }
     }
+    // Mining Dreadnought (style 4): тот же близкий ракурс, отдельный кадр
+    // ship_dreadnought.png. Снимок заодно ловит регрессию осей из #195 - если
+    // корпус снова встанет на хвост, в кадре это видно сразу.
+    {
+      warpdrive::setShipStyle(4);
+      const Vec3 cam = app.m_camera.position;
+      warpdrive::setShip(true, static_cast<float>(cam.x) + 0.52f,
+                         static_cast<float>(cam.y) - 0.40f,
+                         static_cast<float>(cam.z) - 3.6f, 2.35f);
+      for (int frame = 0; frame < 6; ++frame) {
+        app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        app.m_window->swapBuffers();
+        app.m_window->pollEvents();
+      }
+      std::string dreadFile = outDir + "/ship_dreadnought.png";
+      if (app.saveScreenshot(dreadFile)) {
+        std::cout << "Captured screenshot: " << dreadFile << "\n";
+      }
+    }
     warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
     warpdrive::setShipStyle(styleBackup);
     warpdrive::setShipHull(1.0f);
@@ -14613,7 +14639,7 @@ void AppGL::disengageWarp() {
 }
 
 void AppGL::setShipStyleNow(int style) {
-  m_shipStyle = std::min(std::max(style, 0), 3);
+  m_shipStyle = std::min(std::max(style, 0), ship::kShipStyleCount - 1);
   m_pendingShipStyle = m_shipStyle;
   m_shipSwitchTimer = 0.0f;
   m_shipCustomization.style = m_shipStyle;
@@ -15257,11 +15283,13 @@ void AppGL::drawWarpPanel() {
       (m_warpStatus == 1 && curSt && curSt->id != tgtId && warpCap);
   // Выбор корпуса корабля (смена вида).
   {
-  const char* hullNames[] = {"Dart", "Ring Ship", "Shuttle", "Model (OBJ)"};
+  const char* hullNames[] = {ship::kShipStyleNames[0], ship::kShipStyleNames[1],
+                             ship::kShipStyleNames[2], ship::kShipStyleNames[3],
+                             ship::kShipStyleNames[4]};
   int hullSel = m_shipStyle;
   ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
   if (ImGui::BeginCombo("Hull", hullNames[hullSel])) {
-    for (int n = 0; n < 4; ++n) {
+    for (int n = 0; n < ship::kShipStyleCount; ++n) {
       const bool sel = (n == hullSel);
       if (ImGui::Selectable(hullNames[n], sel)) {
         setShipStyleNow(n);

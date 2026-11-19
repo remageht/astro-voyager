@@ -148,7 +148,9 @@ def add_hex_pod(center, radius, length, slot=2):
 
 def build_mining_dreadnought():
     """Assembles all industrial components of the mining dreadnought."""
-    # Coordinates convention: +Y is Forward, +Z is Up, +X is Starboard (Right)
+    # Coordinates convention *inside this builder*: +Y is Forward, +Z is Up,
+    # +X is Starboard (Right). main() tips the joined hull onto the fleet
+    # convention (-Z nose, +Y up, X spanwise) before export - see #195.
     
     # -------------------------------------------------------------
     # 1. CENTRAL SPINAL HULL & HEAVY BULKHEADS
@@ -375,13 +377,26 @@ def main():
     joined = bpy.context.object
     joined.name = "MiningDreadnought"
 
-    # Normalize dimensions to target in-game scale ~4.5
+    # Normalize to the fleet length. dart, shuttle, ring_ship and warp_ship are all
+    # authored to ~2.3 in res/models and the renderer has no per-style scale, so a
+    # hull registered as style 4 has to arrive at the same size or the chase camera
+    # frames it wrong. (#195)
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    target_scale = 4.5
+    target_scale = 2.30
     max_dim = max(joined.dimensions)
     factor = target_scale / max_dim
     joined.scale = (factor, factor, factor)
     bpy.ops.object.transform_apply(scale=True)
+
+    # Fleet axis convention (#195). The other hulls in res/models put their LENGTH
+    # on the OBJ Z axis - dart, shuttle, ring_ship and warp_ship all measure ~2.3
+    # on Z and ~0.5-0.9 on Y - which is what the ship renderer's shipHullModel and
+    # SceneManager's ownUpToY both assume. This builder authored +Y forward / +Z up,
+    # so the whole hull is tipped once here: Rx(-90) sends Blender +Y (length) to -Z
+    # and Blender +Z (up) to +Y, giving generate_ships.py's "-Z is the nose, +Y up,
+    # X spanwise". Do not "fix" this per part - the tip must stay a single step.
+    joined.rotation_euler = (-math.pi / 2, 0.0, 0.0)
+    bpy.ops.object.transform_apply(rotation=True)
 
     poly_count = len(joined.data.polygons)
     print(f"Dreadnought built successfully: {poly_count} polygons, size: {target_scale}", flush=True)
@@ -404,7 +419,13 @@ def main():
         path_mode="RELATIVE",
     )
 
-    # 5. Render high-res Cycles showcase
+    # 5. Render high-res Cycles showcase. The camera above is authored for the
+    # builder's own pose (+Y forward, +Z up = Blender's Z-up world), so undo the
+    # #195 tip for the render pass only. The exported OBJ keeps the fleet frame;
+    # this is purely so the hero shot is not a ship standing on its tail.
+    joined.rotation_euler = (math.pi / 2, 0.0, 0.0)
+    bpy.ops.object.transform_apply(rotation=True)
+
     scene = bpy.context.scene
     setup_showcase_camera_and_lighting(scene, target_size=target_scale)
     render_out = OUT_DIR / f"{prefix}_showcase.png"
