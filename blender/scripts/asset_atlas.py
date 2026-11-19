@@ -172,6 +172,64 @@ def tile(role, color, rough, metal, emission, seed, t=TILE):
         rgh -= 0.20 * lens
     elif role == "polished":
         rgh[:] = rough
+    elif role == "concrete":              # poured concrete with formwork joints
+        cell = 128.0
+        joint = ((xx % cell < 2.5) | (yy % cell < 2.5)).astype(np.float32)
+        tie = (((xx % cell) > 20) & ((xx % cell) < 26) &
+               ((yy % cell) > 20) & ((yy % cell) < 26))
+        tie |= (((xx % cell) > cell - 26) & ((xx % cell) < cell - 20) &
+                ((yy % cell) > cell - 26) & ((yy % cell) < cell - 20))
+        height -= joint * 0.40
+        height[tie] -= 0.30
+        alb *= (0.90 + 0.18 * grime)[..., None]
+        alb *= (0.95 + 0.10 * speckle)[..., None]
+        alb -= (0.14 * joint)[..., None]
+        alb[tie] *= 0.82
+        rgh += 0.10 * grime + 0.08 * joint
+    elif role == "masonry":               # brick / block courses, running bond
+        bw, bh = 32.0, 16.0
+        row = (yy // bh).astype(np.int32)
+        shift = (row % 2) * (bw * 0.5)
+        bx = (xx + shift) % bw
+        joint = ((bx < 2.0) | ((yy % bh) < 2.0)).astype(np.float32)
+        brick_id = row * 7 + ((xx + shift) // bw).astype(np.int32) * 13
+        tone = ((brick_id * 37) % 11) / 11.0
+        height -= joint * 0.55
+        height += (1.0 - joint) * 0.12
+        alb *= (0.86 + 0.22 * tone)[..., None]
+        alb *= (0.92 + 0.16 * grime)[..., None]
+        alb -= (0.22 * joint)[..., None]
+        rgh += 0.10 * joint + 0.08 * grime
+    elif role == "siding":                # horizontal clapboard boards
+        bh = 26.0
+        board = (yy % bh) / bh
+        shadow = (board > 0.86).astype(np.float32)
+        height += (1.0 - board) * 0.25 - shadow * 0.45
+        alb *= (0.90 + 0.14 * (1.0 - board))[..., None]
+        alb *= (0.93 + 0.14 * grime)[..., None]
+        alb -= (0.18 * shadow)[..., None]
+        rgh += 0.10 * shadow + 0.06 * grime
+    elif role == "roof":                  # standing-seam metal roofing
+        sw = 34.0
+        seam = ((xx % sw) < 3.0).astype(np.float32)
+        pan = (np.sin((xx % sw) / sw * math.tau) * 0.5 + 0.5).astype(np.float32)
+        height += seam * 0.60 - pan * 0.08
+        alb *= (0.88 + 0.16 * pan)[..., None]
+        alb *= (0.92 + 0.16 * grime)[..., None]
+        alb += (0.10 * seam)[..., None]
+        rgh -= 0.12 * seam
+        met += 0.10 * seam
+    elif role == "asphalt":               # road / yard surface with lane paint
+        agg = _fbm(t, seed + 23, base=96)
+        crack = (_fbm(t, seed + 57, base=12) > 0.72).astype(np.float32)
+        dash = (((yy > t * 0.47) & (yy < t * 0.53)) &
+                ((xx % 64.0) < 34.0)).astype(np.float32)
+        alb *= (0.80 + 0.40 * agg)[..., None]
+        alb -= (0.25 * crack)[..., None]
+        alb[dash > 0] = (0.78, 0.74, 0.55)
+        height += agg * 0.18 - crack * 0.30
+        rgh += 0.12 * agg + 0.10 * crack
+        met *= 0.2
     else:
         raise ValueError(f"unknown atlas role {role!r}")
 

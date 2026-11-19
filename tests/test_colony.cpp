@@ -191,7 +191,11 @@ int main() {
   // Test 7: surface build-out plans and per-world power plants
   {
     static const char* kKnownAssets[] = {"dome", "factory", "pad", "nuclear",
-                                         "hydro", "thermal", "datacenter"};
+                                         "hydro", "thermal", "datacenter",
+                                         "townhall", "parliament", "police",
+                                         "warehouse", "military", "houses",
+                                         "apartments", "pipeline", "powerline",
+                                         "solar", "diesel", "inverter", "wind"};
     const auto isKnown = [](const std::string& asset) {
       for (const char* known : kKnownAssets)
         if (asset == known) return true;
@@ -207,10 +211,7 @@ int main() {
         if (entry.count <= 0) continue;
         ++items;
         const bool known = entry.asset == std::string(kColonyPowerAsset) ||
-                           std::string(entry.asset) == "dome" ||
-                           std::string(entry.asset) == "factory" ||
-                           std::string(entry.asset) == "pad" ||
-                           std::string(entry.asset) == "datacenter";
+                           isKnown(entry.asset);
         if (!known) {
           std::cerr << "Test 7 failed: stage " << i + 1 << " uses unknown asset "
                     << entry.asset << "\n";
@@ -280,6 +281,34 @@ int main() {
     if (!hasPower || !hasData || !hasDome) {
       std::cerr << "Test 7 failed: capital build-out incomplete\n";
       return 1;
+    }
+
+    // Civic, housing and utility layers must appear in technological order:
+    // backup gensets with the first grid, private plots before storey blocks,
+    // administration before the parliament, and the capital keeps all of them.
+    const auto has = [](const std::vector<std::pair<std::string, int>>& p,
+                        const char* key) {
+      for (const auto& e : p) if (e.first == key) return true;
+      return false;
+    };
+    if (!has(colonyBuildPlan("mars", 3), "diesel") ||
+        !has(colonyBuildPlan("mars", 5), "houses") ||
+        has(colonyBuildPlan("mars", 5), "apartments") ||
+        !has(colonyBuildPlan("mars", 8), "powerline") ||
+        !has(colonyBuildPlan("mars", 11), "townhall") ||
+        !has(colonyBuildPlan("mars", 13), "apartments") ||
+        !has(colonyBuildPlan("mars", 16), "wind") ||
+        !has(colonyBuildPlan("mars", 21), "parliament")) {
+      std::cerr << "Test 7 failed: civic/housing/utility progression out of order\n";
+      return 1;
+    }
+    for (const char* key : {"townhall", "parliament", "police", "warehouse",
+                            "military", "houses", "apartments", "pipeline",
+                            "powerline", "solar", "diesel", "inverter", "wind"}) {
+      if (!has(capital, key)) {
+        std::cerr << "Test 7 failed: capital missing " << key << "\n";
+        return 1;
+      }
     }
 
     std::cout << "PASS: Test 7 surface build-out plans and per-world power plants\n";

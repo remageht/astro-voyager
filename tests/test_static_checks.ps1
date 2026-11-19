@@ -749,6 +749,9 @@ Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenu
 Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and ($sceneCpp -match 'colonyAnchorNormal')) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
 Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
 Check 'colony infrastructure assets loaded' (($sceneCpp -match 'colony_nuclear\.obj') -and ($sceneCpp -match 'colony_hydro\.obj') -and ($sceneCpp -match 'colony_thermal\.obj') -and ($sceneCpp -match 'colony_datacenter\.obj') -and ($sceneCpp -match 'colony_factory\.obj'))
+Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyCivicKeys') -and ($sceneCpp -match 's_colonyCivicModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
+Check 'colony capital distance cull' (($sceneCpp -match 'camDist > 24\.0f') -and ((Read-File 'tests/test_colony.cpp') -match 'civic/housing/utility progression'))
+Check 'civic atlas roles exist' ((((Read-File 'blender/scripts/asset_atlas.py') -match 'role == "masonry"') -and ((Read-File 'blender/scripts/asset_atlas.py') -match 'role == "siding"')) -and (((Read-File 'blender/scripts/asset_atlas.py') -match 'role == "roof"') -and ((Read-File 'blender/scripts/asset_atlas.py') -match 'role == "asphalt"')))
 Check 'colony terraforming milestones' ((($sceneCpp -match 'colonyTerraformState') -and ($appCpp -match 'colonyTerraformMilestones')) -and ((Read-File 'src/ColonySystem.cpp') -match 'colonyMilestonesReached'))
 Check 'colony milestones reward rp' (((Read-File 'src/ColonySystem.h') -match 'int rewardRP') -and ($appCpp -match 'm\.rewardRP'))
 Check 'colony milestone reward window' ((($appCpp -match 'colonyMilestoneReward\(stageBefore, stage\)') -and ((Read-File 'src/ColonySystem.cpp') -match 'm\.stage > previousStage')) -and ((Read-File 'tests/test_colony.cpp') -match 'milestone rewards must be paid once'))
@@ -773,6 +776,12 @@ Check 'achievements counter not hardcoded' (($appCpp -notmatch 'Achievements: %d
 # --- Issue #187: Active assertions in tests and CI ctest gate ---
 Check 'ci workflow runs ctest' (((Read-File '.github/workflows/build.yml') -match 'ctest --test-dir build\b') -and ((Read-File '.github/workflows/build.yml') -match 'ctest --test-dir build-gl\b'))
 Check 'cmake test targets undefine ndebug' (((Read-File 'CMakeLists.txt') -match '/UNDEBUG') -and ((Read-File 'CMakeLists.txt') -match '-UNDEBUG'))
+
+# --- Issue #189: hull primitives are born on local Z, so fore-aft parts need identity rotation ---
+$shipsPy = Read-File 'blender/scripts/generate_ships.py'
+$shipsVertical = @(($shipsPy -split "`n" | Where-Object { $_ -match 'rotation=\(math\.pi/2, 0\.0, 0\.0\)' })).Count
+Check 'ship engine axis convention' (($shipsVertical -eq 1) -and ($shipsPy -match 'p_cone\(name, loc, r_throat, r_exit, depth, segs=segs') -and ($shipsPy -notmatch 'depth=0\.36, location=\(0\.0, 0\.0, 0\.94\), rotation'))
+Check 'ship detail pass frame comment' (($shipsPy -match '\(half,0,0\) tips them DOWN') -and ($shipsPy -match 'Getting this wrong is #189'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
