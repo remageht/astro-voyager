@@ -599,17 +599,9 @@ void AppGL::processInput(float deltaTime) {
   // === Epilogue System === end
 
   const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-  if (escDown && !m_prevEscPressed && !io.WantCaptureKeyboard && !m_slidesOpen && !m_epilogueActive) {
-    // Esc closes top-most overlay or terminal before main menu
-    if (m_orreryMapOpen) {
-      m_orreryMapOpen = false;
-    } else if (m_shipTerminalOpen) {
-      m_shipTerminalOpen = false;
-    } else if (m_zettelkastenOpen) {
-      m_zettelkastenOpen = false;
-    } else if (m_expeditionMapOpen) {
-      m_expeditionMapOpen = false;
-    } else {
+  if (escDown && !m_prevEscPressed && !m_slidesOpen && !m_epilogueActive) {
+    // Esc closes top-most overlay or modal before opening main menu
+    if (!closeTopModal()) {
       m_inMenu = true;
       m_menuBooting = true;
       m_menuBootTimer = 0.0f;
@@ -839,13 +831,13 @@ void AppGL::processInput(float deltaTime) {
   // Идёт до гварда клавиатуры, чтобы орбита жила и при открытом ImGui.
   // Любое WASD-движение выключает орбиту — управление возвращается игроку.
   if (m_orbitOn) {
-    const bool wasdDown =
+    const bool wasdDown = !io.WantCaptureKeyboard && (
         (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) ||
         (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS) ||
         (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS) ||
         (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS) ||
         (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS) ||
-        (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS);
+        (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS));
     if (wasdDown) {
       m_orbitOn = false;
     } else {
@@ -884,8 +876,7 @@ void AppGL::processInput(float deltaTime) {
       (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS ? 1.0 : 0.0) -
       (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS ? 1.0 : 0.0);
   const bool shiftPressed = (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS);
-  const bool ctrlPressed = (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                            glfwGetKey(win, GLFW_KEY_C) == GLFW_PRESS);
+  const bool ctrlPressed = (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS);
   const double axisU =
       (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ? 1.0 : 0.0) -
       (ctrlPressed ? 1.0 : (shiftPressed && axisF == 0.0 && axisR == 0.0 && !ship::canBoost(m_ship) ? 1.0 : 0.0));
@@ -1084,6 +1075,20 @@ void AppGL::processGamepadInput(double dt) {
     return;
   }
 
+  // Suppress flight controls and handle modal dismissal when menus or UI modals are active
+  ImGuiIO& io = ImGui::GetIO();
+  if (m_inMenu || isAnyModalOpen() || io.WantCaptureKeyboard || io.WantCaptureMouse) {
+    if (m_gamepad.isJustPressed(GamepadButton::Start)) {
+      if (!closeTopModal()) {
+        m_inMenu = !m_inMenu;
+      }
+    }
+    if (m_gamepad.isJustPressed(GamepadButton::B)) {
+      closeTopModal();
+    }
+    return;
+  }
+
   // 1. Right analog stick: Camera view rotation (Yaw / Pitch)
   if (std::abs(ctrl.lookYaw) > 0.01f || std::abs(ctrl.lookPitch) > 0.01f) {
     const float lookSpeed = 2.4f * m_mouseSensitivity * ship::rcsGimbalMult(m_shipCustomization.rcsGimbalLevel);
@@ -1121,11 +1126,9 @@ void AppGL::processGamepadInput(double dt) {
   // 4. Face buttons & D-Pad shortcuts
   // Start button: Menu / Pause
   if (m_gamepad.isJustPressed(GamepadButton::Start)) {
-    if (m_orreryMapOpen) m_orreryMapOpen = false;
-    else if (m_shipTerminalOpen) m_shipTerminalOpen = false;
-    else if (m_zettelkastenOpen) m_zettelkastenOpen = false;
-    else if (m_expeditionMapOpen) m_expeditionMapOpen = false;
-    else m_inMenu = !m_inMenu;
+    if (!closeTopModal()) {
+      m_inMenu = !m_inMenu;
+    }
   }
 
   // Back / View button: Unified Terminal toggle
@@ -1143,12 +1146,9 @@ void AppGL::processGamepadInput(double dt) {
 
   // Button B: Back / Close / Expedition map
   if (m_gamepad.isJustPressed(GamepadButton::B)) {
-    if (m_orreryMapOpen) m_orreryMapOpen = false;
-    else if (m_shipTerminalOpen) m_shipTerminalOpen = false;
-    else if (m_zettelkastenOpen) m_zettelkastenOpen = false;
-    else if (m_expeditionMapOpen) m_expeditionMapOpen = false;
-    else if (m_storyOpen) m_storyOpen = false;
-    else m_expeditionMapOpen = true;
+    if (!closeTopModal()) {
+      m_expeditionMapOpen = true;
+    }
   }
 
   // Button X: Shipyard / Undock
@@ -3445,7 +3445,10 @@ void AppGL::drawStoryPanel() {
 }
 
 void AppGL::drawDiscoveryCard(const ConstellationInfo* cInfo) {
-  if (!cInfo) return;
+  if (!cInfo) {
+    m_discoveryCardOpen = false;
+    return;
+  }
 
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_Always,
@@ -3505,8 +3508,8 @@ void AppGL::drawDiscoveryCard(const ConstellationInfo* cInfo) {
       std::string cursor = (std::fmod(time, 0.9f) < 0.45f) ? "_" : " ";
       std::string eqStr = "> RESONANCE_LOCK: " + cInfo->equation + " " + cursor;
       ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.65f, 1.0f), "%s", eqStr.c_str());
-      ImGui::EndChild();
     }
+    ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
     ImGui::Spacing();
@@ -3526,8 +3529,8 @@ void AppGL::drawDiscoveryCard(const ConstellationInfo* cInfo) {
       ImGui::TextColored(ImVec4(0.65f, 0.70f, 0.80f, 0.85f), "%s",
                          uiRu("— Егорка-5 (из временного узла резонатора)",
                               "— Egorka-5 (from temporal resonator node)"));
-      ImGui::EndChild();
     }
+    ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
     ImGui::Spacing();
@@ -3541,8 +3544,8 @@ void AppGL::drawDiscoveryCard(const ConstellationInfo* cInfo) {
     if (ImGui::BeginChild("PerkBox", ImVec2(0.0f, 44.0f), true)) {
       ImGui::TextColored(ImVec4(0.30f, 1.0f, 0.50f, 1.0f), "[✔ СИСТЕМА МОДЕРНИЗИРОВАНА]  ✔ %s",
                          uiRu(cInfo->effectRu.c_str(), cInfo->effectEn.c_str()));
-      ImGui::EndChild();
     }
+    ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
     ImGui::Spacing();
@@ -4154,6 +4157,11 @@ void AppGL::saveAdventureSlotNow(bool quiet) {
 
 unsigned int AppGL::uploadRgba(const unsigned char* px, int w, int h) {
   unsigned int tex = 0;
+  GLint prevTex = 0;
+  glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
+  GLint prevAlign = 4;
+  glGetIntegerv(GL_UNPACK_ALIGNMENT, &prevAlign);
+
   glGenTextures(1, &tex);
   glBindTexture(GL_TEXTURE_2D, tex);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -4163,6 +4171,8 @@ unsigned int AppGL::uploadRgba(const unsigned char* px, int w, int h) {
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, px);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, prevAlign);
+  glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevTex));
   return tex;
 }
 
@@ -5024,9 +5034,11 @@ void AppGL::warpToCurrentStoryObjective() {
 }
 
 void AppGL::drawExpeditionHud() {
+  const ExpeditionChapter* ch = m_expedition.current();
+  if (!ch) return;
+
   const bool fontPushed = modernPushFont();
   // === Expedition ===: компактная карточка главы вверху по центру.
-  const ExpeditionChapter* ch = m_expedition.current();
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, 56.0f), ImGuiCond_Always,
                           ImVec2(0.5f, 0.0f));
@@ -5037,7 +5049,7 @@ void AppGL::drawExpeditionHud() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
   ImGuiWindowFlags fl = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
-  if (!ch || ImGui::Begin("##expeditionHud", nullptr, fl)) {
+  if (ImGui::Begin("##expeditionHud", nullptr, fl)) {
     if (ch) {
       // 1px Technical Sci-Fi corner brackets
       ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -5126,7 +5138,7 @@ void AppGL::drawExpeditionHud() {
       }
     }
   }
-  if (ch) ImGui::End();
+  ImGui::End();
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor(2);
   if (fontPushed) ImGui::PopFont();
@@ -5284,6 +5296,7 @@ void AppGL::drawMissionHud() {
 }
 
 void AppGL::drawExpeditionMap() {
+  const bool fontPushed = modernPushFont();
   // === Expedition ===: интерактивная карта и выбор глав экспедиции «Astro-Voyager».
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
@@ -5462,6 +5475,7 @@ void AppGL::drawExpeditionMap() {
   ImGui::End();
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor(2);
+  if (fontPushed) ImGui::PopFont();
 }
 
 void AppGL::drawOrreryMap() {
@@ -5472,8 +5486,8 @@ void AppGL::drawOrreryMap() {
   const float currentTime = static_cast<float>(glfwGetTime());
 
   // === Mouse Orbit & Pan Interaction (Canvas Area) ===
-  const bool mouseInRightCard = (io.MousePos.x > disp.x - 390.0f && io.MousePos.y > 50.0f && io.MousePos.y < disp.y - 40.0f);
-  const bool mouseInLeftCard = (io.MousePos.x < 250.0f && io.MousePos.y > 60.0f && io.MousePos.y < disp.y - 40.0f);
+  const bool mouseInRightCard = !m_orrerySidebarsCollapsed && (io.MousePos.x > disp.x - 390.0f && io.MousePos.y > 50.0f && io.MousePos.y < disp.y - 40.0f);
+  const bool mouseInLeftCard = !m_orrerySidebarsCollapsed && (io.MousePos.x < 250.0f && io.MousePos.y > 60.0f && io.MousePos.y < disp.y - 40.0f);
   const bool mouseInTopBar = (io.MousePos.y < 55.0f);
   const bool canDragCanvas = (!mouseInRightCard && !mouseInLeftCard && !mouseInTopBar);
 
@@ -5832,7 +5846,8 @@ void AppGL::drawOrreryMap() {
                        uiRu("СЕКТОР", "SECTOR"), uiRu("МАСШТАБ", "SCALE"), m_orreryZoom);
 
     // Quick scale buttons
-    ImGui::SameLine(disp.x - 670.0f);
+    const float rightBtnAreaW = 790.0f;
+    ImGui::SameLine(std::max(380.0f, disp.x - rightBtnAreaW));
     if (ImGui::Button(uiRu("1. Внутренние [1]", "1. Inner [1]"), ImVec2(120.0f, 26.0f))) {
       m_orreryZoom = 14.0f;
       m_orreryPanX = 0.0f;
@@ -5855,6 +5870,11 @@ void AppGL::drawOrreryMap() {
       m_orreryPanY = 0.0f;
     }
     ImGui::SameLine();
+    if (ImGui::Button(m_orrerySidebarsCollapsed ? uiRu("▶ Панели", "▶ Panels")
+                                                : uiRu("◀ Скрыть", "◀ Hide Panels"), ImVec2(100.0f, 26.0f))) {
+      m_orrerySidebarsCollapsed = !m_orrerySidebarsCollapsed;
+    }
+    ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.25f, 0.25f, 0.85f));
     if (ImGui::Button(uiRu("✕ ЗАКРЫТЬ [M]", "✕ CLOSE [M]"), ImVec2(120.0f, 26.0f))) {
       m_orreryMapOpen = false;
@@ -5866,17 +5886,19 @@ void AppGL::drawOrreryMap() {
   ImGui::PopStyleVar(3);
   ImGui::PopStyleColor(2);
 
-  // === Left Quick-Select Celestial Directory Panel ===
+  // === Left Quick-Select Celestial Directory Panel & Right Dossier ===
   const float leftPanelW = 210.0f;
-  ImGui::SetNextWindowPos(ImVec2(16.0f, 68.0f), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(leftPanelW, disp.y - 110.0f), ImGuiCond_Always);
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.038f, 0.88f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.55f));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 10.0f));
+  const float rightPanelW = 340.0f;
+  if (!m_orrerySidebarsCollapsed) {
+    ImGui::SetNextWindowPos(ImVec2(16.0f, 68.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(leftPanelW, disp.y - 110.0f), ImGuiCond_Always);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.038f, 0.88f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.55f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 10.0f));
 
-  if (ImGui::Begin("##OrreryLeftDir", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
+    if (ImGui::Begin("##OrreryLeftDir", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
     ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "✦ %s", uiRu("КАТАЛОГ СИСТЕМЫ", "SYSTEM DIRECTORY"));
     ImGui::Separator();
     ImGui::Spacing();
@@ -5936,7 +5958,6 @@ void AppGL::drawOrreryMap() {
   ImGui::PopStyleColor(2);
 
   // === Right Telemetry Glass Inspector Card ===
-  const float rightPanelW = 340.0f;
   ImGui::SetNextWindowPos(ImVec2(disp.x - rightPanelW - 16.0f, 68.0f), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(rightPanelW, disp.y - 110.0f), ImGuiCond_Always);
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.038f, 0.92f));
@@ -6081,14 +6102,17 @@ void AppGL::drawOrreryMap() {
       m_orreryMapOpen = false;
       m_audio.playWhoosh();
     }
+    ImGui::End();
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
   }
-  ImGui::End();
-  ImGui::PopStyleVar(3);
-  ImGui::PopStyleColor(2);
+}
 
   // === Bottom Controls Navigation Helper ===
-  ImGui::SetNextWindowPos(ImVec2(leftPanelW + 28.0f, disp.y - 36.0f), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(disp.x - leftPanelW - rightPanelW - 56.0f, 28.0f), ImGuiCond_Always);
+  const float bottomX = m_orrerySidebarsCollapsed ? 28.0f : (leftPanelW + 28.0f);
+  const float bottomW = m_orrerySidebarsCollapsed ? (disp.x - 56.0f) : (disp.x - leftPanelW - rightPanelW - 56.0f);
+  ImGui::SetNextWindowPos(ImVec2(bottomX, disp.y - 36.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(bottomW, 28.0f), ImGuiCond_Always);
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.015f, 0.024f, 0.040f, 0.85f));
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.74f, 0.97f, 0.45f));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
@@ -6499,6 +6523,98 @@ void AppGL::toggleLandingGear() {
       m_audio.playEgorkaVoice(AudioEngine::EgorkaVoiceCue::GearUp);
     }
   }
+}
+
+bool AppGL::isAnyModalOpen() const {
+  return m_discoveryCardOpen || m_createNoteModalOpen || m_cassetteDeckOpen ||
+         m_constellationAlignOpen || m_surfaceReportOpen || m_spectrometerOpen ||
+         m_codexOpen || m_shipyardOpen || m_coloniesOpen || m_storyOpen ||
+         m_zettelkastenOpen || m_expeditionMapOpen || m_orreryMapOpen ||
+         m_shipTerminalOpen;
+}
+
+bool AppGL::closeTopModal() {
+  if (m_createNoteModalOpen) {
+    m_createNoteModalOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_discoveryCardOpen) {
+    m_discoveryCardOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_constellationAlignOpen) {
+    m_constellationAlignOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_surfaceReportOpen) {
+    m_surfaceReportOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_spectrometerOpen) {
+    m_spectrometerOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_codexOpen) {
+    m_codexOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_shipyardOpen) {
+    m_shipyardOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_coloniesOpen) {
+    m_coloniesOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_storyOpen) {
+    m_storyOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_zettelkastenOpen) {
+    m_zettelkastenOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_cassetteDeckOpen) {
+    m_cassetteDeckOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_expeditionMapOpen) {
+    m_expeditionMapOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_orreryMapOpen) {
+    m_orreryMapOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_shipTerminalOpen) {
+    m_shipTerminalOpen = false;
+    m_audio.playWhoosh();
+    return true;
+  }
+  if (m_inMenu) {
+    if (m_menuPage != 0) {
+      m_menuPage = 0;
+      m_pageTransitionTimer = 0.0f;
+      m_audio.playBlip();
+    } else if (!m_menuClosing && !m_menuBooting) {
+      requestCloseMenu();
+    }
+    return true;
+  }
+  return false;
 }
 
 void AppGL::updateDynamicHudAlphas(float dt) {
@@ -6976,6 +7092,7 @@ void AppGL::drawUnifiedShipTerminal() {
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   if (disp.x <= 0.0f || disp.y <= 0.0f) return;
 
+  const bool fontPushed = modernPushFont();
   const float termW = std::min(1080.0f, disp.x - 40.0f);
   const float termH = std::min(640.0f, disp.y - 40.0f);
   ImGui::SetNextWindowPos(ImVec2((disp.x - termW) * 0.5f, (disp.y - termH) * 0.5f), ImGuiCond_Always);
@@ -7014,11 +7131,12 @@ void AppGL::drawUnifiedShipTerminal() {
     ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.78f, 1.0f), " | %s: %s",
                        uiRu("СЕКТОР", "SECTOR"), curSt ? curSt->name.c_str() : "DEEP SPACE");
 
-    const float btnCloseW = 180.0f;
+    const float btnCloseW = 200.0f;
     ImGui::SameLine(ImGui::GetWindowWidth() - btnCloseW - 16.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.25f, 0.25f, 0.85f));
-    if (ImGui::Button(uiRu("[X] ВЫХОД В КОСМОС [Tab]", "[X] CLOSE TERMINAL [Tab]"), ImVec2(btnCloseW, 0.0f))) {
+    if (ImGui::Button(uiRu("[ESC / Tab] Закрыть терминал", "[ESC / Tab] Close Terminal"), ImVec2(btnCloseW, 0.0f))) {
       m_shipTerminalOpen = false;
+      m_audio.playWhoosh();
     }
     ImGui::PopStyleColor();
 
@@ -7174,6 +7292,7 @@ void AppGL::drawUnifiedShipTerminal() {
       if (ImGui::Button(uiRu("✦ ОТКРЫТЬ ПОЛНЫЙ ГРАФ ВТОРОГО МОЗГА (B)",
                              "✦ OPEN FULL SECOND BRAIN GRAPH (B)"), ImVec2(340.0f, 32.0f))) {
         m_zettelkastenOpen = true;
+        m_shipTerminalOpen = false;
         m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
       }
 
@@ -7244,10 +7363,12 @@ void AppGL::drawUnifiedShipTerminal() {
       ImGui::Spacing();
       if (ImGui::Button(uiRu("🔬 Открыть спектрометр (C)", "🔬 Open Spectrometer (C)"), ImVec2(220.0f, 32.0f))) {
         m_spectrometerOpen = true;
+        m_shipTerminalOpen = false;
       }
       ImGui::SameLine();
       if (ImGui::Button(uiRu("📖 Открыть Кодекс (K)", "📖 Open Codex (K)"), ImVec2(220.0f, 32.0f))) {
         m_codexOpen = true;
+        m_shipTerminalOpen = false;
       }
 
     } else if (m_shipTerminalTab == 3) {
@@ -7279,6 +7400,7 @@ void AppGL::drawUnifiedShipTerminal() {
 
       if (ImGui::Button(uiRu("🛠 ОТКРЫТЬ ВЕРФЬ И МОДЕРНИЗАЦИИ (X)", "🛠 OPEN SHIPYARD & UPGRADES (X)"), ImVec2(320.0f, 32.0f))) {
         m_shipyardOpen = true;
+        m_shipTerminalOpen = false;
       }
 
       ImGui::Spacing();
@@ -7429,10 +7551,12 @@ void AppGL::drawUnifiedShipTerminal() {
       ImGui::Spacing();
       if (ImGui::Button(uiRu("📖 Открыть полный журнал (J)", "📖 Open Full Journal (J)"), ImVec2(240.0f, 32.0f))) {
         m_storyOpen = true;
+        m_shipTerminalOpen = false;
       }
       ImGui::SameLine();
-      if (ImGui::Button(uiRu("🗺 Открыть звездную карту (M)", "🗺 Open Star Map (M)"), ImVec2(240.0f, 32.0f))) {
+      if (ImGui::Button(uiRu("🗺 Открыть звездную карту (N)", "🗺 Open Star Map (N)"), ImVec2(240.0f, 32.0f))) {
         m_expeditionMapOpen = true;
+        m_shipTerminalOpen = false;
       }
     }
 
@@ -7442,6 +7566,7 @@ void AppGL::drawUnifiedShipTerminal() {
 
   ImGui::PopStyleVar(3);
   ImGui::PopStyleColor(2);
+  if (fontPushed) ImGui::PopFont();
 }
 
 // === Center-Focused HUD === (UI/UX Overhaul)
@@ -7450,28 +7575,42 @@ void AppGL::drawCenterReticleHud() {
   const ImVec2 disp = ImGui::GetIO().DisplaySize;
   if (disp.x <= 0.0f || disp.y <= 0.0f) return;
   const ImVec2 ctr(disp.x * 0.5f, disp.y * 0.5f);
-  const ImU32 cyan = IM_COL32(56, 189, 248, 160);       // #38BDF8
-  const ImU32 cyanDim = IM_COL32(56, 189, 248, 140);
-  const ImU32 cyanGlow = IM_COL32(56, 189, 248, 55);
+  const ImU32 cyan = IM_COL32(56, 189, 248, 210);       // #38BDF8
+  const ImU32 cyanDim = IM_COL32(56, 189, 248, 160);
+  const ImU32 cyanGlow = IM_COL32(56, 189, 248, 75);
   const ImU32 white = IM_COL32(255, 255, 255, 255);
   const ImU32 slate = IM_COL32(148, 163, 184, 255);     // #94A3B8
   const ImU32 starWhite = IM_COL32(248, 250, 252, 255); // #F8FAFC
   const ImU32 amber = IM_COL32(245, 158, 11, 240);
   const ImU32 redAlert = IM_COL32(239, 68, 68, 240);
+  const ImU32 darkHalo = IM_COL32(2, 6, 14, 230);
+  const ImU32 darkTextHalo = IM_COL32(0, 0, 0, 245);
 
   ImDrawList* dl = ImGui::GetForegroundDrawList();
-  // Center brackets 1px precision
+
+  auto drawHaloLine = [&](ImVec2 p1, ImVec2 p2, ImU32 col, float thickness) {
+    dl->AddLine(p1, p2, darkHalo, thickness + 2.0f);
+    dl->AddLine(p1, p2, col, thickness);
+  };
+  auto drawHaloText = [&](ImVec2 p, ImU32 col, const char* text) {
+    dl->AddText(ImVec2(p.x + 1.0f, p.y + 1.0f), darkTextHalo, text);
+    dl->AddText(p, col, text);
+  };
+
+  // Center brackets with 1px precision + dark outline halo
   const float br = 14.0f;
   const float gap = 6.0f;
-  dl->AddLine(ImVec2(ctr.x - br, ctr.y - gap), ImVec2(ctr.x - gap, ctr.y - gap), cyan, 1.0f);
-  dl->AddLine(ImVec2(ctr.x - br, ctr.y + gap), ImVec2(ctr.x - gap, ctr.y + gap), cyan, 1.0f);
-  dl->AddLine(ImVec2(ctr.x - gap, ctr.y - br), ImVec2(ctr.x - gap, ctr.y - gap), cyan, 1.0f);
-  dl->AddLine(ImVec2(ctr.x - gap, ctr.y + gap), ImVec2(ctr.x - gap, ctr.y + br), cyan, 1.0f);
-  dl->AddLine(ImVec2(ctr.x + gap, ctr.y - gap), ImVec2(ctr.x + br, ctr.y - gap), cyan, 1.0f);
-  dl->AddLine(ImVec2(ctr.x + gap, ctr.y + gap), ImVec2(ctr.x + br, ctr.y + gap), cyan, 1.0f);
-  dl->AddLine(ImVec2(ctr.x + gap, ctr.y - br), ImVec2(ctr.x + gap, ctr.y - gap), cyan, 1.0f);
-  dl->AddLine(ImVec2(ctr.x + gap, ctr.y + gap), ImVec2(ctr.x + gap, ctr.y + br), cyan, 1.0f);
+  drawHaloLine(ImVec2(ctr.x - br, ctr.y - gap), ImVec2(ctr.x - gap, ctr.y - gap), cyan, 1.0f);
+  drawHaloLine(ImVec2(ctr.x - br, ctr.y + gap), ImVec2(ctr.x - gap, ctr.y + gap), cyan, 1.0f);
+  drawHaloLine(ImVec2(ctr.x - gap, ctr.y - br), ImVec2(ctr.x - gap, ctr.y - gap), cyan, 1.0f);
+  drawHaloLine(ImVec2(ctr.x - gap, ctr.y + gap), ImVec2(ctr.x - gap, ctr.y + br), cyan, 1.0f);
+  drawHaloLine(ImVec2(ctr.x + gap, ctr.y - gap), ImVec2(ctr.x + br, ctr.y - gap), cyan, 1.0f);
+  drawHaloLine(ImVec2(ctr.x + gap, ctr.y + gap), ImVec2(ctr.x + br, ctr.y + gap), cyan, 1.0f);
+  drawHaloLine(ImVec2(ctr.x + gap, ctr.y - br), ImVec2(ctr.x + gap, ctr.y - gap), cyan, 1.0f);
+  drawHaloLine(ImVec2(ctr.x + gap, ctr.y + gap), ImVec2(ctr.x + gap, ctr.y + br), cyan, 1.0f);
+  dl->AddCircleFilled(ctr, 2.5f, darkHalo, 8);
   dl->AddCircleFilled(ctr, 1.5f, white, 8);
+  dl->AddCircle(ctr, 24.0f, darkHalo, 32, 2.4f);
   dl->AddCircle(ctr, 24.0f, cyanGlow, 32, 1.0f);
 
   // Target header above crosshair
@@ -7483,10 +7622,16 @@ void AppGL::drawCenterReticleHud() {
                          m_camera.position.z * m_camera.position.z);
     std::snprintf(buf, sizeof(buf), "%s  %.1f Rs", curSt->name.c_str(), d);
     ImVec2 sz = ImGui::CalcTextSize(buf);
-    dl->AddText(ImVec2(ctr.x - sz.x * 0.5f, ctr.y - 42.0f), cyan, buf);
+    dl->AddRectFilled(ImVec2(ctr.x - sz.x * 0.5f - 8.0f, ctr.y - 45.0f),
+                      ImVec2(ctr.x + sz.x * 0.5f + 8.0f, ctr.y - 25.0f),
+                      IM_COL32(4, 8, 16, 175), 4.0f);
+    dl->AddRect(ImVec2(ctr.x - sz.x * 0.5f - 8.0f, ctr.y - 45.0f),
+                ImVec2(ctr.x + sz.x * 0.5f + 8.0f, ctr.y - 25.0f),
+                IM_COL32(56, 189, 248, 80), 4.0f, 0, 1.0f);
+    drawHaloText(ImVec2(ctr.x - sz.x * 0.5f, ctr.y - 42.0f), cyan, buf);
   }
 
-  // Left arch: speed + throttle + warp badge
+  // Left arch: speed + throttle + warp badge with dark backing tile
   float spd = static_cast<float>(std::sqrt(m_shipVel.x * m_shipVel.x + m_shipVel.y * m_shipVel.y +
                                            m_shipVel.z * m_shipVel.z));
   char spdBuf[64];
@@ -7495,34 +7640,44 @@ void AppGL::drawCenterReticleHud() {
   } else {
     std::snprintf(spdBuf, sizeof(spdBuf), "%.1f km/s", spd * 5.0f);
   }
-  dl->AddText(ImVec2(ctr.x - 160.0f, ctr.y - 10.0f), starWhite, spdBuf);
   char thrBuf[64];
   std::snprintf(thrBuf, sizeof(thrBuf), "THR %.0f%%", m_camSpeed * 100.0);
-  dl->AddText(ImVec2(ctr.x - 160.0f, ctr.y + 8.0f), slate, thrBuf);
+
+  const float leftTileH = m_warpOn ? 62.0f : 44.0f;
+  dl->AddRectFilled(ImVec2(ctr.x - 170.0f, ctr.y - 14.0f),
+                    ImVec2(ctr.x - 45.0f, ctr.y - 14.0f + leftTileH),
+                    IM_COL32(4, 8, 16, 175), 4.0f);
+  dl->AddRect(ImVec2(ctr.x - 170.0f, ctr.y - 14.0f),
+              ImVec2(ctr.x - 45.0f, ctr.y - 14.0f + leftTileH),
+              IM_COL32(56, 189, 248, 75), 4.0f, 0, 1.0f);
+
+  drawHaloText(ImVec2(ctr.x - 160.0f, ctr.y - 10.0f), starWhite, spdBuf);
+  drawHaloText(ImVec2(ctr.x - 160.0f, ctr.y + 8.0f), slate, thrBuf);
   if (m_warpOn) {
     char wfBuf[32];
     std::snprintf(wfBuf, sizeof(wfBuf), "F%d WARP", m_warpFactor);
-    dl->AddText(ImVec2(ctr.x - 160.0f, ctr.y + 26.0f), amber, wfBuf);
+    drawHaloText(ImVec2(ctr.x - 160.0f, ctr.y + 26.0f), amber, wfBuf);
   }
 
-  // Right arch: shield/fuel segmented bars
+  // Right arch: shield/fuel segmented bars with obsidian backing
   float sh = std::clamp(m_ship.shield / m_shieldMax, 0.0f, 1.0f);
   float fu = std::clamp(m_ship.fuel / 100.0f, 0.0f, 1.0f);
   auto drawBar = [&](ImVec2 p, float v, ImU32 col, const char* label) {
-    dl->AddRectFilled(p, ImVec2(p.x + 90.0f, p.y + 8.0f), IM_COL32(10, 15, 25, 200));
+    dl->AddRectFilled(ImVec2(p.x - 6.0f, p.y - 15.0f), ImVec2(p.x + 96.0f, p.y + 11.0f), IM_COL32(4, 8, 16, 175), 4.0f);
+    dl->AddRectFilled(p, ImVec2(p.x + 90.0f, p.y + 8.0f), IM_COL32(10, 15, 25, 220));
     dl->AddRectFilled(p, ImVec2(p.x + 90.0f * v, p.y + 8.0f), col);
     dl->AddRect(p, ImVec2(p.x + 90.0f, p.y + 8.0f), cyanDim, 0.0f, 0, 1.0f);
-    dl->AddText(ImVec2(p.x, p.y - 12.0f), slate, label);
+    drawHaloText(ImVec2(p.x, p.y - 13.0f), slate, label);
   };
   ImU32 shCol = (sh < 0.2f) ? redAlert : cyan;
   ImU32 fuCol = (fu < 0.2f) ? redAlert : IM_COL32(251, 191, 36, 240);
   drawBar(ImVec2(ctr.x + 70.0f, ctr.y - 10.0f), sh, shCol, "SHIELD");
-  drawBar(ImVec2(ctr.x + 70.0f, ctr.y + 12.0f), fu, fuCol, "FUEL");
+  drawBar(ImVec2(ctr.x + 70.0f, ctr.y + 16.0f), fu, fuCol, "FUEL");
   // Emergency pulse
   if (sh < 0.2f || fu < 0.2f) {
     float a = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 8.0));
     ImU32 pulse = IM_COL32(239, 68, 68, static_cast<int>(255 * a));
-    dl->AddRect(ImVec2(ctr.x + 68.0f, ctr.y - 14.0f), ImVec2(ctr.x + 162.0f, ctr.y + 22.0f),
+    dl->AddRect(ImVec2(ctr.x + 62.0f, ctr.y - 27.0f), ImVec2(ctr.x + 168.0f, ctr.y + 29.0f),
                 pulse, 4.0f, 0, 1.5f);
   }
 }
@@ -7701,11 +7856,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   {
     ImGuiIO& navIo = ImGui::GetIO();
     const bool uiNavWanted =
-        m_inMenu || m_shipTerminalOpen || m_slidesOpen || m_epilogueActive ||
-        m_finaleChoiceOpen || m_storyOpen || m_zettelkastenOpen ||
-        m_shipyardOpen || m_expeditionMapOpen || m_codexOpen || m_coloniesOpen ||
-        m_spectrometerOpen || m_surfaceReportOpen || m_constellationAlignOpen ||
-        m_jumpCine || m_orreryMapOpen;
+        m_inMenu || isAnyModalOpen() || m_slidesOpen || m_epilogueActive ||
+        m_finaleChoiceOpen || m_jumpCine;
     if (uiNavWanted) {
       navIo.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     } else {
@@ -7822,7 +7974,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
                      curSt ? curSt->name.c_str() : "None");
   ImGui::TextWrapped("%s", curSt ? curSt->description.c_str() : "");
 
-  if (ImGui::Button(uiRu("[S] Спектрометр (C)", "[S] Spectrometer (C)"), ImVec2(150.0f, 0))) {
+  if (ImGui::Button(uiRu("[C] Спектрометр", "[C] Spectrometer"), ImVec2(150.0f, 0))) {
     m_spectrometerOpen = !m_spectrometerOpen;
   }
   ImGui::SameLine();
@@ -17159,6 +17311,7 @@ void AppGL::updateLandingOperations(float deltaTime) {
 void AppGL::drawSurfaceReportModal() {
   if (!m_surfaceReportOpen) return;
 
+  const bool fontPushed = modernPushFont();
   ImGui::SetNextWindowSize(ImVec2(660.0f, 680.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 330.0f,
                                  ImGui::GetIO().DisplaySize.y * 0.5f - 340.0f),
@@ -17378,6 +17531,7 @@ void AppGL::drawSurfaceReportModal() {
     }
   }
   ImGui::End();
+  if (fontPushed) ImGui::PopFont();
 }
 
 void AppGL::stepForceDirectedLayout(float dt) {
@@ -18431,6 +18585,7 @@ void AppGL::drawZettelkasten() {
 }
 
 void AppGL::drawMindMatrixMiniGame() {
+  const bool fontPushed = modernPushFont();
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
                           ImGuiCond_Always, ImVec2(0.5f, 0.5f));
@@ -18517,9 +18672,11 @@ void AppGL::drawMindMatrixMiniGame() {
   ImGui::End();
   ImGui::PopStyleVar();
   ImGui::PopStyleColor(2);
+  if (fontPushed) ImGui::PopFont();
 }
 
 void AppGL::drawCreateCustomNoteModal() {
+  const bool fontPushed = modernPushFont();
   ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
                           ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
@@ -18592,9 +18749,11 @@ void AppGL::drawCreateCustomNoteModal() {
   ImGui::End();
   ImGui::PopStyleVar();
   ImGui::PopStyleColor(2);
+  if (fontPushed) ImGui::PopFont();
 }
 
 void AppGL::drawCassetteDeckControls() {
+  const bool fontPushed = modernPushFont();
   ImGui::SetNextWindowSize(ImVec2(420.0f, 260.0f), ImGuiCond_FirstUseEver);
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.02f, 0.035f, 0.05f, 0.97f));
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.75f, 0.60f, 0.80f));
@@ -18666,6 +18825,7 @@ void AppGL::drawCassetteDeckControls() {
   ImGui::End();
   ImGui::PopStyleVar();
   ImGui::PopStyleColor(2);
+  if (fontPushed) ImGui::PopFont();
 }
 
 void AppGL::triggerGrandSynthesisClimax() {
