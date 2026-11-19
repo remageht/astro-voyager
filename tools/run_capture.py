@@ -26,7 +26,7 @@ pi = PROCESS_INFORMATION()
 flag = sys.argv[1] if len(sys.argv) > 1 else '--capture-station'
 out_arg = sys.argv[2] if len(sys.argv) > 2 else 'blender/out/ingame_station_check.png'
 target_file = os.path.abspath(out_arg)
-if os.path.exists(target_file):
+if os.path.isfile(target_file):
     os.remove(target_file)
 
 cwd = os.path.abspath('.')
@@ -35,7 +35,7 @@ cmd = f'"{exe_path}" {flag} "{target_file}"'
 print("Spawning:", cmd)
 res = ctypes.windll.kernel32.CreateProcessW(None, cmd, None, None, False, 0, None, cwd, ctypes.byref(si), ctypes.byref(pi))
 if res:
-    ctypes.windll.kernel32.WaitForSingleObject(pi.hProcess, 15000)
+    ctypes.windll.kernel32.WaitForSingleObject(pi.hProcess, 35000)
     exit_code = wintypes.DWORD()
     ctypes.windll.kernel32.GetExitCodeProcess(pi.hProcess, ctypes.byref(exit_code))
     print('Exit code:', hex(exit_code.value))

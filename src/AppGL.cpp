@@ -10095,7 +10095,8 @@ const ImU32 kLed = IM_COL32(90, 205, 240, 255);
 
 // Тактическая кнопка со скошенным правым верхним углом в стиле Quantum Console
 bool drawTacticalCutButton(const char* label, const ImVec2& size, ImU32 borderColor, ImU32 bgColor,
-                           float cut = 10.0f, const char* subtitle = nullptr, const char* indexStr = nullptr) {
+                           float cut = 10.0f, const char* subtitle = nullptr, const char* indexStr = nullptr,
+                           const char* hotkeyBadge = nullptr) {
   ImVec2 p0 = ImGui::GetCursorScreenPos();
   ImVec2 p1(p0.x + size.x, p0.y + size.y);
   bool pressed = ImGui::InvisibleButton(label, size);
@@ -10111,62 +10112,101 @@ bool drawTacticalCutButton(const char* label, const ImVec2& size, ImU32 borderCo
       ImVec2(p0.x, p1.y)
   };
 
-  // Холодное обсидиановое стекло с градиентным откликом
-  ImU32 fill = held ? IM_COL32(35, 110, 160, 170)
-                    : (hovered ? IM_COL32(18, 52, 82, 190) : bgColor);
-  dl->AddConvexPolyFilled(pts, 5, fill);
-  dl->AddPolyline(pts, 5, hovered ? IM_COL32(56, 189, 248, 255) : borderColor, ImDrawFlags_Closed, hovered ? 1.8f : 1.2f);
+  // Дышащий мягкий пульс для главной кнопки "Продолжить"
+  const bool isPrimary = (borderColor == menuui::kNavPrimaryBorder);
+  float pulse = isPrimary ? (0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime()) * 3.2f)) : 0.0f;
 
-  // Неоновый срез в правом верхнем углу при наведении
-  if (hovered) {
-    dl->AddLine(ImVec2(p1.x - cut, p0.y), ImVec2(p1.x, p0.y + cut), IM_COL32(125, 225, 255, 255), 2.2f);
+  // Холодное обсидиановое стекло с градиентным откликом
+  ImU32 fill = held ? IM_COL32(35, 110, 160, 180)
+                    : (hovered ? IM_COL32(20, 58, 92, 210)
+                               : (isPrimary ? IM_COL32(14, 38, 58, 235) : bgColor));
+  dl->AddConvexPolyFilled(pts, 5, fill);
+
+  // Свечение и контур
+  ImU32 activeBorder = hovered ? IM_COL32(56, 189, 248, 255)
+                               : (isPrimary ? IM_COL32(90 + static_cast<int>(35 * pulse), 190 + static_cast<int>(30 * pulse), 245, 230 + static_cast<int>(25 * pulse))
+                                            : borderColor);
+  float borderThickness = hovered ? 1.8f : (isPrimary ? (1.2f + 0.5f * pulse) : 1.1f);
+  dl->AddPolyline(pts, 5, activeBorder, ImDrawFlags_Closed, borderThickness);
+
+  // Неоновый срез в правом верхнем углу
+  if (hovered || isPrimary) {
+    dl->AddLine(ImVec2(p1.x - cut, p0.y), ImVec2(p1.x, p0.y + cut),
+                hovered ? IM_COL32(125, 225, 255, 255) : IM_COL32(56, 189, 248, 160 + static_cast<int>(80 * pulse)),
+                hovered ? 2.4f : 1.6f);
   }
 
   // Акцентная кромка слева: тусклая в покое, светящаяся бирюзовая при наведении
   if (hovered || held) {
-    // Внешнее мягкое свечение
-    dl->AddRectFilled(ImVec2(p0.x, p0.y + 2.0f), ImVec2(p0.x + 3.0f, p1.y - 2.0f),
+    dl->AddRectFilled(ImVec2(p0.x, p0.y + 2.0f), ImVec2(p0.x + 3.5f, p1.y - 2.0f),
                       IM_COL32(56, 189, 248, 255));
-    dl->AddRectFilled(ImVec2(p0.x + 3.0f, p0.y + 4.0f), ImVec2(p0.x + 5.0f, p1.y - 4.0f),
-                      IM_COL32(56, 189, 248, 60));
+    dl->AddRectFilled(ImVec2(p0.x + 3.5f, p0.y + 4.0f), ImVec2(p0.x + 6.0f, p1.y - 4.0f),
+                      IM_COL32(56, 189, 248, 80));
+  } else if (isPrimary) {
+    dl->AddRectFilled(ImVec2(p0.x, p0.y + 3.0f), ImVec2(p0.x + 3.0f, p1.y - 3.0f),
+                      IM_COL32(56, 189, 248, 180 + static_cast<int>(75 * pulse)));
   } else {
     dl->AddRectFilled(ImVec2(p0.x, p0.y + 4.0f), ImVec2(p0.x + 2.0f, p1.y - 4.0f),
                       IM_COL32(40, 85, 115, 140));
   }
 
+  // Микро-скобки на углах при наведении
+  if (hovered) {
+    float cLen = 5.0f;
+    dl->AddLine(p0, ImVec2(p0.x + cLen, p0.y), IM_COL32(125, 225, 255, 220), 1.2f);
+    dl->AddLine(p0, ImVec2(p0.x, p0.y + cLen), IM_COL32(125, 225, 255, 220), 1.2f);
+    dl->AddLine(ImVec2(p0.x, p1.y), ImVec2(p0.x + cLen, p1.y), IM_COL32(125, 225, 255, 220), 1.2f);
+    dl->AddLine(ImVec2(p0.x, p1.y), ImVec2(p0.x, p1.y - cLen), IM_COL32(125, 225, 255, 220), 1.2f);
+  }
+
   float textX = p0.x + 14.0f;
   if (indexStr && indexStr[0] != '\0') {
     // Высокотехнологичный индекс блока: "01", "02" и т.д.
-    ImU32 idxCol = hovered ? IM_COL32(56, 189, 248, 240) : IM_COL32(80, 120, 150, 170);
+    ImU32 idxCol = hovered ? IM_COL32(56, 189, 248, 255) : IM_COL32(80, 125, 155, 180);
     dl->AddText(ImVec2(textX, p0.y + (subtitle ? 8.0f : (size.y - ImGui::GetFontSize()) * 0.5f)),
                 idxCol, indexStr);
     textX += ImGui::CalcTextSize(indexStr).x + 10.0f;
     // Разделительная микро-чёрточка
     float midY = p0.y + size.y * 0.5f;
-    dl->AddLine(ImVec2(textX - 5.0f, midY - 5.0f), ImVec2(textX - 5.0f, midY + 5.0f),
-                hovered ? IM_COL32(56, 189, 248, 140) : IM_COL32(50, 85, 110, 100), 1.0f);
+    dl->AddLine(ImVec2(textX - 5.0f, midY - 6.0f), ImVec2(textX - 5.0f, midY + 6.0f),
+                hovered ? IM_COL32(56, 189, 248, 160) : IM_COL32(50, 85, 110, 110), 1.0f);
     textX += 4.0f;
   }
 
   ImVec2 tsz = ImGui::CalcTextSize(label);
   if (subtitle) {
     dl->AddText(ImVec2(textX, p0.y + 7.0f),
-                hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 238, 248, 255), label);
+                hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(230, 240, 250, 255), label);
     dl->AddText(ImVec2(textX, p0.y + 7.0f + tsz.y + 3.0f),
-                hovered ? IM_COL32(148, 215, 245, 240) : IM_COL32(110, 155, 182, 210), subtitle);
+                hovered ? IM_COL32(160, 225, 255, 250) : IM_COL32(115, 160, 188, 220), subtitle);
   } else {
     ImVec2 tp(textX, p0.y + (size.y - tsz.y) * 0.5f);
-    dl->AddText(tp, hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 238, 248, 255), label);
+    dl->AddText(tp, hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(228, 238, 248, 255), label);
+  }
+
+  // Горячая клавиша справа (бейдж)
+  if (hotkeyBadge && hotkeyBadge[0] != '\0') {
+    ImVec2 hsz = ImGui::CalcTextSize(hotkeyBadge);
+    float badgeW = hsz.x + 10.0f;
+    float badgeH = 18.0f;
+    float bx = p1.x - cut - badgeW - (hovered ? 14.0f : 8.0f);
+    float by = p0.y + (size.y - badgeH) * 0.5f;
+    dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + badgeW, by + badgeH),
+                      hovered ? IM_COL32(16, 42, 66, 230) : IM_COL32(8, 16, 26, 170), 3.0f);
+    dl->AddRect(ImVec2(bx, by), ImVec2(bx + badgeW, by + badgeH),
+                hovered ? IM_COL32(56, 189, 248, 180) : IM_COL32(38, 72, 100, 120), 3.0f, 0, 1.0f);
+    dl->AddText(ImVec2(bx + 5.0f, by + (badgeH - hsz.y) * 0.5f),
+                hovered ? IM_COL32(200, 242, 255, 255) : IM_COL32(115, 155, 182, 190), hotkeyBadge);
   }
 
   // Правый тактический шеврон при наведении
   if (hovered) {
-    float chevX = p1.x - 16.0f;
+    float chevX = p1.x - 14.0f;
     float chevY = p0.y + size.y * 0.5f;
     dl->AddLine(ImVec2(chevX - 4.0f, chevY - 5.0f), ImVec2(chevX + 1.0f, chevY),
-                IM_COL32(56, 189, 248, 240), 1.8f);
+                IM_COL32(56, 189, 248, 255), 2.0f);
     dl->AddLine(ImVec2(chevX + 1.0f, chevY), ImVec2(chevX - 4.0f, chevY + 5.0f),
-                IM_COL32(56, 189, 248, 240), 1.8f);
+                IM_COL32(56, 189, 248, 255), 2.0f);
   }
 
   return pressed;
@@ -10668,6 +10708,23 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
 
   dl->AddText(ImVec2(p0.x + padX + 14.0f, curY), IM_COL32(56, 189, 248, 230), headerTitle);
 
+  // Живой квантовый осциллограф в шапке карточки
+  {
+    float waveW = 54.0f;
+    float waveX = p1.x - padX - waveW;
+    float waveY = curY + 6.0f;
+    float curTime = static_cast<float>(glfwGetTime());
+    dl->AddLine(ImVec2(waveX, waveY), ImVec2(waveX + waveW, waveY), IM_COL32(30, 65, 90, 110), 1.0f);
+    ImVec2 wavePts[16];
+    for (int i = 0; i < 16; ++i) {
+      float u = static_cast<float>(i) / 15.0f;
+      float env = std::sin(u * 3.14159f);
+      float val = std::sin(curTime * 4.5f + u * 12.0f) * 0.65f + std::sin(curTime * 9.0f + u * 24.0f) * 0.35f;
+      wavePts[i] = ImVec2(waveX + u * waveW, waveY + val * 4.0f * env);
+    }
+    dl->AddPolyline(wavePts, 16, IM_COL32(56, 189, 248, 200), 0, 1.2f);
+  }
+
   // Разделительная линия в карточке
   curY += 19.0f;
   dl->AddLine(ImVec2(p0.x + padX, curY), ImVec2(p1.x - padX, curY), IM_COL32(30, 65, 90, 130), 1.0f);
@@ -10733,6 +10790,26 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
 
   ImGui::Begin("MainMenuHero", nullptr, flags);
 
+  ImDrawList* hudDl = ImGui::GetWindowDrawList();
+  // Оптические HUD микро-скобки по углам визора
+  {
+    const float cInset = 16.0f;
+    const float bLen = 22.0f;
+    const ImU32 bCol = IM_COL32(56, 189, 248, 80);
+    // Верхний левый
+    hudDl->AddLine(ImVec2(cInset, cInset), ImVec2(cInset + bLen, cInset), bCol, 1.2f);
+    hudDl->AddLine(ImVec2(cInset, cInset), ImVec2(cInset, cInset + bLen), bCol, 1.2f);
+    // Верхний правый
+    hudDl->AddLine(ImVec2(screenW - cInset, cInset), ImVec2(screenW - cInset - bLen, cInset), bCol, 1.2f);
+    hudDl->AddLine(ImVec2(screenW - cInset, cInset), ImVec2(screenW - cInset, cInset + bLen), bCol, 1.2f);
+    // Нижний левый
+    hudDl->AddLine(ImVec2(cInset, screenH - cInset), ImVec2(cInset + bLen, screenH - cInset), bCol, 1.2f);
+    hudDl->AddLine(ImVec2(cInset, screenH - cInset), ImVec2(cInset, screenH - cInset - bLen), bCol, 1.2f);
+    // Нижний правый
+    hudDl->AddLine(ImVec2(screenW - cInset, screenH - cInset), ImVec2(screenW - cInset - bLen, screenH - cInset), bCol, 1.2f);
+    hudDl->AddLine(ImVec2(screenW - cInset, screenH - cInset), ImVec2(screenW - cInset, screenH - cInset - bLen), bCol, 1.2f);
+  }
+
   float leftMargin = std::max(screenW * 0.045f, 44.0f);
   float topMargin = (screenH >= 900.0f) ? std::max((screenH - 660.0f) * 0.45f, 40.0f)
                                         : std::max((screenH - 620.0f) * 0.35f, 22.0f);
@@ -10781,6 +10858,24 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
       bdl->AddText(ImVec2(px + 18.0f, bp.y + 3.0f), pillText[i], pills[i].c_str());
       px = q1.x + 8.0f;
     }
+
+    // Астрофизическая телеметрия чёрной дыры Керра в правом верхнем углу
+    {
+      const char* kerrBadge = uiRu("ОБСЕРВАТОРИЯ: КЕРР a/M=0.94 // Rg=29.5 km",
+                                   "OBSERVATORY: KERR a/M=0.94 // Rg=29.5 km");
+      ImVec2 kSz = ImGui::CalcTextSize(kerrBadge);
+      float kw = kSz.x + 28.0f;
+      float kx = screenW - leftMargin - kw;
+      ImVec2 kq0(kx, bp.y);
+      ImVec2 kq1(kx + kw, bp.y + 22.0f);
+      bdl->AddRectFilled(kq0, kq1, IM_COL32(8, 18, 30, 210), 11.0f);
+      bdl->AddRect(kq0, kq1, IM_COL32(40, 85, 120, 140), 11.0f, 0, 1.0f);
+      ImVec2 kDot(kx + 10.0f, bp.y + 11.0f);
+      bdl->AddCircleFilled(kDot, 2.5f, IM_COL32(56, 189, 248, 255));
+      bdl->AddCircle(kDot, 4.5f, IM_COL32(56, 189, 248, 70), 12, 1.0f);
+      bdl->AddText(ImVec2(kx + 18.0f, bp.y + 3.0f), IM_COL32(180, 225, 245, 230), kerrBadge);
+    }
+
     ImGui::Dummy(ImVec2(0.0f, 22.0f));
   }
 
@@ -10838,7 +10933,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
                                              : uiRu("ПРОДОЛЖИТЬ", "CONTINUE");
   if (drawTacticalCutButton(contLabel, ImVec2(cmdW, 54.0f),
                            menuui::kNavPrimaryBorder, menuui::kNavPrimaryBg, 11.0f,
-                           contSubtitle.c_str(), "01")) {
+                           contSubtitle.c_str(), "01", "[ENTER]")) {
     if (!m_hasStartedFlight) {
       m_loadingScreen.startContinueWarp(contSubtitle);
       m_audio.playWarpReadyChime();
@@ -10850,7 +10945,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
 
   ImGui::SetCursorPosX(leftMargin);
   if (drawTacticalCutButton(uiRu("НОВАЯ ЭКСПЕДИЦИЯ", "NEW EXPEDITION"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "02")) {
+                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "02", "[N]")) {
     m_loadingScreen.startNewGameWarp(uiRu("НАЧИНАЕМ НОВУЮ ЭКСПЕДИЦИЮ", "STARTING A NEW EXPEDITION"));
     m_audio.playJump();
     m_hasStartedFlight = true;
@@ -10863,7 +10958,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
 
   ImGui::SetCursorPosX(leftMargin);
   if (drawTacticalCutButton(uiRu("СВОБОДНЫЙ ПОЛЁТ", "FREE FLIGHT"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "03")) {
+                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "03", "[F]")) {
     m_hasStartedFlight = true;
     requestCloseMenu();
   }
@@ -10874,7 +10969,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
 
   ImGui::SetCursorPosX(leftMargin);
   if (drawTacticalCutButton(uiRu("СИСТЕМНЫЕ НАСТРОЙКИ", "SYSTEM SETTINGS"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "04")) {
+                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "04", "[S]")) {
     m_menuPage = 1;
     m_pageTransitionTimer = 0.0f;
     m_audio.playBlip();
@@ -10886,7 +10981,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
 
   ImGui::SetCursorPosX(leftMargin);
   if (drawTacticalCutButton(uiRu("АРХИВ И ДАННЫЕ", "DATA ARCHIVE & EXTRAS"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "05")) {
+                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "05", "[A]")) {
     m_menuPage = 5;
     m_pageTransitionTimer = 0.0f;
     m_audio.playBlip();
@@ -10899,7 +10994,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   ImGui::Dummy(ImVec2(0.0f, 4.0f));
   ImGui::SetCursorPosX(leftMargin);
   if (drawTacticalCutButton(uiRu("ВЫХОД ИЗ СИСТЕМЫ", "EXIT SYSTEM"),
-                           ImVec2(cmdW, 38.0f), IM_COL32(70, 110, 140, 130), navBg, 10.0f, nullptr, "06")) {
+                           ImVec2(cmdW, 38.0f), IM_COL32(70, 110, 140, 130), navBg, 10.0f, nullptr, "06", "[ESC]")) {
     glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
   }
   if (ImGui::IsItemHovered()) {
@@ -10909,6 +11004,42 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
 
   ImGui::SetWindowFontScale(1.0f);
   ImGui::PopStyleVar(); // ItemSpacing
+
+  // Звуковой отклик при наведении на пункты меню
+  static int s_prevHeroHovered = -1;
+  if (hoveredOption != -1 && hoveredOption != s_prevHeroHovered) {
+    m_audio.playBlip();
+  }
+  s_prevHeroHovered = hoveredOption;
+
+  // Быстрые клавиши навигации в главном меню
+  ImGuiIO& io = ImGui::GetIO();
+  if (m_menuPage == 0 && !io.WantTextInput) {
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
+      if (!m_hasStartedFlight) {
+        m_loadingScreen.startContinueWarp(contSubtitle);
+        m_audio.playWarpReadyChime();
+        m_hasStartedFlight = true;
+      }
+      requestCloseMenu();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_N)) {
+      m_loadingScreen.startNewGameWarp(uiRu("НАЧИНАЕМ НОВУЮ ЭКСПЕДИЦИЮ", "STARTING A NEW EXPEDITION"));
+      m_audio.playJump();
+      m_hasStartedFlight = true;
+      startNewAdventure();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_F)) {
+      m_hasStartedFlight = true;
+      requestCloseMenu();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_S)) {
+      m_menuPage = 1;
+      m_pageTransitionTimer = 0.0f;
+      m_audio.playBlip();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_A)) {
+      m_menuPage = 5;
+      m_pageTransitionTimer = 0.0f;
+      m_audio.playBlip();
+    }
+  }
 
   // 3. Динамическая карточка телеметрии полёта (Flight Briefing HUD)
   ImGui::Dummy(ImVec2(0.0f, 8.0f));
