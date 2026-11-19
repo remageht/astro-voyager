@@ -2720,6 +2720,14 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               {"pipeline", 0.200f, 4.4f},    {"powerline", 0.200f, 4.4f},
               {"solar", 0.190f, 4.4f},       {"diesel", 0.150f, 4.0f},
               {"inverter", 0.150f, 4.0f},    {"wind", 0.200f, 4.4f},
+              // Healthcare, retail, recreation and real water services were the
+              // functional gaps a settlement cannot be called a town without.
+              // modelLength must equal the target the generator normalizes that
+              // mesh to, or every colony scales the building wrong.
+              {"hospital", 0.175f, 4.4f},    {"clinic", 0.135f, 3.4f},
+              {"park", 0.155f, 3.8f},        {"market", 0.165f, 4.0f},
+              {"school", 0.165f, 4.2f},      {"fire", 0.145f, 3.6f},
+              {"water", 0.180f, 4.4f},       {"greenhouse", 0.170f, 4.2f},
           };
           static constexpr int kColonyAssetCount =
               static_cast<int>(sizeof(kColonyAssets) / sizeof(kColonyAssets[0]));
