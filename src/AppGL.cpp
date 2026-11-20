@@ -13602,6 +13602,84 @@ int AppGL::captureColonyCheck(const std::string& outDir) {
     ok = pass && ok;
   }
 
+  // Close-up surface frame. The orbit cases above only prove the settlement is
+  // drawn: at three planetary radii every building is a speck and nothing in
+  // the service layer is actually verifiable. Stand a couple of building
+  // footprints above the town anchor and look along the curved surface, which
+  // is what a player sees on descent, using the same basis the renderer places
+  // the spiral with.
+  {
+    ++checks;
+    setStages(true);
+    const SceneManager::ColonySite* town = nullptr;
+    for (const auto& s : app.m_sceneManager->colonySites()) {
+      if (s.id == "europa" && s.stationId == "sol") {
+        town = &s;
+        break;
+      }
+    }
+    if (!town) {
+      std::cout << "Colony surface close-up: FAIL (site missing)\n";
+      ok = false;
+    } else {
+      const ColonySurfaceFrame basis = colonySurfaceFrame("europa");
+      const Vec3 a(basis.anchor[0], basis.anchor[1], basis.anchor[2]);
+      const float r = town->radius;
+      // Frame from the settlement's own extent instead of a guessed constant:
+      // the spiral reaches min(0.032*sqrt(n), 0.30) rad, so the district arc is
+      // that angle times the planetary radius. But the projection near plane is
+      // 0.1 world units and Europa's radius is 0.09 - the camera cannot stand
+      // closer to the surface than the whole planet is wide, so the shot takes
+      // the larger of the district framing and the nearest legal altitude.
+      const int count = colonyStructureCount("europa", 22);
+      const float cap = std::min(0.032f * std::sqrt(static_cast<float>(count)), 0.30f);
+      const float arc = cap * r;
+      const float alt = std::max(arc * 1.15f, 0.11f);
+      const Vec3 eye(town->pos.x + a.x * (r + alt),
+                     town->pos.y + a.y * (r + alt),
+                     town->pos.z + a.z * (r + alt));
+      const Vec3 look(town->pos.x + a.x * r,
+                      town->pos.y + a.y * r,
+                      town->pos.z + a.z * r);
+      std::cout << "  europa stage 22: radius=" << r << ", structures=" << count
+                << ", cap=" << cap << " rad, arc=" << arc << ", camera alt=" << alt
+                << " (near plane 0.1)\n";
+      app.m_camera.position = eye;
+      app.computeLookYawPitch(eye, look, app.m_camera.yaw, app.m_camera.pitch);
+      for (int pass = 0; pass < 6; ++pass) {
+        app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+        if (pass < 5) {
+          app.m_window->swapBuffers();
+          app.m_window->pollEvents();
+        }
+      }
+      const auto built = grabCentre();
+      const bool saved = app.saveScreenshot(outDir + "/colony_surface_europa.png");
+      setStages(false);
+      for (int pass = 0; pass < 3; ++pass) {
+        app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
+        app.m_window->swapBuffers();
+        app.m_window->pollEvents();
+      }
+      const auto bare = grabCentre();
+      int changed = 0, shadowed = 0;
+      for (size_t i = 0; i < built.size(); i += 3) {
+        if (built[i] != bare[i] || built[i + 1] != bare[i + 1] || built[i + 2] != bare[i + 2])
+          ++changed;
+        const int lb = (built[i] * 299 + built[i + 1] * 587 + built[i + 2] * 114) / 1000;
+        const int bb = (bare[i] * 299 + bare[i + 1] * 587 + bare[i + 2] * 114) / 1000;
+        // Structures are far darker than sunlit ice, so a frame that really
+        // holds the town must occlude the surface, not just show a new camera.
+        if (lb + 24 < bb) ++shadowed;
+      }
+      const bool surfacePass = saved && changed > 400 && shadowed > 3200;
+      std::cout << "Colony surface close-up europa stage 22: centre-changed=" << changed
+                << ", surface-occluded=" << shadowed << (surfacePass ? " PASS" : " FAIL") << "\n";
+      ok = surfacePass && ok;
+      setStages(true);
+    }
+  }
+
   setStages(true);
   std::cout << "Colony capture checks: " << checks << "\n";
   return ok ? 0 : 1;

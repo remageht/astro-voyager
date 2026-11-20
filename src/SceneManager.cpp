@@ -2710,24 +2710,24 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             float modelLength;
           };
           static const ColonyAssetSpec kColonyAssets[] = {
-              {"dome", 0.100f, 3.0f},        {"pad", 0.110f, 3.2f},
-              {"factory", 0.140f, 3.4f},     {"datacenter", 0.150f, 4.2f},
-              {"nuclear", 0.170f, 4.2f},     {"thermal", 0.170f, 4.6f},
-              {"hydro", 0.190f, 4.6f},       {"townhall", 0.160f, 3.6f},
-              {"parliament", 0.180f, 4.0f},  {"police", 0.150f, 3.6f},
-              {"warehouse", 0.170f, 4.2f},   {"military", 0.190f, 4.2f},
-              {"houses", 0.160f, 3.8f},      {"apartments", 0.150f, 4.2f},
-              {"pipeline", 0.200f, 4.4f},    {"powerline", 0.200f, 4.4f},
-              {"solar", 0.190f, 4.4f},       {"diesel", 0.150f, 4.0f},
-              {"inverter", 0.150f, 4.0f},    {"wind", 0.200f, 4.4f},
+              {"dome", 0.0200f, 3.0f},        {"pad", 0.0220f, 3.2f},
+              {"factory", 0.0280f, 3.4f},     {"datacenter", 0.0300f, 4.2f},
+              {"nuclear", 0.0340f, 4.2f},     {"thermal", 0.0340f, 4.6f},
+              {"hydro", 0.0380f, 4.6f},       {"townhall", 0.0320f, 3.6f},
+              {"parliament", 0.0360f, 4.0f},  {"police", 0.0300f, 3.6f},
+              {"warehouse", 0.0340f, 4.2f},   {"military", 0.0380f, 4.2f},
+              {"houses", 0.0320f, 3.8f},      {"apartments", 0.0300f, 4.2f},
+              {"pipeline", 0.0400f, 4.4f},    {"powerline", 0.0400f, 4.4f},
+              {"solar", 0.0380f, 4.4f},       {"diesel", 0.0300f, 4.0f},
+              {"inverter", 0.0300f, 4.0f},    {"wind", 0.0400f, 4.4f},
               // Healthcare, retail, recreation and real water services were the
               // functional gaps a settlement cannot be called a town without.
               // modelLength must equal the target the generator normalizes that
               // mesh to, or every colony scales the building wrong.
-              {"hospital", 0.175f, 4.4f},    {"clinic", 0.135f, 3.4f},
-              {"park", 0.155f, 3.8f},        {"market", 0.165f, 4.0f},
-              {"school", 0.165f, 4.2f},      {"fire", 0.145f, 3.6f},
-              {"water", 0.180f, 4.4f},       {"greenhouse", 0.170f, 4.2f},
+              {"hospital", 0.0350f, 4.4f},    {"clinic", 0.0270f, 3.4f},
+              {"park", 0.0310f, 3.8f},        {"market", 0.0330f, 4.0f},
+              {"school", 0.0330f, 4.2f},      {"fire", 0.0290f, 3.6f},
+              {"water", 0.0360f, 4.4f},       {"greenhouse", 0.0340f, 4.2f},
           };
           static constexpr int kColonyAssetCount =
               static_cast<int>(sizeof(kColonyAssets) / sizeof(kColonyAssets[0]));
@@ -3315,15 +3315,13 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                       static_cast<float>(site.pos.z));
             const float planetRadius = std::max(static_cast<float>(site.radius), 0.02f);
 
-            // Settlement anchor from the shared colony data, so the capture
-            // harness and the renderer always agree on where the town is.
-            const float* anchorN = colonyAnchorNormal(site.id);
-            const glm::vec3 anchor(anchorN[0], anchorN[1], anchorN[2]);
-
-            const glm::vec3 upRef = std::abs(anchor.y) < 0.90f ? glm::vec3(0.0f, 1.0f, 0.0f)
-                                                               : glm::vec3(1.0f, 0.0f, 0.0f);
-            const glm::vec3 tangentU = glm::normalize(glm::cross(anchor, upRef));
-            const glm::vec3 tangentV = glm::normalize(glm::cross(anchor, tangentU));
+            // Settlement anchor and tangent basis from the shared colony data,
+            // so the capture harness and the renderer always agree on where the
+            // town is and which way it faces.
+            const ColonySurfaceFrame frame = colonySurfaceFrame(site.id);
+            const glm::vec3 anchor(frame.anchor[0], frame.anchor[1], frame.anchor[2]);
+            const glm::vec3 tangentU(frame.tangentU[0], frame.tangentU[1], frame.tangentU[2]);
+            const glm::vec3 tangentV(frame.tangentV[0], frame.tangentV[1], frame.tangentV[2]);
 
             const auto plan = colonyBuildPlan(site.id, stage);
             int placed = 0;
@@ -3337,7 +3335,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 // Golden-angle spiral: neighbour spacing stays around one
                 // footprint, so buildings neither merge nor overlap.
                 const float phi = placed * 2.39996323f;
-                const float theta = std::min(0.160f * std::sqrt(static_cast<float>(placed + 1)), 1.15f);
+                const float theta = std::min(0.032f * std::sqrt(static_cast<float>(placed + 1)), 0.30f);
                 const glm::vec3 dir = glm::normalize(
                     anchor * std::cos(theta) +
                     (tangentU * std::cos(phi) + tangentV * std::sin(phi)) * std::sin(theta));
