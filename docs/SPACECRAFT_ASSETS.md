@@ -1,4 +1,4 @@
-﻿# Spacecraft assets / Ассеты кораблей
+# Spacecraft assets / Ассеты кораблей
 
 Локальные исходники и пайплайн для пилотируемых кораблей на орбите Земли.
 Тяжёлые GLTF/OBJ/PNG-файлы в git не попадают: в репозитории лежат только
@@ -288,11 +288,32 @@ python tools/download_spacecraft_assets.py --strict
 | Витрина | docs/screens/warp_drive_vis_hero.png |
 
 
+## Alcubierre Ring Ship (Style 1, процедурная)
+
+| Поле | Значение |
+|---|---|
+| Модель | Alcubierre Tri-Ring Warp Cruiser (Style 1) |
+| Автор | Astro Voyager (процедурная) |
+| Лицензия | MIT (код проекта) |
+| Исходный скрипт | `generate_ring_ship.py` |
+| Игровые файлы | `res/models/ring_ship.obj` (36 354 треугольника, 26 617 вершин, длина 2.320) + 5 PBR BMP-атласов 2048×2048 (`_albedo`, `_normal`, `_rough`, `_metal`, `_emissive`) |
+| В сцене | Игровой корабль (стиль 1, `SceneManager.cpp`), масштаб каноничный 2.32 |
+| Витрина | `docs/screens/ring_ship_showcase.png` |
+| Состав детального прохода | 20 хомутов силовых катушек, внешние магнитные блоки, внутренние шинные вводы и 8 квантовых инжекторов на каждом из 3 колец; 4 продольных ферменных рельса со сферическими узлами и раскосами; 5 бронепоясов фюзеляжа, киль и спинной стрингер, 20-ламельные радиаторы; козырёк, каркас остекления, 3 оптических сенсора, носовая штанга и зонд; паук дефлектора и центральный эмиттер; стыковочный порт PMA, антенна дальней связи; 4 блока РКС (16 сопел); упорный шпангоут, CTV-кольцо с гидроцилиндрами, 2 топливные магистрали, тяги вспомогательных сопел, навигационный стробоскоп. Сопла ориентированы вдоль оси Z (#199). |
+
+
+## Внешний репозиторий процедурных 3D-генераторов
+
+Все скрипты процедурной 3D-генерации вынесены в отдельный внешний репозиторий:
+- **Расположение**: `../astro-voyager-generators/scripts/` (или переменная окружения `ASTRO_GENERATORS_DIR`).
+- **Скрипты**: `generate_ships.py` (флот), `generate_ring_ship.py` (Alcubierre Ring Ship v2), `generate_mining_dreadnought.py` (Mining Dreadnought), `generate_colony_assets.py` (инфраструктура).
+- **Общий атлас материалов**: `asset_atlas.py` с ролями тайлов `masonry`, `siding`, `roof`, `asphalt`.
+
 ## Планетарная инфраструктура колоний (собственные процедурные ассеты)
 
-Генератор: `blender/scripts/generate_colony_assets.py` (подмножество: `-- --only nuclear hydro`).
-Атлас общий и flip-safe: `blender/scripts/asset_atlas.py` (сетка 4x4 тайлов по 256 px,
-normal из height-поля, зеркальные строки). Витрины: `blender/out/colony/*_showcase.png`.
+Генератор: `../astro-voyager-generators/scripts/generate_colony_assets.py` (подмножество: `-- --only nuclear hydro`).
+Атлас общий и flip-safe: `asset_atlas.py` (сетка 4x4 тайлов по 256 px, роли: masonry, siding, roof, asphalt,
+normal из height-поля, зеркальные строки). Витрины: `docs/screens/colony_*_showcase.png`.
 
 | Ассет | Треугольников | Габарит | Состав |
 |---|---:|---:|---|

@@ -195,7 +195,9 @@ int main() {
                                          "townhall", "parliament", "police",
                                          "warehouse", "military", "houses",
                                          "apartments", "pipeline", "powerline",
-                                         "solar", "diesel", "inverter", "wind"};
+                                         "solar", "diesel", "inverter", "wind",
+                                         "hospital", "clinic", "park", "market",
+                                         "school", "fire", "water", "greenhouse"};
     const auto isKnown = [](const std::string& asset) {
       for (const char* known : kKnownAssets)
         if (asset == known) return true;
@@ -286,17 +288,33 @@ int main() {
     // Civic, housing and utility layers must appear in technological order:
     // backup gensets with the first grid, private plots before storey blocks,
     // administration before the parliament, and the capital keeps all of them.
+    // Healthcare, retail, recreation and education are asserted to actually
+    // arrive, not merely to be allowed - a whitelist that never demands a
+    // layer shows up would pass on a colony with no hospital at all.
     const auto has = [](const std::vector<std::pair<std::string, int>>& p,
                         const char* key) {
       for (const auto& e : p) if (e.first == key) return true;
       return false;
     };
     if (!has(colonyBuildPlan("mars", 3), "diesel") ||
+        !has(colonyBuildPlan("mars", 4), "water") ||
         !has(colonyBuildPlan("mars", 5), "houses") ||
         has(colonyBuildPlan("mars", 5), "apartments") ||
+        !has(colonyBuildPlan("mars", 6), "greenhouse") ||
         !has(colonyBuildPlan("mars", 8), "powerline") ||
-        !has(colonyBuildPlan("mars", 11), "townhall") ||
+        // Healthcare opens the social layer, and it must not wait for the
+        // township: an inpatient hospital and a walk-in clinic at stage 11.
+        !has(colonyBuildPlan("mars", 11), "hospital") ||
+        !has(colonyBuildPlan("mars", 11), "clinic") ||
+        !has(colonyBuildPlan("mars", 12), "fire") ||
+        // Administration moved to the township that houses it; the order that
+        // actually matters - town hall before parliament - still holds.
+        has(colonyBuildPlan("mars", 11), "townhall") ||
+        !has(colonyBuildPlan("mars", 13), "townhall") ||
         !has(colonyBuildPlan("mars", 13), "apartments") ||
+        !has(colonyBuildPlan("mars", 13), "park") ||
+        !has(colonyBuildPlan("mars", 13), "market") ||
+        !has(colonyBuildPlan("mars", 15), "school") ||
         !has(colonyBuildPlan("mars", 16), "wind") ||
         !has(colonyBuildPlan("mars", 21), "parliament")) {
       std::cerr << "Test 7 failed: civic/housing/utility progression out of order\n";

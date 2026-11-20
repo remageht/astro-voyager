@@ -30,11 +30,11 @@ imgui.ini
 docs/screens/disk/
 routes/
 
-# Blender previews/models are local build artifacts (scripts live in blender/scripts/)
-blender/out/
-# Downloaded third-party reference imagery and local capture scratch: never commit
-blender/ref/
+# Procedural 3D model generators and Blender workspace (extracted to external repo)
+blender/
+.qoder/
 vibe_videos/
+vibe_images/
 
 # Certificates / private keys: never commit
 *.pfx
@@ -48,3 +48,4 @@ Testing/
 __pycache__/
 save_out.txt
 test_save_out.txt
+*.log

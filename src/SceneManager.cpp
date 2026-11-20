@@ -1,5 +1,6 @@
 #include "SceneManager.h"
 #include "Constellation.h"
+#include "Types.h"  // ship::kShipStyleCount - единый список корпусов (#195)
 
 #include "GLCompat.h"
 #include "LaunchDiagnostics.h"
@@ -85,7 +86,7 @@ float shipX() { return g_shipPos[0]; }
 float shipY() { return g_shipPos[1]; }
 float shipZ() { return g_shipPos[2]; }
 float shipYaw() { return g_shipYaw; }
-void setShipStyle(int s) { g_shipStyle = (s < 0 || s > 3) ? 0 : s; }
+void setShipStyle(int s) { g_shipStyle = (s < 0 || s >= ship::kShipStyleCount) ? 0 : s; }
 void setShipCustomization(const ShipCustomization& c) { g_shipCustomization = c; }
 const ShipCustomization& shipCustomization() { return g_shipCustomization; }
 void setDockSitesVisible(bool v) { g_dockSitesVisible = v; }
@@ -2501,6 +2502,20 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               activeModel = &s_ringShipModel;
               modelRingSpin = spinPhase;
             }
+          } else if (style == 4) {
+            // Mining Dreadnought (тяжёлый колониальный транспорт):
+            // меш из res/models/mining_dreadnought.obj. Длина на Z, нос на -Z -
+            // та же конвенция, что у dart/shuttle/ring_ship (#195).
+            static ObjModel s_dreadnoughtModel;
+            static bool s_dreadnoughtTried = false;
+            if (!s_dreadnoughtTried) {
+              s_dreadnoughtTried = true;
+              s_dreadnoughtModel.load("res/models/mining_dreadnought.obj");
+              s_dreadnoughtModel.loadTextures("res/models/mining_dreadnought");
+            }
+            if (s_dreadnoughtModel.ready()) {
+              activeModel = &s_dreadnoughtModel;
+            }
           } else if (style == 2) {
             // Shuttle explorer: меш из res/models/shuttle.obj
             static ObjModel s_shuttleModel;
@@ -2681,19 +2696,43 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_warpBubbleModel;
           static ObjModel s_warpTunnelModel;
           static ObjModel s_warpDriveVisModel;
-          static ObjModel s_colonyDomeModel;
-          static ObjModel s_colonyFactoryModel;
-          static ObjModel s_colonyPadModel;
-          static ObjModel s_colonyNuclearModel;
-          static ObjModel s_colonyHydroModel;
-          static ObjModel s_colonyThermalModel;
-          static ObjModel s_colonyDatacenterModel;
-          // Civic / housing / utility meshes: one slot per plan key, loaded once.
-          static ObjModel s_colonyCivicModels[13];
-          static const char* kColonyCivicKeys[13] = {
-              "townhall", "parliament", "police", "warehouse", "military",
-              "houses", "apartments", "pipeline", "powerline", "solar",
-              "diesel", "inverter", "wind"};
+          // One row per colony structure type: the plan key, how large it reads
+          // on a planet as a fraction of planet radius, and the length our
+          // generators normalized that mesh to. Loading, lookup and sizing all
+          // index this one table, so a new structure type is a new ROW. Before
+          // this the same fact lived in three places - a 13-entry key array, an
+          // if-chain over seven named statics, and a second 13-entry size array -
+          // and drifting them apart failed silently at runtime as "asset not
+          // found" instead of at build time.
+          struct ColonyAssetSpec {
+            const char* key;
+            float footprint;
+            float modelLength;
+          };
+          static const ColonyAssetSpec kColonyAssets[] = {
+              {"dome", 0.100f, 3.0f},        {"pad", 0.110f, 3.2f},
+              {"factory", 0.140f, 3.4f},     {"datacenter", 0.150f, 4.2f},
+              {"nuclear", 0.170f, 4.2f},     {"thermal", 0.170f, 4.6f},
+              {"hydro", 0.190f, 4.6f},       {"townhall", 0.160f, 3.6f},
+              {"parliament", 0.180f, 4.0f},  {"police", 0.150f, 3.6f},
+              {"warehouse", 0.170f, 4.2f},   {"military", 0.190f, 4.2f},
+              {"houses", 0.160f, 3.8f},      {"apartments", 0.150f, 4.2f},
+              {"pipeline", 0.200f, 4.4f},    {"powerline", 0.200f, 4.4f},
+              {"solar", 0.190f, 4.4f},       {"diesel", 0.150f, 4.0f},
+              {"inverter", 0.150f, 4.0f},    {"wind", 0.200f, 4.4f},
+              // Healthcare, retail, recreation and real water services were the
+              // functional gaps a settlement cannot be called a town without.
+              // modelLength must equal the target the generator normalizes that
+              // mesh to, or every colony scales the building wrong.
+              {"hospital", 0.175f, 4.4f},    {"clinic", 0.135f, 3.4f},
+              {"park", 0.155f, 3.8f},        {"market", 0.165f, 4.0f},
+              {"school", 0.165f, 4.2f},      {"fire", 0.145f, 3.6f},
+              {"water", 0.180f, 4.4f},       {"greenhouse", 0.170f, 4.2f},
+          };
+          static constexpr int kColonyAssetCount =
+              static_cast<int>(sizeof(kColonyAssets) / sizeof(kColonyAssets[0]));
+          // One model slot per table row, loaded once on first use.
+          static ObjModel s_colonyAssetModels[kColonyAssetCount];
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2751,24 +2790,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_warpDriveVisModel.load("res/models/warp_drive_vis.obj");
             s_warpDriveVisModel.loadTextures("res/models/warp_drive_vis");
 
-            s_colonyDomeModel.load("res/models/colony_dome.obj");
-            s_colonyDomeModel.loadTextures("res/models/colony_dome");
-            s_colonyFactoryModel.load("res/models/colony_factory.obj");
-            s_colonyFactoryModel.loadTextures("res/models/colony_factory");
-            s_colonyPadModel.load("res/models/colony_pad.obj");
-            s_colonyPadModel.loadTextures("res/models/colony_pad");
-            s_colonyNuclearModel.load("res/models/colony_nuclear.obj");
-            s_colonyNuclearModel.loadTextures("res/models/colony_nuclear");
-            s_colonyHydroModel.load("res/models/colony_hydro.obj");
-            s_colonyHydroModel.loadTextures("res/models/colony_hydro");
-            s_colonyThermalModel.load("res/models/colony_thermal.obj");
-            s_colonyThermalModel.loadTextures("res/models/colony_thermal");
-            s_colonyDatacenterModel.load("res/models/colony_datacenter.obj");
-            s_colonyDatacenterModel.loadTextures("res/models/colony_datacenter");
-            for (int i = 0; i < 13; ++i) {
-              const std::string base = std::string("res/models/colony_") + kColonyCivicKeys[i];
-              s_colonyCivicModels[i].load(base + ".obj");
-              s_colonyCivicModels[i].loadTextures(base);
+            for (int i = 0; i < kColonyAssetCount; ++i) {
+              const std::string base =
+                  std::string("res/models/colony_") + kColonyAssets[i].key;
+              s_colonyAssetModels[i].load(base + ".obj");
+              s_colonyAssetModels[i].loadTextures(base);
             }
           }
 
@@ -3260,40 +3286,23 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           const glm::mat4 ownUpToY(glm::rotate(glm::mat4(1.0f), -1.5707963f,
                                                glm::vec3(1.0f, 0.0f, 0.0f)));
           auto colonyAsset = [&](const std::string& key) -> ObjModel* {
-            if (key == "dome") return &s_colonyDomeModel;
-            if (key == "factory") return &s_colonyFactoryModel;
-            if (key == "pad") return &s_colonyPadModel;
-            if (key == "nuclear") return &s_colonyNuclearModel;
-            if (key == "hydro") return &s_colonyHydroModel;
-            if (key == "thermal") return &s_colonyThermalModel;
-            if (key == "datacenter") return &s_colonyDatacenterModel;
-            for (int i = 0; i < 13; ++i)
-              if (key == kColonyCivicKeys[i]) return &s_colonyCivicModels[i];
+            for (int i = 0; i < kColonyAssetCount; ++i)
+              if (key == kColonyAssets[i].key) return &s_colonyAssetModels[i];
             return nullptr;
           };
           // Footprint of each structure as a fraction of the planet radius, and
           // the length our generators normalized that mesh to. The two together
           // give the model-matrix scale, so a refinery reads the same relative
-          // size on Mars and on Europa instead of dwarfing both.
+          // size on Mars and on Europa instead of dwarfing both. Both numbers
+          // come from the same kColonyAssets row that owns the mesh.
           auto colonyAssetSize = [](const std::string& key, float& footprint,
                                     float& modelLength) {
-            if (key == "dome") { footprint = 0.100f; modelLength = 3.0f; return true; }
-            if (key == "pad") { footprint = 0.110f; modelLength = 3.2f; return true; }
-            if (key == "factory") { footprint = 0.140f; modelLength = 3.4f; return true; }
-            if (key == "datacenter") { footprint = 0.150f; modelLength = 4.2f; return true; }
-            if (key == "nuclear") { footprint = 0.170f; modelLength = 4.2f; return true; }
-            if (key == "thermal") { footprint = 0.170f; modelLength = 4.6f; return true; }
-            if (key == "hydro") { footprint = 0.190f; modelLength = 4.6f; return true; }
-            static const struct { const char* key; float fp; float len; } kCivicSizes[13] = {
-                {"townhall", 0.160f, 3.6f}, {"parliament", 0.180f, 4.0f},
-                {"police", 0.150f, 3.6f}, {"warehouse", 0.170f, 4.2f},
-                {"military", 0.190f, 4.2f}, {"houses", 0.160f, 3.8f},
-                {"apartments", 0.150f, 4.2f}, {"pipeline", 0.200f, 4.4f},
-                {"powerline", 0.200f, 4.4f}, {"solar", 0.190f, 4.4f},
-                {"diesel", 0.150f, 4.0f}, {"inverter", 0.150f, 4.0f},
-                {"wind", 0.200f, 4.4f}};
-            for (const auto& e : kCivicSizes)
-              if (key == e.key) { footprint = e.fp; modelLength = e.len; return true; }
+            for (const auto& e : kColonyAssets)
+              if (key == e.key) {
+                footprint = e.footprint;
+                modelLength = e.modelLength;
+                return true;
+              }
             return false;
           };
           for (const auto& site : m_colonySites) {

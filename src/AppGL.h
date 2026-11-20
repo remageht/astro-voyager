@@ -610,7 +610,7 @@ class AppGL {
   float jumpFuelCostK(const std::string& targetId) const;  // сложность + Казимир + конденсаторы + маяк
   float m_shieldMax = 100.0f;  // ship::shieldCapacity(boost), пересчитывается в sim
   int m_warpSel = 0;  // выбор пункта в варп-панели
-  int m_shipStyle = 0;  // корпус корабля: 0 Dart, 1 Ring Ship v2, 2 Shuttle, 3 Model (OBJ)
+  int m_shipStyle = 0;  // корпус корабля: 0 Dart, 1 Ring Ship v2, 2 Shuttle, 3 Model (OBJ), 4 Mining Dreadnought
   // === Orbital Shipyard & Station Docking (v3.11.0) ===
   bool m_shipyardOpen = false;
   int m_hubTab = 0;  // Station Hub tab: 0 Service, 1 Upgrades, 2 Hangar
@@ -862,7 +862,7 @@ float shipX();
 float shipY();
 float shipZ();
 float shipYaw();
-void setShipStyle(int s);  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model
+void setShipStyle(int s);  // 0 Dart, 1 Ring Ship (IXS), 2 Shuttle, 3 Model, 4 Mining Dreadnought
 // v3.11.0: кастомизация корабля (ливрея, свечение, спин колец, апгрейды)
 void setShipCustomization(const ShipCustomization& c);
 const ShipCustomization& shipCustomization();
