@@ -116,6 +116,16 @@ int colonyStructureCount(const std::string& worldId, int stage);
 // Unit surface normal where this world's settlement sits. Shared by the scene
 // renderer and the capture harness so a screenshot always faces the town.
 const float* colonyAnchorNormal(const std::string& worldId);
+// Orthonormal basis at the settlement anchor: the normal plus the two tangents
+// the golden-angle spiral is built from. The renderer and the capture harness
+// both need it, and a close-up screenshot only shows what the player descends
+// into if they agree on which way the town faces.
+struct ColonySurfaceFrame {
+  float anchor[3];
+  float tangentU[3];
+  float tangentV[3];
+};
+ColonySurfaceFrame colonySurfaceFrame(const std::string& worldId);
 int colonyResearchBonus(const ColonyStages& stages);
 int colonyTotalPopulation(const ColonyStages& stages);
 int colonyPassiveRatePerMin(const ColonyStages& stages);

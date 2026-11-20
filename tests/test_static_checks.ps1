@@ -758,6 +758,7 @@ $colonyTestSrc = Read-File 'tests/test_colony.cpp'
 Check 'colony service assets loaded' ((($sceneCpp -match '"hospital"') -and ($sceneCpp -match '"clinic"') -and ($sceneCpp -match '"park"') -and ($sceneCpp -match '"market"') -and ($sceneCpp -match '"school"') -and ($sceneCpp -match '"fire"') -and ($sceneCpp -match '"water"') -and ($sceneCpp -match '"greenhouse"')))
 Check 'colony service plan order' ((($planSrc -match '4 water loop') -and ($planSrc -match '11 medical centre') -and ($planSrc -match '13 township') -and ($planSrc -match '15 research campus')))
 Check 'colony service demand layers tested' ((($colonyTestSrc -match 'hospital') -and ($colonyTestSrc -match 'greenhouse')))
+Check 'colony district scale pinned' ((($sceneCpp -match '0\.032f \* std::sqrt') -and ($sceneCpp -match '0\.30f')) -and (($appCpp -match 'surface-occluded') -and ($appCpp -match '0\.11f')))
 $extGenDir = if ($env:ASTRO_GENERATORS_DIR -and (Test-Path $env:ASTRO_GENERATORS_DIR)) {
     $env:ASTRO_GENERATORS_DIR
 } elseif (Test-Path (Join-Path $root '../astro-voyager-generators/scripts')) {
