@@ -47,3 +47,4 @@ Testing/
 __pycache__/
 save_out.txt
 test_save_out.txt
+*.log

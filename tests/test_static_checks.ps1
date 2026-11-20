@@ -28,6 +28,7 @@ $ci = Read-File '.github/workflows/build.yml'
 $dockerfile = Read-File 'Dockerfile'
 $ver = (Read-File 'VERSION').Trim()
 $appCpp = Read-File 'src/AppGL.cpp'
+$sceneCpp = Read-File 'src/SceneManager.cpp'
 
 Check 'cmake project astro-voyager' ($cmake -match 'project\(astro-voyager')
 Check 'cmake cxx17' ($cmake -match 'CMAKE_CXX_STANDARD 17')
@@ -748,15 +749,15 @@ Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenu
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
 Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and ($sceneCpp -match 'colonyAnchorNormal')) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
 Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
-Check 'colony infrastructure assets loaded' (($sceneCpp -match 'colony_nuclear\.obj') -and ($sceneCpp -match 'colony_hydro\.obj') -and ($sceneCpp -match 'colony_thermal\.obj') -and ($sceneCpp -match 'colony_datacenter\.obj') -and ($sceneCpp -match 'colony_factory\.obj'))
-Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyCivicKeys') -and ($sceneCpp -match 's_colonyCivicModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
+Check 'colony infrastructure assets loaded' (($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match '"nuclear"') -and ($sceneCpp -match '"hydro"') -and ($sceneCpp -match '"thermal"') -and ($sceneCpp -match '"datacenter"') -and ($sceneCpp -match '"factory"') -and ($sceneCpp -match 'kColonyAssets\[i\]\.key'))
+Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match 's_colonyAssetModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
 Check 'colony capital distance cull' (($sceneCpp -match 'camDist > 24\.0f') -and ((Read-File 'tests/test_colony.cpp') -match 'civic/housing/utility progression'))
 $hasAtlas = Test-Path (Join-Path $root 'blender/scripts/asset_atlas.py')
 $atlasOk = if ($hasAtlas) {
     $atlas = Read-File 'blender/scripts/asset_atlas.py'
     (((($atlas -match 'role == "masonry"') -and ($atlas -match 'role == "siding"')) -and (($atlas -match 'role == "roof"') -and ($atlas -match 'role == "asphalt"'))))
 } else {
-    ((Read-File 'docs/SPACECRAFT_ASSETS.md') -match 'masonry') -and ($sceneCpp -match 'kColonyCivicKeys')
+    ((Read-File 'docs/SPACECRAFT_ASSETS.md') -match 'masonry') -and ($sceneCpp -match 'kColonyAssets')
 }
 Check 'civic atlas roles exist' $atlasOk
 Check 'colony terraforming milestones' ((($sceneCpp -match 'colonyTerraformState') -and ($appCpp -match 'colonyTerraformMilestones')) -and ((Read-File 'src/ColonySystem.cpp') -match 'colonyMilestonesReached'))
