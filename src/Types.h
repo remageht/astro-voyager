@@ -46,7 +46,7 @@ struct ShipState {
 // Defaults are neutral (tints 1.0, spin 1.0, upgrades 0) so the baseline
 // reference screenshots and flight balance remain bit-for-bit identical.
 struct ShipCustomization {
-  int style = 0;                               // 0 Dart, 1 Ring Ship, 2 Shuttle, 3 Model (Warp Cruiser)
+  int style = 0;                               // 0 Dart, 1 Ring Ship, 2 Shuttle, 3 Model (Warp Cruiser), 4 Mining Dreadnought
   float primaryColor[3] = {1.0f, 1.0f, 1.0f};  // base hull tint multiplier
   float accentColor[3] = {1.0f, 1.0f, 1.0f};   // secondary livery trim (cyan, gold, dark)
   float emissiveColor[3] = {1.0f, 1.0f, 1.0f}; // plasma glow tint (nozzle, rings, core)

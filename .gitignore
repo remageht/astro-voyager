@@ -34,6 +34,7 @@ routes/
 blender/
 .qoder/
 vibe_videos/
+vibe_images/
 
 # Certificates / private keys: never commit
 *.pfx

@@ -67,6 +67,21 @@ stb_image и zlib. Нет карт — корпус остаётся плоск�
 утилиту и шейдеры. Скин процедурного Ring Ship всегда генерится из
 `tools/make_ring_skin.mjs` (без внешнего FBX).
 
+## Процедурные 3D-генераторы флота и ассетов колоний
+
+Скрипты процедурной генерации 3D-моделей (флот, станции, инфраструктура колоний, карты нормалей и PBR-атласы) вынесены в отдельный репозиторий/каталог генераторов, чтобы не утяжелять основной репозиторий:
+- **Расположение по умолчанию**: `../astro-voyager-generators/scripts/` (или переменная окружения `ASTRO_GENERATORS_DIR`).
+- **Восстановление и запуск в Blender 5.2+**:
+  ```bash
+  # Сборка кольцевого корабля (Alcubierre Ring Ship v2):
+  blender -b -P ../astro-voyager-generators/scripts/generate_ring_ship.py
+  # Сборка тяжёлого колониального дредноута (Mining Dreadnought):
+  blender -b -P ../astro-voyager-generators/scripts/generate_mining_dreadnought.py
+  # Сборка ассетов колониальной инфраструктуры:
+  blender -b -P ../astro-voyager-generators/scripts/generate_colony_assets.py
+  ```
+  Сгенерированные `.obj` и 24-битные PBR BMP-карты сохраняются непосредственно в `res/models/`.
+
 ## Тесты
 
 ```bash

@@ -753,27 +753,30 @@ Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 
 Check 'colony infrastructure assets loaded' (($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match '"nuclear"') -and ($sceneCpp -match '"hydro"') -and ($sceneCpp -match '"thermal"') -and ($sceneCpp -match '"datacenter"') -and ($sceneCpp -match '"factory"') -and ($sceneCpp -match 'kColonyAssets\[i\]\.key'))
 Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match 's_colonyAssetModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
 Check 'colony capital distance cull' (($sceneCpp -match 'camDist > 24\.0f') -and ((Read-File 'tests/test_colony.cpp') -match 'civic/housing/utility progression'))
-$hasAtlas = Test-Path (Join-Path $root 'blender/scripts/asset_atlas.py')
-$atlasOk = if ($hasAtlas) {
-    $atlas = Read-File 'blender/scripts/asset_atlas.py'
-    (((($atlas -match 'role == "masonry"') -and ($atlas -match 'role == "siding"')) -and (($atlas -match 'role == "roof"') -and ($atlas -match 'role == "asphalt"'))))
+$extGenDir = if ($env:ASTRO_GENERATORS_DIR -and (Test-Path $env:ASTRO_GENERATORS_DIR)) {
+    $env:ASTRO_GENERATORS_DIR
+} elseif (Test-Path (Join-Path $root '../astro-voyager-generators/scripts')) {
+    (Join-Path $root '../astro-voyager-generators/scripts')
+} elseif (Test-Path (Join-Path $root 'blender/scripts')) {
+    (Join-Path $root 'blender/scripts')
 } else {
-    ((Read-File 'docs/SPACECRAFT_ASSETS.md') -match 'masonry') -and ($sceneCpp -match 'kColonyAssets')
+    $null
 }
-Check 'civic atlas roles exist' $atlasOk
+$hasAtlas = if ($extGenDir) { Test-Path (Join-Path $extGenDir 'asset_atlas.py') } else { $false }
+if ($hasAtlas) {
+    $atlas = Get-Content -LiteralPath (Join-Path $extGenDir 'asset_atlas.py') -Raw -Encoding UTF8
+    Check 'civic atlas roles exist' (((($atlas -match 'role == "masonry"') -and ($atlas -match 'role == "siding"')) -and (($atlas -match 'role == "roof"') -and ($atlas -match 'role == "asphalt"'))))
+    Check 'shared atlas module' (($atlas -match 'GRID - 1 - gy') -and (Test-Path (Join-Path $extGenDir 'generate_colony_assets.py')))
+} else {
+    Check 'civic atlas roles documented in assets doc' (((Read-File 'docs/SPACECRAFT_ASSETS.md') -match 'masonry') -and ($sceneCpp -match 'kColonyAssets'))
+    Check 'colony albedo texture loaded in scene' (($sceneCpp -match 'colony_albedo') -and ($sceneCpp -match 'loadTextures'))
+}
 Check 'colony terraforming milestones' ((($sceneCpp -match 'colonyTerraformState') -and ($appCpp -match 'colonyTerraformMilestones')) -and ((Read-File 'src/ColonySystem.cpp') -match 'colonyMilestonesReached'))
 Check 'colony milestones reward rp' (((Read-File 'src/ColonySystem.h') -match 'int rewardRP') -and ($appCpp -match 'm\.rewardRP'))
 Check 'colony milestone reward window' ((($appCpp -match 'colonyMilestoneReward\(stageBefore, stage\)') -and ((Read-File 'src/ColonySystem.cpp') -match 'm\.stage > previousStage')) -and ((Read-File 'tests/test_colony.cpp') -match 'milestone rewards must be paid once'))
 Check 'colony passive income outside ui' ((($appCpp -match 'updateColonyEconomy\(simDt\)') -and ($appCpp -notmatch 'updateColonyEconomy\(ImGui')) -and ((Read-File 'src/ScienceSystem.cpp') -match 'clamp\(bonusPercent, 0, 120\)'))
 Check 'colony capture harness' (((Read-File 'src/main.cpp') -match '--capture-colony') -and ($appCpp -match 'captureColonyCheck') -and ((Read-File 'src/AppGL.h') -match 'captureColonyCheck'))
 Check 'colony stage and rp saved' (((Read-File 'src/SaveGame.cpp') -match 'colonyStages') -and ((Read-File 'src/SaveGame.cpp') -match 'researchPoints') -and ((Read-File 'tests/test_save.cpp') -match 'colonyStages'))
-$sharedAtlasOk = if ($hasAtlas) {
-    $atlas = Read-File 'blender/scripts/asset_atlas.py'
-    ((($atlas -match 'GRID - 1 - gy') -and ((Read-File 'blender/scripts/generate_colony_assets.py') -match 'import asset_atlas') -and ((Read-File 'blender/scripts/generate_own_craft.py') -match 'import asset_atlas') -and ((Read-File 'blender/scripts/generate_station_aurora.py') -match 'import asset_atlas')))
-} else {
-    (($sceneCpp -match 'colony_albedo') -and ($sceneCpp -match 'loadTextures'))
-}
-Check 'shared atlas module' $sharedAtlasOk
 $ciStray = (((Read-File '.github/workflows/build.yml') -split "`n") | Where-Object { $_ -match '^[^\s#]' -and $_ -notmatch '^(name|on|permissions|jobs|env|concurrency|defaults):' }).Count
 Check 'ci workflow yaml indent' ($ciStray -eq 0)
 Check 'v5.0.5 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
@@ -792,41 +795,49 @@ Check 'achievements counter not hardcoded' (($appCpp -notmatch 'Achievements: %d
 Check 'ci workflow runs ctest' (((Read-File '.github/workflows/build.yml') -match 'ctest --test-dir build\b') -and ((Read-File '.github/workflows/build.yml') -match 'ctest --test-dir build-gl\b'))
 Check 'cmake test targets undefine ndebug' (((Read-File 'CMakeLists.txt') -match '/UNDEBUG') -and ((Read-File 'CMakeLists.txt') -match '-UNDEBUG'))
 
-# --- Issue #189: hull primitives are born on local Z, so fore-aft parts need identity rotation ---
-$hasShipsPy = Test-Path (Join-Path $root 'blender/scripts/generate_ships.py')
+# --- Issue #189, #201: generator checks if available, honest static fallbacks if decoupled ---
+$hasShipsPy = if ($extGenDir) { Test-Path (Join-Path $extGenDir 'generate_ships.py') } else { $false }
 if ($hasShipsPy) {
-    $shipsPy = Read-File 'blender/scripts/generate_ships.py'
+    $shipsPy = Get-Content -LiteralPath (Join-Path $extGenDir 'generate_ships.py') -Raw -Encoding UTF8
     $shipsVertical = @(($shipsPy -split "`n" | Where-Object { $_ -match 'rotation=\(math\.pi/2, 0\.0, 0\.0\)' })).Count
     Check 'ship engine axis convention' (($shipsVertical -eq 1) -and ($shipsPy -match 'p_cone\(name, loc, r_throat, r_exit, depth, segs=segs') -and ($shipsPy -notmatch 'depth=0\.36, location=\(0\.0, 0\.0, 0\.94\), rotation'))
     Check 'ship detail pass frame comment' (($shipsPy -match '\(half,0,0\) tips them DOWN') -and ($shipsPy -match 'Getting this wrong is #189'))
 } else {
-    Check 'ship engine axis convention' (($sceneCpp -match 'stScale = 0\.095f') -and ($sceneCpp -match 'stScale = 0\.085f') -and ($sceneCpp -match 'sScale ='))
-    Check 'ship detail pass frame comment' (($readme -match 'Dart') -and ($readme -match 'Shuttle'))
+    Check 'station scales documented in scene' (($sceneCpp -match 'stScale = 0\.095f') -and ($sceneCpp -match 'stScale = 0\.085f') -and ($sceneCpp -match 'sScale ='))
+    Check 'fleet styles documented in readme' (($readme -match 'Dart') -and ($readme -match 'Shuttle'))
 }
 
-# --- Issue #195: mining dreadnought is a fleet hull, not an orphan asset ---
+# --- Issue #195, #201: mining dreadnought fleet hull integration and axis invariants ---
 $typesH = Read-File 'src/Types.h'
 $appH = Read-File 'src/AppGL.h'
-$hasDreadPy = Test-Path (Join-Path $root 'blender/scripts/generate_mining_dreadnought.py')
+$hasDreadPy = if ($extGenDir) { Test-Path (Join-Path $extGenDir 'generate_mining_dreadnought.py') } else { $false }
 Check 'dreadnought hull loaded in scene' (($sceneCpp -match 'mining_dreadnought\.obj') -and ($sceneCpp -match 'loadTextures\("res/models/mining_dreadnought"\)'))
 Check 'ship style list has single source of truth' ((($typesH -match 'constexpr int kShipStyleCount = 5') -and ($typesH -match 'Mining Dreadnought') -and ($sceneCpp -match 's >= ship::kShipStyleCount') -and ($sceneCpp -notmatch 's > 3')) -and (($appCpp -match 'ship::kShipStyleCount - 1') -and ($appCpp -match 'n < ship::kShipStyleCount')))
 Check 'dreadnought warp role and handling' ((($typesH -match 'style == 1 \|\| style == 3 \|\| style == 4') -and ($typesH -match 'case 4: return 1\.10f')) -and (($typesH -match 'case 4: return 1\.70f') -and ($appH -match '4 Mining Dreadnought')))
 
 if ($hasDreadPy) {
-    $dreadPy = Read-File 'blender/scripts/generate_mining_dreadnought.py'
+    $dreadPy = Get-Content -LiteralPath (Join-Path $extGenDir 'generate_mining_dreadnought.py') -Raw -Encoding UTF8
     Check 'dreadnought generator uses fleet axis' ((($dreadPy -match 'rotation_euler = \(-math\.pi / 2, 0\.0, 0\.0\)') -and ($dreadPy -match 'target_scale = 2\.30')) -and (($dreadPy -match '#195') -and ($dreadPy -notmatch 'target_scale = 4\.5')))
+    Check 'dreadnought detail pass wired' ((($dreadPy -match 'def add_dreadnought_details\(\)') -and ($dreadPy -match 'add_dreadnought_details\(\)')) -and (($dreadPy -match 'Fleet axis convention \(#195\)') -and ($dreadPy -match 'target_scale = 2\.30')))
 } else {
-    Check 'dreadnought generator uses fleet axis' (($typesH -match 'Mining Dreadnought') -and ($sceneCpp -match 'mining_dreadnought\.obj'))
+    Check 'dreadnought registered in scene and styles' (($typesH -match 'Mining Dreadnought') -and ($sceneCpp -match 'mining_dreadnought\.obj'))
+    Check 'dreadnought documented in readme and hud' (($readme -match 'Mining Dreadnought \(4\)') -and ($appCpp -match 'ship_dreadnought\.png'))
 }
 Check 'dreadnought captured in hud harness' (($appCpp -match 'ship_dreadnought\.png') -and ($appCpp -match 'warpdrive::setShipStyle\(4\)'))
 Check 'dreadnought documented' (($readme -match 'Mining Dreadnought \(4\)') -and ($readme -match 'mining_dreadnought_showcase\.png'))
 
-# --- Dreadnought detail pass (follow-up to #195) ---
-if ($hasDreadPy) {
-    Check 'dreadnought detail pass wired' ((($dreadPy -match 'def add_dreadnought_details\(\)') -and ($dreadPy -match 'add_dreadnought_details\(\)')) -and (($dreadPy -match 'Fleet axis convention \(#195\)') -and ($dreadPy -match 'target_scale = 2\.30')))
-} else {
-    Check 'dreadnought detail pass wired' (($readme -match 'Mining Dreadnought \(4\)') -and ($appCpp -match 'ship_dreadnought\.png'))
-}
+# --- Issue #198: Main menu tactical button hotkeys, centralized accent, and hover gate ---
+Check 'menu tactical cut button defines unique hotkey badges' (($appCpp -match '\[ENTER\]') -and ($appCpp -match '\[N\]') -and ($appCpp -match '\[F\]') -and ($appCpp -match '\[S\]') -and ($appCpp -match '\[A\]') -and ($appCpp -match '\[ESC\]'))
+Check 'menu UI centralizes accent color in menuui::kAccentU32' ($appCpp -match '(const|constexpr)\s+ImU32\s+kAccentU32\s*=\s*IM_COL32\(\s*56\s*,\s*189\s*,\s*248\s*,\s*255\s*\);')
+Check 'menu status pills avoid duplicating warp briefing line' (($appCpp -match 'СИСТЕМЫ: НОМИНАЛ') -and ($appCpp -notmatch 'ПРИВОД: ГОТОВ 100%'))
+Check 'captureMenuCheck verifies interactive button hover and hero elements' (($appCpp -match 'Menu hero elements: hover-diff=') -and ($appCpp -match 'menu_hover_btn01\.png'))
+
+# --- Issue #202: Tier 1 diegetic flight HUD telemetry and peripheral vitals arcs ---
+Check 'flight hud vitals arc spans 90 degrees for peripheral visibility' (($appCpp -match 'minAng\s*=\s*-0\.785f') -and ($appCpp -match 'maxAng\s*=\s*0\.785f'))
+Check 'flight hud state legend displays docked, surface ops, gear suspension and boost' (($appCpp -match 'm_ship\.isDocked') -and ($appCpp -match 'DOCKED:') -and ($appCpp -match 'SURFACE OPS') -and ($appCpp -match 'm_ship\.gearDeployed') -and ($appCpp -match 'm_ship\.suspensionCompression') -and ($appCpp -match '\[BOOST\]'))
+Check 'flight hud only references existing ShipState fields without imaginary mining telemetry' (($appCpp -notmatch 'CRUSHER\s+\d+\s+rpm') -and ($appCpp -notmatch 'CUTTER:\s+LOAD') -and ($appCpp -notmatch 'FERRIC / AURIC'))
+Check 'captureHudCheck tests distinct vitals arcs with 96 hull 52 shield 23 fuel' (($appCpp -match 'app\.m_ship\.hull\s*=\s*96\.0f') -and ($appCpp -match 'app\.m_ship\.shield\s*=\s*52\.0f') -and ($appCpp -match 'app\.m_ship\.fuel\s*=\s*23\.0f'))
+Check 'Types.h and AppGL.h style comments include Mining Dreadnought' (((Read-File 'src/Types.h') -match '0 Dart, 1 Ring Ship, 2 Shuttle, 3 Model \(Warp Cruiser\), 4 Mining Dreadnought') -and ((Read-File 'src/AppGL.h') -match '4 Mining Dreadnought'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

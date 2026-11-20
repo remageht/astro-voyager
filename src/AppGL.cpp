@@ -6798,8 +6798,8 @@ void AppGL::drawContextualFlightHud() {
     const int a255 = static_cast<int>(255.0f * a);
     const int a120 = static_cast<int>(120.0f * a);
 
-    const float minAng = -0.61f; // -35 deg
-    const float maxAng = 0.61f;  // +35 deg
+    const float minAng = -0.785f; // -45 deg (~90 deg total span for distinct peripheral reading)
+    const float maxAng = 0.785f;  // +45 deg
 
     // 3.1 Outer Arc: SHIELD
     const float arcR = 150.0f;
@@ -6845,13 +6845,30 @@ void AppGL::drawContextualFlightHud() {
     std::snprintf(fuBuf, sizeof(fuBuf), "FUEL %.0f%%", m_ship.fuel);
     dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 18.0f), fuCol, fuBuf);
 
+    // State legend (Tier 1 diegetic telemetry from ShipState)
+    float stateY = ctr.y + 36.0f;
+    if (m_ship.isDocked) {
+      char dockBuf[64];
+      const Station* curDockSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+      std::snprintf(dockBuf, sizeof(dockBuf), "DOCKED: %s",
+                    curDockSt ? curDockSt->name.c_str() : (!m_ship.dockedStationId.empty() ? m_ship.dockedStationId.c_str() : "STATION"));
+      dl->AddText(ImVec2(ctr.x + 95.0f, stateY), IM_COL32(56, 189, 248, a255), dockBuf);
+    } else if (m_ship.isLanded) {
+      dl->AddText(ImVec2(ctr.x + 95.0f, stateY), IM_COL32(52, 211, 153, a255), "SURFACE OPS");
+      char gearBuf[64];
+      std::snprintf(gearBuf, sizeof(gearBuf), "GEAR: %.0f%% | SUSP: %.0f%%",
+                    m_ship.gearDeployed ? (m_ship.gearProgress * 100.0f) : 0.0f,
+                    std::clamp(m_ship.suspensionCompression * 100.0f, 0.0f, 100.0f));
+      dl->AddText(ImVec2(ctr.x + 95.0f, stateY + 16.0f), IM_COL32(148, 163, 184, static_cast<int>(200.0f * a)), gearBuf);
+    }
+
     // Warnings and alert pulses
-    if (fu < 0.25f) {
+    if (fu < 0.25f && !m_ship.isDocked && !m_ship.isLanded) {
       float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 10.0));
       ImU32 fuWarnCol = IM_COL32(239, 68, 68, static_cast<int>(a255 * pulse));
-      dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 36.0f), fuWarnCol, uiRu("! ТОПЛИВО НА ИСХОДЕ !", "! LOW FUEL !"));
+      dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 54.0f), fuWarnCol, uiRu("! ТОПЛИВО НА ИСХОДЕ !", "! LOW FUEL !"));
     }
-    if (sh < 0.25f || hu < 0.30f) {
+    if ((sh < 0.25f || hu < 0.30f) && !m_ship.isDocked) {
       float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 8.0));
       ImU32 redPulse = IM_COL32(239, 68, 68, static_cast<int>(a255 * pulse));
       dl->AddCircle(ctr, arcR + 6.0f, redPulse, 32, 1.5f);
@@ -10081,7 +10098,7 @@ namespace {
 
 // Единая холодная палитра меню: обсидиан + бирюза, без «радуги» тактических цветов.
 namespace menuui {
-const ImVec4 kAccent(0.36f, 0.80f, 0.98f, 1.0f);
+const ImVec4 kAccent(0.22f, 0.74f, 0.97f, 1.0f);
 const ImVec4 kAccentDim(0.24f, 0.52f, 0.68f, 1.0f);
 const ImVec4 kText(0.90f, 0.95f, 0.99f, 1.0f);
 const ImVec4 kTextDim(0.55f, 0.66f, 0.76f, 1.0f);
@@ -10091,6 +10108,8 @@ const ImU32 kNavBg = IM_COL32(9, 17, 27, 225);
 const ImU32 kNavPrimaryBorder = IM_COL32(120, 205, 240, 235);
 const ImU32 kNavPrimaryBg = IM_COL32(14, 36, 54, 235);
 const ImU32 kLed = IM_COL32(90, 205, 240, 255);
+const ImU32 kAccentU32 = IM_COL32(56, 189, 248, 255);
+inline ImU32 accentAlpha(int a) { return IM_COL32(56, 189, 248, a); }
 }  // namespace menuui
 
 // Тактическая кнопка со скошенным правым верхним углом в стиле Quantum Console
@@ -10119,11 +10138,11 @@ bool drawTacticalCutButton(const char* label, const ImVec2& size, ImU32 borderCo
   // Холодное обсидиановое стекло с градиентным откликом
   ImU32 fill = held ? IM_COL32(35, 110, 160, 180)
                     : (hovered ? IM_COL32(20, 58, 92, 210)
-                               : (isPrimary ? IM_COL32(14, 38, 58, 235) : bgColor));
+                                : (isPrimary ? IM_COL32(14, 38, 58, 235) : bgColor));
   dl->AddConvexPolyFilled(pts, 5, fill);
 
   // Свечение и контур
-  ImU32 activeBorder = hovered ? IM_COL32(56, 189, 248, 255)
+  ImU32 activeBorder = hovered ? menuui::kAccentU32
                                : (isPrimary ? IM_COL32(90 + static_cast<int>(35 * pulse), 190 + static_cast<int>(30 * pulse), 245, 230 + static_cast<int>(25 * pulse))
                                             : borderColor);
   float borderThickness = hovered ? 1.8f : (isPrimary ? (1.2f + 0.5f * pulse) : 1.1f);
@@ -10132,19 +10151,19 @@ bool drawTacticalCutButton(const char* label, const ImVec2& size, ImU32 borderCo
   // Неоновый срез в правом верхнем углу
   if (hovered || isPrimary) {
     dl->AddLine(ImVec2(p1.x - cut, p0.y), ImVec2(p1.x, p0.y + cut),
-                hovered ? IM_COL32(125, 225, 255, 255) : IM_COL32(56, 189, 248, 160 + static_cast<int>(80 * pulse)),
+                hovered ? IM_COL32(125, 225, 255, 255) : menuui::accentAlpha(160 + static_cast<int>(80 * pulse)),
                 hovered ? 2.4f : 1.6f);
   }
 
   // Акцентная кромка слева: тусклая в покое, светящаяся бирюзовая при наведении
   if (hovered || held) {
     dl->AddRectFilled(ImVec2(p0.x, p0.y + 2.0f), ImVec2(p0.x + 3.5f, p1.y - 2.0f),
-                      IM_COL32(56, 189, 248, 255));
+                      menuui::kAccentU32);
     dl->AddRectFilled(ImVec2(p0.x + 3.5f, p0.y + 4.0f), ImVec2(p0.x + 6.0f, p1.y - 4.0f),
-                      IM_COL32(56, 189, 248, 80));
+                      menuui::accentAlpha(80));
   } else if (isPrimary) {
     dl->AddRectFilled(ImVec2(p0.x, p0.y + 3.0f), ImVec2(p0.x + 3.0f, p1.y - 3.0f),
-                      IM_COL32(56, 189, 248, 180 + static_cast<int>(75 * pulse)));
+                      menuui::accentAlpha(180 + static_cast<int>(75 * pulse)));
   } else {
     dl->AddRectFilled(ImVec2(p0.x, p0.y + 4.0f), ImVec2(p0.x + 2.0f, p1.y - 4.0f),
                       IM_COL32(40, 85, 115, 140));
@@ -10162,14 +10181,14 @@ bool drawTacticalCutButton(const char* label, const ImVec2& size, ImU32 borderCo
   float textX = p0.x + 14.0f;
   if (indexStr && indexStr[0] != '\0') {
     // Высокотехнологичный индекс блока: "01", "02" и т.д.
-    ImU32 idxCol = hovered ? IM_COL32(56, 189, 248, 255) : IM_COL32(80, 125, 155, 180);
+    ImU32 idxCol = hovered ? menuui::kAccentU32 : IM_COL32(80, 125, 155, 180);
     dl->AddText(ImVec2(textX, p0.y + (subtitle ? 8.0f : (size.y - ImGui::GetFontSize()) * 0.5f)),
                 idxCol, indexStr);
     textX += ImGui::CalcTextSize(indexStr).x + 10.0f;
     // Разделительная микро-чёрточка
     float midY = p0.y + size.y * 0.5f;
     dl->AddLine(ImVec2(textX - 5.0f, midY - 6.0f), ImVec2(textX - 5.0f, midY + 6.0f),
-                hovered ? IM_COL32(56, 189, 248, 160) : IM_COL32(50, 85, 110, 110), 1.0f);
+                hovered ? menuui::accentAlpha(160) : IM_COL32(50, 85, 110, 110), 1.0f);
     textX += 4.0f;
   }
 
@@ -10194,7 +10213,7 @@ bool drawTacticalCutButton(const char* label, const ImVec2& size, ImU32 borderCo
     dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + badgeW, by + badgeH),
                       hovered ? IM_COL32(16, 42, 66, 230) : IM_COL32(8, 16, 26, 170), 3.0f);
     dl->AddRect(ImVec2(bx, by), ImVec2(bx + badgeW, by + badgeH),
-                hovered ? IM_COL32(56, 189, 248, 180) : IM_COL32(38, 72, 100, 120), 3.0f, 0, 1.0f);
+                hovered ? menuui::accentAlpha(180) : IM_COL32(38, 72, 100, 120), 3.0f, 0, 1.0f);
     dl->AddText(ImVec2(bx + 5.0f, by + (badgeH - hsz.y) * 0.5f),
                 hovered ? IM_COL32(200, 242, 255, 255) : IM_COL32(115, 155, 182, 190), hotkeyBadge);
   }
@@ -10204,9 +10223,9 @@ bool drawTacticalCutButton(const char* label, const ImVec2& size, ImU32 borderCo
     float chevX = p1.x - 14.0f;
     float chevY = p0.y + size.y * 0.5f;
     dl->AddLine(ImVec2(chevX - 4.0f, chevY - 5.0f), ImVec2(chevX + 1.0f, chevY),
-                IM_COL32(56, 189, 248, 255), 2.0f);
+                menuui::kAccentU32, 2.0f);
     dl->AddLine(ImVec2(chevX + 1.0f, chevY), ImVec2(chevX - 4.0f, chevY + 5.0f),
-                IM_COL32(56, 189, 248, 255), 2.0f);
+                menuui::kAccentU32, 2.0f);
   }
 
   return pressed;
@@ -10706,7 +10725,7 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
   else if (hoveredOption == 4) headerTitle = uiRu("АРХИВ ДАННЫХ // ZETTELKASTEN", "ARCHIVE // EXTRA MATERIALS");
   else if (hoveredOption == 5) headerTitle = uiRu("ЗАВЕРШЕНИЕ СЕАНСА // ВЫХОД", "SESSION // EXIT TO DESKTOP");
 
-  dl->AddText(ImVec2(p0.x + padX + 14.0f, curY), IM_COL32(56, 189, 248, 230), headerTitle);
+  dl->AddText(ImVec2(p0.x + padX + 14.0f, curY), menuui::accentAlpha(230), headerTitle);
 
   // Живой квантовый осциллограф в шапке карточки
   {
@@ -10722,7 +10741,7 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
       float val = std::sin(curTime * 4.5f + u * 12.0f) * 0.65f + std::sin(curTime * 9.0f + u * 24.0f) * 0.35f;
       wavePts[i] = ImVec2(waveX + u * waveW, waveY + val * 4.0f * env);
     }
-    dl->AddPolyline(wavePts, 16, IM_COL32(56, 189, 248, 200), 0, 1.2f);
+    dl->AddPolyline(wavePts, 16, menuui::accentAlpha(200), 0, 1.2f);
   }
 
   // Разделительная линия в карточке
@@ -10741,27 +10760,27 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
   std::string stName = curSt ? curSt->name : uiRu("СОЛНЕЧНАЯ СИСТЕМА", "SOL SYSTEM");
 
   if (hoveredOption == 0) {
-    drawParamLine(uiRu("ТОЧКА ВОЗВРАТА:", "RETURN POINT:"), stName.c_str(), IM_COL32(56, 189, 248, 255));
+    drawParamLine(uiRu("ТОЧКА ВОЗВРАТА:", "RETURN POINT:"), stName.c_str(), menuui::kAccentU32);
     drawParamLine(uiRu("СОСТОЯНИЕ ЯДРА:", "CORE STATUS:"), uiRu("ГОТОВ К ПЕРЕХОДУ", "READY FOR WARP"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("СИСТЕМЫ СВЯЗИ:", "COMMS:"), uiRu("КВАНТОВЫЙ ЛИНК OK", "QUANTUM LINK OK"), IM_COL32(245, 158, 11, 255));
     drawParamLine(uiRu("ПРОТОКОЛ:", "PROTOCOL:"), m_hasStartedFlight ? uiRu("ТЕКУЩАЯ СЕССИЯ", "ACTIVE SESSION") : uiRu("АВТОСОХРАНЕНИЕ", "AUTOSAVE"));
   } else if (hoveredOption == 1) {
-    drawParamLine(uiRu("ЭКСПЕДИЦИЯ:", "EXPEDITION:"), uiRu("ASTRO-VOYAGER I", "ASTRO-VOYAGER I"), IM_COL32(56, 189, 248, 255));
+    drawParamLine(uiRu("ЭКСПЕДИЦИЯ:", "EXPEDITION:"), uiRu("ASTRO-VOYAGER I", "ASTRO-VOYAGER I"), menuui::kAccentU32);
     drawParamLine(uiRu("ЭКИПАЖ:", "CREW:"), uiRu("ЕГОРКА, МИА САТО, РОСТОВА", "EGORKA, MIA SATO, ROSTOVA"));
     drawParamLine(uiRu("ЦЕЛЬ:", "OBJECTIVE:"), uiRu("ИССЛЕДОВАНИЕ ЧЁРНОЙ ДЫРЫ", "KERR BLACK HOLE RESEARCH"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("СТАРТ:", "LAUNCHPAD:"), uiRu("ОРБИТАЛЬНЫЙ ДОК ЗЕМЛИ", "EARTH ORBITAL DOCK"));
   } else if (hoveredOption == 2) {
-    drawParamLine(uiRu("РЕЖИМ:", "MODE:"), uiRu("СВОБОДНАЯ НАВИГАЦИЯ", "FREE EXPLORATION"), IM_COL32(56, 189, 248, 255));
+    drawParamLine(uiRu("РЕЖИМ:", "MODE:"), uiRu("СВОБОДНАЯ НАВИГАЦИЯ", "FREE EXPLORATION"), menuui::kAccentU32);
     drawParamLine(uiRu("ОБЪЕКТЫ:", "OBJECTS:"), uiRu("22 ОРБИТАЛЬНЫХ СТАНЦИИ", "22 ORBITAL STATIONS"));
     drawParamLine(uiRu("ФИЗИКА:", "PHYSICS:"), uiRu("РЕЛЯТИВИСТСКИЕ МЕТРИКИ", "RELATIVISTIC METRICS"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("ПОСАДКА:", "LANDING:"), uiRu("ПЛАНЕТАРНЫЙ ВАРИОМЕТР", "PLANETARY VARIOMETER"));
   } else if (hoveredOption == 3) {
-    drawParamLine(uiRu("ПОДСИСТЕМА:", "SUBSYSTEM:"), uiRu("ГРАФИКА / ЗВУК / ВВОД", "GRAPHICS / AUDIO / INPUT"), IM_COL32(56, 189, 248, 255));
+    drawParamLine(uiRu("ПОДСИСТЕМА:", "SUBSYSTEM:"), uiRu("ГРАФИКА / ЗВУК / ВВОД", "GRAPHICS / AUDIO / INPUT"), menuui::kAccentU32);
     drawParamLine(uiRu("АККРЕЦИОННЫЙ ДИСК:", "ACCRETION DISK:"), uiRu("ПРОЦЕДУРНЫЙ GLSL", "PROCEDURAL GLSL"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("АУДИО ДВИЖОК:", "AUDIO ENGINE:"), uiRu("MINIAUDIO PRO", "MINIAUDIO PRO"));
     drawParamLine(uiRu("ОПТИМИЗАЦИЯ:", "OPTIMIZATION:"), uiRu("НУЛЕВОЙ ОВЕРХЕД CPU", "ZERO CPU OVERHEAD"));
   } else if (hoveredOption == 4) {
-    drawParamLine(uiRu("БАЗА ЗНАНИЙ:", "KNOWLEDGE BASE:"), uiRu("ZETTELKASTEN // 28 КАРТОЧЕК", "ZETTELKASTEN // 28 CARDS"), IM_COL32(56, 189, 248, 255));
+    drawParamLine(uiRu("БАЗА ЗНАНИЙ:", "KNOWLEDGE BASE:"), uiRu("ZETTELKASTEN // 28 КАРТОЧЕК", "ZETTELKASTEN // 28 CARDS"), menuui::kAccentU32);
     drawParamLine(uiRu("САУНДТРЕК:", "SOUNDTRACK:"), uiRu("ГОЛОСА ЭКИПАЖА И ТЕМА", "CREW VOICES & THEMES"));
     drawParamLine(uiRu("АРХИВ НАБЛЮДЕНИЙ:", "ARCHIVES:"), uiRu("АКТИВЕН И СИНХРОНИЗИРОВАН", "ACTIVE & SYNCED"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("СПЕКТРОМЕТРИЯ:", "SPECTROMETRY:"), uiRu("РЕГИСТРАЦИЯ БИОСИГНАТУР", "BIOSIGNATURE SCAN"));
@@ -10772,7 +10791,7 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
     drawParamLine(uiRu("ЗАВЕРШЕНИЕ:", "SHUTDOWN:"), uiRu("БЕЗ МЕРЦАНИЯ ЭКРАНА", "CLEAN / NO FLICKER"));
   } else {
     // Дефолтный статус телеметрии корабля
-    drawParamLine(uiRu("КОРАБЛЬ:", "VESSEL:"), uiRu("СТРАННИК [ALCUBIERRE]", "VOYAGER [ALCUBIERRE]"), IM_COL32(56, 189, 248, 255));
+    drawParamLine(uiRu("КОРАБЛЬ:", "VESSEL:"), uiRu("СТРАННИК [ALCUBIERRE]", "VOYAGER [ALCUBIERRE]"), menuui::kAccentU32);
     drawParamLine(uiRu("ТЕКУЩИЙ СЕКТОР:", "CURRENT SECTOR:"), stName.c_str());
     drawParamLine(uiRu("ВАРП-ПРИВОД:", "WARP DRIVE:"), m_toggleWarpStandby ? uiRu("100% НОМИНАЛ // ГОТОВ", "100% NOMINAL // READY") : uiRu("ОЖИДАНИЕ ИНИЦИАЛИЗАЦИИ", "STANDBY // READY"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("КВАНТОВЫЙ ЛИНК:", "QUANTUM LINK:"), uiRu("СИНХРОНИЗИРОВАН", "SYNCHRONIZED"), IM_COL32(245, 158, 11, 255));
@@ -10795,7 +10814,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   {
     const float cInset = 16.0f;
     const float bLen = 22.0f;
-    const ImU32 bCol = IM_COL32(56, 189, 248, 80);
+    const ImU32 bCol = menuui::accentAlpha(80);
     // Верхний левый
     hudDl->AddLine(ImVec2(cInset, cInset), ImVec2(cInset + bLen, cInset), bCol, 1.2f);
     hudDl->AddLine(ImVec2(cInset, cInset), ImVec2(cInset, cInset + bLen), bCol, 1.2f);
@@ -10826,13 +10845,13 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
     ImVec2 bp = ImGui::GetCursorScreenPos();
     const std::string pills[3] = {
         uiRu("КОРАБЛЬ: СТРАННИК [ALCUBIERRE]", "SHIP: VOYAGER [ALCUBIERRE]"),
-        m_toggleWarpStandby ? uiRu("ПРИВОД: ГОТОВ 100%", "WARP DRIVE: 100% READY")
-                            : uiRu("ПРИВОД: ОЖИДАНИЕ", "WARP DRIVE: STANDBY"),
+        m_toggleWarpStandby ? uiRu("СИСТЕМЫ: НОМИНАЛ", "SYSTEMS: NOMINAL")
+                            : uiRu("СИСТЕМЫ: ОЖИДАНИЕ", "SYSTEMS: STANDBY"),
         sectorBadge};
     const ImU32 dotColors[3] = {
-        IM_COL32(56, 189, 248, 255), // Cyan LED
+        menuui::kAccentU32, // Cyan LED
         m_toggleWarpStandby ? IM_COL32(16, 185, 129, 255) : IM_COL32(245, 158, 11, 255), // Emerald / Amber LED
-        IM_COL32(56, 189, 248, 230)  // Cyan LED
+        menuui::accentAlpha(230)  // Cyan LED
     };
     const ImU32 pillText[3] = {
         IM_COL32(200, 235, 255, 240),
@@ -10871,8 +10890,8 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
       bdl->AddRectFilled(kq0, kq1, IM_COL32(8, 18, 30, 210), 11.0f);
       bdl->AddRect(kq0, kq1, IM_COL32(40, 85, 120, 140), 11.0f, 0, 1.0f);
       ImVec2 kDot(kx + 10.0f, bp.y + 11.0f);
-      bdl->AddCircleFilled(kDot, 2.5f, IM_COL32(56, 189, 248, 255));
-      bdl->AddCircle(kDot, 4.5f, IM_COL32(56, 189, 248, 70), 12, 1.0f);
+      bdl->AddCircleFilled(kDot, 2.5f, menuui::kAccentU32);
+      bdl->AddCircle(kDot, 4.5f, menuui::accentAlpha(70), 12, 1.0f);
       bdl->AddText(ImVec2(kx + 18.0f, bp.y + 3.0f), IM_COL32(180, 225, 245, 230), kerrBadge);
     }
 
@@ -10912,7 +10931,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
     dl->AddLine(ImVec2(divP.x, divP.y + 5.0f), ImVec2(divP.x + cmdW, divP.y + 5.0f),
                 IM_COL32(32, 68, 96, 140), 1.0f);
     dl->AddLine(ImVec2(divP.x, divP.y + 5.0f), ImVec2(divP.x + 42.0f, divP.y + 5.0f),
-                IM_COL32(56, 189, 248, 220), 2.0f);
+                menuui::accentAlpha(220), 2.0f);
     dl->AddCircleFilled(ImVec2(divP.x + 42.0f, divP.y + 5.0f), 2.5f, IM_COL32(125, 225, 255, 255));
   }
   ImGui::Dummy(ImVec2(0.0f, 10.0f));
@@ -13666,9 +13685,9 @@ int AppGL::captureHudCheck(const std::string& outPath) {
   app.m_hudActionAlpha = 1.0f;
   app.m_camSpeed = 0.65f;
   app.m_shipVel = Vec3(0.0, 0.0, 12.0);
-  app.m_ship.shield = 85.0f;
-  app.m_ship.fuel = 75.0f;
-  app.m_ship.hull = 92.0f;
+  app.m_ship.hull = 96.0f;
+  app.m_ship.shield = 52.0f;
+  app.m_ship.fuel = 23.0f;
   app.m_dockHintId = "sgra";
 
   int fbWidth = 1280, fbHeight = 720;
@@ -13883,6 +13902,12 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
       maxRenderSeconds = std::max(maxRenderSeconds, elapsed);
       ++rendered;
     }
+    if (frame == 48) {
+      ImGui::GetIO().MousePos = ImVec2(-100.0f, -100.0f);
+    }
+    if (frame == 50) {
+      ImGui::GetIO().MousePos = ImVec2(100.0f, 210.0f); // Hover over button 01
+    }
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -13891,6 +13916,57 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
     else app.drawImGui();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    static std::vector<unsigned char> s_menuNoHover(1280 * 720 * 3, 0);
+    static std::vector<unsigned char> s_menuHover(1280 * 720 * 3, 0);
+    if (frame == 49) {
+      glPixelStorei(GL_PACK_ALIGNMENT, 1);
+      glReadPixels(0, 0, 1280, 720, GL_RGB, GL_UNSIGNED_BYTE, s_menuNoHover.data());
+    }
+    if (frame == 51) {
+      glPixelStorei(GL_PACK_ALIGNMENT, 1);
+      glReadPixels(0, 0, 1280, 720, GL_RGB, GL_UNSIGNED_BYTE, s_menuHover.data());
+      ImGui::GetIO().MousePos = ImVec2(-100.0f, -100.0f); // restore mouse position
+
+      // 1. Difference on button 01 area between unhovered and hovered state
+      size_t hoverDiff = 0;
+      for (int gy = 470; gy <= 530; ++gy) {
+        for (int gx = 60; gx <= 430; ++gx) {
+          size_t idx = (static_cast<size_t>(gy) * 1280 + gx) * 3;
+          if (s_menuNoHover[idx] != s_menuHover[idx] ||
+              s_menuNoHover[idx + 1] != s_menuHover[idx + 1] ||
+              s_menuNoHover[idx + 2] != s_menuHover[idx + 2]) {
+            ++hoverDiff;
+          }
+        }
+      }
+      // 2. Flight briefing / telemetry card presence
+      size_t telemetryPixels = 0;
+      for (int gy = 70; gy <= 270; ++gy) {
+        for (int gx = 60; gx <= 430; ++gx) {
+          size_t idx = (static_cast<size_t>(gy) * 1280 + gx) * 3;
+          if (s_menuHover[idx] > 40 || s_menuHover[idx + 1] > 40 || s_menuHover[idx + 2] > 40) {
+            ++telemetryPixels;
+          }
+        }
+      }
+      // 3. Status pills presence
+      size_t statusPillPixels = 0;
+      for (int gy = 660; gy <= 685; ++gy) {
+        for (int gx = 60; gx <= 1220; ++gx) {
+          size_t idx = (static_cast<size_t>(gy) * 1280 + gx) * 3;
+          if (s_menuHover[idx] > 40 || s_menuHover[idx + 1] > 40 || s_menuHover[idx + 2] > 40) {
+            ++statusPillPixels;
+          }
+        }
+      }
+      const bool heroElementsPass = (hoverDiff > 50) && (telemetryPixels > 300) && (statusPillPixels > 100);
+      std::cout << "Menu hero elements: hover-diff=" << hoverDiff
+                << ", telemetry-pixels=" << telemetryPixels
+                << ", status-pill-pixels=" << statusPillPixels
+                << (heroElementsPass ? " PASS" : " FAIL") << "\n";
+      ok = heroElementsPass && ok;
+      app.saveScreenshot(outDir + "/menu_hover_btn01.png");
+    }
     const char* screenshot = nullptr;
     if (frame == 60) screenshot = "menu.png";
     if (frame == 389) screenshot = "loop_before.png";
