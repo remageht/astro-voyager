@@ -695,6 +695,7 @@ Check 'workflow builds linux portable tarball' ($ci -match 'linux-x86_64-portabl
 Check 'workflow builds windows portable archive' ($ci -match 'windows-x86_64-portable\.zip')
 Check 'readme documents diagnostics flag' ($readme -match '--diagnostics')
 Check 'egorka_voice_player.html removed from root' (-not (Test-Path (Join-Path $root 'egorka_voice_player.html')))
+Check 'preview_hud.html moved to docs/prototypes' ((-not (Test-Path (Join-Path $root 'preview_hud.html'))) -and (Test-Path (Join-Path $root 'docs/prototypes/preview_hud.html')))
 Check 'AppGL has drawVoiceCatalogPage declaration' ((Read-File 'src/AppGL.h') -match 'void drawVoiceCatalogPage\(float areaH\)')
 Check 'AppGL implements drawVoiceCatalogPage' ($appCpp -match 'void AppGL::drawVoiceCatalogPage\(float areaH\)')
 Check 'AppGL drawMenu header has voice catalog tab' ($appCpp -match '04 VOICES')
