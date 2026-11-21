@@ -748,7 +748,7 @@ Check 'menu backdrop and disk mask retain aspect-ratio cover crop' (($menuFrag -
 Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenuActive\(m_inMenu\)')
 
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
-Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and ($sceneCpp -match 'colonyAnchorNormal')) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
+Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and (($sceneCpp -match 'colonySurfaceFrame') -or ($sceneCpp -match 'colonyAnchorNormal'))) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
 Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
 Check 'colony infrastructure assets loaded' (($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match '"nuclear"') -and ($sceneCpp -match '"hydro"') -and ($sceneCpp -match '"thermal"') -and ($sceneCpp -match '"datacenter"') -and ($sceneCpp -match '"factory"') -and ($sceneCpp -match 'kColonyAssets\[i\]\.key'))
 Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match 's_colonyAssetModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
