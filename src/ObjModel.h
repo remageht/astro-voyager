@@ -53,6 +53,18 @@ class ObjModel {
   void bindTextures(int firstUnit) const;
 
   const glm::vec3& center() const { return m_center; }
+  const glm::vec3& bboxMin() const { return m_bboxMin; }
+  const glm::vec3& bboxMax() const { return m_bboxMax; }
+  glm::vec3 dimensions() const { return m_bboxMax - m_bboxMin; }
+
+  unsigned int vertexCount() const { return m_vertexCount; }
+  unsigned int indexCount() const { return m_indexCount; }
+  unsigned int triangleCount() const { return m_indexCount / 3; }
+  unsigned int albedoTex() const { return m_texAlbedo; }
+  unsigned int normalTex() const { return m_texNormal; }
+  unsigned int roughTex() const { return m_texRough; }
+  unsigned int metalTex() const { return m_texMetal; }
+  unsigned int emissiveTex() const { return m_texEmissive; }
 
  private:
   unsigned int m_vao = 0;
@@ -67,6 +79,8 @@ class ObjModel {
   unsigned int m_texEmissive = 0;
   bool m_sharedTex = false;
   glm::vec3 m_center{0.0f};
+  glm::vec3 m_bboxMin{0.0f};
+  glm::vec3 m_bboxMax{0.0f};
 };
 
 }  // namespace astro

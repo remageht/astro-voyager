@@ -72,6 +72,7 @@ class AppGL {
   static int captureHudCheck(const std::string& outPath);
   static int captureTerminalCheck(const std::string& outPath);
   static int captureMenuCheck(const std::string& outDir);
+  static int captureWorkshopCheck(const std::string& outDir);
   static int captureEarthCheck(const std::string& outDir);
 
   // === Perf Benchmark Harness === (Stage 4, public entry for CLI)
@@ -92,6 +93,9 @@ class AppGL {
   void drawMainMenuBackground(float screenW, float screenH);
   void drawFlightBriefingCard(int hoveredOption, float cardW, const Station* curSt);
   void drawVoiceCatalogPage(float areaH);
+  void drawWorkshopPage(float colAreaH);
+  void renderWorkshop3D(int width, int height, double time);
+  void loadWorkshopModel(int modelIdx);
   void drawHelpContent();
   void drawHelpOverlay();
   void drawWorldLabels();
@@ -108,6 +112,7 @@ class AppGL {
   void updateColonyEconomy(float dt);
   void drawBridgeCommsToast();
   void checkBridgeCommsTriggers(const std::string& stationId);
+  void checkZettelDetectiveEvents();
   // === Planetary Landing & Surface Operations === (v4.6.1)
   void drawSurfaceReportModal();
   void updateLandingOperations(float deltaTime);
@@ -421,6 +426,25 @@ class AppGL {
   void renderMenuBackdrop(int width, int height, double time);
   bool m_hasStartedFlight = false;
   void requestCloseMenu();
+
+  // === 3D Workshop / Model Viewer (Мастерская) ===
+  int m_workshopModelIdx = 0;
+  int m_workshopCategory = 0;
+  char m_workshopSearch[64] = {};
+  float m_workshopYaw = 35.0f;
+  float m_workshopPitch = 18.0f;
+  float m_workshopDist = 5.0f;
+  glm::vec2 m_workshopPan{0.0f, 0.0f};
+  bool m_workshopAutoRotate = true;
+  float m_workshopRotateSpeed = 20.0f;
+  bool m_workshopWireframe = false;
+  int m_workshopRenderMode = 0;
+  float m_workshopLightAngle = 45.0f;
+  float m_workshopLightIntensity = 1.6f;
+  ObjModel m_workshopModel;
+  std::unique_ptr<Shader> m_workshopShader;
+  bool m_workshopShaderTried = false;
+  bool m_workshopModelLoaded = false;
 
   void drawPatchNotesModal();
   bool m_hideUI = false;

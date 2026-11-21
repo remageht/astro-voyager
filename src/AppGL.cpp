@@ -2443,6 +2443,37 @@ void AppGL::checkBridgeCommsTriggers(const std::string& stationId) {
   }
 }
 
+void AppGL::checkZettelDetectiveEvents() {
+  auto events = m_zettelkasten.pollNewDetectiveEvents();
+  if (events.empty()) return;
+  double now = glfwGetTime();
+  for (const auto& ev : events) {
+    if (ev == kDetectiveCaseArsenyShuttles && !m_bridgeComms.hasTriggered("detective_arseny_shuttles")) {
+      RadioMessage msg;
+      msg.id = "detective_arseny_shuttles";
+      msg.callsignRu = "Арсений [Зашифрованный канал]";
+      msg.callsignEn = "Arseny [Encrypted Channel]";
+      msg.textRu = "Ты сопоставил лог декомпрессии с турелями... Да, Егорка. Я отдал приказ срезать стыковочные захваты и сжечь 14 челноков. Либо они детонируют в горловине червоточины и разорвут весь «Мянь Лун», либо крейсер выйдет с оставшимися двумя тысячами. Меня прозвали Палачом не за жестокость — а за то, что я не дал им умереть в иллюзиях.";
+      msg.textEn = "You matched the decompression impulses to the turret cycle... Yes, Egorka. I gave the order to shear the docking clamps and fire on the 14 shuttles. Either they detonated inside the wormhole throat obliterating the entire «Mian Long», or the cruiser escaped with the remaining two thousand souls. They called me Executioner not for cruelty — but because I refused to let them die in false hope.";
+      msg.priority = 3.0f;
+      msg.durationSec = 12.0;
+      m_bridgeComms.queueMessage(msg, now);
+      m_audio.playRadioBeep();
+    } else if (ev == kDetectiveCaseMiaContraband && !m_bridgeComms.hasTriggered("detective_mia_contraband")) {
+      RadioMessage msg;
+      msg.id = "detective_mia_contraband";
+      msg.callsignRu = "Мия Сато [Приватная линия]";
+      msg.callsignEn = "Mia Sato [Private Comms]";
+      msg.textRu = "Ты заметил лишний вес контейнера 404-B... Пожалуйста, не докладывай Совету. Там не только семена. Под кварцевым грунтом — кристаллы памяти. Голоса школьников из Парижа, колыбельная матери из Токио... тех, кого комиссия посчитала 'биологическим балластом'. Если мы построим колонию на M13, их голоса должны зазвучать там первыми.";
+      msg.textEn = "You noticed the extra weight in container 404-B... Please, don't report this to the Council. It isn't just seeds. Beneath the quartz soil are memory crystals. Voices of Paris schoolkids, a mother's lullaby from Tokyo... those the committee wrote off as 'biological ballast'. If we build a home on M13, their voices must be the first to echo under its skies.";
+      msg.priority = 3.0f;
+      msg.durationSec = 12.0;
+      m_bridgeComms.queueMessage(msg, now);
+      m_audio.playRadioBeep();
+    }
+  }
+}
+
 void AppGL::drawPhotoPopup() {
   drawPhotoDirectorOverlay();
 
@@ -7958,7 +7989,8 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
   if (m_codexOpen && !m_inMenu) {
     drawCodex();
   }
-  if (!m_inMenu) {
+  checkZettelDetectiveEvents();
+  if (!m_inMenu || m_bridgeComms.hasActiveMessage()) {
     drawBridgeCommsToast();
   }
   // === Planetary Landing & Surface Operations === (v4.6.1)
@@ -10647,6 +10679,10 @@ void AppGL::renderMenuBackdrop(int width, int height, double time) {
   glBindTexture(GL_TEXTURE_2D, m_menuBgTex);
   m_menuSkyQuad->draw();
   m_menuSkyShader->unbind();
+
+  if (m_menuPage == 6) {
+    renderWorkshop3D(width, height, time);
+  }
 }
 
 void AppGL::drawMainMenuBackground(float screenW, float screenH) {
@@ -10721,9 +10757,10 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
   if (hoveredOption == 0) headerTitle = uiRu("ТЕЛЕМЕТРИЯ // ВОЗОБНОВЛЕНИЕ", "TELEMETRY // RESUME FLIGHT");
   else if (hoveredOption == 1) headerTitle = uiRu("ЭКСПЕДИЦИОННЫЙ ПРОТОКОЛ // СТАРТ", "EXPEDITION // START MISSION");
   else if (hoveredOption == 2) headerTitle = uiRu("РЕЖИМ НАВИГАЦИИ // SANDBOX", "NAVIGATION // FREE FLIGHT");
-  else if (hoveredOption == 3) headerTitle = uiRu("СИСТЕМНЫЕ СЛУЖБЫ // КОНФИГУРАЦИЯ", "SYSTEM CONFIG // SETTINGS");
-  else if (hoveredOption == 4) headerTitle = uiRu("АРХИВ ДАННЫХ // ZETTELKASTEN", "ARCHIVE // EXTRA MATERIALS");
-  else if (hoveredOption == 5) headerTitle = uiRu("ЗАВЕРШЕНИЕ СЕАНСА // ВЫХОД", "SESSION // EXIT TO DESKTOP");
+  else if (hoveredOption == 3) headerTitle = uiRu("3D МАСТЕРСКАЯ // АНГАР МОДЕЛЕЙ", "3D WORKSHOP // HANGAR CATALOG");
+  else if (hoveredOption == 4) headerTitle = uiRu("СИСТЕМНЫЕ СЛУЖБЫ // КОНФИГУРАЦИЯ", "SYSTEM CONFIG // SETTINGS");
+  else if (hoveredOption == 5) headerTitle = uiRu("АРХИВ ДАННЫХ // ZETTELKASTEN", "ARCHIVE // EXTRA MATERIALS");
+  else if (hoveredOption == 6) headerTitle = uiRu("ЗАВЕРШЕНИЕ СЕАНСА // ВЫХОД", "SESSION // EXIT TO DESKTOP");
 
   dl->AddText(ImVec2(p0.x + padX + 14.0f, curY), menuui::accentAlpha(230), headerTitle);
 
@@ -10775,16 +10812,21 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
     drawParamLine(uiRu("ФИЗИКА:", "PHYSICS:"), uiRu("РЕЛЯТИВИСТСКИЕ МЕТРИКИ", "RELATIVISTIC METRICS"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("ПОСАДКА:", "LANDING:"), uiRu("ПЛАНЕТАРНЫЙ ВАРИОМЕТР", "PLANETARY VARIOMETER"));
   } else if (hoveredOption == 3) {
+    drawParamLine(uiRu("КАТАЛОГ:", "CATALOG:"), uiRu("57 АКТИВНЫХ 3D-ОБЪЕКТОВ", "57 ACTIVE 3D ASSETS"), menuui::kAccentU32);
+    drawParamLine(uiRu("РЕНДЕРЕР:", "RENDERER:"), uiRu("PBR TURNTABLE / ПЬЕДЕСТАЛ", "PBR TURNTABLE / PEDESTAL"), IM_COL32(16, 185, 129, 255));
+    drawParamLine(uiRu("СИСТЕМЫ:", "SYSTEMS:"), uiRu("ФЛОТ, КОЛОНИИ, СТАНЦИИ", "FLEET, COLONIES, STATIONS"));
+    drawParamLine(uiRu("ДИАГНОСТИКА:", "DIAGNOSTICS:"), uiRu("СЕТКА / PBR / CLAY / NORMALS", "WIRE / PBR / CLAY / NORMALS"));
+  } else if (hoveredOption == 4) {
     drawParamLine(uiRu("ПОДСИСТЕМА:", "SUBSYSTEM:"), uiRu("ГРАФИКА / ЗВУК / ВВОД", "GRAPHICS / AUDIO / INPUT"), menuui::kAccentU32);
     drawParamLine(uiRu("АККРЕЦИОННЫЙ ДИСК:", "ACCRETION DISK:"), uiRu("ПРОЦЕДУРНЫЙ GLSL", "PROCEDURAL GLSL"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("АУДИО ДВИЖОК:", "AUDIO ENGINE:"), uiRu("MINIAUDIO PRO", "MINIAUDIO PRO"));
     drawParamLine(uiRu("ОПТИМИЗАЦИЯ:", "OPTIMIZATION:"), uiRu("НУЛЕВОЙ ОВЕРХЕД CPU", "ZERO CPU OVERHEAD"));
-  } else if (hoveredOption == 4) {
+  } else if (hoveredOption == 5) {
     drawParamLine(uiRu("БАЗА ЗНАНИЙ:", "KNOWLEDGE BASE:"), uiRu("ZETTELKASTEN // 28 КАРТОЧЕК", "ZETTELKASTEN // 28 CARDS"), menuui::kAccentU32);
     drawParamLine(uiRu("САУНДТРЕК:", "SOUNDTRACK:"), uiRu("ГОЛОСА ЭКИПАЖА И ТЕМА", "CREW VOICES & THEMES"));
     drawParamLine(uiRu("АРХИВ НАБЛЮДЕНИЙ:", "ARCHIVES:"), uiRu("АКТИВЕН И СИНХРОНИЗИРОВАН", "ACTIVE & SYNCED"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("СПЕКТРОМЕТРИЯ:", "SPECTROMETRY:"), uiRu("РЕГИСТРАЦИЯ БИОСИГНАТУР", "BIOSIGNATURE SCAN"));
-  } else if (hoveredOption == 5) {
+  } else if (hoveredOption == 6) {
     drawParamLine(uiRu("ДЕЙСТВИЕ:", "ACTION:"), uiRu("ВЫХОД НА РАБОЧИЙ СТОЛ", "EXIT TO DESKTOP"), IM_COL32(239, 68, 68, 255));
     drawParamLine(uiRu("СОХРАНЕНИЕ:", "AUTOSAVE:"), uiRu("ПРОФИЛЬ ЗАПИСАН", "PROFILE SYNCED"), IM_COL32(16, 185, 129, 255));
     drawParamLine(uiRu("РЕСУРСЫ GPU:", "GPU RESOURCES:"), uiRu("БЕЗОПАСНАЯ ВЫГРУЗКА", "SAFE RELEASE"));
@@ -10987,37 +11029,49 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   }
 
   ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("СИСТЕМНЫЕ НАСТРОЙКИ", "SYSTEM SETTINGS"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "04", "[S]")) {
-    m_menuPage = 1;
+  if (drawTacticalCutButton(uiRu("МАСТЕРСКАЯ 3D", "3D WORKSHOP"),
+                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "04", "[W]")) {
+    m_menuPage = 6;
     m_pageTransitionTimer = 0.0f;
     m_audio.playBlip();
   }
   if (ImGui::IsItemHovered()) {
     hoveredOption = 3;
-    ImGui::SetTooltip("%s", uiRu("Графика, звук, симуляция и управление", "Graphics, audio, simulation and controls"));
+    ImGui::SetTooltip("%s", uiRu("Интерактивный 3D-ангар моделей: флот, базы, станции", "Interactive 3D model hangar: fleet, colonies, stations"));
   }
 
   ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("АРХИВ И ДАННЫЕ", "DATA ARCHIVE & EXTRAS"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "05", "[A]")) {
-    m_menuPage = 5;
+  if (drawTacticalCutButton(uiRu("СИСТЕМНЫЕ НАСТРОЙКИ", "SYSTEM SETTINGS"),
+                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "05", "[S]")) {
+    m_menuPage = 1;
     m_pageTransitionTimer = 0.0f;
     m_audio.playBlip();
   }
   if (ImGui::IsItemHovered()) {
     hoveredOption = 4;
+    ImGui::SetTooltip("%s", uiRu("Графика, звук, симуляция и управление", "Graphics, audio, simulation and controls"));
+  }
+
+  ImGui::SetCursorPosX(leftMargin);
+  if (drawTacticalCutButton(uiRu("АРХИВ И ДАННЫЕ", "DATA ARCHIVE & EXTRAS"),
+                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "06", "[A]")) {
+    m_menuPage = 5;
+    m_pageTransitionTimer = 0.0f;
+    m_audio.playBlip();
+  }
+  if (ImGui::IsItemHovered()) {
+    hoveredOption = 5;
     ImGui::SetTooltip("%s", uiRu("База знаний Zettelkasten, саундтрек и статистика", "Zettelkasten knowledge base, soundtrack and stats"));
   }
 
   ImGui::Dummy(ImVec2(0.0f, 4.0f));
   ImGui::SetCursorPosX(leftMargin);
   if (drawTacticalCutButton(uiRu("ВЫХОД ИЗ СИСТЕМЫ", "EXIT SYSTEM"),
-                           ImVec2(cmdW, 38.0f), IM_COL32(70, 110, 140, 130), navBg, 10.0f, nullptr, "06", "[ESC]")) {
+                           ImVec2(cmdW, 38.0f), IM_COL32(70, 110, 140, 130), navBg, 10.0f, nullptr, "07", "[ESC]")) {
     glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
   }
   if (ImGui::IsItemHovered()) {
-    hoveredOption = 5;
+    hoveredOption = 6;
     ImGui::SetTooltip("%s", uiRu("Штатное завершение сеанса и сохранение", "Graceful shutdown and save telemetry"));
   }
 
@@ -11049,6 +11103,10 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
     } else if (ImGui::IsKeyPressed(ImGuiKey_F)) {
       m_hasStartedFlight = true;
       requestCloseMenu();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_W)) {
+      m_menuPage = 6;
+      m_pageTransitionTimer = 0.0f;
+      m_audio.playBlip();
     } else if (ImGui::IsKeyPressed(ImGuiKey_S)) {
       m_menuPage = 1;
       m_pageTransitionTimer = 0.0f;
@@ -11131,7 +11189,8 @@ void AppGL::drawMenu() {
                                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
 
   // === Cold Obsidian Console Theme ===: обсидиановое стекло + бирюзовые акценты, без янтарной «радуги»
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.030f, 0.96f));
+  const float winBgAlpha = (m_menuPage == 6) ? 0.0f : 0.96f;
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.030f, winBgAlpha));
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.82f, 0.86f, 0.88f, 0.92f));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.14f, 0.22f, 0.85f));
   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.13f, 0.34f, 0.46f, 0.98f));
@@ -11158,6 +11217,12 @@ void AppGL::drawMenu() {
     ImDrawList* tdl = ImGui::GetWindowDrawList();
     const ImVec2 tpos = ImGui::GetCursorScreenPos();
     const float gw = ImGui::GetContentRegionAvail().x;
+    
+    if (m_menuPage == 6) {
+      tdl->AddRectFilled(ImVec2(tpos.x - 4.0f, tpos.y - 2.0f),
+                         ImVec2(tpos.x + gw + 4.0f, tpos.y + 36.0f),
+                         IM_COL32(6, 12, 18, 235), 4.0f);
+    }
     
     // Заклепки / винты по краям плашки
     tdl->AddCircleFilled(ImVec2(tpos.x + 4.0f, tpos.y + 4.0f), 3.0f, IM_COL32(14, 22, 30, 255));
@@ -11197,7 +11262,7 @@ void AppGL::drawMenu() {
       ImGui::PopStyleColor(2);
     };
 
-    ImGui::SameLine(gw - 540.0f);
+    ImGui::SameLine(gw - 670.0f);
     drawHeaderTab(uiRu("<< МЕНЮ", "<< MAIN"), 0);
     ImGui::SameLine();
     drawHeaderTab(uiRu("02 НАСТРОЙКИ", "02 SETTINGS"), 1);
@@ -11207,6 +11272,8 @@ void AppGL::drawMenu() {
     drawHeaderTab(uiRu("04 ГОЛОСА", "04 VOICES"), 4);
     ImGui::SameLine();
     drawHeaderTab(uiRu("05 ВЕРСИЯ", "05 VERSION"), 3);
+    ImGui::SameLine();
+    drawHeaderTab(uiRu("06 МАСТЕРСКАЯ", "06 WORKSHOP"), 6);
 
     ImGui::Spacing();
   }
@@ -11800,6 +11867,8 @@ void AppGL::drawMenu() {
     ImGui::EndChild();
   } else if (m_menuPage == 4) {
     drawVoiceCatalogPage(colAreaH);
+  } else if (m_menuPage == 6) {
+    drawWorkshopPage(colAreaH);
   } else {
     if (ImGui::BeginChild("##pageFallback", ImVec2(-1.0f, colAreaH), true)) {
       ImGui::Text("Help - Controls");
@@ -11825,6 +11894,13 @@ void AppGL::drawMenu() {
 
   {
     const float barW = ImGui::GetContentRegionAvail().x;
+    if (m_menuPage == 6) {
+      ImDrawList* bdl = ImGui::GetWindowDrawList();
+      const ImVec2 bpos = ImGui::GetCursorScreenPos();
+      bdl->AddRectFilled(ImVec2(bpos.x - 4.0f, bpos.y - 4.0f),
+                         ImVec2(bpos.x + barW + 4.0f, bpos.y + 36.0f),
+                         IM_COL32(6, 12, 18, 235), 4.0f);
+    }
     if (drawAnimatedTactileToggle("WARP", m_toggleWarpStandby, m_togglePosWarp, io.DeltaTime,
                                   menuui::kLed)) {
       m_audio.playBlip();
@@ -12354,6 +12430,821 @@ void AppGL::drawVoiceCatalogPage(float areaH) {
     }
   }
   ImGui::EndChild();
+}
+
+namespace {
+struct WorkshopAssetEntry {
+  const char* id;
+  const char* nameRu;
+  const char* nameEn;
+  int category; // 0: Fleet, 1: Colony, 2: Stations, 3: Celestial
+  const char* objPath;
+  const char* texBase;
+  const char* sharedBase;
+  float defaultDist;
+  const char* descRu;
+  const char* descEn;
+};
+
+static const WorkshopAssetEntry kWorkshopCatalog[] = {
+  // === 0: Флот и корабли (Fleet) ===
+  {"dart", "Разведчик «Дротик»", "Dart Interceptor", 0,
+   "res/models/dart.obj", "res/models/dart", nullptr, 4.5f,
+   "Сверхзвуковой суборбитальный перехватчик с дельта-крылом. Оснащен высокореактивными соплами ориентации и усиленным носовым обтекателем.",
+   "Supersonic suborbital interceptor with delta wings, high-thrust reaction thrusters and reinforced nose radome."},
+
+  {"shuttle", "Исследовательский челнок", "Exploration Shuttle", 0,
+   "res/models/shuttle.obj", "res/models/shuttle", nullptr, 4.8f,
+   "Многоцелевой десантный транспорт с несущим композитным корпусом и панорамным блистером кабины. Предназначен для челночных рейсов на поверхность.",
+   "Multipurpose dropship explorer with lifting body composite hull and panoramic cockpit blister for surface atmospheric sorties."},
+
+  {"ring_ship", "Кольцевой варп-крейсер", "Tri-Ring Warp Cruiser", 0,
+   "res/models/ring_ship.obj", "res/models/ring_ship", nullptr, 5.5f,
+   "Тяжелый дальний эксплорер с тройной системой колец Алькубьерре. Кольцевые тороиды генерируют деформацию метрики пространства-времени.",
+   "Heavy deep-space explorer equipped with a triple Alcubierre warp ring system generating spacetime metric deformation."},
+
+  {"mining_dreadnought", "Добывающий дредноут", "Mining Dreadnought", 0,
+   "res/models/mining_dreadnought.obj", "res/models/mining_dreadnought", nullptr, 5.5f,
+   "Индустриальный колониальный транспорт высокой грузоподъемности. Усиленный нос с магнитными захватами и тяжелыми буровыми лазерами.",
+   "Heavy-lift industrial colonial transport with magnetic grappling anchors and heavy plasma mining arrays."},
+
+  {"voyager", "Звёздный странник «Вояджер»", "Star Voyager", 0,
+   "res/models/voyager.obj", "res/models/voyager", nullptr, 5.2f,
+   "Флагманский исследовательский звездолёт первой межзвёздной экспедиции к чёрной дыре Керра. Автономный научный комплекс глубокого космоса.",
+   "Flagship exploration starship of the first interstellar mission to the Kerr black hole. Autonomous deep-space scientific suite."},
+
+  {"dragon", "Пилотируемый корабль «Дракон»", "Dragon Capsule", 0,
+   "res/models/dragon.obj", "res/models/dragon", nullptr, 4.5f,
+   "Экипажная капсула с аэродинамическим термозащитным экраном PICA-X и встроенными маневровыми двигателями SuperDraco.",
+   "Crew capsule featuring PICA-X aerodynamic heat shield and integrated SuperDraco abort thruster pods."},
+
+  {"soyuz", "Орбитальный корабль «Союз»", "Soyuz Spacecraft", 0,
+   "res/models/soyuz.obj", "res/models/soyuz", nullptr, 4.5f,
+   "Легендарный модульный космический корабль: бытовой отсек, спускаемый аппарат и приборно-агрегатный модуль с солнечными батареями.",
+   "Legendary modular spacecraft: orbital module, descent capsule, and instrumentation propulsion module with solar arrays."},
+
+  {"sail", "Фотонный парусник", "Solar Sail Probe", 0,
+   "res/models/sail.obj", "res/models/sail", nullptr, 4.5f,
+   "Беспилотный сверхлегкий зонд с развертываемым дифракционным световым парусом для ускорения давлением солнечного ветра.",
+   "Uncrewed ultralight probe propelled by photon radiation pressure on a deployable diffractive solar sail."},
+
+  {"lander", "Посадочный модуль «Альтаир»", "Planetary Lander", 0,
+   "res/models/lander.obj", "res/models/lander", nullptr, 4.5f,
+   "Автономный модуль высадки на безатмосферные тела с четырьмя телескопическими опорами и посадочной ступенью мягкого касания.",
+   "Autonomous airless body lander with four telescopic shock-absorbing struts and soft-touchdown descent stage."},
+
+  {"rover", "Геологический марсоход", "Survey Rover", 0,
+   "res/models/rover.obj", "res/models/rover", nullptr, 4.2f,
+   "Шестиколесный планетарный вездеход с подвеской rocker-bogie, мачтой панорамных спектрометров и роботизированным манипулятором-буром.",
+   "Six-wheeled planetary rover with rocker-bogie suspension, panoramic spectrometry mast, and robotic drill arm."},
+
+  {"probe", "Глубококосмический зонд", "Deep Space Probe", 0,
+   "res/models/probe.obj", "res/models/probe", nullptr, 3.8f,
+   "Автоматическая межпланетная станция с параболической антенной дальней связи, радиоизотопным РИТЭГ и штангой магнитометра.",
+   "Deep space robotic probe with high-gain parabolic dish antenna, radioisotope RTG, and magnetometer boom."},
+
+  {"warp_ship", "Варп-звездолёт Алькубьерре", "Alcubierre Warp Cruiser", 0,
+   "res/models/warp_ship.obj", "res/models/warp_ship", nullptr, 6.0f,
+   "Полномасштабный звездолет со сдвоенными гондолами искривления пространства и центральным мостиком.",
+   "Full-scale warp starship with twin Alcubierre nacelles, Bussard collectors and deflector array."},
+
+  {"warp_ship_separated", "Варп-корабль (разделяемый)", "Separated Warp Ship", 0,
+   "res/models/warp_ship_separated.obj", nullptr, "res/models/warp_ship", 6.0f,
+   "Конфигурация с разделенной командной секцией для суборбитальных посадок при сохранении орбитального варп-кольца.",
+   "Separated command module configuration allowing atmospheric landing while maintaining orbital warp ring readiness."},
+
+  // === 1: Колониальная инфраструктура (Colony 28 assets) ===
+  {"colony_park", "Центральный биопарк", "Central Bio-Park", 1,
+   "res/models/colony_park.obj", "res/models/colony_park", nullptr, 5.0f,
+   "Купольный природный оазис с терраформированной флорой Земли, замкнутым циклом кислорода и рекреационной зоной для колонистов.",
+   "Domed nature biosphere park with terraformed Earth flora, closed-loop oxygen cycle and wellness commons for settlers."},
+
+  {"colony_market", "Торговый центр колонии", "Colony Market & Agora", 1,
+   "res/models/colony_market.obj", "res/models/colony_market", nullptr, 5.0f,
+   "Общественный торговый хаб и агора поселения. Зона распределения ресурсов, обмена синтезированными продуктами и культурной жизни.",
+   "Civic commercial hub and settlement agora for resource distribution, synthesized trade goods, and civic life."},
+
+  {"colony_water", "Водоочистной комплекс", "Water Purification Plant", 1,
+   "res/models/colony_water.obj", "res/models/colony_water", nullptr, 5.0f,
+   "Гидротехнический комплекс замкнутого цикла: опреснение подповерхностного льда, многоступенчатая фильтрация и рециркуляция.",
+   "Closed-loop water refinery: subsurface glacier melting, multi-stage catalytic filtration and high-pressure recirculation."},
+
+  {"colony_greenhouse", "Гидропонная оранжерея", "Hydroponic Greenhouse", 1,
+   "res/models/colony_greenhouse.obj", "res/models/colony_greenhouse", nullptr, 5.0f,
+   "Вертикальная гидропонная и аэропонная фабрика синтеза биомассы с настраиваемым спектром ультрафиолетового освещения.",
+   "Vertical aeroponic biomass cultivation facility with spectrum-tuned LED growth arrays and autonomous nutrition dosing."},
+
+  {"colony_hospital", "Главный госпиталь", "Regional Hospital", 1,
+   "res/models/colony_hospital.obj", "res/models/colony_hospital", nullptr, 5.0f,
+   "Многопрофильный медицинский стационар с хирургическими роботами, биокапсулами регенерации и карантинным боксом.",
+   "Full-spectrum medical trauma center with robotic surgical pods, tissue regeneration baths, and biocontainment wards."},
+
+  {"colony_clinic", "Медицинская клиника", "Medical Clinic", 1,
+   "res/models/colony_clinic.obj", "res/models/colony_clinic", nullptr, 4.5f,
+   "Районная поликлиника первичной медико-санитарной помощи, радиационного мониторинга и скрининга адаптации колонистов.",
+   "Neighborhood medical clinic for outpatient care, radiation dosimeter monitoring, and gravity adaptation checks."},
+
+  {"colony_school", "Академия и школа", "Science Academy & School", 1,
+   "res/models/colony_school.obj", "res/models/colony_school", nullptr, 5.0f,
+   "Образовательный центр и научно-техническая академия для подготовки нового поколения инженеров и исследователей.",
+   "Educational STEM academy and immersive simulator school for training the next generation of engineers and explorers."},
+
+  {"colony_fire", "Служба спасения и пожарные", "Emergency & Fire Station", 1,
+   "res/models/colony_fire.obj", "res/models/colony_fire", nullptr, 4.5f,
+   "Оперативная станция аварийно-спасательных служб: техника разгерметизации, вакуумные пенные тушители и антидетонационные боксы.",
+   "Emergency response depot with vacuum-proof suppression foamers, breach rescue skiffs, and hazard containment suits."},
+
+  {"colony_dome", "Жилой геокупол", "Biosphere Habitat Dome", 1,
+   "res/models/colony_dome.obj", "res/models/colony_dome", nullptr, 5.0f,
+   "Геодезический купол из прозрачного бронированного поликарбоната с искусственной атмосферой 1 атм и радиационной защитой.",
+   "Geodesic poly-shield habitat dome providing 1 atm conditioned air and multilayer radiation attenuation."},
+
+  {"colony_factory", "Промышленный завод", "Fabrication Plant", 1,
+   "res/models/colony_factory.obj", "res/models/colony_factory", nullptr, 5.0f,
+   "Автоматизированный комплекс 3D-печати конструкционных сплавов, композитов и сборки тяжелой техники колонии.",
+   "Heavy robotic metallurgy foundry and additive composite fabrication facility for colony expansion components."},
+
+  {"colony_datacenter", "Квантовый дата-центр", "Quantum Data Center", 1,
+   "res/models/colony_datacenter.obj", "res/models/colony_datacenter", nullptr, 5.0f,
+   "Криогенно охлаждаемый суперкомпьютер с оптическими матрицами и квантовым архивом знаний Zettelkasten.",
+   "Cryogenically cooled quantum supercomputing array hosting colony telemetric nodes and Zettelkasten second brain archives."},
+
+  {"colony_nuclear", "Ядерный реактор колонии", "Nuclear Reactor Facility", 1,
+   "res/models/colony_nuclear.obj", "res/models/colony_nuclear", nullptr, 5.0f,
+   "Компактный ториевый жидкосолевой реактор с тройным контуром безопасности и магнитогидродинамическим преобразователем энергии.",
+   "Compact molten-salt thorium fission power core delivering gigawatt baseload energy with triple passive cooling containment."},
+
+  {"colony_thermal", "Геотермальная станция", "Geothermal Station", 1,
+   "res/models/colony_thermal.obj", "res/models/colony_thermal", nullptr, 5.0f,
+   "Скважинный энергокомплекс, утилизирующий эндогенное тепло планетарного ядра через замкнутый фреоновый цикл.",
+   "Deep-well geothermal thermoelectric generation station utilizing volcanic mantle convection currents."},
+
+  {"colony_hydro", "Гидроэлектростанция", "Hydro Generation Plant", 1,
+   "res/models/colony_hydro.obj", "res/models/colony_hydro", nullptr, 5.0f,
+   "Турбинная станция на подповерхностных криопотоках и метановых реках внешних спутников.",
+   "Subsurface cryogenic fluid turbine plant extracting kinetic energy from cryogenic liquid flows."},
+
+  {"colony_townhall", "Ратуша администрации", "Colony Townhall", 1,
+   "res/models/colony_townhall.obj", "res/models/colony_townhall", nullptr, 4.5f,
+   "Центр координации жизнедеятельности поселения, распределения квот и связи с орбитальной станцией.",
+   "Civic administration hall for demographic coordination, resource rationing, and orbital communication links."},
+
+  {"colony_parliament", "Совет поселения", "Council Parliament", 1,
+   "res/models/colony_parliament.obj", "res/models/colony_parliament", nullptr, 4.5f,
+   "Зал ассамблеи колониального самоуправления для принятия законов и директив межзвездной хартии.",
+   "Democratic assembly chamber and inter-faction arbitration council hall of the frontier settlement."},
+
+  {"colony_police", "Служба безопасности", "Security & Police", 1,
+   "res/models/colony_police.obj", "res/models/colony_police", nullptr, 4.5f,
+   "Штаб охраны правопорядка, мониторинга периметра и управления защитными автоматическими турелями базы.",
+   "Colonial constabulary station with sensor telemetry monitoring, drone hangars, and perimeter control gates."},
+
+  {"colony_warehouse", "Логистический склад", "Logistics Warehouse", 1,
+   "res/models/colony_warehouse.obj", "res/models/colony_warehouse", nullptr, 5.0f,
+   "Высокостеллажный автоматизированный терминал долговременного хранения продовольствия, металлов и реагентов.",
+   "Automated high-bay logistics depot with pressurized storage cells for ores, nutrients, and replacement drives."},
+
+  {"colony_military", "Оборонный форпост", "Defense Outpost", 1,
+   "res/models/colony_military.obj", "res/models/colony_military", nullptr, 5.0f,
+   "Бронированный бункер с фазированной РЛС раннего предупреждения об астероидной угрозе и противоударными шахтами.",
+   "Fortified defense redoubt with planetary phased-array radar, ballistic shields, and meteor intercept silos."},
+
+  {"colony_houses", "Модульный жилой сектор", "Residential Habitat Sector", 1,
+   "res/models/colony_houses.obj", "res/models/colony_houses", nullptr, 5.0f,
+   "Индивидуальные модульные капсулы колонистов с приватными садами и индивидуальными шлюзовыми камерами.",
+   "Modular residential habitat blocks offering personalized settler quarters, micro-gardens, and personal airlocks."},
+
+  {"colony_apartments", "Многоэтажный жилой комплекс", "Apartment Complex", 1,
+   "res/models/colony_apartments.obj", "res/models/colony_apartments", nullptr, 5.0f,
+   "Многоярусный высотный жилой массив высокой плотности с интегрированными системами регенерации воды и воздуха.",
+   "High-density multi-story residential towers with integrated acoustic baffles and localized air scrubbers."},
+
+  {"colony_pipeline", "Магистральный криотрубопровод", "Main Cryo-Pipeline", 1,
+   "res/models/colony_pipeline.obj", "res/models/colony_pipeline", nullptr, 5.0f,
+   "Вакуумированный изолированный трубопровод перекачки жидкого водорода, гелия-3 и чистой воды между районами базы.",
+   "Cryo-jacketed high-throughput pipeline moving liquid hydrogen, Helium-3, and potable water across districts."},
+
+  {"colony_powerline", "Энергосеть и ЛЭП", "Power Transmission Grid", 1,
+   "res/models/colony_powerline.obj", "res/models/colony_powerline", nullptr, 5.0f,
+   "Сверхпроводящие пилоны магистральной передачи мегаваттных потоков энергии без омических потерь.",
+   "High-temperature superconducting energy transmission towers distributing power without resistive drop."},
+
+  {"colony_solar", "Солнечная ферма", "Photovoltaic Solar Farm", 1,
+   "res/models/colony_solar.obj", "res/models/colony_solar", nullptr, 5.0f,
+   "Массив двусторонних кремниево-перовскитных фотоэлектрических панелей с автоматическим трекингом светила.",
+   "Dual-junction silicon-perovskite solar tracking array with automated self-cleaning electro-repulsive coating."},
+
+  {"colony_diesel", "Резервный генератор", "Backup Power Generator", 1,
+   "res/models/colony_diesel.obj", "res/models/colony_diesel", nullptr, 4.5f,
+   "Автономный генератор аварийного питания на синтетическом топливе для критических систем жизнеобеспечения.",
+   "Heavy-duty synthetic hydrocarbon auxiliary generator for emergency life-support fallback."},
+
+  {"colony_inverter", "Квантовый инвертор энергии", "Power Inverter Substation", 1,
+   "res/models/colony_inverter.obj", "res/models/colony_inverter", nullptr, 4.5f,
+   "Твердотельная распределительная подстанция с квантовыми сглаживающими конденсаторами емкостью в мегаджоули.",
+   "Solid-state power inversion substation with high-voltage solid-state capacitors and transient surge arresters."},
+
+  {"colony_wind", "Атмосферный ветрогенератор", "Atmospheric Wind Turbine", 1,
+   "res/models/colony_wind.obj", "res/models/colony_wind", nullptr, 5.0f,
+   "Тяжелая ветротурбина с углепластиковыми лопастями для генерации энергии в плотной атмосфере планет и спутников.",
+   "High-density atmospheric wind generator optimized for high-pressure alien weather fronts."},
+
+  {"colony_pad", "Посадочная площадка", "Surface Landing Pad", 1,
+   "res/models/colony_pad.obj", "res/models/colony_pad", nullptr, 4.5f,
+   "Термостойкая монолитная стартово-посадочная платформа с автоматическими заправочными коннекторами и световой разметкой.",
+   "Reinforced landing pad with blast deflector trenches, automated umbilical refuel couplers, and optical nav guidance."},
+
+  // === 2: Станции и мегаструктуры (Stations 13 assets) ===
+  {"station", "Орбитальная станция (комплекс)", "Orbital Station Complex", 2,
+   "res/models/station.obj", "res/models/station", nullptr, 5.5f,
+   "Базовый орбитальный форпост человечества на околоземной и планетарной орбитах. Центр докования и торговли.",
+   "Standard orbital orbital outpost and interplanetary trade terminus with pressurized habitat rings."},
+
+  {"station_core", "Осевой модуль станции", "Station Core Hub", 2,
+   "res/models/station_core.obj", nullptr, "res/models/station", 5.0f,
+   "Центральный осевой хаб с нулевой гравитацией, шлюзовыми портами стандарта IDA и квантовыми антеннами ретранслятора.",
+   "Zero-G central axial hub with IDA standard docking mechanisms and quantum communication repeaters."},
+
+  {"station_ring", "Гравитационное кольцо станции", "Station Habitat Ring", 2,
+   "res/models/station_ring.obj", nullptr, "res/models/station", 5.0f,
+   "Вращающийся центробежный модуль обитания, создающий комфортную искусственную гравитацию 0.8g для экипажа.",
+   "Centrifugal rotating habitat ring providing simulated 0.8g gravity for long-duration crew health."},
+
+  {"station_panels", "Солнечные батареи станции", "Station Solar Panels", 2,
+   "res/models/station_panels.obj", nullptr, "res/models/station", 5.0f,
+   "Ориентируемые фотоэлектрические панели станции с радиаторами сброса избыточного технологического тепла.",
+   "Sun-tracking photovoltaic arrays coupled with high-emissivity thermal radiators."},
+
+  {"station_aurora", "Станция дальнего рубежа «Аврора»", "Aurora Deep Station", 2,
+   "res/models/station_aurora.obj", "res/models/station_aurora", nullptr, 5.5f,
+   "Глубококосмическая форпост-обсерватория у границы эргосферы чёрной дыры с защитными магнитными дефлекторами.",
+   "Deep-space vanguard outpost operating near the black hole ergosphere with heavy magnetic deflector arrays."},
+
+  {"station_aurora_core", "Ядро «Авроры»", "Aurora Core Hub", 2,
+   "res/models/station_aurora_core.obj", nullptr, "res/models/station_aurora", 5.0f,
+   "Тяжелобронированное центральное ядро «Авроры» с лабораторными отсеками гравитационно-волнового анализа.",
+   "Heavy-armored central core of Aurora hosting gravitational wave interferometers and singularity laboratories."},
+
+  {"station_aurora_ring", "Кольцо «Авроры»", "Aurora Habitat Ring", 2,
+   "res/models/station_aurora_ring.obj", nullptr, "res/models/station_aurora", 5.0f,
+   "Обитаемый тор станции «Аврора» со смотровыми блистерами, направленными на аккреционный диск чёрной дыры.",
+   "Living quarters ring of Station Aurora with shielded viewing galleries pointed toward the accretion disk."},
+
+  {"telescope", "Космический телескоп", "Space Observatory Telescope", 2,
+   "res/models/telescope.obj", "res/models/telescope", nullptr, 5.0f,
+   "Орбитальная астрофизическая обсерватория инфракрасного и субмиллиметрового диапазонов с охлаждаемыми криодетекторами.",
+   "Orbital infrared and submillimeter space telescope observatory with cryogenically chilled detectors."},
+
+  {"telescope_mirror", "Первичное зеркало телескопа", "Telescope Primary Mirror", 2,
+   "res/models/telescope_mirror.obj", nullptr, "res/models/telescope", 4.5f,
+   "Сегментированное бериллиевое зеркало с золотым напылением для сверхточного сбора фотонов далеких экзопланет.",
+   "Segmented gold-coated beryllium primary mirror for extreme photon capture from distant stellar systems."},
+
+  {"telescope_body", "Корпус телескопа", "Telescope Structural Body", 2,
+   "res/models/telescope_body.obj", nullptr, "res/models/telescope", 4.5f,
+   "Несущая ажурная ферменная конструкция космического телескопа из углепластика с теплоизоляционными экранами.",
+   "Composite open-truss structural barrel of the space telescope with multilayer insulation baffles."},
+
+  {"warp_core", "Ядро варп-генератора", "Alcubierre Warp Core", 2,
+   "res/models/warp_core.obj", "res/models/warp_core", nullptr, 5.5f,
+   "Квантовый антигравитационный реактор отрицательной энергии, создающий стабильный пузырь деформации пространства-времени.",
+   "Quantum exotic matter reactor synthesizing negative energy density to sustain the Alcubierre warp bubble."},
+
+  {"warp_bubble", "Метрика варп-пузыря", "Warp Bubble Metric Shell", 2,
+   "res/models/warp_bubble.obj", "res/models/warp_bubble", nullptr, 5.0f,
+   "Геометрическая модель внешней границы метрики Алькубьерре: сжатие пространства спереди и расширение сзади.",
+   "Geometric boundary shell of the Alcubierre metric: spacetime contraction forward and expansion aft."},
+
+  {"warp_tunnel", "Пространственный туннель", "Warp Distortion Tunnel", 2,
+   "res/models/warp_tunnel.obj", "res/models/warp_tunnel", nullptr, 5.0f,
+   "Визуализатор динамического туннеля гиперпространственного перехода при включении форсажа варп-привода.",
+   "Dynamic spacetime slipstream tunnel generated during faster-than-light hyper-jump transitions."},
+
+  {"warp_drive_vis", "Визуализатор варп-поля", "Warp Field Visualizer", 2,
+   "res/models/warp_drive_vis.obj", "res/models/warp_drive_vis", nullptr, 4.5f,
+   "Аналитический симулятор силовых линий гравитационного градиента для калибровки привода перед прыжком.",
+   "Analytical gravitational tensor field simulator used by flight computers to balance warp bubble symmetry."},
+
+  // === 3: Небесные тела и астероиды (Celestial 3 assets) ===
+  {"asteroid_1", "Астероид Тип-С (хондрит)", "Asteroid Type-C (Chondrite)", 3,
+   "res/models/asteroid_1.obj", nullptr, nullptr, 4.5f,
+   "Углистый хондритовый астероид, богатый водой, летучими органическими соединениями и гидратированными глинами.",
+   "Carbonaceous C-type asteroid rich in trapped water ice, volatiles, and prebiotic organic compounds."},
+
+  {"asteroid_2", "Астероид Тип-S (силикат)", "Asteroid Type-S (Silicate)", 3,
+   "res/models/asteroid_2.obj", nullptr, nullptr, 4.5f,
+   "Каменный силикатный астероид из оливина и пироксена с вкраплениями самородного никелистого железа.",
+   "Stony S-type asteroid composed of pyroxene, olivine, and native nickel-iron nodules."},
+
+  {"asteroid_3", "Астероид Тип-M (металл)", "Asteroid Type-M (Metallic)", 3,
+   "res/models/asteroid_3.obj", nullptr, nullptr, 4.5f,
+   "Металлический астероид из чистого железа, никеля, кобальта и металлов платиновой группы — основа металлургии колонии.",
+   "Metallic M-type asteroid fragment of a shattered protoplanetary core, rich in iron, nickel, cobalt, and platinum-group metals."}
+};
+
+static constexpr size_t kWorkshopCatalogCount = sizeof(kWorkshopCatalog) / sizeof(kWorkshopCatalog[0]);
+
+struct WorkshopGridVertex {
+  float x, y, z;
+  float nx, ny, nz;
+  float u, v;
+};
+
+void drawWorkshopTurntableGrid(Shader* shader, const glm::mat4& vp, const glm::vec3& target, float floorY, double time) {
+  (void)time;
+  static unsigned int s_gridVao = 0;
+  static unsigned int s_gridVbo = 0;
+  static int s_gridVertCount = 0;
+  if (s_gridVao == 0) {
+    std::vector<WorkshopGridVertex> verts;
+    const float radii[] = {1.5f, 2.3f, 3.1f};
+    const int segments = 64;
+    for (float r : radii) {
+      for (int i = 0; i < segments; ++i) {
+        float a0 = static_cast<float>(i) / segments * 6.2831853f;
+        float a1 = static_cast<float>(i + 1) / segments * 6.2831853f;
+        verts.push_back({r * std::cos(a0), 0.0f, r * std::sin(a0), 0.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+        verts.push_back({r * std::cos(a1), 0.0f, r * std::sin(a1), 0.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+      }
+    }
+    for (int a = 0; a < 12; ++a) {
+      float ang = static_cast<float>(a) / 12.0f * 6.2831853f;
+      verts.push_back({1.1f * std::cos(ang), 0.0f, 1.1f * std::sin(ang), 0.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+      verts.push_back({3.3f * std::cos(ang), 0.0f, 3.3f * std::sin(ang), 0.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+    }
+    s_gridVertCount = static_cast<int>(verts.size());
+    glGenVertexArrays(1, &s_gridVao);
+    glGenBuffers(1, &s_gridVbo);
+    glBindVertexArray(s_gridVao);
+    glBindBuffer(GL_ARRAY_BUFFER, s_gridVbo);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(verts.size() * sizeof(WorkshopGridVertex)), verts.data(), GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(WorkshopGridVertex), reinterpret_cast<const void*>(0));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(WorkshopGridVertex), reinterpret_cast<const void*>(12));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(WorkshopGridVertex), reinterpret_cast<const void*>(24));
+    glBindVertexArray(0);
+  }
+
+  if (s_gridVao != 0 && shader) {
+    glm::mat4 gridModel = glm::translate(glm::mat4(1.0f), glm::vec3(target.x, floorY, target.z));
+    glm::mat4 gridMvp = vp * gridModel;
+    shader->setUniformMat4f("u_MVP", gridMvp);
+    shader->setUniformMat4f("u_Model", gridModel);
+    shader->setUniformMat4f("u_ShipInv", glm::inverse(gridModel));
+    shader->setUniform1i("u_TexOn", 0);
+    shader->setUniform1i("u_EmissiveOn", 1);
+    shader->setUniform3f("u_BaseColor", glm::vec3(0.12f, 0.35f, 0.55f));
+    shader->setUniform3f("u_Emissive", glm::vec3(0.22f, 0.74f, 0.97f) * 1.5f);
+    glBindVertexArray(s_gridVao);
+    glLineWidth(1.2f);
+    glDrawArrays(GL_LINES, 0, s_gridVertCount);
+    glBindVertexArray(0);
+  }
+}
+}  // namespace
+
+void AppGL::loadWorkshopModel(int modelIdx) {
+  if (modelIdx < 0 || modelIdx >= static_cast<int>(kWorkshopCatalogCount)) return;
+  m_workshopModelIdx = modelIdx;
+  const auto& entry = kWorkshopCatalog[modelIdx];
+  m_workshopModel.load(entry.objPath);
+  if (entry.texBase && entry.texBase[0] != '\0') {
+    m_workshopModel.loadTextures(entry.texBase);
+  } else if (entry.sharedBase && entry.sharedBase[0] != '\0') {
+    m_workshopModel.loadTextures(entry.sharedBase);
+  }
+  m_workshopModelLoaded = true;
+  m_workshopDist = entry.defaultDist > 0.0f ? entry.defaultDist : 5.0f;
+  m_workshopPan = glm::vec2(0.0f, 0.0f);
+}
+
+void AppGL::renderWorkshop3D(int width, int height, double time) {
+  if (width <= 0 || height <= 0) return;
+  if (!m_workshopModelLoaded) {
+    loadWorkshopModel(m_workshopModelIdx);
+  }
+  if (!m_workshopShaderTried) {
+    m_workshopShaderTried = true;
+    m_workshopShader = std::make_unique<Shader>("shaders/ship.vert", "shaders/ship.frag");
+  }
+
+  static double s_lastWorkshopTime = time;
+  float dt = static_cast<float>(time - s_lastWorkshopTime);
+  s_lastWorkshopTime = time;
+  if (dt < 0.0f || dt > 0.2f) dt = 1.0f / 60.0f;
+  if (m_workshopAutoRotate) {
+    m_workshopYaw += dt * m_workshopRotateSpeed;
+    if (m_workshopYaw >= 360.0f) m_workshopYaw -= 360.0f;
+  }
+
+  glViewport(0, 0, width, height);
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);
+  glClear(GL_DEPTH_BUFFER_BIT);
+
+  float aspect = static_cast<float>(width) / static_cast<float>(height);
+  glm::mat4 proj = glm::perspective(glm::radians(42.0f), aspect, 0.05f, 200.0f);
+
+  float yawRad = glm::radians(m_workshopYaw);
+  float pitchRad = glm::radians(std::clamp(m_workshopPitch, -85.0f, 85.0f));
+
+  glm::vec3 camOffset(
+      m_workshopDist * std::cos(pitchRad) * std::sin(yawRad),
+      m_workshopDist * std::sin(pitchRad),
+      m_workshopDist * std::cos(pitchRad) * std::cos(yawRad));
+
+  glm::vec3 target = glm::vec3(m_workshopPan.x, m_workshopPan.y, 0.0f);
+  glm::vec3 camPos = target + camOffset;
+  glm::mat4 view = glm::lookAt(camPos, target, glm::vec3(0.0f, 1.0f, 0.0f));
+  glm::mat4 vp = proj * view;
+
+  float floorY = target.y - 1.5f;
+
+  if (m_workshopShader) {
+    m_workshopShader->bind();
+    m_workshopShader->setUniform3f("u_CamPos", camPos);
+
+    float lightAzRad = glm::radians(m_workshopLightAngle);
+    glm::vec3 keyDir = glm::normalize(glm::vec3(std::sin(lightAzRad) * 0.8f, 0.7f, std::cos(lightAzRad) * 0.8f));
+    glm::vec3 keyCol = glm::vec3(1.0f, 0.98f, 0.95f) * (m_workshopLightIntensity * 14.0f);
+    m_workshopShader->setUniform3f("u_KeyDir", keyDir);
+    m_workshopShader->setUniform3f("u_KeyColor", keyCol);
+
+    static GLuint s_studioCubemap = 0;
+    if (s_studioCubemap == 0) {
+      glGenTextures(1, &s_studioCubemap);
+      glBindTexture(GL_TEXTURE_CUBE_MAP, s_studioCubemap);
+      const float faceColors[6][3] = {
+        {0.30f, 0.38f, 0.46f},
+        {0.26f, 0.32f, 0.40f},
+        {0.55f, 0.65f, 0.78f},
+        {0.14f, 0.17f, 0.22f},
+        {0.42f, 0.50f, 0.60f},
+        {0.24f, 0.29f, 0.36f}
+      };
+      for (int face = 0; face < 6; ++face) {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGB16F,
+                     1, 1, 0, GL_RGB, GL_FLOAT, faceColors[face]);
+      }
+      glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    }
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, s_studioCubemap);
+
+    m_workshopShader->setUniform1i("u_Env", 0);
+    m_workshopShader->setUniform1i("u_Albedo", 1);
+    m_workshopShader->setUniform1i("u_NormalTex", 2);
+    m_workshopShader->setUniform1i("u_RoughTex", 3);
+    m_workshopShader->setUniform1i("u_MetalTex", 4);
+    m_workshopShader->setUniform1i("u_EmissiveTex", 5);
+    m_workshopShader->setUniform1i("u_SkinAlbedo", 6);
+    m_workshopShader->setUniform1i("u_SkinRough", 7);
+    m_workshopShader->setUniform1f("u_EnvMaxLod", 9.0f);
+    m_workshopShader->setUniform1f("u_ReflK", 0.8f);
+    m_workshopShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
+    m_workshopShader->setUniform1i("u_FlatNormal", 0);
+    m_workshopShader->setUniform1f("u_RingSpin", 0.0f);
+    m_workshopShader->setUniform1i("u_SkinOn", 0);
+    m_workshopShader->setUniform3f("u_HullTint", glm::vec3(1.0f));
+    m_workshopShader->setUniform3f("u_AccentTint", glm::vec3(1.0f));
+    m_workshopShader->setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
+    m_workshopShader->setUniform1f("u_StationPbr", 1.0f);
+    m_workshopShader->setUniform1f("u_HullWear", -1.0f);
+
+    // Draw grid platform
+    drawWorkshopTurntableGrid(m_workshopShader.get(), vp, target, floorY, time);
+
+    if (m_workshopModel.ready()) {
+      glm::vec3 dims = m_workshopModel.dimensions();
+      float maxDim = std::max({dims.x, dims.y, dims.z, 0.01f});
+      float targetScale = 2.8f / maxDim;
+
+      glm::mat4 modelMat = glm::translate(glm::mat4(1.0f), target);
+      modelMat = glm::scale(modelMat, glm::vec3(targetScale));
+      modelMat = glm::translate(modelMat, -m_workshopModel.center());
+
+      glm::mat4 mvp = vp * modelMat;
+      m_workshopShader->setUniformMat4f("u_MVP", mvp);
+      m_workshopShader->setUniformMat4f("u_Model", modelMat);
+      m_workshopShader->setUniformMat4f("u_ShipInv", glm::inverse(modelMat));
+
+      if (m_workshopRenderMode == 1) {
+        // Clay / Studio
+        m_workshopShader->setUniform1i("u_TexOn", 0);
+        m_workshopShader->setUniform1i("u_EmissiveOn", 0);
+        m_workshopShader->setUniform3f("u_BaseColor", glm::vec3(0.72f, 0.74f, 0.78f));
+        m_workshopShader->setUniform1f("u_Metal", 0.05f);
+        m_workshopShader->setUniform1f("u_Rough", 0.55f);
+        m_workshopShader->setUniform3f("u_Emissive", glm::vec3(0.0f));
+      } else {
+        // PBR Realistic
+        const bool texOn = m_workshopModel.textured();
+        m_workshopShader->setUniform1i("u_TexOn", texOn ? 1 : 0);
+        m_workshopShader->setUniform3f("u_BaseColor", glm::vec3(0.85f, 0.88f, 0.92f));
+        m_workshopShader->setUniform1f("u_Metal", 0.75f);
+        m_workshopShader->setUniform1f("u_Rough", 0.40f);
+        if (texOn) {
+          m_workshopModel.bindTextures(1);
+        }
+        const bool emOn = m_workshopModel.emissive();
+        m_workshopShader->setUniform1i("u_EmissiveOn", emOn ? 1 : 0);
+        m_workshopShader->setUniform3f("u_Emissive", glm::vec3(0.0f));
+      }
+
+      if (m_workshopWireframe || m_workshopRenderMode == 3) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glEnable(GL_LINE_SMOOTH);
+        glLineWidth(1.2f);
+        m_workshopModel.draw();
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+      } else {
+        m_workshopModel.draw();
+        if (m_workshopWireframe) {
+          glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+          glEnable(GL_POLYGON_OFFSET_LINE);
+          glPolygonOffset(-1.0f, -1.0f);
+          m_workshopShader->setUniform1i("u_TexOn", 0);
+          m_workshopShader->setUniform3f("u_BaseColor", glm::vec3(0.2f, 0.8f, 1.0f));
+          m_workshopShader->setUniform1i("u_EmissiveOn", 1);
+          m_workshopShader->setUniform3f("u_Emissive", glm::vec3(0.2f, 0.8f, 1.0f) * 2.0f);
+          m_workshopModel.draw();
+          glDisable(GL_POLYGON_OFFSET_LINE);
+          glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        }
+      }
+    }
+
+    m_workshopShader->unbind();
+  }
+
+  glDisable(GL_DEPTH_TEST);
+}
+
+void AppGL::drawWorkshopPage(float colAreaH) {
+  if (!m_workshopModelLoaded) {
+    loadWorkshopModel(m_workshopModelIdx);
+  }
+
+  const float fullW = ImGui::GetContentRegionAvail().x;
+  const float listW = std::clamp(fullW * 0.28f, 260.0f, 310.0f);
+  const float inspW = std::clamp(fullW * 0.32f, 280.0f, 330.0f);
+  const float canvasW = fullW - listW - inspW - 16.0f;
+
+  ImGuiIO& io = ImGui::GetIO();
+  if (!io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+    m_menuPage = 0;
+    m_pageTransitionTimer = 0.0f;
+    m_audio.playBlip();
+    return;
+  }
+
+  // === 1. Левая колонка: Каталог моделей ===
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.015f, 0.025f, 0.038f, 0.92f));
+  if (ImGui::BeginChild("##WorkshopCatalog", ImVec2(listW, colAreaH), true)) {
+    ImGui::TextColored(menuui::kAccent, "[ 06 // %s ]", uiRu("КАТАЛОГ 3D МОДЕЛЕЙ", "3D ASSET CATALOG"));
+    ImGui::TextColored(menuui::kTextDim, "%s", uiRu("// Флот, колонии, станции и астероиды", "// Fleet, colonies, stations"));
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Категории
+    const char* catLabels[5] = {
+      uiRu("Все", "All"),
+      uiRu("Флот", "Fleet"),
+      uiRu("Колония", "Colony"),
+      uiRu("Станции", "Stations"),
+      uiRu("Космос", "Space")
+    };
+    for (int c = 0; c < 5; ++c) {
+      if (c > 0) ImGui::SameLine(0.0f, 4.0f);
+      bool active = (m_workshopCategory == c);
+      if (active) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.55f, 0.72f, 0.95f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.03f, 0.08f, 0.12f, 1.00f));
+      } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.06f, 0.12f, 0.19f, 0.70f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.66f, 0.76f, 0.90f));
+      }
+      if (ImGui::Button(catLabels[c], ImVec2((listW - 32.0f) / 5.0f, 22.0f))) {
+        m_workshopCategory = c;
+        m_audio.playBlip();
+      }
+      ImGui::PopStyleColor(2);
+    }
+
+    ImGui::Spacing();
+    ImGui::SetNextItemWidth(listW - 54.0f);
+    ImGui::InputTextWithHint("##WorkshopSearch", uiRu("Поиск модели...", "Search model..."),
+                             m_workshopSearch, sizeof(m_workshopSearch));
+    ImGui::SameLine();
+    if (ImGui::Button("X", ImVec2(24.0f, 0.0f))) {
+      m_workshopSearch[0] = '\0';
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Список моделей
+    if (ImGui::BeginChild("##ModelListScroll", ImVec2(-1.0f, -1.0f), false)) {
+      int visibleCount = 0;
+      for (size_t i = 0; i < kWorkshopCatalogCount; ++i) {
+        const auto& entry = kWorkshopCatalog[i];
+        if (m_workshopCategory != 0 && entry.category != (m_workshopCategory - 1)) {
+          continue;
+        }
+        if (m_workshopSearch[0] != '\0') {
+          if (!fuzzyMatch(entry.nameRu, m_workshopSearch) &&
+              !fuzzyMatch(entry.nameEn, m_workshopSearch) &&
+              !fuzzyMatch(entry.id, m_workshopSearch)) {
+            continue;
+          }
+        }
+
+        bool isSelected = (m_workshopModelIdx == static_cast<int>(i));
+        ImGui::PushID(static_cast<int>(i));
+
+        if (isSelected) {
+          ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.12f, 0.32f, 0.46f, 0.95f));
+          ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.15f, 0.38f, 0.52f, 0.98f));
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.98f, 1.0f, 1.0f));
+        }
+
+        std::string rowLabel = std::string(uiRu(entry.nameRu, entry.nameEn));
+        if (ImGui::Selectable(rowLabel.c_str(), isSelected, 0, ImVec2(0.0f, 22.0f))) {
+          if (m_workshopModelIdx != static_cast<int>(i)) {
+            loadWorkshopModel(static_cast<int>(i));
+            m_audio.playBlip();
+          }
+        }
+
+        if (isSelected) {
+          ImGui::PopStyleColor(3);
+        }
+
+        ImGui::PopID();
+        ++visibleCount;
+      }
+
+      if (visibleCount == 0) {
+        ImGui::TextColored(menuui::kTextDim, "%s", uiRu("Модели не найдены", "No models found"));
+      }
+    }
+    ImGui::EndChild();
+  }
+  ImGui::EndChild();
+  ImGui::PopStyleColor(1);
+
+  // === 2. Центральная область: Интерактивный визор (Turntable Canvas) ===
+  ImGui::SameLine(0.0f, 8.0f);
+  if (ImGui::BeginChild("##WorkshopCenter", ImVec2(canvasW, colAreaH), false,
+                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+    const auto& entry = kWorkshopCatalog[m_workshopModelIdx];
+
+    // Кнопка захвата мыши для орбиты/зума/панорамы
+    ImGui::InvisibleButton("##WorkshopCanvas", ImVec2(canvasW, colAreaH - 40.0f));
+    if (ImGui::IsItemActive()) {
+      if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        m_workshopYaw += io.MouseDelta.x * 0.5f;
+        m_workshopPitch += io.MouseDelta.y * 0.5f;
+        m_workshopPitch = std::clamp(m_workshopPitch, -85.0f, 85.0f);
+      }
+      if (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+        float panSpeed = 0.0035f * m_workshopDist;
+        m_workshopPan.x += io.MouseDelta.x * panSpeed;
+        m_workshopPan.y -= io.MouseDelta.y * panSpeed;
+      }
+    }
+    if (ImGui::IsItemHovered()) {
+      if (io.MouseWheel != 0.0f) {
+        m_workshopDist = std::clamp(m_workshopDist - io.MouseWheel * 0.45f, 1.0f, 25.0f);
+      }
+    }
+
+    // Onscreen HUD DrawList
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 cp = ImGui::GetWindowPos();
+
+    // Заголовок текущей модели по центру визора
+    std::string titleStr = uiRu(entry.nameRu, entry.nameEn);
+    ImVec2 tSz = ImGui::CalcTextSize(titleStr.c_str());
+    float titleX = cp.x + (canvasW - tSz.x) * 0.5f;
+    float titleY = cp.y + 12.0f;
+    dl->AddRectFilled(ImVec2(titleX - 14.0f, titleY - 4.0f),
+                      ImVec2(titleX + tSz.x + 14.0f, titleY + tSz.y + 4.0f),
+                      IM_COL32(4, 10, 18, 190), 6.0f);
+    dl->AddRect(ImVec2(titleX - 14.0f, titleY - 4.0f),
+                ImVec2(titleX + tSz.x + 14.0f, titleY + tSz.y + 4.0f),
+                menuui::accentAlpha(120), 6.0f);
+    dl->AddText(ImVec2(titleX, titleY), IM_COL32(230, 245, 255, 255), titleStr.c_str());
+
+    // Нижняя панель быстрых действий визора
+    ImGui::SetCursorPos(ImVec2(10.0f, colAreaH - 34.0f));
+    if (ImGui::Button(uiRu("⟲ Сброс", "⟲ Reset"), ImVec2(75.0f, 24.0f))) {
+      m_workshopYaw = 35.0f;
+      m_workshopPitch = 18.0f;
+      m_workshopPan = glm::vec2(0.0f, 0.0f);
+      m_workshopDist = entry.defaultDist > 0.0f ? entry.defaultDist : 5.0f;
+      m_audio.playBlip();
+    }
+    ImGui::SameLine(0.0f, 6.0f);
+    const char* autoRotText = m_workshopAutoRotate ? uiRu("■ Стоп", "■ Stop") : uiRu("▶ Вращение", "▶ Auto-Rot");
+    if (ImGui::Button(autoRotText, ImVec2(95.0f, 24.0f))) {
+      m_workshopAutoRotate = !m_workshopAutoRotate;
+      m_audio.playBlip();
+    }
+    ImGui::SameLine(0.0f, 8.0f);
+    ImGui::TextColored(menuui::kTextDim, "%s",
+                       uiRu("ЛКМ: Вращение | ПКМ: Панорама | Колесо: Зум",
+                            "LMB: Orbit | RMB: Pan | Wheel: Zoom"));
+  }
+  ImGui::EndChild();
+
+  // === 3. Правая колонка: Телеметрия, Спецификации и Управление рендером ===
+  ImGui::SameLine(0.0f, 8.0f);
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.015f, 0.025f, 0.038f, 0.92f));
+  if (ImGui::BeginChild("##WorkshopInspector", ImVec2(inspW, colAreaH), true)) {
+    const auto& entry = kWorkshopCatalog[m_workshopModelIdx];
+
+    ImGui::TextColored(menuui::kAccent, "[ %s ]", uiRu("СПЕЦИФИКАЦИЯ И ТЕЛЕМЕТРИЯ", "SPECIFICATIONS"));
+    ImGui::TextColored(menuui::kTextDim, "ID: %s // CAT #%d", entry.id, entry.category);
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 1. Геометрия
+    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ГЕОМЕТРИЯ МЕША", "MESH GEOMETRY"));
+    ImGui::Text("%s: %u ▲", uiRu("Полигоны", "Triangles"), m_workshopModel.triangleCount());
+    ImGui::Text("%s: %u ●", uiRu("Вершины", "Vertices"), m_workshopModel.vertexCount());
+    glm::vec3 dims = m_workshopModel.dimensions();
+    ImGui::Text("%s: %.2f x %.2f x %.2f м", uiRu("Габариты", "Bounds"), dims.x, dims.y, dims.z);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 2. Текстуры PBR
+    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("PBR КАРТЫ (24-BIT BMP)", "PBR TEXTURE MAPS"));
+    auto drawTexPill = [&](const char* name, unsigned int tex, const char* info) {
+      bool ok = (tex != 0);
+      ImVec4 col = ok ? ImVec4(0.2f, 0.85f, 0.45f, 1.0f) : ImVec4(0.6f, 0.65f, 0.7f, 0.6f);
+      ImGui::TextColored(col, "%s %s:", ok ? "[OK]" : "[--]", name);
+      ImGui::SameLine();
+      ImGui::TextColored(menuui::kTextDim, "%s", ok ? info : uiRu("Отсутствует", "None"));
+    };
+    drawTexPill("Albedo", m_workshopModel.albedoTex(), "2048x2048 Diffuse");
+    drawTexPill("Normal", m_workshopModel.normalTex(), "Tangent GL Normal");
+    drawTexPill("Rough ", m_workshopModel.roughTex(), "Micro-surface");
+    drawTexPill("Metal ", m_workshopModel.metalTex(), "Conductive Mask");
+    drawTexPill("Emiss ", m_workshopModel.emissiveTex(), "Plasma / Luminescence");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 3. Режимы шейдера
+    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("РЕЖИМ ШЕЙДЕРА", "SHADING MODE"));
+    ImGui::RadioButton(uiRu("PBR Реализм", "PBR Realistic"), &m_workshopRenderMode, 0);
+    ImGui::SameLine();
+    ImGui::RadioButton(uiRu("Студийная глина", "Studio Clay"), &m_workshopRenderMode, 1);
+    ImGui::RadioButton(uiRu("Проволочная сетка", "Wireframe Only"), &m_workshopRenderMode, 3);
+    ImGui::Checkbox(uiRu("Каркас поверх (Wire Overlay)", "Wireframe Overlay"), &m_workshopWireframe);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 4. Освещение и вращение
+    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("СТУДИЙНЫЙ СВЕТ И ПЬЕДЕСТАЛ", "STUDIO LIGHT & TURNTABLE"));
+    ImGui::SliderFloat(uiRu("Азимут света", "Light Azimuth"), &m_workshopLightAngle, 0.0f, 360.0f, "%.0f°");
+    ImGui::SliderFloat(uiRu("Яркость света", "Light Intensity"), &m_workshopLightIntensity, 0.5f, 3.0f, "%.1fx");
+    ImGui::SliderFloat(uiRu("Скорость вращ.", "Rotation Speed"), &m_workshopRotateSpeed, 0.0f, 60.0f, "%.0f°/s");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 5. Описание и лор
+    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ОПИСАНИЕ И НАЗНАЧЕНИЕ", "MISSION ROLE & LORE"));
+    ImGui::TextWrapped("%s", uiRu(entry.descRu, entry.descEn));
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::Button(uiRu("<< В ГЛАВНОЕ МЕНЮ", "<< BACK TO MAIN MENU"), ImVec2(-1.0f, 26.0f))) {
+      m_pageTransitionTimer = 0.0f;
+      m_prevMenuPage = m_menuPage;
+      m_menuPage = 0;
+      m_audio.playBlip();
+    }
+  }
+  ImGui::EndChild();
+  ImGui::PopStyleColor(1);
 }
 
 void AppGL::drawPatchNotesModal() {
@@ -13862,6 +14753,68 @@ int AppGL::captureEarthCheck(const std::string& outDir) {
   app.m_sceneManager->render(app.m_camera, 1600, 1066, 0.0f);
   const bool inGame = app.saveScreenshot(outDir + "/earth_ingame.png") && glGetError() == GL_NO_ERROR;
   return app.m_sceneManager->captureEarthCheck(outDir) && inGame ? 0 : 1;
+}
+
+int AppGL::captureWorkshopCheck(const std::string& outDir) {
+  try {
+    std::filesystem::create_directories(outDir);
+  } catch (...) {}
+  s_harnessPinFps = true;
+  AppGL app(1280, 720, true);
+  ImGui::GetIO().IniFilename = nullptr;
+  app.m_inMenu = true;
+  app.m_menuBooting = false;
+  app.m_menuPage = 6;
+
+  auto renderAndSave = [&](int modelIdx, int renderMode, const std::string& filename) {
+    app.loadWorkshopModel(modelIdx);
+    app.m_workshopRenderMode = renderMode;
+    app.m_workshopAutoRotate = false;
+    for (int frame = 0; frame < 8; ++frame) {
+      app.m_window->pollEvents();
+      int w = 0, h = 0;
+      app.m_window->getFramebufferSize(w, h);
+      app.renderMenuBackdrop(w, h, 1.0);
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+      app.drawMenu();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      if (frame < 7) {
+        app.m_window->swapBuffers();
+      }
+    }
+    app.saveScreenshot(outDir + "/" + filename);
+    app.m_window->swapBuffers();
+  };
+
+  renderAndSave(3, 0, "workshop_dreadnought_pbr.png");
+  renderAndSave(0, 1, "workshop_dart_clay.png");
+  renderAndSave(13, 0, "workshop_colony_park_pbr.png");
+  renderAndSave(50, 0, "workshop_warp_core_pbr.png");
+
+  app.m_menuPage = 0;
+  for (int frame = 0; frame < 6; ++frame) {
+    app.m_window->pollEvents();
+    int w = 0, h = 0;
+    app.m_window->getFramebufferSize(w, h);
+    app.renderMenuBackdrop(w, h, 1.0);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawMenu();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    if (frame < 5) {
+      app.m_window->swapBuffers();
+    }
+  }
+  app.saveScreenshot(outDir + "/main_menu_workshop_button.png");
+  app.m_window->swapBuffers();
+
+  std::cout << "Workshop captures saved to: " << outDir << std::endl;
+  return 0;
 }
 
 int AppGL::captureMenuCheck(const std::string& outDir) {
@@ -18613,6 +19566,7 @@ void AppGL::drawZettelkasten() {
                 if (m_linkingSourceId != n.id) {
                   m_zettelkasten.linkNotes(m_linkingSourceId, n.id);
                   saveZettelkastenFileNow();
+                  checkZettelDetectiveEvents();
 
                   // Check if this newly forged link completed a breakthrough recipe!
                   const ZettelSynthesisRecipe* ready = m_zettelkasten.checkPendingSynthesis();
@@ -18782,6 +19736,50 @@ void AppGL::drawZettelkasten() {
         }
 
         ImGui::Spacing();
+
+        // Detective Clues & Physical Evidence
+        if (!sel->evidenceRu.empty()) {
+          ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.08f, 0.12f, 0.85f));
+          ImGui::BeginChild("EvidenceBox", ImVec2(0.0f, 75.0f), true);
+          ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.9f, 1.0f), "⌕ %s",
+                             uiRu("[УЛИКА / ТЕЛЕМЕТРИЯ]", "[EVIDENCE / TELEMETRY]"));
+          ImGui::TextWrapped("%s", uiRu(sel->evidenceRu.c_str(), sel->evidenceEn.c_str()));
+          ImGui::EndChild();
+          ImGui::PopStyleColor();
+          ImGui::Spacing();
+        }
+
+        // Analytical Discrepancies & Questioning
+        if (!sel->discrepancyRu.empty()) {
+          ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.08f, 0.02f, 0.85f));
+          ImGui::BeginChild("DiscrepancyBox", ImVec2(0.0f, 70.0f), true);
+          ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.2f, 1.0f), "⚠ %s",
+                             uiRu("[НЕСТЫКОВКА / АНОМАЛИЯ]", "[DISCREPANCY / ANOMALY]"));
+          ImGui::TextWrapped("%s", uiRu(sel->discrepancyRu.c_str(), sel->discrepancyEn.c_str()));
+          ImGui::EndChild();
+          ImGui::PopStyleColor();
+          ImGui::Spacing();
+        }
+
+        // Solved Detective Case Dossier
+        for (const auto& c : m_zettelkasten.getDetectiveCases()) {
+          if (c.solved && (c.noteA == sel->id || c.noteB == sel->id)) {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.15f, 0.12f, 0.02f, 0.9f));
+            ImGui::BeginChild("CaseSolvedBox", ImVec2(0.0f, 85.0f), true);
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "★ %s: %s",
+                               uiRu("РАССЛЕДОВАНИЕ ЗАВЕРШЕНО", "CASE SOLVED"),
+                               uiRu(c.titleRu.c_str(), c.titleEn.c_str()));
+            ImGui::TextWrapped("%s", uiRu(c.deductionRu.c_str(), c.deductionEn.c_str()));
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+            ImGui::Spacing();
+            break;
+          }
+        }
+
+        // Egorka's insight deduction
+        ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.5f, 0.9f), "✎ %s:",
+                           uiRu("[ЗАМЕТКА ЕГОРКИ]", "[EGORKA'S DEDUCTION NOTE]"));
         renderTextWithWikilinks(uiRu(sel->textRu.c_str(), sel->textEn.c_str()));
         ImGui::Spacing();
         ImGui::Separator();

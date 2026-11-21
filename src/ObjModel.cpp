@@ -394,6 +394,8 @@ bool ObjModel::load(const std::string& path) {
   m_indexCount = static_cast<unsigned int>(indices.size());
   m_vertexCount = static_cast<unsigned int>(verts.size());
   m_center = (mn + mx) * 0.5f;
+  m_bboxMin = mn;
+  m_bboxMax = mx;
   (void)hasUV;
   return true;
 }
