@@ -748,11 +748,17 @@ Check 'menu backdrop and disk mask retain aspect-ratio cover crop' (($menuFrag -
 Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenuActive\(m_inMenu\)')
 
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
-Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and ($sceneCpp -match 'colonyAnchorNormal')) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
+Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and (($sceneCpp -match 'colonySurfaceFrame') -or ($sceneCpp -match 'colonyAnchorNormal'))) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
 Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
 Check 'colony infrastructure assets loaded' (($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match '"nuclear"') -and ($sceneCpp -match '"hydro"') -and ($sceneCpp -match '"thermal"') -and ($sceneCpp -match '"datacenter"') -and ($sceneCpp -match '"factory"') -and ($sceneCpp -match 'kColonyAssets\[i\]\.key'))
 Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match 's_colonyAssetModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
 Check 'colony capital distance cull' (($sceneCpp -match 'camDist > 24\.0f') -and ((Read-File 'tests/test_colony.cpp') -match 'civic/housing/utility progression'))
+$planSrc = Read-File 'src/ColonySystem.cpp'
+$colonyTestSrc = Read-File 'tests/test_colony.cpp'
+Check 'colony service assets loaded' ((($sceneCpp -match '"hospital"') -and ($sceneCpp -match '"clinic"') -and ($sceneCpp -match '"park"') -and ($sceneCpp -match '"market"') -and ($sceneCpp -match '"school"') -and ($sceneCpp -match '"fire"') -and ($sceneCpp -match '"water"') -and ($sceneCpp -match '"greenhouse"')))
+Check 'colony service plan order' ((($planSrc -match '4 water loop') -and ($planSrc -match '11 medical centre') -and ($planSrc -match '13 township') -and ($planSrc -match '15 research campus')))
+Check 'colony service demand layers tested' ((($colonyTestSrc -match 'hospital') -and ($colonyTestSrc -match 'greenhouse')))
+Check 'colony district scale pinned' ((($sceneCpp -match '0\.032f \* std::sqrt') -and ($sceneCpp -match '0\.30f')) -and (($appCpp -match 'surface-occluded') -and ($appCpp -match '0\.11f')))
 $extGenDir = if ($env:ASTRO_GENERATORS_DIR -and (Test-Path $env:ASTRO_GENERATORS_DIR)) {
     $env:ASTRO_GENERATORS_DIR
 } elseif (Test-Path (Join-Path $root '../astro-voyager-generators/scripts')) {
@@ -767,6 +773,10 @@ if ($hasAtlas) {
     $atlas = Get-Content -LiteralPath (Join-Path $extGenDir 'asset_atlas.py') -Raw -Encoding UTF8
     Check 'civic atlas roles exist' (((($atlas -match 'role == "masonry"') -and ($atlas -match 'role == "siding"')) -and (($atlas -match 'role == "roof"') -and ($atlas -match 'role == "asphalt"'))))
     Check 'shared atlas module' (($atlas -match 'GRID - 1 - gy') -and (Test-Path (Join-Path $extGenDir 'generate_colony_assets.py')))
+    $colonyGen = Get-Content -LiteralPath (Join-Path $extGenDir 'generate_colony_assets.py') -Raw -Encoding UTF8
+    Check 'colony service builders present' (((($colonyGen -match 'def build_colony_hospital') -and ($colonyGen -match 'def build_colony_clinic')) -and (($colonyGen -match 'def build_colony_school') -and ($colonyGen -match 'def build_colony_fire'))) -and ((($colonyGen -match 'def build_colony_park') -and ($colonyGen -match 'def build_colony_market')) -and (($colonyGen -match 'def build_colony_water') -and ($colonyGen -match 'def build_colony_greenhouse'))))
+    Check 'colony service atlas configs' ((($colonyGen -match '"colony_park": \{"roles": PARK_ROLES') -and ($colonyGen -match '"colony_water"')) -and ($colonyGen -match '"colony_greenhouse"'))
+    Check 'colony generators resolve repo by probe' (($colonyGen -match 'REPO_CANDIDATES') -and ($colonyGen -notmatch 'ROOT = Path\(__file__\)\.resolve\(\)\.parents\[2\]'))
 } else {
     Check 'civic atlas roles documented in assets doc' (((Read-File 'docs/SPACECRAFT_ASSETS.md') -match 'masonry') -and ($sceneCpp -match 'kColonyAssets'))
     Check 'colony albedo texture loaded in scene' (($sceneCpp -match 'colony_albedo') -and ($sceneCpp -match 'loadTextures'))

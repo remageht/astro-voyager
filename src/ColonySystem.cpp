@@ -459,6 +459,32 @@ const float* colonyAnchorNormal(const std::string& worldId) {
   return kDefault;
 }
 
+ColonySurfaceFrame colonySurfaceFrame(const std::string& worldId) {
+  ColonySurfaceFrame f{};
+  const float* n = colonyAnchorNormal(worldId);
+  const float ax = n[0], ay = n[1], az = n[2];
+
+  // Same reference-up choice the renderer has always used: a settlement near a
+  // pole has no east-west direction, so tilt the tangent frame onto X instead.
+  const bool onEquator = std::fabs(ay) < 0.90f;
+  const float rx = onEquator ? 0.0f : 1.0f, ry = onEquator ? 1.0f : 0.0f, rz = 0.0f;
+  float ux = ay * rz - az * ry;
+  float uy = az * rx - ax * rz;
+  float uz = ax * ry - ay * rx;
+  float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
+  ux /= ul; uy /= ul; uz /= ul;
+
+  float vx = ay * uz - az * uy;
+  float vy = az * ux - ax * uz;
+  float vz = ax * uy - ay * ux;
+  float vl = std::sqrt(vx * vx + vy * vy + vz * vz);
+
+  f.anchor[0] = ax; f.anchor[1] = ay; f.anchor[2] = az;
+  f.tangentU[0] = ux; f.tangentU[1] = uy; f.tangentU[2] = uz;
+  f.tangentV[0] = vx / vl; f.tangentV[1] = vy / vl; f.tangentV[2] = vz / vl;
+  return f;
+}
+
 const std::vector<ColonyMilestone>& colonyTerraformMilestones() {
   // Ordered by stage. Rewards are one-off RP grants, paid when the player
   // crosses the milestone by building a stage.
