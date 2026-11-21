@@ -849,6 +849,14 @@ Check 'flight hud only references existing ShipState fields without imaginary mi
 Check 'captureHudCheck tests distinct vitals arcs with 96 hull 52 shield 23 fuel' (($appCpp -match 'app\.m_ship\.hull\s*=\s*96\.0f') -and ($appCpp -match 'app\.m_ship\.shield\s*=\s*52\.0f') -and ($appCpp -match 'app\.m_ship\.fuel\s*=\s*23\.0f'))
 Check 'Types.h and AppGL.h style comments include Mining Dreadnought' (((Read-File 'src/Types.h') -match '0 Dart, 1 Ring Ship, 2 Shuttle, 3 Model \(Warp Cruiser\), 4 Mining Dreadnought') -and ((Read-File 'src/AppGL.h') -match '4 Mining Dreadnought'))
 
+# --- Issue #210: Zettelkasten detective clues, evidence anomalies & bridge radio reactions ---
+$zettelH = Read-File 'src/Zettelkasten.h'
+$zettelCpp = Read-File 'src/Zettelkasten.cpp'
+Check 'ZettelNote has evidence and discrepancy forensic fields' (($zettelH -match 'std::string evidenceRu;') -and ($zettelH -match 'std::string discrepancyRu;'))
+Check 'ZettelGraph defines detective investigation cases' (($zettelH -match 'struct ZettelDetectiveCase') -and ($zettelH -match 'kDetectiveCaseArsenyShuttles') -and ($zettelH -match 'kDetectiveCaseMiaContraband'))
+Check 'ZettelGraph implements detective cases and telemetry evidence' (($zettelCpp -match 'kDetectiveCaseArsenyShuttles') -and ($zettelCpp -match 'kDetectiveCaseMiaContraband') -and ($zettelCpp -match 'initDetectiveCases') -and ($zettelCpp -match 'pollNewDetectiveEvents'))
+Check 'AppGL wires detective bridge radio barks and Thought Inspector evidence' (($appCpp -match 'detective_arseny_shuttles') -and ($appCpp -match 'detective_mia_contraband') -and ($appCpp -match 'EvidenceBox') -and ($appCpp -match 'DiscrepancyBox') -and ($appCpp -match 'CaseSolvedBox'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

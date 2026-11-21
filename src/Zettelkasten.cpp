@@ -1,4 +1,4 @@
-﻿#include "Zettelkasten.h"
+#include "Zettelkasten.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -19,6 +19,7 @@ void ZettelGraph::addSeed(const ZettelNote& note) {
 void ZettelGraph::init() {
   m_notes.clear();
   seedDefaultHypotheses();
+  initDetectiveCases();
 
   // -------------------------------------------------------------
   // Cluster: SOLAR («Солнечный Синтез» · Д-р Елена Ростова)
@@ -101,6 +102,10 @@ void ZettelGraph::init() {
     n.quoteEn = "Five layers of polymer foam won't cure nightmares of a dying Earth. But at least your ribs stay in one piece.";
     n.speakerRu = "Арсений «Палач Ложных Надежд»";
     n.speakerEn = "Arseny «Executioner of False Hopes»";
+    n.evidenceRu = "Бортовой журнал: серийный номер регенерирующей губки совпадает со спецификацией шлюзовых аварийных гасителей тяжелого крейсера «Мянь Лун» (флот Вселенной-05). В структуре графена запеклись следы лазерной резки класса «фрегат-борт».";
+    n.evidenceEn = "Telemetry log: serial number of the dampener matches emergency airlock specifications of heavy cruiser «Mian Long» (Universe-05). Structural graphene contains laser cutting residue of frigate-grade hull shears.";
+    n.discrepancyRu = "Почему на индивидуальном средстве пилота следы ручного отсечения внешних стыковочных креплений снаружи корабля?";
+    n.discrepancyEn = "Why does an individual pilot's dampener bear physical scorch marks of manual exterior docking clamp severing?";
     n.posX = -210.0f;
     n.posY = 90.0f;
     n.seedDiscovered = false;
@@ -121,6 +126,10 @@ void ZettelGraph::init() {
     n.quoteEn = "We scorched false hope with red-hot iron. Hope blinds; survival demands cold steel and a steadfast brother.";
     n.speakerRu = "Арсений «Палач Ложных Надежд»";
     n.speakerEn = "Arseny «Executioner of False Hopes»";
+    n.evidenceRu = "Телеметрия волнового фронта: гравитационный сдвиг при коллапсе червоточины №5 зафиксировал 14 дискретных импульсов декомпрессии с интервалом ровно 1.8 секунды.";
+    n.evidenceEn = "Wavefront telemetry: gravitational shift during wormhole #5 collapse recorded 14 discrete decompression impulses at exactly 1.8-second intervals.";
+    n.discrepancyRu = "В официальном рапорте Арсения указано: 'Челноки беженцев не успели выйти на траекторию'. Но интервал в 1.8 секунды в точности равен времени перезарядки курсовых турелей крейсера.";
+    n.discrepancyEn = "Arseny's official report states: 'Refugee shuttles failed to intercept trajectory'. But the 1.8s interval precisely matches cruiser bow point-defense turret cycling.";
     n.posX = -120.0f;
     n.posY = 170.0f;
     n.seedDiscovered = false;
@@ -165,6 +174,10 @@ void ZettelGraph::init() {
     n.quoteEn = "We aren't just searching for a rock in the void, Egorka. We are seeking a world where children gaze up into green skies without helmets.";
     n.speakerRu = "Мия Сато";
     n.speakerEn = "Mia Sato";
+    n.evidenceRu = "Масс-спектрометрия стартового ангара: биоконтейнер №404-B опломбирован с массой 14.820 кг при паспортном максимуме семенного фонда 14.400 кг (+420 г). Радиационный фон: слабый изотопный след цезия-137.";
+    n.evidenceEn = "Mass spectrometry log: biocontainer #404-B sealed at 14.820 kg against seed bank baseline of 14.400 kg (+420 g). Radiation readout: faint cesium-137 isotopic trace.";
+    n.discrepancyRu = "Семена сибирского кедра и пшеницы не содержат цезий-137 и не дают превышения плотности в центральном отсеке. Что на самом деле спрятано под субстратом?";
+    n.discrepancyEn = "Siberian cedar and heirloom wheat seeds contain no cesium-137 and cannot explain central core density spikes. What is hidden beneath the substrate?";
     n.posX = 110.0f;
     n.posY = -140.0f;
     n.seedDiscovered = false;
@@ -205,6 +218,10 @@ void ZettelGraph::init() {
     n.quoteEn = "The spectrometer confirms liquid oceans and an oxygen mantle! True New Eden is waiting for us!";
     n.speakerRu = "Мия Сато";
     n.speakerEn = "Mia Sato";
+    n.evidenceRu = "Архив протоколов связи: сразу после спектрального анализа атмосферы M13 Мия активировала локальный кварцевый декодер с ключом шифрования парижского гражданского сектора.";
+    n.evidenceEn = "Comms protocol log: immediately following M13 atmospheric spectral analysis, Mia initialized a local quartz decoder using a Paris civilian sector key.";
+    n.discrepancyRu = "Почему научный сотрудник колониального флота сверяет параметры пригодности экзопланеты с личным архивом голосов людей, не вошедших в списки экспедиции?";
+    n.discrepancyEn = "Why does a colonial fleet scientist benchmark exoplanet habitability against a personal archive of unlisted, unevacuated civilian voice recordings?";
     n.posX = 200.0f;
     n.posY = -60.0f;
     n.seedDiscovered = false;
@@ -634,6 +651,16 @@ bool ZettelGraph::linkNotes(const std::string& idA, const std::string& idB) {
   a->synthesized = true;
   b->synthesized = true;
 
+  // Detective cases: check if connecting these two notes solves an active investigation
+  for (auto& c : m_detectiveCases) {
+    if (!c.solved) {
+      if ((c.noteA == idA && c.noteB == idB) || (c.noteA == idB && c.noteB == idA)) {
+        c.solved = true;
+        m_newlySolvedCases.push_back(c.id);
+      }
+    }
+  }
+
   // Zettelkasten 2.0: linking distant topics may spawn scientific hypothesis
   maybeGenerateHypotheses(idA, idB);
   return true;
@@ -864,6 +891,9 @@ std::string ZettelGraph::serialize() const {
   for (const auto& r : m_recipes) {
     os << "recipe=" << r.id << "|synth=" << (r.synthesized ? 1 : 0) << "\n";
   }
+  for (const auto& c : m_detectiveCases) {
+    os << "detective_case=" << c.id << "|solved=" << (c.solved ? 1 : 0) << "\n";
+  }
   return os.str();
 }
 
@@ -875,6 +905,28 @@ bool ZettelGraph::deserialize(const std::string& data) {
 
   while (std::getline(is, line)) {
     if (line.empty() || line[0] == '#') continue;
+
+    // Detective Case line
+    if (line.rfind("detective_case=", 0) == 0) {
+      std::string payload = line.substr(15);
+      size_t pipe = payload.find('|');
+      std::string caseId = (pipe == std::string::npos) ? payload : payload.substr(0, pipe);
+      bool solved = false;
+      if (pipe != std::string::npos) {
+        std::string rest = payload.substr(pipe + 1);
+        if (rest.rfind("solved=", 0) == 0) {
+          solved = (std::atoi(rest.substr(7).c_str()) != 0);
+        }
+      }
+      for (auto& c : m_detectiveCases) {
+        if (c.id == caseId) {
+          c.solved = solved;
+          any = true;
+          break;
+        }
+      }
+      continue;
+    }
 
     // Recipe line
     if (line.rfind("recipe=", 0) == 0) {
@@ -1309,6 +1361,50 @@ void ZettelGraph::maybeGenerateHypotheses(const std::string& idA, const std::str
       (void)match;
     }
   }
+}
+
+void ZettelGraph::initDetectiveCases() {
+  m_detectiveCases.clear();
+  m_newlySolvedCases.clear();
+
+  {
+    ZettelDetectiveCase c;
+    c.id = kDetectiveCaseArsenyShuttles;
+    c.noteA = "z_stasis_dampener";
+    c.noteB = "z_universe5_collapse";
+    c.titleRu = "Тайна крейсера «Мянь Лун» и 14 челноков";
+    c.titleEn = "Secret of Cruiser «Mian Long» & 14 Shuttles";
+    c.deductionRu = "Прозвище Арсения «Палач Ложных Надежд» — не поэтический образ, а военный триаж. При коллапсе червоточины №5 он лично отдал приказ перерубить захваты и расстрелять 14 челноков с беженцами, чтобы спасти 2000 человек на борту крейсера от пространственного взрыва.";
+    c.deductionEn = "Arseny's moniker «Executioner of False Hopes» is no poetic conceit, but brutal military triage. During wormhole #5 collapse, he ordered docking clamps severed and 14 refugee shuttles destroyed to save 2,000 souls aboard the cruiser from total spatial detonation.";
+    c.solved = false;
+    m_detectiveCases.push_back(c);
+  }
+
+  {
+    ZettelDetectiveCase c;
+    c.id = kDetectiveCaseMiaContraband;
+    c.noteA = "z_mia_promise";
+    c.noteB = "z_m13_biosphere";
+    c.titleRu = "Контрабанда в биоконтейнере №404-B";
+    c.titleEn = "Contraband in Biocontainer #404-B";
+    c.deductionRu = "Семенной биоконтейнер Мии тяжелее нормы на 420 грамм из-за контрабандных кварцевых накопителей с архивом голосов и писем оставленных на замерзающей Земле парижан и токийцев, не прошедших евгенический отбор Совета.";
+    c.deductionEn = "Mia's seed biocontainer is 420 grams overweight due to smuggled quartz memory crystals holding personal voice logs and letters of civilians abandoned on a freezing Earth who failed the Council's genetic quota.";
+    c.solved = false;
+    m_detectiveCases.push_back(c);
+  }
+}
+
+bool ZettelGraph::isDetectiveCaseSolved(const std::string& caseId) const {
+  for (const auto& c : m_detectiveCases) {
+    if (c.id == caseId) return c.solved;
+  }
+  return false;
+}
+
+std::vector<std::string> ZettelGraph::pollNewDetectiveEvents() {
+  std::vector<std::string> events = m_newlySolvedCases;
+  m_newlySolvedCases.clear();
+  return events;
 }
 
 }  // namespace astro

@@ -28,6 +28,12 @@ struct ZettelNote {
   std::string speakerRu;      // Speaker name
   std::string speakerEn;
 
+  // Detective clues & forensic anomalies
+  std::string evidenceRu;     // Concrete physical clue or sensor telemetry
+  std::string evidenceEn;
+  std::string discrepancyRu;  // Analytical discrepancy / anomaly to investigate
+  std::string discrepancyEn;
+
   float posX = 0.0f;          // 2D position in canvas space
   float posY = 0.0f;
 
@@ -67,6 +73,21 @@ struct ZettelHypothesis {
 
 constexpr const char* kHypothesisRelicTachyon = "hyp_relic_tachyon";
 constexpr const char* kHypothesisPrecursorMetric = "hyp_precursor_metric";
+
+// Detective case solved by connecting anomalous clue notes
+struct ZettelDetectiveCase {
+  std::string id;             // e.g. "case_arseny_shuttles", "case_mia_contraband"
+  std::string noteA;          // first required note
+  std::string noteB;          // second required note
+  std::string titleRu;
+  std::string titleEn;
+  std::string deductionRu;    // deduction text unlocked upon connecting the dots
+  std::string deductionEn;
+  bool solved = false;
+};
+
+constexpr const char* kDetectiveCaseArsenyShuttles = "case_arseny_shuttles";
+constexpr const char* kDetectiveCaseMiaContraband = "case_mia_contraband";
 
 // Recipe defining the synthesis of a new breakthrough Master Node
 struct ZettelSynthesisRecipe {
@@ -154,6 +175,12 @@ class ZettelGraph {
   std::string serialize() const;
   bool deserialize(const std::string& data);
 
+  // === Detective Investigation Cases ===
+  const std::vector<ZettelDetectiveCase>& getDetectiveCases() const { return m_detectiveCases; }
+  std::vector<ZettelDetectiveCase>& getDetectiveCases() { return m_detectiveCases; }
+  bool isDetectiveCaseSolved(const std::string& caseId) const;
+  std::vector<std::string> pollNewDetectiveEvents();
+
   // Narrative descriptions
   static std::string getClusterTitleRu(const std::string& cluster);
   static std::string getClusterTitleEn(const std::string& cluster);
@@ -166,9 +193,12 @@ class ZettelGraph {
   std::vector<ZettelNote> m_notes;
   std::vector<ZettelSynthesisRecipe> m_recipes;
   std::vector<ZettelHypothesis> m_hypotheses;
+  std::vector<ZettelDetectiveCase> m_detectiveCases;
+  std::vector<std::string> m_newlySolvedCases;
   void addSeed(const ZettelNote& note);
   void maybeGenerateHypotheses(const std::string& idA, const std::string& idB);
   void seedDefaultHypotheses();
+  void initDetectiveCases();
 };
 
 std::string zettelkastenFilePathFor(const std::string& dir);

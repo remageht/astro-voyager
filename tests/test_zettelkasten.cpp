@@ -387,6 +387,74 @@ static void test_classified_hypotheses() {
   std::cout << "PASS: test_classified_hypotheses\n";
 }
 
+static void test_detective_investigation_cases() {
+  ZettelGraph zg;
+  REQUIRE(zg.getDetectiveCases().size() == 2);
+  REQUIRE(!zg.isDetectiveCaseSolved(kDetectiveCaseArsenyShuttles));
+  REQUIRE(!zg.isDetectiveCaseSolved(kDetectiveCaseMiaContraband));
+
+  // Check physical clues and analytical discrepancies in notes
+  const ZettelNote* damp = zg.getNote("z_stasis_dampener");
+  REQUIRE(damp != nullptr);
+  REQUIRE(!damp->evidenceRu.empty());
+  REQUIRE(!damp->discrepancyRu.empty());
+  REQUIRE(damp->evidenceRu.find("Мянь Лун") != std::string::npos);
+
+  const ZettelNote* u5 = zg.getNote("z_universe5_collapse");
+  REQUIRE(u5 != nullptr);
+  REQUIRE(!u5->evidenceRu.empty());
+  REQUIRE(!u5->discrepancyRu.empty());
+  REQUIRE(u5->evidenceRu.find("14 дискретных импульсов") != std::string::npos);
+
+  const ZettelNote* mia = zg.getNote("z_mia_promise");
+  REQUIRE(mia != nullptr);
+  REQUIRE(!mia->evidenceRu.empty());
+  REQUIRE(!mia->discrepancyRu.empty());
+  REQUIRE(mia->evidenceRu.find("404-B") != std::string::npos);
+
+  const ZettelNote* m13 = zg.getNote("z_m13_biosphere");
+  REQUIRE(m13 != nullptr);
+  REQUIRE(!m13->evidenceRu.empty());
+  REQUIRE(!m13->discrepancyRu.empty());
+  REQUIRE(m13->discrepancyRu.find("не вошедших в списки") != std::string::npos);
+
+  // Discover and link Arseny's case
+  zg.discoverSeed("z_stasis_dampener");
+  zg.discoverSeed("z_universe5_collapse");
+  REQUIRE(zg.linkNotes("z_stasis_dampener", "z_universe5_collapse"));
+  REQUIRE(zg.isDetectiveCaseSolved(kDetectiveCaseArsenyShuttles));
+
+  auto evs1 = zg.pollNewDetectiveEvents();
+  REQUIRE(evs1.size() == 1);
+  REQUIRE(evs1[0] == kDetectiveCaseArsenyShuttles);
+  REQUIRE(zg.pollNewDetectiveEvents().empty());
+
+  // Discover and link Mia's case
+  zg.discoverSeed("z_mia_promise");
+  zg.discoverSeed("z_m13_biosphere");
+  REQUIRE(zg.linkNotes("z_mia_promise", "z_m13_biosphere"));
+  REQUIRE(zg.isDetectiveCaseSolved(kDetectiveCaseMiaContraband));
+
+  auto evs2 = zg.pollNewDetectiveEvents();
+  REQUIRE(evs2.size() == 1);
+  REQUIRE(evs2[0] == kDetectiveCaseMiaContraband);
+  REQUIRE(zg.pollNewDetectiveEvents().empty());
+
+  // Serialization & deserialization roundtrip
+  std::string saved = zg.serialize();
+  REQUIRE(saved.find("detective_case=case_arseny_shuttles|solved=1") != std::string::npos);
+  REQUIRE(saved.find("detective_case=case_mia_contraband|solved=1") != std::string::npos);
+
+  ZettelGraph roundtrip;
+  REQUIRE(!roundtrip.isDetectiveCaseSolved(kDetectiveCaseArsenyShuttles));
+  REQUIRE(!roundtrip.isDetectiveCaseSolved(kDetectiveCaseMiaContraband));
+  REQUIRE(roundtrip.deserialize(saved));
+  REQUIRE(roundtrip.isDetectiveCaseSolved(kDetectiveCaseArsenyShuttles));
+  REQUIRE(roundtrip.isDetectiveCaseSolved(kDetectiveCaseMiaContraband));
+
+  std::cout << "PASS: test_detective_investigation_cases\n";
+}
+
 int main() {
   test_init();
   test_refresh_discovery();
@@ -398,6 +466,7 @@ int main() {
   test_custom_notes_and_grand_synthesis();
   test_backlinks_and_hypotheses();
   test_classified_hypotheses();
-  std::cout << "\nAll 10 Zettelkasten tests passed successfully.\n";
+  test_detective_investigation_cases();
+  std::cout << "\nAll 11 Zettelkasten tests passed successfully.\n";
   return 0;
 }

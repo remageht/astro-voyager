@@ -827,6 +827,10 @@ int main(int argc, char** argv) {
     std::string outDir = (argc > 2) ? argv[2] : "vibe_videos/menu_check";
     return astro::AppGL::captureMenuCheck(outDir);
   }
+  if (arg == "--capture-workshop") {
+    std::string outDir = (argc > 2) ? argv[2] : "docs/screens";
+    return astro::AppGL::captureWorkshopCheck(outDir);
+  }
   if (arg == "--capture-terminal") {
     std::string outPng = (argc > 2) ? argv[2] : "docs/screens/unified_terminal.png";
     return astro::AppGL::captureTerminalCheck(outPng);
