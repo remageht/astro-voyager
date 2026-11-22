@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## 5.2.0 (2026-11-22)
+
+## What's new / Что нового
+
+- EN: Real-time 3D Cinematic Opening Splash & Spline Director:
+  - Added `IntroCinematicDirector` in `src/IntroCinematicDirector.h` and `src/IntroCinematicDirector.cpp`, orchestrating a real-time 3D intro splash sequence upon game launch with smooth Catmull-Rom cubic spline camera trajectory through deep space, warp transitions, and megastructure approach.
+  - Features 6 distinct cinematic phases (`VoidDrift` -> `WarpBurst` -> `ShipPass` -> `MegastructureReveal` -> `BridgeEnter` -> `TitleGlory` -> `Finished`), letterbox cinematic bars, anamorphic flare streaks, audio cue hooks (`playWarpBoom`, `playWarpDrop`, `playRadioBeep`, `playSuccessChime`), and instant skip at any time via Space, Enter, or Escape keys.
+  - Integrated `[ >> 3D-ЗАСТАВКА (ИНТРО) ]` replay button directly into the Main Menu hero navigation for instant replayability.
+  - Fully verified with unit tests in `tests/test_intro_cinematic.cpp`.
+- RU: Кинематографичная 3D-заставка на движке и сплайновый режиссёр:
+  - Внедрён `IntroCinematicDirector` (`src/IntroCinematicDirector.h`, `src/IntroCinematicDirector.cpp`), управляющий полноценной трёхмерной кинематографичной заставкой при запуске игры. Камера движется по гладким кубическим сплайнам Катмулла-Рома сквозь глубокий космос, варп-переход и подлёт к космической станции.
+  - 6 кинематографичных фаз (`VoidDrift` -> `WarpBurst` -> `ShipPass` -> `MegastructureReveal` -> `BridgeEnter` -> `TitleGlory` -> `Finished`), широкоформатный синематик-леттербоксинг (2.39:1), анаморфотные световые блики, звуковые хуки варп-удара и радиопереговоров, а также мгновенный пропуск по нажатию Space/Enter/Esc.
+  - На главный экран меню добавлена кнопка «3D-ЗАСТАВКА (ИНТРО)» для повторного воспроизведения заставки в любой момент.
+  - Полностью протестировано в `tests/test_intro_cinematic.cpp`.
+
+- EN: Modular Orbital Megastructure 3D Model & 2K PBR Asset Suite:
+  - Authored colossal modular starbase asset (`res/models/station_megastructure.obj`, 117,136 triangles) with dual counter-rotating gravity habitat rings, central multi-docking hub with capital ship moorings, axial solar radiator trusses, and communications array.
+  - Complete 24-bit flip-safe PBR texture suite (1024x1024 BMPs): albedo, tangent-space normal, roughness, metallic, and cyan emissive windows and navigation strobe channels.
+  - Registered in 3D Workshop catalog (Category 2: Megastructures) with complete orbital telemetry, Clay/PBR inspection shaders, and multi-angle lighting.
+- RU: 3D-модель орбитальной мегаструктуры и 2K PBR-пак текстур:
+  - Создана исполинская модульная орбитальная звездная база (`res/models/station_megastructure.obj`, 117 136 полигонов) с двумя встречно-вращающимися кольцами искусственной гравитации, центральным стыковочным хабом для дредноутов, радиаторно-ферменными балками и антенными комплексами дальней связи.
+  - Полный комплект 24-битных PBR-текстур (1024x1024 BMP): альбедо, карта нормалей, шероховатость, металличность и неоновые эмиссивные каналы иллюминаторов и огней.
+  - Зарегистрирована в каталоге 3D Мастерской (Категория 2: Мегаструктуры) с подробной телеметрией и переключением режимов PBR/глина.
+
+- EN: Detailed 3D Ship Bridge Interior & Tactical Holo-Table:
+  - Authored walkable ship command bridge interior (`res/models/bridge_interior.obj`, 122,880 triangles) featuring captain's command chair, navigation and tactical operator consoles, central 3D holographic star-map table, panoramic observation canopy, and reinforced structural bulkheads.
+  - Full flip-safe 24-bit PBR texture suite (1024x1024 BMPs): albedo, normal, roughness, metallic, and vivid holographic emitter emissive maps.
+  - Registered in 3D Workshop catalog (Category 0: Fleet) for interactive orbit inspection and visual fidelity exploration (Fixes #228).
+- RU: 3D-интерьер командного мостика корабля и тактический голо-стол:
+  - Создан детальный интерьер мостика корабля (`res/models/bridge_interior.obj`, 122 880 полигонов): кресло капитана, терминалы штурмана и тактика, центральный голографический стол проекции звездных карт, панорамный бронефонарь и ребристые переборки.
+  - Полный комплект 24-битных PBR-текстур (1024x1024 BMP): альбедо, нормали, шероховатость, металличность и светящиеся голографические эмиттеры.
+  - Добавлен в каталог 3D Мастерской (Категория 0: Флот) для свободного осмотра и инспекции (Fixes #228).
+
 ## 5.1.11 (2026-11-22)
 
 ## What's new / Что нового

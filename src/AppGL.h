@@ -33,6 +33,7 @@
 #include "audio/AudioEngine.h"
 // === Audio === end
 #include "LoadingScreen.h"
+#include "IntroCinematicDirector.h"
 
 // === Cinematic ===: forward-decls для ImGui-типов (imgui.h тянуть в хедер не
 // нужно; дефолтный шрифт и чужие виджеты не тронуты).
@@ -410,6 +411,8 @@ class AppGL {
   float m_radarLockTimer = 1.0f;
   // === Loading & Transitions === (v5.0.8)
   astro::LoadingScreen m_loadingScreen;
+  // === 3D Cinematic Intro === (v5.2.0)
+  astro::IntroCinematicDirector m_introDirector;
   unsigned int m_menuBgTex = 0;
   int m_menuBgW = 0;
   int m_menuBgH = 0;
