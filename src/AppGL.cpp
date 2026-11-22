@@ -238,6 +238,31 @@ int AppGL::run() {
     if (m_loadingScreen.justFinished()) {
       m_loadingScreen.clearFinishedFlag();
       m_audio.playRadioBeep();
+      m_introDirector.start();
+    }
+
+    // === 3D Cinematic Intro === (v5.2.0)
+    if (m_introDirector.isActive()) {
+      GLFWwindow* win = m_window->getNativeWindow();
+      if (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_ENTER) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_KP_ENTER) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        m_introDirector.skip();
+      }
+      m_introDirector.update(deltaTime);
+      if (m_introDirector.consumeWarpBoomTrigger()) {
+        m_audio.playJump();
+      }
+      if (m_introDirector.consumeEngineWhooshTrigger()) {
+        m_audio.playWhoosh();
+      }
+      if (m_introDirector.consumeBridgeOnlineTrigger()) {
+        m_audio.playRadioBeep();
+      }
+      if (m_introDirector.consumeTitleChimeTrigger()) {
+        m_audio.playEurekaChime();
+      }
     }
 
     // === Perf Benchmark Harness === (Stage 4): сбор кадров и авто-вылет
@@ -273,17 +298,29 @@ int AppGL::run() {
       }
       m_prevEscPressed = menuEscDown;
 
+      if (glfwGetKey(menuWin, GLFW_KEY_I) == GLFW_PRESS && !m_introDirector.isActive() && !m_loadingScreen.isActive()) {
+        m_introDirector.start();
+        m_audio.playBlip();
+      }
+
       m_window->pollEvents();
 
-      const Station* menuSt = m_sceneManager->getCurrentStation();
-      double menuSpawn = (menuSt ? menuSt->spawnDistanceRs : 20.0);
-      float menuRadius = static_cast<float>(menuSpawn * 1.25 + 4.0);
-      menuAngle += deltaTime * 0.05f;
-      m_camera.position = Vec3(static_cast<double>(std::cos(menuAngle)) * menuRadius,
-                               static_cast<double>(menuRadius) * 0.35,
-                               static_cast<double>(std::sin(menuAngle)) * menuRadius);
-      Vec3 menuOrigin(0.0, 0.0, 0.0);
-      computeLookYawPitch(m_camera.position, menuOrigin, m_camera.yaw, m_camera.pitch);
+      if (m_introDirector.isActive()) {
+        auto camPos = m_introDirector.cameraPosition();
+        auto camTgt = m_introDirector.cameraTarget();
+        m_camera.position = Vec3(camPos.x, camPos.y, camPos.z);
+        computeLookYawPitch(m_camera.position, Vec3(camTgt.x, camTgt.y, camTgt.z), m_camera.yaw, m_camera.pitch);
+      } else {
+        const Station* menuSt = m_sceneManager->getCurrentStation();
+        double menuSpawn = (menuSt ? menuSt->spawnDistanceRs : 20.0);
+        float menuRadius = static_cast<float>(menuSpawn * 1.25 + 4.0);
+        menuAngle += deltaTime * 0.05f;
+        m_camera.position = Vec3(static_cast<double>(std::cos(menuAngle)) * menuRadius,
+                                 static_cast<double>(menuRadius) * 0.35,
+                                 static_cast<double>(std::sin(menuAngle)) * menuRadius);
+        Vec3 menuOrigin(0.0, 0.0, 0.0);
+        computeLookYawPitch(m_camera.position, menuOrigin, m_camera.yaw, m_camera.pitch);
+      }
 
       int menuFbW = 0, menuFbH = 0;
       m_window->getFramebufferSize(menuFbW, menuFbH);
@@ -298,7 +335,11 @@ int AppGL::run() {
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
-      drawMenu();
+      if (m_introDirector.isActive()) {
+        m_introDirector.drawHUD(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
+      } else {
+        drawMenu();
+      }
       if (m_loadingScreen.isActive()) {
         m_loadingScreen.draw(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
       }
@@ -11547,6 +11588,17 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
     ImGui::SetTooltip("%s", uiRu("Дневник Егорки, Zettelkasten, саундтрек и статистика", "Egorka's logbook, Zettelkasten, soundtrack and stats"));
   }
 
+  ImGui::SetCursorPosX(leftMargin);
+  if (drawTacticalCutButton(uiRu("3D-ЗАСТАВКА (ИНТРО)", "3D INTRO CINEMATIC"),
+                           ImVec2(cmdW, 38.0f), navBorder, navBg, 10.0f, nullptr, ">>", "[I]")) {
+    m_introDirector.start();
+    m_audio.playBlip();
+  }
+  if (ImGui::IsItemHovered()) {
+    hoveredOption = 7;
+    ImGui::SetTooltip("%s", uiRu("Повторить кинематографичную 3D-заставку игры", "Replay the real-time 3D cinematic opening"));
+  }
+
   ImGui::Dummy(ImVec2(0.0f, 4.0f));
   ImGui::SetCursorPosX(leftMargin);
   if (drawTacticalCutButton(uiRu("ВЫХОД ИЗ СИСТЕМЫ", "EXIT SYSTEM"),
@@ -13004,6 +13056,11 @@ static const WorkshopAssetEntry kWorkshopCatalog[] = {
    "Конфигурация с разделенной командной секцией для суборбитальных посадок при сохранении орбитального варп-кольца.",
    "Separated command module configuration allowing atmospheric landing while maintaining orbital warp ring readiness."},
 
+  {"bridge_interior", "3D-Мостик Корабля", "Ship Bridge Interior", 0,
+   "res/models/bridge_interior.obj", "res/models/bridge_interior", nullptr, 4.5f,
+   "Детализированный командный мостик корабля: кресло капитана, терминалы штурмана и инженера, тактический голографический стол и панорамный бронефонарь.",
+   "Fully rendered 3D ship bridge interior featuring captain dais, operator stations, tactical holo-table, and reinforced observation canopy."},
+
   // === 1: Колониальная инфраструктура (Colony 28 assets) ===
   {"colony_park", "Центральный биопарк", "Central Bio-Park", 1,
    "res/models/colony_park.obj", "res/models/colony_park", nullptr, 5.0f,
@@ -13220,6 +13277,11 @@ static const WorkshopAssetEntry kWorkshopCatalog[] = {
    "res/models/jumpgate.obj", "res/models/jumpgate", nullptr, 12.0f,
    "Орбитальные врата гиперпространственного перехода диаметром 9.2м с 8 квантовыми эмиттерами, стыковочными шлюзами и навигационными маяками. Открывают стабильный транзитный коридор сквозь релятивистский космос.",
    "Orbital hypergate megastructure (9.2m ring, 7.48m clear aperture) featuring 8 quantum plasma emitters, docking locks, and navigation beacons for zero-inertia interstellar transit."},
+
+  {"station_megastructure", "Орбитальная Мегаструктура", "Orbital Megastructure", 2,
+   "res/models/station_megastructure.obj", "res/models/station_megastructure", nullptr, 16.0f,
+   "Исполинская модульная орбитальная станция с двумя встречно-вращающимися кольцами искусственной гравитации, причалами дредноутов и солнечными фермами.",
+   "Colossal modular orbital starbase featuring dual counter-rotating gravity tori, docking cradles, and expansive photovoltaic arrays."},
 
   // === 3: Небесные тела и астероиды (Celestial 3 assets) ===
   {"asteroid_1", "Астероид Тип-С (хондрит)", "Asteroid Type-C (Chondrite)", 3,

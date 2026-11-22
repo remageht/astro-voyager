@@ -789,7 +789,7 @@ Check 'colony capture harness' (((Read-File 'src/main.cpp') -match '--capture-co
 Check 'colony stage and rp saved' (((Read-File 'src/SaveGame.cpp') -match 'colonyStages') -and ((Read-File 'src/SaveGame.cpp') -match 'researchPoints') -and ((Read-File 'tests/test_save.cpp') -match 'colonyStages'))
 $ciStray = (((Read-File '.github/workflows/build.yml') -split "`n") | Where-Object { $_ -match '^[^\s#]' -and $_ -notmatch '^(name|on|permissions|jobs|env|concurrency|defaults):' }).Count
 Check 'ci workflow yaml indent' ($ciStray -eq 0)
-Check 'v5.1.0 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
+Check 'v5.2.0 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
 
 # --- Colony 2.0 perks wired into the simulation (not panel text only) ---
 Check 'colony perk warp recharge in sim' ((((Read-File 'src/WarpJump.cpp') -match 'dur\(JumpPhase::Charge\)') -and ($appCpp -match 'colonyWarpRechargeBoost\(m_colonyStages\)')) -and ((($appCpp -match '3\.0f \* warpRechargeScale\(\)') -and ($appCpp -match '2\.0f \* warpRechargeScale\(\)')) -and ($appCpp -match 'm_jump\.dur\(JumpPhase::Cooldown\)')))
@@ -946,6 +946,18 @@ Check 'PeopleSystem.cpp implements candidate generation, vitals simulation and c
 Check 'SaveGame persists ShipCrewRoster assigned officers and reserve' (($saveH -match 'ShipCrewRoster crew;') -and ($saveCpp -match 'crew\.allAssigned\(\)') -and ($saveCpp -match 'crew\.reserve') -and ($saveCpp -match 'crew\.assign'))
 Check 'test_people registered in CMakeLists and ASTRO_TEST_TARGETS' (($cmakeTxt -match 'test_people') -and (Test-Path 'tests/test_people.cpp'))
 Check 'AppGL declares and wires crew roster and colony population tab' (($appH -match 'ShipCrewRoster m_crew;') -and ($appH -match 'int m_colonyTab') -and ($appCpp -match 'm_crew\.warpCooldownMultiplier\(\)') -and ($appCpp -match 'm_crew\.fuelConsumptionMultiplier\(\)') -and ($appCpp -match 'm_crew\.hullAutoRepairRate\(\)'))
+
+# --- Issue #228: 3D Cinematic Opening Splash, Modular Orbital Megastructure & 3D Bridge Interior (v5.2.0) ---
+$introH = Read-File 'src/IntroCinematicDirector.h'
+$introCpp = Read-File 'src/IntroCinematicDirector.cpp'
+
+Check 'IntroCinematicDirector.h declares IntroPhase and spline director' (($introH -match 'enum class IntroPhase') -and ($introH -match 'VoidDrift') -and ($introH -match 'WarpBurst') -and ($introH -match 'MegastructureReveal') -and ($introH -match 'BridgeEnter') -and ($introH -match 'TitleGlory') -and ($introH -match 'class IntroCinematicDirector'))
+Check 'IntroCinematicDirector.cpp implements Catmull-Rom spline and drawHUD' (($introCpp -match 'catmullRom') -and ($introCpp -match 'evaluateSpline') -and ($introCpp -match 'drawHUD') -and ($introCpp -match 'ASTRO - VOYAGER') -and ($introCpp -match 'consumeWarpBoomTrigger'))
+Check 'test_intro_cinematic registered in CMakeLists and ASTRO_TEST_TARGETS' (($cmakeTxt -match 'test_intro_cinematic') -and (Test-Path 'tests/test_intro_cinematic.cpp'))
+Check 'orbital megastructure 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/station_megastructure.obj')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_emissive.bmp')))
+Check 'bridge interior 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/bridge_interior.obj')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_emissive.bmp')))
+Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(deltaTime\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match '3D-ЗАСТАВКА \(ИНТРО\)'))
+Check 'workshop catalog registers bridge_interior and station_megastructure' (($appCpp -match '"bridge_interior"') -and ($appCpp -match '"station_megastructure"'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
