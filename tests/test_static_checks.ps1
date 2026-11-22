@@ -912,6 +912,19 @@ Check 'LodSystem defines multi-nozzle thruster geometry layout for fleet styles'
 Check 'SceneManager implements multi-nozzle plumes with standing Mach diamonds' (($sceneCpp -match 'getShipNozzleLayout\(style\)') -and ($sceneCpp -match 'plumePoints') -and ($sceneCpp -match 'plumeMags') -and ($sceneCpp -match 'Mach Diamonds') -and ($sceneCpp -match 'shockDist') -and ($sceneCpp -match 'shockMag'))
 Check 'SceneManager implements 3-tier station LOD distance scaling and culling' (($sceneCpp -match 'kStationLodCullDistance') -and ($sceneCpp -match 'calculateStationLod\(camDist\)') -and ($sceneCpp -match 'StationLodLevel::LOD0_Close'))
 
+# --- Issue #220: Narrative motto, prologue directives, pilot logbook Day 1 Factor 9, Egorka voice density, and tidal stress HUD ---
+$audioH = Read-File 'src/audio/AudioEngine.h'
+$audioCpp = Read-File 'src/audio/AudioEngine.cpp'
+$typesH = Read-File 'src/Types.h'
+$zettelH = Read-File 'src/Zettelkasten.h'
+$zettelCpp = Read-File 'src/Zettelkasten.cpp'
+
+Check 'AppGL renders poetic menu motto and prologue directives' (($appCpp -match 'Distance is not a wall') -and ($appCpp -match 'CASIMIR KEY & COORDS') -and ($appCpp -match 'FACTOR 9 // FIRST WARP') -and ($appCpp -match 'PILOT LOGBOOK & ARCHIVE'))
+Check 'AudioEngine declares EgorkaVoiceDensity enum and getters' (($audioH -match 'enum class EgorkaVoiceDensity') -and ($audioH -match 'CriticalOnly') -and ($audioH -match 'setEgorkaVoiceDensity') -and ($audioH -match 'egorkaVoiceDensity'))
+Check 'AudioEngine and AppGL wire voice density filtering and UI combo' (($audioCpp -match 'm_egorkaVoiceDensity\.load\(\)') -and ($appCpp -match 'Egorka Voice Density') -and ($appCpp -match 'Critical Only'))
+Check 'Zettelkasten defines and discovers Pilot Logbook Day 1 Factor 9 note' (($zettelH -match 'kNotePilotLogDay1\s*=\s*"z_pilot_log_day1"') -and ($zettelCpp -match 'kNotePilotLogDay1') -and ($zettelCpp -match 'Day 1\. Factor 9') -and ($zettelCpp -match 'discoverSeed\(kNotePilotLogDay1\)'))
+Check 'ShipState tracks tidalStrain and AppGL renders tidal stress HUD gauge' (($typesH -match 'float tidalStrain = 0\.0f;') -and ($appCpp -match 'm_ship\.tidalStrain') -and ($appCpp -match 'TIDAL %.0f%%') -and ($appCpp -match 'TIDAL STRAIN: STRUCTURAL HAZARD'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
