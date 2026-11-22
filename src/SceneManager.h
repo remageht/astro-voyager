@@ -14,6 +14,7 @@
 #include "PostFX.h"
 #include "Shader.h"
 #include "SolarSystem.h"
+#include "LodSystem.h"
 
 namespace astro {
 
