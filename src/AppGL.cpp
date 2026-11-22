@@ -10673,11 +10673,10 @@ void AppGL::renderMenuBackdrop(int width, int height, double time) {
   if (m_menuPage == 6) {
     if (m_workshopBackdropMode == 1) {
       dimFactor = 0.15f;  // Затемнение фона на 85%
-    } else if (m_workshopBackdropMode == 0) {
-      dimFactor = 0.02f;  // Тёмная студия
     }
   }
   m_menuSkyShader->setUniform1f("u_DimFactor", dimFactor);
+  m_menuSkyShader->setUniform1i("u_WorkshopStudio", (m_menuPage == 6 && m_workshopBackdropMode == 0) ? 1 : 0);
   glActiveTexture(GL_TEXTURE3);
   glBindTexture(GL_TEXTURE_2D, m_menuMotionMaskTex);
   glActiveTexture(GL_TEXTURE2);
@@ -12862,12 +12861,8 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
   glViewport(0, 0, width, height);
   glEnable(GL_DEPTH_TEST);
   glDepthMask(GL_TRUE);
-  if (m_workshopBackdropMode == 0) {
-    glClearColor(0.024f, 0.028f, 0.038f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  } else {
-    glClear(GL_DEPTH_BUFFER_BIT);
-  }
+  glClearColor(0.024f, 0.028f, 0.038f, 1.0f);
+  glClear(GL_DEPTH_BUFFER_BIT);
 
   float aspect = static_cast<float>(width) / static_cast<float>(height);
   glm::mat4 proj = glm::perspective(glm::radians(42.0f), aspect, 0.05f, 200.0f);

@@ -14,9 +14,26 @@ uniform float u_Time;
 uniform vec2 u_Res;
 uniform float u_BgAspect;
 uniform float u_DimFactor;
+uniform int u_WorkshopStudio;
 
 void main() {
   float aspect = u_Res.x / max(u_Res.y, 1.0);
+
+  if (u_WorkshopStudio != 0) {
+    vec2 p = v_TexCoord - vec2(0.5, 0.5);
+    p.x *= aspect;
+    float dist = length(p);
+    // Высокотехнологичный тёмный студийный фон мастерской (Dark Studio Showroom):
+    // Мягкий рассеянный лазурно-серый световой купол по центру (#0b1420),
+    // плавное угасание к глубокому обсидиановому тону (#020407) на периферии.
+    vec3 studioCenter = vec3(0.042, 0.078, 0.125);
+    vec3 studioEdge   = vec3(0.009, 0.015, 0.027);
+    vec3 studioCol = mix(studioCenter, studioEdge, smoothstep(0.12, 0.95, dist));
+    vec2 edge = v_TexCoord * 2.0 - 1.0;
+    studioCol *= (1.0 - 0.28 * dot(edge, edge));
+    fragColor = vec4(studioCol, 1.0);
+    return;
+  }
   vec2 screenUv = vec2(v_TexCoord.x, 1.0 - v_TexCoord.y);
   vec2 coverScale = vec2(min(aspect / u_BgAspect, 1.0),
                          min(u_BgAspect / aspect, 1.0));
