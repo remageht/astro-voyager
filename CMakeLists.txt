@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 5.1.11 LANGUAGES CXX)
+project(astro-voyager VERSION 5.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -419,6 +419,7 @@ if(ASTROVOYAGER_ENABLE_GL)
     src/WarpJump.cpp  # === WarpJump === (агент J: чистая логика катсцены)
     src/CockpitController.cpp  # === CockpitController === (v4.2.0): динамика кабины и HUD
     src/CockpitRenderer.cpp  # === CockpitRenderer === (v4.2.0): рендеринг 3D-кокпита и HUD
+    src/IntroCinematicDirector.cpp  # === IntroCinematicDirector === (v5.2.0): 3D-интро
     src/vendor/imgui/imgui.cpp
     src/vendor/imgui/imgui_draw.cpp
     src/vendor/imgui/imgui_tables.cpp
@@ -674,6 +675,29 @@ if(TARGET test_people)
   add_test(NAME test_people COMMAND test_people)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_intro_cinematic.cpp")
+  add_executable(test_intro_cinematic
+    tests/test_intro_cinematic.cpp
+    src/IntroCinematicDirector.cpp
+  )
+  target_include_directories(test_intro_cinematic PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  target_compile_definitions(test_intro_cinematic PRIVATE ASTRO_NO_IMGUI)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+    target_include_directories(test_intro_cinematic PRIVATE "${CMAKE_SOURCE_DIR}/src/vendor/glm")
+  elseif(TARGET glm::glm)
+    target_link_libraries(test_intro_cinematic PRIVATE glm::glm)
+  endif()
+  if(MSVC)
+    target_compile_options(test_intro_cinematic PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_intro_cinematic PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_intro_cinematic)
+  add_test(NAME test_intro_cinematic COMMAND test_intro_cinematic)
+endif()
+
 # Preserve assert() in tests even in Release configurations (Issue #187).
 # MSVC passes /DNDEBUG by default in Release; /UNDEBUG undefines it.
 # Clang/GCC use -UNDEBUG.
@@ -702,6 +726,7 @@ set(ASTRO_TEST_TARGETS
   test_loading
   test_colony
   test_people
+  test_intro_cinematic
 )
 foreach(t ${ASTRO_TEST_TARGETS})
   if(TARGET ${t})
