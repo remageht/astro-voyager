@@ -364,7 +364,7 @@ void main() {
       land = surface.a;
       albedo = surface.rgb;
 
-      // --- Two-Layer Cyclonic Cloud System with Directional Ground Shadows ---
+      // --- Two-Layer Cyclonic Cloud System with Directional Ground Shadows & Coriolis Drift ---
       vec3 sunDirLocal = sunDir;
       if (u_SpinAngle != 0.0) {
         float spinC = cos(u_SpinAngle);
@@ -372,9 +372,11 @@ void main() {
         sunDirLocal = vec3(spinC * sunDir.x + spinS * sunDir.z, sunDir.y,
                            -spinS * sunDir.x + spinC * sunDir.z);
       }
-      vec3 cp = sp * 4.8 + u_Seed + vec3(u_Time * 0.03, 0.0, 0.0);
+      float latWeight = cos(sp.y * 3.14159265 * 0.5);
+      float coriolisSpeed = mix(0.012, 0.038, latWeight);
+      vec3 cp = sp * 4.8 + u_Seed + vec3(u_Time * coriolisSpeed, 0.0, 0.0);
       float cl1 = fbm4(cp);
-      float cl2 = fbm3(cp * 2.4 + vec3(u_Time * 0.015, 0.0, 0.0));
+      float cl2 = fbm3(cp * 2.4 + vec3(u_Time * (coriolisSpeed * 0.65), 0.0, 0.0));
       float cloudVal = cl1 * 0.72 + cl2 * 0.28;
       float clm = smoothstep(0.50, 0.72, cloudVal) * u_Clouds;
 
@@ -521,6 +523,17 @@ void main() {
     float net = smoothstep(0.6, 0.9, fbm3(sp * 30.0 + u_Seed * 1.7));
     float cellFlick = 0.8 + 0.2 * sin(u_Time * 2.5 + hash13(floor(sp * 14.0)) * 40.0);
     col += vec3(1.0, 0.75, 0.42) * cities * (0.7 + 0.5 * net) * night * cellFlick * 2.0;
+
+    // Aurora Borealis / Australis ribbons at polar latitudes (Birkeland currents)
+    float polarLat = abs(sp.y);
+    if (polarLat > 0.65) {
+      float auroraOval = smoothstep(0.65, 0.78, polarLat) * (1.0 - smoothstep(0.85, 0.95, polarLat));
+      float auroraWave = sin(atan(sp.z, sp.x) * 5.0 + u_Time * 0.8) * 0.5 + 0.5;
+      float auroraCurtain = fbm3(sp * 14.0 + vec3(0.0, u_Time * 0.35, u_Time * 0.15));
+      float auroraIntensity = auroraOval * (0.4 + 0.6 * auroraWave) * auroraCurtain * (1.0 - smoothstep(0.0, 0.15, diff)) * 1.5;
+      vec3 auroraCol = mix(vec3(0.12, 0.95, 0.48), vec3(0.72, 0.18, 0.95), smoothstep(0.74, 0.85, polarLat));
+      col += auroraCol * auroraIntensity;
+    }
   } else if (u_Type == 2 && u_Body != 3) {
     float night = 1.0 - smoothstep(0.0, 0.08, diff);
     float cc = fbm3(sp * 14.0 + u_Seed);

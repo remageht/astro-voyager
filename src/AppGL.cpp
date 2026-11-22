@@ -738,17 +738,24 @@ void AppGL::processInput(float deltaTime) {
   m_prevPPressed = pDown;
 
   // === Camera views === (v3.3.0): V цикл кабина -> за кормой -> обзор.
+  // Shift+V (v5.4.0): переключение режима EVA (выход в открытый космос).
   // Во время катсцены прыжка вид не трогаем (камерой владеет updateJumpCine).
   const bool vDown = (glfwGetKey(win, m_keyView) == GLFW_PRESS);
   if (vDown && !m_prevVPressed && !io.WantCaptureKeyboard && !m_jumpCine) {
-    m_viewMode = view::nextView(m_viewMode);
+    const bool shiftDown = (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+                            glfwGetKey(win, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+    if (shiftDown) {
+      m_viewMode = view::toggleEva(m_viewMode);
+    } else {
+      m_viewMode = view::nextView(m_viewMode);
+    }
     m_viewZoom = 1.0f;
     m_viewZoomT = 1.0f;
     // Снос камеры меняет камеру кадра: без сброса рел. скорости был бы
     // ложный скачок beta (доплер-вспышка) на кадр переключения.
     m_sceneManager->resetRelativity();
-    static const char* kViewNameRu[] = {"Кабина", "За кормой", "Дальний обзор"};
-    static const char* kViewNameEn[] = {"Cockpit", "Behind", "Overview"};
+    static const char* kViewNameRu[] = {"Кабина", "За кормой", "Дальний обзор", "Выход в открытый космос (EVA)"};
+    static const char* kViewNameEn[] = {"Cockpit", "Behind", "Overview", "Spacewalk Inspection (EVA)"};
     const int vi = static_cast<int>(m_viewMode);
     Toast vt;
     vt.title = uiRu("Вид камеры", "Camera view");
@@ -757,6 +764,22 @@ void AppGL::processInput(float deltaTime) {
     m_toasts.push_back(vt);
   }
   m_prevVPressed = vDown;
+
+  // v5.4.0: F7 — горячая клавиша тестирования варп-транзита в свободном полёте
+  const bool f7Down = (glfwGetKey(win, GLFW_KEY_F7) == GLFW_PRESS);
+  if (f7Down && !m_prevF7Pressed && !io.WantCaptureKeyboard && !m_jumpCine) {
+    m_warpTransitTestForced = !m_warpTransitTestForced;
+    warpdrive::setWarpTransitTestActive(m_warpTransitTestForced);
+    Toast wt;
+    wt.title = uiRu("Варп-транзит (Тест)", "Warp Transit (Test)");
+    wt.desc = m_warpTransitTestForced
+                  ? uiRu("Туннель искривления пространства: АКТИВЕН", "Spacetime warp tunnel: ACTIVE")
+                  : uiRu("Туннель искривления пространства: ВЫКЛ", "Spacetime warp tunnel: OFF");
+    wt.time = static_cast<float>(glfwGetTime());
+    m_toasts.push_back(wt);
+    m_audio.playBlip();
+  }
+  m_prevF7Pressed = f7Down;
 
   // Time pace: - steps down, = (or +) steps up the preset list.
   // Slash is reserved for station search focus, so it is not reused here.
@@ -9346,14 +9369,24 @@ void AppGL::drawShipHud() {
     if (hasCasimir) {
       ImGui::TextColored(ImVec4(0.35f, 0.95f, 1.0f, 1.0f), "★ [CASIMIR WARP 9.9]");
     }
-    // Вид камеры (v3.3.0): строка-подсказка для клавиши V.
+    // Вид камеры (v3.3.0, v5.4.0): строка-подсказка для клавиши V / Shift+V.
     // v3.6.0: сложность Hard отключает подсказки (difficultyTuning().hints).
     if (difficultyTuning(m_difficulty).hints) {
-      static const char* kViewRu[3] = {"Кабина", "За кормой", "Обзор"};
-      static const char* kViewEn[3] = {"Cockpit", "Behind", "Overview"};
-      const int vi = static_cast<int>(m_viewMode);
+      static const char* kViewRu[4] = {"Кабина", "За кормой", "Обзор", "EVA Космос"};
+      static const char* kViewEn[4] = {"Cockpit", "Behind", "Overview", "EVA Spacewalk"};
+      const int vi = std::clamp(static_cast<int>(m_viewMode), 0, 3);
       ImGui::TextColored(ImVec4(0.6f, 0.75f, 0.9f, 1.0f), "%s: %s",
                          uiRu("Вид", "View"), uiRu(kViewRu[vi], kViewEn[vi]));
+    }
+    if (m_viewMode == view::ViewMode::EvaFreeInspect) {
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::TextColored(ImVec4(0.2f, 0.9f, 1.0f, 1.0f), "● %s", uiRu("РЕЖИМ EVA // ВЫХОД В КОСМОС", "EVA MODE // SPACEWALK"));
+      ImGui::TextColored(ImVec4(0.7f, 0.85f, 0.95f, 0.9f), "%s: %.0f%% | %s: %.0f%%",
+                         uiRu("Кислород O2", "Oxygen O2"), m_evaO2,
+                         uiRu("Газ РКС", "RCS Gas"), m_evaPropellant);
+      ImGui::TextColored(ImVec4(0.5f, 0.75f, 0.85f, 0.8f), "%s: %.1f м [ФАЛ OK]",
+                         uiRu("Дистанция", "Tether Dist"), m_evaTetherDist);
     }
     if (m_shipNoticeT > 0.0f && !m_shipNotice.empty()) {
       ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s",
@@ -9473,6 +9506,20 @@ void AppGL::applyViewCamera(Camera& out) {
     out.position.x += headOff.x * rt.x + headOff.y * up.x + headOff.z * fwd.x;
     out.position.y += headOff.x * rt.y + headOff.y * up.y + headOff.z * fwd.y;
     out.position.z += headOff.x * rt.z + headOff.y * up.z + headOff.z * fwd.z;
+    return;
+  }
+  if (m_viewMode == view::ViewMode::EvaFreeInspect) {
+    // v5.4.0: 6DOF EVA Inspection float offset with gentle spacewalk micro-drift
+    float t = static_cast<float>(glfwGetTime());
+    float evaSwayX = std::sin(t * 0.8f) * 0.15f;
+    float evaSwayY = std::cos(t * 0.6f) * 0.12f;
+    out.position = view::offsetCameraPos(
+        m_camera.position, m_camera.forward(), m_viewMode, m_viewZoom);
+    const Vec3 rt = m_camera.right();
+    const Vec3 up = m_camera.up();
+    out.position.x += rt.x * evaSwayX + up.x * evaSwayY;
+    out.position.y += rt.y * evaSwayX + up.y * evaSwayY;
+    out.position.z += rt.z * evaSwayX + up.z * evaSwayY;
     return;
   }
   // v4.0: зум колёсиком — множитель сноса (ближе/дальше), без крышки значений.
@@ -9724,6 +9771,15 @@ void AppGL::updateSpeedFx(float deltaTime) {
     msg.durationSec = 6.0;
     m_bridgeComms.queueMessage(msg, glfwGetTime());
   }
+  // v5.4.0: тестовый прототип варп-транзита во время полётного варп-круиза
+  if (!m_jumpCine) {
+    if (m_warpOn && warpK > 0.35f) {
+      warpdrive::setWarpTransitTestActive(true);
+    } else if (!m_warpTransitTestForced) {
+      warpdrive::setWarpTransitTestActive(false);
+    }
+  }
+
   // Микро-FOV: +3° на полном эффекте поверх варп-кривой (+10° * m_warpK).
   auto& st = m_sceneManager->getSettings();
   if (m_warpBaseFov <= 1.0f) m_warpBaseFov = st.fovDegrees;  // ленивая база
@@ -12885,6 +12941,12 @@ void AppGL::loadWorkshopModel(int modelIdx) {
   m_workshopModelLoaded = true;
   m_workshopDist = entry.defaultDist > 0.0f ? entry.defaultDist : 5.0f;
   m_workshopPan = glm::vec2(0.0f, 0.0f);
+  m_workshopSubsystem = WorkshopSubsystem::Overall;
+  m_workshopTargetDist = m_workshopDist;
+  m_workshopTargetPan = m_workshopPan;
+  m_workshopTargetPitch = 18.0f;
+  m_workshopTargetYaw = 35.0f;
+  m_workshopLerpActive = false;
 }
 
 void AppGL::renderWorkshop3D(int width, int height, double time) {
@@ -12901,7 +12963,21 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
   float dt = static_cast<float>(time - s_lastWorkshopTime);
   s_lastWorkshopTime = time;
   if (dt < 0.0f || dt > 0.2f) dt = 1.0f / 60.0f;
-  if (m_workshopAutoRotate) {
+  if (m_workshopLerpActive) {
+    float alpha = std::clamp(dt * 5.5f, 0.0f, 1.0f);
+    m_workshopDist += (m_workshopTargetDist - m_workshopDist) * alpha;
+    m_workshopPan.x += (m_workshopTargetPan.x - m_workshopPan.x) * alpha;
+    m_workshopPan.y += (m_workshopTargetPan.y - m_workshopPan.y) * alpha;
+    m_workshopPitch += (m_workshopTargetPitch - m_workshopPitch) * alpha;
+    float yawDiff = m_workshopTargetYaw - m_workshopYaw;
+    while (yawDiff > 180.0f) yawDiff -= 360.0f;
+    while (yawDiff < -180.0f) yawDiff += 360.0f;
+    m_workshopYaw += yawDiff * alpha;
+    if (std::abs(m_workshopDist - m_workshopTargetDist) < 0.05f &&
+        glm::length(m_workshopPan - m_workshopTargetPan) < 0.02f) {
+      m_workshopLerpActive = false;
+    }
+  } else if (m_workshopAutoRotate) {
     m_workshopYaw += dt * m_workshopRotateSpeed;
     if (m_workshopYaw >= 360.0f) m_workshopYaw -= 360.0f;
   }
@@ -12983,12 +13059,32 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
     m_workshopShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
     m_workshopShader->setUniform1i("u_FlatNormal", 0);
     m_workshopShader->setUniform1f("u_RingSpin", 0.0f);
-    m_workshopShader->setUniform1i("u_SkinOn", 0);
-    m_workshopShader->setUniform3f("u_HullTint", glm::vec3(1.0f));
-    m_workshopShader->setUniform3f("u_AccentTint", glm::vec3(1.0f));
-    m_workshopShader->setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
+    glm::vec3 hullTint(1.0f);
+    glm::vec3 accentTint(1.0f);
+    if (m_workshopLivery == 1) {
+      // NASA Classic White / Black
+      hullTint = glm::vec3(1.15f, 1.15f, 1.18f);
+      accentTint = glm::vec3(0.20f, 0.22f, 0.25f);
+    } else if (m_workshopLivery == 2) {
+      // Stealth Titanium
+      hullTint = glm::vec3(0.42f, 0.45f, 0.49f);
+      accentTint = glm::vec3(0.28f, 0.32f, 0.36f);
+    } else if (m_workshopLivery == 3) {
+      // Deep Blue Explorer
+      hullTint = glm::vec3(0.35f, 0.60f, 0.95f);
+      accentTint = glm::vec3(0.12f, 0.28f, 0.55f);
+    } else if (m_workshopLivery == 4) {
+      // Solar Gold
+      hullTint = glm::vec3(1.10f, 0.82f, 0.38f);
+      accentTint = glm::vec3(0.95f, 0.42f, 0.12f);
+    }
+
+    m_workshopShader->setUniform3f("u_HullTint", hullTint);
+    m_workshopShader->setUniform3f("u_AccentTint", accentTint);
+    m_workshopShader->setUniform3f("u_EmissiveTint", glm::vec3(m_workshopEmissiveScale));
     m_workshopShader->setUniform1f("u_StationPbr", 1.0f);
     m_workshopShader->setUniform1f("u_HullWear", -1.0f);
+    m_workshopShader->setUniform1i("u_RenderMode", m_workshopRenderMode);
 
     // Draw grid platform
     drawWorkshopTurntableGrid(m_workshopShader.get(), vp, target, floorY, time);
@@ -13187,16 +13283,19 @@ void AppGL::drawWorkshopPage(float colAreaH) {
         m_workshopYaw += io.MouseDelta.x * 0.5f;
         m_workshopPitch += io.MouseDelta.y * 0.5f;
         m_workshopPitch = std::clamp(m_workshopPitch, -85.0f, 85.0f);
+        m_workshopLerpActive = false;
       }
       if (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
         float panSpeed = 0.0035f * m_workshopDist;
         m_workshopPan.x += io.MouseDelta.x * panSpeed;
         m_workshopPan.y -= io.MouseDelta.y * panSpeed;
+        m_workshopLerpActive = false;
       }
     }
     if (ImGui::IsItemHovered()) {
       if (io.MouseWheel != 0.0f) {
         m_workshopDist = std::clamp(m_workshopDist - io.MouseWheel * 0.45f, 1.0f, 25.0f);
+        m_workshopLerpActive = false;
       }
     }
 
@@ -13217,6 +13316,71 @@ void AppGL::drawWorkshopPage(float colAreaH) {
                 menuui::accentAlpha(120), 6.0f);
     dl->AddText(ImVec2(titleX, titleY), IM_COL32(230, 245, 255, 255), titleStr.c_str());
 
+    // Горизонтальный тулбар фокуса подсистем корабля
+    ImGui::SetCursorPos(ImVec2(10.0f, 42.0f));
+    auto drawSubsystemBtn = [&](const char* label, WorkshopSubsystem sub, float btnW) {
+      bool active = (m_workshopSubsystem == sub);
+      if (active) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.55f, 0.72f, 0.95f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.03f, 0.08f, 0.12f, 1.00f));
+      } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.06f, 0.12f, 0.19f, 0.75f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.82f, 0.92f, 0.90f));
+      }
+      if (ImGui::Button(label, ImVec2(btnW, 22.0f))) {
+        m_workshopSubsystem = sub;
+        float bDist = entry.defaultDist > 0.0f ? entry.defaultDist : 5.0f;
+        if (sub == WorkshopSubsystem::Overall) {
+          m_workshopTargetDist = bDist;
+          m_workshopTargetPan = glm::vec2(0.0f, 0.0f);
+          m_workshopTargetPitch = 18.0f;
+          m_workshopTargetYaw = 35.0f;
+        } else if (sub == WorkshopSubsystem::Cockpit) {
+          m_workshopTargetDist = bDist * 0.45f;
+          m_workshopTargetPan = glm::vec2(0.0f, 0.22f);
+          m_workshopTargetPitch = 14.0f;
+          m_workshopTargetYaw = 175.0f;
+        } else if (sub == WorkshopSubsystem::Reactor) {
+          m_workshopTargetDist = bDist * 0.52f;
+          m_workshopTargetPan = glm::vec2(0.0f, 0.0f);
+          m_workshopTargetPitch = 28.0f;
+          m_workshopTargetYaw = 45.0f;
+        } else if (sub == WorkshopSubsystem::Propulsion) {
+          m_workshopTargetDist = bDist * 0.46f;
+          m_workshopTargetPan = glm::vec2(0.0f, -0.15f);
+          m_workshopTargetPitch = 16.0f;
+          m_workshopTargetYaw = -20.0f;
+        } else if (sub == WorkshopSubsystem::WingsRadiators) {
+          m_workshopTargetDist = bDist * 0.62f;
+          m_workshopTargetPan = glm::vec2(0.35f, 0.0f);
+          m_workshopTargetPitch = 32.0f;
+          m_workshopTargetYaw = 90.0f;
+        } else if (sub == WorkshopSubsystem::DockingPort) {
+          m_workshopTargetDist = bDist * 0.36f;
+          m_workshopTargetPan = glm::vec2(0.0f, 0.32f);
+          m_workshopTargetPitch = 8.0f;
+          m_workshopTargetYaw = 180.0f;
+        }
+        m_workshopLerpActive = true;
+        m_workshopAutoRotate = false;
+        m_audio.playBlip();
+      }
+      ImGui::PopStyleColor(2);
+    };
+
+    float subBtnW = std::clamp((canvasW - 46.0f) / 6.0f, 52.0f, 105.0f);
+    drawSubsystemBtn(uiRu("Все", "All"), WorkshopSubsystem::Overall, subBtnW);
+    ImGui::SameLine(0.0f, 4.0f);
+    drawSubsystemBtn(uiRu("Кабина", "Cockpit"), WorkshopSubsystem::Cockpit, subBtnW);
+    ImGui::SameLine(0.0f, 4.0f);
+    drawSubsystemBtn(uiRu("Реактор", "Reactor"), WorkshopSubsystem::Reactor, subBtnW);
+    ImGui::SameLine(0.0f, 4.0f);
+    drawSubsystemBtn(uiRu("Двигатели", "Engines"), WorkshopSubsystem::Propulsion, subBtnW);
+    ImGui::SameLine(0.0f, 4.0f);
+    drawSubsystemBtn(uiRu("Крылья", "Wings"), WorkshopSubsystem::WingsRadiators, subBtnW);
+    ImGui::SameLine(0.0f, 4.0f);
+    drawSubsystemBtn(uiRu("Шлюз", "Airlock"), WorkshopSubsystem::DockingPort, subBtnW);
+
     // Нижняя панель быстрых действий визора
     ImGui::SetCursorPos(ImVec2(10.0f, colAreaH - 34.0f));
     if (ImGui::Button(uiRu("⟲ Сброс", "⟲ Reset"), ImVec2(75.0f, 24.0f))) {
@@ -13224,6 +13388,11 @@ void AppGL::drawWorkshopPage(float colAreaH) {
       m_workshopPitch = 18.0f;
       m_workshopPan = glm::vec2(0.0f, 0.0f);
       m_workshopDist = entry.defaultDist > 0.0f ? entry.defaultDist : 5.0f;
+      m_workshopTargetDist = m_workshopDist;
+      m_workshopTargetPan = m_workshopPan;
+      m_workshopTargetPitch = m_workshopPitch;
+      m_workshopTargetYaw = m_workshopYaw;
+      m_workshopLerpActive = false;
       m_workshopExplode = 0.0f;
       m_workshopExplodeAnim = false;
       m_audio.playBlip();
@@ -13232,6 +13401,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     const char* autoRotText = m_workshopAutoRotate ? uiRu("■ Стоп", "■ Stop") : uiRu("▶ Вращение", "▶ Auto-Rot");
     if (ImGui::Button(autoRotText, ImVec2(95.0f, 24.0f))) {
       m_workshopAutoRotate = !m_workshopAutoRotate;
+      if (m_workshopAutoRotate) m_workshopLerpActive = false;
       m_audio.playBlip();
     }
     ImGui::SameLine(0.0f, 8.0f);
@@ -13263,7 +13433,49 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // 2. Текстуры PBR
+    // 2. Инженерная телеметрия подсистемы
+    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ТЕЛЕМЕТРИЯ ПОДСИСТЕМЫ", "SUBSYSTEM TELEMETRY"));
+    if (m_workshopSubsystem == WorkshopSubsystem::Overall) {
+      ImGui::TextColored(ImVec4(0.2f, 0.85f, 0.45f, 1.0f), "● %s", uiRu("Общий контур судна активен", "Vessel main contour active"));
+      ImGui::Text("%s: %s", uiRu("Назначение", "Class"), uiRu("Экспедиционный FTL-комплекс", "Expedition FTL Vessel"));
+      ImGui::Text("%s: %s", uiRu("Корпус", "Hull"), uiRu("Титаново-углеродный композит", "Titanium-Carbon Composite"));
+    } else if (m_workshopSubsystem == WorkshopSubsystem::Cockpit) {
+      ImGui::TextColored(ImVec4(0.2f, 0.85f, 0.45f, 1.0f), "● %s", uiRu("Носовой командный отсек", "Forward Command Module"));
+      ImGui::Text("%s: %s", uiRu("Авионика", "Avionics"), uiRu("Квантовая навигация v5.4", "Quantum Nav System v5.4"));
+      ImGui::Text("%s: %s", uiRu("Визор HUD", "HUD Visor"), uiRu("Многослойный ACES HDR", "Multi-layer ACES HDR"));
+      ImGui::Text("%s: %s", uiRu("СЖО ECLSS", "Life Support"), uiRu("100% O2, 101.3 kPa", "100% O2, 101.3 kPa"));
+      ImGui::Text("%s: %s", uiRu("Гасители G", "Inertial Dampers"), uiRu("99.98% компенсации", "99.98% Compensation"));
+    } else if (m_workshopSubsystem == WorkshopSubsystem::Reactor) {
+      ImGui::TextColored(ImVec4(0.25f, 0.75f, 1.0f, 1.0f), "● %s", uiRu("Квантовое варп-ядро", "Quantum Warp Core"));
+      ImGui::Text("%s: %s", uiRu("Тип привода", "Drive Type"), uiRu("Метрический пузырь Алькубьерре", "Alcubierre Metric Bubble"));
+      ImGui::Text("%s: %s", uiRu("Поле Казимира", "Casimir Density"), "-1.24e18 Дж/м³");
+      ImGui::Text("%s: %s", uiRu("Частота волны", "Warp Frequency"), "432.8 THz");
+      ImGui::Text("%s: %s", uiRu("Стабильность", "Stability"), "99.94% [NOMINAL]");
+    } else if (m_workshopSubsystem == WorkshopSubsystem::Propulsion) {
+      ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.2f, 1.0f), "● %s", uiRu("Маршевая двигательная установка", "Main Propulsion Assembly"));
+      ImGui::Text("%s: %s", uiRu("Двигатели", "Thrusters"), uiRu("Плазменные импульсные сопла", "Plasma Pulse Nozzles"));
+      ImGui::Text("%s: %s", uiRu("Тяга в вакууме", "Vacuum Thrust"), "1 450 kN (FTL: 4 200 kN)");
+      ImGui::Text("%s: %s", uiRu("Удельный импульс", "Specific Impulse"), "12 500 с (Isp)");
+      ImGui::Text("%s: %s", uiRu("Давление камеры", "Chamber Press."), "28.5 MPa");
+    } else if (m_workshopSubsystem == WorkshopSubsystem::WingsRadiators) {
+      ImGui::TextColored(ImVec4(0.9f, 0.85f, 0.3f, 1.0f), "● %s", uiRu("Энергосистема и охлаждение", "Power & Thermal Radiators"));
+      ImGui::Text("%s: %s", uiRu("Солнечные крылья", "PV Arrays"), uiRu("GaAs фотоэлементы (КПД 38.5%)", "Triple-junction GaAs"));
+      ImGui::Text("%s: %s", uiRu("Генерация э/э", "Power Output"), "185 kW (1 AU)");
+      ImGui::Text("%s: %s", uiRu("Радиаторы", "Radiators"), uiRu("Графеновые тепловые трубки", "Graphene Loop Heat Pipes"));
+      ImGui::Text("%s: %s", uiRu("Теплоотвод", "Heat Dissipation"), "420 kW");
+    } else if (m_workshopSubsystem == WorkshopSubsystem::DockingPort) {
+      ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.95f, 1.0f), "● %s", uiRu("Стыковочный шлюзовой агрегат", "Airlock & Docking Mechanism"));
+      ImGui::Text("%s: %s", uiRu("Стандарт", "Mechanism"), "APAS-95 / NDS Active");
+      ImGui::Text("%s: %s", uiRu("Замки", "Latches"), uiRu("12 титановых захватов", "12 Active Titanium Hooks"));
+      ImGui::Text("%s: %s", uiRu("Герметичность", "Hermetic Seal"), uiRu("0.00 Па/мин [НОМИНАЛ]", "0.00 Pa/min [NOMINAL]"));
+      ImGui::Text("%s: %s", uiRu("Дальномер", "Ranging"), uiRu("Лидар 0.12 м/с", "LIDAR Guided 0.12 m/s"));
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 3. Текстуры PBR
     ImGui::TextColored(menuui::kAccent, "// %s", uiRu("PBR КАРТЫ (24-BIT BMP)", "PBR TEXTURE MAPS"));
     auto drawTexPill = [&](const char* name, unsigned int tex, const char* info) {
       bool ok = (tex != 0);
@@ -13282,19 +13494,38 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // 3. Режимы шейдера
+    // 4. Режимы шейдера
     ImGui::TextColored(menuui::kAccent, "// %s", uiRu("РЕЖИМ ШЕЙДЕРА", "SHADING MODE"));
     ImGui::RadioButton(uiRu("PBR Реализм", "PBR Realistic"), &m_workshopRenderMode, 0);
     ImGui::SameLine();
     ImGui::RadioButton(uiRu("Студийная глина", "Studio Clay"), &m_workshopRenderMode, 1);
-    ImGui::RadioButton(uiRu("Проволочная сетка", "Wireframe Only"), &m_workshopRenderMode, 3);
+    ImGui::RadioButton(uiRu("Карта нормалей", "Normals RGB"), &m_workshopRenderMode, 2);
+    ImGui::SameLine();
+    ImGui::RadioButton(uiRu("Сетка", "Wireframe"), &m_workshopRenderMode, 3);
     ImGui::Checkbox(uiRu("Каркас поверх (Wire Overlay)", "Wireframe Overlay"), &m_workshopWireframe);
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    // 4. Освещение и вращение
+    // 5. Ливрея флота и свечение
+    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ЛИВРЕЯ ФЛОТА И СВЕЧЕНИЕ", "FLEET LIVERY & GLOW"));
+    const char* liveryNames[5] = {
+      uiRu("Заводская (Factory Spec)", "Factory Spec"),
+      uiRu("NASA Classic (Белый / Графит)", "NASA Classic White/Black"),
+      uiRu("Stealth Titanium (Титановый сплав)", "Stealth Titanium"),
+      uiRu("Deep Blue Explorer (Кобальт)", "Deep Blue Explorer"),
+      uiRu("Solar Gold (Золотистый оранж)", "Solar Gold Hazard")
+    };
+    ImGui::SetNextItemWidth(inspW - 24.0f);
+    ImGui::Combo("##WorkshopLivery", &m_workshopLivery, liveryNames, 5);
+    ImGui::SliderFloat(uiRu("Свечение", "Plasma Glow"), &m_workshopEmissiveScale, 0.2f, 3.0f, "%.1fx");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 6. Освещение и вращение
     ImGui::TextColored(menuui::kAccent, "// %s", uiRu("СТУДИЙНЫЙ СВЕТ И ПЬЕДЕСТАЛ", "STUDIO LIGHT & TURNTABLE"));
     ImGui::SliderFloat(uiRu("Азимут света", "Light Azimuth"), &m_workshopLightAngle, 0.0f, 360.0f, "%.0f°");
     ImGui::SliderFloat(uiRu("Яркость света", "Light Intensity"), &m_workshopLightIntensity, 0.5f, 3.0f, "%.1fx");
@@ -13304,7 +13535,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // 5. Фон и разнесённый вид
+    // 7. Фон и разнесённый вид
     ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ФОН И РАЗНЕСЁННЫЙ ВИД", "BACKDROP & EXPLODED VIEW"));
     ImGui::Text("%s:", uiRu("Окружение", "Backdrop"));
     if (ImGui::RadioButton(uiRu("Тёмная студия", "Dark Studio"), m_workshopBackdropMode == 0)) {
@@ -13334,7 +13565,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // 6. Описание и лор
+    // 8. Описание и лор
     ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ОПИСАНИЕ И НАЗНАЧЕНИЕ", "MISSION ROLE & LORE"));
     ImGui::TextWrapped("%s", uiRu(entry.descRu, entry.descEn));
 

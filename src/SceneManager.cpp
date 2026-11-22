@@ -123,6 +123,9 @@ float shipHull() { return g_shipHull; }
 bool g_warpTravelActive = false;
 void setWarpTravelActive(bool active) { g_warpTravelActive = active; }
 bool warpTravelActive() { return g_warpTravelActive; }
+bool g_warpTransitTestActive = false;
+void setWarpTransitTestActive(bool active) { g_warpTransitTestActive = active; }
+bool warpTransitTestActive() { return g_warpTransitTestActive; }
 
 // v4.6.3: Docking 3D corridor, IDA latching and RCS visualization (Issue #65)
 static bool g_dockVisualActive = false;
@@ -3721,9 +3724,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         // STRICTLY active during Warp Jump cinematic traversal (never during cruise)!
         // =========================================================================
         const float warpTunnelK = warpdrive::warpK();
-        const bool warpActive = warpdrive::warpTravelActive();
+        const bool warpActive = warpdrive::warpTravelActive() || warpdrive::warpTransitTestActive();
         if (warpActive && s_warpTunnelTubeModel.ready() && s_shipShader) {
-          const float tAlpha = glm::clamp(warpTunnelK > 0.01f ? warpTunnelK : 1.0f, 0.0f, 1.0f);
+          const float tAlpha = glm::clamp(warpTunnelK > 0.01f ? warpTunnelK : (warpdrive::warpTransitTestActive() ? 0.85f : 1.0f), 0.0f, 1.0f);
           if (tAlpha > 0.01f) {
             const float tunnelScaleR = 8.5f;
             const float segLen = 20.0f;

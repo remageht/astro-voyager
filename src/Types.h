@@ -472,16 +472,23 @@ inline DifficultyTuning difficultyTuning(int difficulty) {
 // === Camera views === (v3.3.0): cockpit / behind the ship / far overview.
 // Toggled with V; pure helpers live here so the core tests cover them too.
 namespace view {
-enum class ViewMode { Cockpit = 0, Chase = 1, Overview = 2 };
+enum class ViewMode { Cockpit = 0, Chase = 1, Overview = 2, EvaFreeInspect = 3 };
 
 inline ViewMode nextView(ViewMode v) {
+  if (v == ViewMode::EvaFreeInspect) return ViewMode::Cockpit;
   return static_cast<ViewMode>((static_cast<int>(v) + 1) % 3);
+}
+
+inline ViewMode toggleEva(ViewMode v) {
+  return (v == ViewMode::EvaFreeInspect) ? ViewMode::Cockpit : ViewMode::EvaFreeInspect;
 }
 
 constexpr double kChaseBack = 4.5;  // world units behind the ship
 constexpr double kChaseUp = 1.1;
 constexpr double kFarBack = 9.0;
 constexpr double kFarUp = 2.2;
+constexpr double kEvaDist = 6.5;
+constexpr double kEvaUp = 1.8;
 
 // Render-camera position for a view mode (Cockpit = the camera itself).
 // zoomK (v4.0): множитель сноса колёсиком; 1 = дефолт.
@@ -489,8 +496,8 @@ inline Vec3 offsetCameraPos(const Vec3& pos, const Vec3& fwd, ViewMode v,
                             float zoomK = 1.0f) {
   if (v == ViewMode::Cockpit) return pos;
   const double zk = static_cast<double>(zoomK);
-  const double back = ((v == ViewMode::Chase) ? kChaseBack : kFarBack) * zk;
-  const double up = (((v == ViewMode::Chase) ? kChaseUp : kFarUp) - 0.35) * zk +
+  const double back = ((v == ViewMode::Chase) ? kChaseBack : ((v == ViewMode::EvaFreeInspect) ? kEvaDist : kFarBack)) * zk;
+  const double up = (((v == ViewMode::Chase) ? kChaseUp : ((v == ViewMode::EvaFreeInspect) ? kEvaUp : kFarUp)) - 0.35) * zk +
                     0.35;  // подъём почти пропорционален, но не уходит в 0
   return Vec3(pos.x - fwd.x * back, pos.y - fwd.y * back + up,
               pos.z - fwd.z * back);

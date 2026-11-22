@@ -214,6 +214,8 @@ class AppGL {
   std::string m_journeyStatus;
   bool m_prevF5Pressed = false;
   bool m_prevF6Pressed = false;
+  bool m_prevF7Pressed = false;
+  bool m_warpTransitTestForced = false;
 
   // Object editor (v3.2.0): palette state for spawning custom bodies and
   // live-editing the selected one.
@@ -428,6 +430,23 @@ class AppGL {
   void requestCloseMenu();
 
   // === 3D Workshop / Model Viewer (Мастерская) ===
+  enum class WorkshopSubsystem {
+    Overall = 0,
+    Cockpit,
+    Reactor,
+    Propulsion,
+    WingsRadiators,
+    DockingPort
+  };
+  WorkshopSubsystem m_workshopSubsystem = WorkshopSubsystem::Overall;
+  float m_workshopTargetDist = 5.0f;
+  glm::vec2 m_workshopTargetPan{0.0f, 0.0f};
+  float m_workshopTargetPitch = 18.0f;
+  float m_workshopTargetYaw = 35.0f;
+  bool m_workshopLerpActive = false;
+  int m_workshopLivery = 0;  // 0=Factory, 1=NASA Classic, 2=Stealth Titanium, 3=Deep Blue, 4=Solar Gold
+  float m_workshopEmissiveScale = 1.0f;
+
   int m_workshopModelIdx = 0;
   int m_workshopCategory = 0;
   char m_workshopSearch[64] = {};
@@ -824,6 +843,10 @@ class AppGL {
   // стрики в композите и микро-FOV (+3°). Дефолты 0 => харнесс байт-в-байт.
   view::ViewMode m_viewMode = view::ViewMode::Cockpit;
   bool m_prevVPressed = false;
+  // v5.4.0: фундамент режима EVA (выход в открытый космос)
+  float m_evaO2 = 100.0f;
+  float m_evaPropellant = 100.0f;
+  float m_evaTetherDist = 12.5f;
   // v4.0: зум колёсиком в видах Chase/Overview (кокпит не трогаем).
   // 1 = дефолт; 0.35..2.5 — множитель сноса камеры назад.
   float m_viewZoom = 1.0f;
@@ -911,6 +934,9 @@ void setAsteroids(float k, float lane);
 // v4.2.0: 3D-анимированный варп-туннель SpaceDrive (tamminen, CC BY 4.0)
 void setWarpTravelActive(bool active);
 bool warpTravelActive();
+// v5.4.0: тестовый прототип варп-транзита во время полёта
+void setWarpTransitTestActive(bool active);
+bool warpTransitTestActive();
 // v4.6.3: Docking 3D corridor, IDA latching and RCS visualization (Issue #65)
 void setDockingVisuals(bool active, bool isDocked, int animPhase,
                        float shipDist, float projDist,
