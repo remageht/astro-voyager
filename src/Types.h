@@ -39,6 +39,8 @@ struct ShipState {
   bool isLanded = false;
   std::string landedBodyId;
   float suspensionCompression = 0.0f;
+  // v5.3.0: Tidal gravitational stress on hull near Kerr black holes / Sgr A* (0..1)
+  float tidalStrain = 0.0f;
 };
 
 // === Ship Customization & Shipyard === (v3.11.0)

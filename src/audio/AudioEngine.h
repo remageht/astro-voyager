@@ -135,10 +135,19 @@ class AudioEngine {
     AuroraSysOnline = 26
   };
 
+  // v5.3.0: Регулировка плотности подсказок Егорки
+  enum class EgorkaVoiceDensity : int {
+    Full = 0,        // Все реплики и авионика
+    CriticalOnly = 1, // Только критические тревоги (FuelLow, ShieldLow, TerrainWarn)
+    Mute = 2         // Полное отключение подсказок
+  };
+
   void playEgorkaVoice(EgorkaVoiceCue cue, float gainDb = 0.0f, bool force = false);
   void stopCurrentVoiceCue();
   void setEgorkaVoiceEnabled(bool enabled) { m_egorkaVoiceEnabled.store(enabled); }
   bool isEgorkaVoiceEnabled() const { return m_egorkaVoiceEnabled.load(); }
+  void setEgorkaVoiceDensity(EgorkaVoiceDensity density) { m_egorkaVoiceDensity.store(density); }
+  EgorkaVoiceDensity egorkaVoiceDensity() const { return m_egorkaVoiceDensity.load(); }
   void setEgorkaVoiceVolume(float v) { m_egorkaVoiceVolume.store(v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v)); }
   float egorkaVoiceVolume() const { return m_egorkaVoiceVolume.load(); }
   bool isEgorkaVoicePlaying() const;
@@ -230,6 +239,7 @@ class AudioEngine {
   std::atomic<uint64_t> m_samples{0};  // счётчик сэмплов (live: колбэк)
 
   std::atomic<bool> m_egorkaVoiceEnabled{true};
+  std::atomic<EgorkaVoiceDensity> m_egorkaVoiceDensity{EgorkaVoiceDensity::Full};
   std::atomic<float> m_egorkaVoiceVolume{1.0f};
   std::unordered_map<int, std::shared_ptr<std::vector<float>>> m_egorkaCache;
   uint64_t m_lastEgorkaSample = 0;

@@ -254,6 +254,30 @@ void ZettelGraph::init() {
   // -------------------------------------------------------------
   {
     ZettelNote n;
+    n.id = kNotePilotLogDay1;
+    n.cluster = kClusterMultiverse;
+    n.categoryRu = "Дневник";
+    n.categoryEn = "Logbook";
+    n.titleRu = "День 1. Фактор 9";
+    n.titleEn = "Day 1. Factor 9";
+    n.textRu = "Пространство не разорвалось. Оно просто согласилось стать короче. Резонатор дрожит, как струна перед первым аккордом. Я держу курс. Если это последний журнал — передайте моему шестнадцатилетнему «я»: тройка по физике не приговор. [[z_casimir_metric|Метрика Казимира]] держит варп-пузырь стабильным.";
+    n.textEn = "Spacetime did not tear apart. It simply agreed to become shorter. The resonator vibrates like a taut string before the opening chord. Bearing locked. If this is my final logbook entry — tell my sixteen-year-old self: a C in physics is not a life sentence. [[z_casimir_metric|Casimir metric]] holds the warp bubble stable.";
+    n.quoteRu = "«Расстояние — это не стена. Это договор, который ещё не подписан.»";
+    n.quoteEn = "«Distance is not a wall. It is a pact not yet signed.»";
+    n.speakerRu = "Егорка (Бортовой журнал)";
+    n.speakerEn = "Egorka (Pilot Logbook)";
+    n.evidenceRu = "Телеметрия варп-перехода: частота резонатора 14.2 ГГц, сдвиг фазы поля Казимира 0.042 рад, метрика Алькубьерре стабильна.";
+    n.evidenceEn = "Warp transition telemetry: cavity frequency 14.2 GHz, Casimir phase shift 0.042 rad, Alcubierre metric stable.";
+    n.discrepancyRu = "Хронометр кабины отстал от земного маяка на 1.4 миллисекунды за 3 секунды сжатия пространства.";
+    n.discrepancyEn = "Cockpit chronometer lagged 1.4 milliseconds behind Earth beacon during 3 seconds of space contraction.";
+    n.posX = 15.0f;
+    n.posY = 30.0f;
+    n.seedDiscovered = true;  // Initial seed discovered at departure
+    n.synthesized = false;
+    addSeed(n);
+  }
+  {
+    ZettelNote n;
     n.id = "z_sixth_resonance";
     n.cluster = kClusterMultiverse;
     n.categoryRu = "Эхо";
@@ -710,6 +734,7 @@ void ZettelGraph::refresh(const std::vector<std::string>& visitedStations,
 
   // Base departure
   discoverSeed("z_paris_rain");
+  discoverSeed(kNotePilotLogDay1);
 
   // Earth / Fleet stations
   if (hasStation("sol") || hasStation("dock-dragon") || hasStation("dock-soyuz") || hasStation("voyager1")) {

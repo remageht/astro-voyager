@@ -88,6 +88,7 @@ struct ZettelDetectiveCase {
 
 constexpr const char* kDetectiveCaseArsenyShuttles = "case_arseny_shuttles";
 constexpr const char* kDetectiveCaseMiaContraband = "case_mia_contraband";
+constexpr const char* kNotePilotLogDay1 = "z_pilot_log_day1";
 
 // Recipe defining the synthesis of a new breakthrough Master Node
 struct ZettelSynthesisRecipe {

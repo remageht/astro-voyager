@@ -19,8 +19,8 @@ using namespace astro;
 
 static void test_init() {
   ZettelGraph zg;
-  assert(zg.getTotalCount() == 17);
-  assert(zg.getDiscoveredCount() == 1);
+  assert(zg.getTotalCount() == 18);
+  assert(zg.getDiscoveredCount() == 2);
   assert(zg.getSynthesizedCount() == 0);
   assert(zg.getMasterNodesCount() == 0);
   assert(zg.getTotalLinksCount() == 0);
@@ -32,6 +32,18 @@ static void test_init() {
   assert(paris->cluster == kClusterSolar);
   assert(!paris->titleRu.empty());
   assert(!paris->quoteRu.empty());
+
+  const ZettelNote* pilotLog = zg.getNote(kNotePilotLogDay1);
+  assert(pilotLog != nullptr);
+  (void)pilotLog;
+  assert(pilotLog->seedDiscovered == true);
+  assert(pilotLog->cluster == kClusterMultiverse);
+  assert(pilotLog->categoryRu == "Дневник");
+  assert(pilotLog->titleRu == "День 1. Фактор 9");
+  assert(pilotLog->titleEn == "Day 1. Factor 9");
+  assert(!pilotLog->evidenceRu.empty());
+  assert(!pilotLog->discrepancyRu.empty());
+  assert(pilotLog->quoteRu.find("договор") != std::string::npos);
 
   const ZettelNote* casimir = zg.getNote("z_casimir_metric");
   assert(casimir != nullptr);
@@ -85,7 +97,7 @@ static void test_refresh_discovery() {
   assert(zg.getNote("z_sixth_resonance")->seedDiscovered);
   assert(zg.getNote("z_phase_shard")->seedDiscovered);
 
-  assert(zg.getDiscoveredCount() == 13);
+  assert(zg.getDiscoveredCount() == 14);
   std::cout << "PASS: test_refresh_discovery\n";
 }
 
@@ -271,7 +283,7 @@ static void test_custom_notes_and_grand_synthesis() {
   bool added = zg.addCustomNote("Заметка пилота", "Проверить [[sol|Солнце]] и метрику", "Гипотеза", 10.0f, 20.0f);
   assert(added);
   (void)added;
-  assert(zg.getTotalCount() == 18);
+  assert(zg.getTotalCount() == 19);
 
   const ZettelNote* custom = nullptr;
   for (const auto& n : zg.getNotes()) {
@@ -312,7 +324,7 @@ static void test_custom_notes_and_grand_synthesis() {
   // 4. Delete custom note
   assert(zg.deleteCustomNote(customId));
   assert(zg.getNote(customId) == nullptr);
-  assert(zg.getTotalCount() == 17);
+  assert(zg.getTotalCount() == 18);
   assert(!zg.areLinked(customId, "z_paris_rain"));
 
   // 5. Test Grand Synthesis
