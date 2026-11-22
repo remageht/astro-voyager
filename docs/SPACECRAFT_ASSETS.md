@@ -133,6 +133,19 @@
 
 Процедурная модель: тор (варп-катушка) + центральная сфера (пузырь) + вторая наклонённая катушка. PBR-атласы: альбедо (тёмный корпус с циановыми акцентами), нормали, roughness, metalness, emissive (свечение катушки).
 
+## Собственные процедурные пилотируемые аппараты и станции (MIT)
+
+Для исключения сторонних зависимостей и ограничений несвободных лицензий все модели на околоземной орбите перегенерированы в 100% авторские процедурные ассеты под свободной лицензией MIT с использованием Blender 5.2 LTS, скилла `blender-scifi-artisan` и модуля детализации `scifi_detailing_toolkit.py`:
+
+| Аппарат | Назначение / Класс | Генератор | Полигонов | Текстуры | Лицензия |
+|---|---|---|---:|---|---|
+| «Феникс» (Phoenix Orbital Pod) | Замена SpaceX Crew Dragon (`res/models/dragon.obj`) | `generate_phoenix_capsule.py` | 2 004 | 5x 2K PBR BMP | MIT (авторские) |
+| «Заря-Орбитер» (Zarya-Orbiter) | Замена Союз-МС (`res/models/soyuz.obj`) | `generate_zarya_orbiter.py` | 5 458 | 5x 2K PBR BMP | MIT (авторские) |
+| «Звезда-Альфа» (Zvezda-Alpha) | Замена комплекса «Мир» (`res/models/mir.obj`) | `generate_zvezda_station.py` | 2 668 | 5x 2K PBR BMP | MIT (авторские) |
+| Geodesic Warp Tunnel | Замена туннеля SpaceDrive (`res/models/warp_tunnel*.obj`) | `export_warp_tunnel.py` | 12 400 | 15x 2K PBR BMP | MIT (авторские) |
+
+Витрины: `docs/screens/spacex_dragon_hero.png`, `docs/screens/soyuz_hero.png`, `docs/screens/mir_hero.png`, `docs/screens/warp_tunnel_hero.png`.
+
 ## Собственные модели флота (полностью процедурные)
 
 Все пять ассетов сгенерированы в Blender 5.2 LTS собственными скриптами —
