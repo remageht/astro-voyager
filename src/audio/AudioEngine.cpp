@@ -607,6 +607,17 @@ bool AudioEngine::isEgorkaVoicePlaying() const {
 
 void AudioEngine::playEgorkaVoice(EgorkaVoiceCue cue, float gainDb, bool force) {
   if (!m_tried || !m_egorkaVoiceEnabled.load()) return;
+  const EgorkaVoiceDensity density = m_egorkaVoiceDensity.load();
+  if (!force) {
+    if (density == EgorkaVoiceDensity::Mute) return;
+    if (density == EgorkaVoiceDensity::CriticalOnly) {
+      if (cue != EgorkaVoiceCue::FuelLow &&
+          cue != EgorkaVoiceCue::ShieldLow &&
+          cue != EgorkaVoiceCue::TerrainWarn) {
+        return;
+      }
+    }
+  }
   const int cueId = static_cast<int>(cue);
   const uint64_t nowSample = m_samples.load();
 

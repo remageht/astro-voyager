@@ -6876,8 +6876,38 @@ void AppGL::drawContextualFlightHud() {
     std::snprintf(fuBuf, sizeof(fuBuf), "FUEL %.0f%%", m_ship.fuel);
     dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 18.0f), fuCol, fuBuf);
 
+    // 3.4 Tidal Stress Gauge (near Black Holes / Ergosphere)
+    if (m_ship.tidalStrain > 0.04f) {
+      const float tStrain = m_ship.tidalStrain;
+      const float minT = -0.785f;
+      const float maxT = 0.785f;
+      const float strainR = 158.0f;
+      dl->PathArcTo(ctr, strainR, minT, maxT, 16);
+      dl->PathStroke(IM_COL32(20, 30, 50, a120), 0, 2.5f);
+
+      float tAng = minT + (maxT - minT) * tStrain;
+      ImU32 strainCol = (tStrain > 0.70f)
+                            ? IM_COL32(239, 68, 68, a255)
+                            : ((tStrain > 0.35f) ? IM_COL32(245, 158, 11, a255)
+                                                 : IM_COL32(56, 189, 248, a255));
+      dl->PathArcTo(ctr, strainR, minT, tAng, 16);
+      dl->PathStroke(strainCol, 0, 2.5f);
+
+      char tBuf[64];
+      std::snprintf(tBuf, sizeof(tBuf), "TIDAL %.0f%%", tStrain * 100.0f);
+      dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 36.0f), strainCol, tBuf);
+
+      if (tStrain > 0.70f) {
+        float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 12.0));
+        ImU32 pulseCol = IM_COL32(239, 68, 68, static_cast<int>(a255 * pulse));
+        dl->AddCircle(ctr, strainR + 4.0f, pulseCol, 32, 1.8f);
+        dl->AddText(ImVec2(ctr.x - 110.0f, ctr.y - 62.0f), pulseCol,
+                    uiRu("! ПРИЛИВНОЙ СТРЕСС: УГРОЗА КОРПУСУ !", "! TIDAL STRAIN: STRUCTURAL HAZARD !"));
+      }
+    }
+
     // State legend (Tier 1 diegetic telemetry from ShipState)
-    float stateY = ctr.y + 36.0f;
+    float stateY = ctr.y + (m_ship.tidalStrain > 0.04f ? 54.0f : 36.0f);
     if (m_ship.isDocked) {
       char dockBuf[64];
       const Station* curDockSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
@@ -6897,7 +6927,7 @@ void AppGL::drawContextualFlightHud() {
     if (fu < 0.25f && !m_ship.isDocked && !m_ship.isLanded) {
       float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 10.0));
       ImU32 fuWarnCol = IM_COL32(239, 68, 68, static_cast<int>(a255 * pulse));
-      dl->AddText(ImVec2(ctr.x + 95.0f, ctr.y + 54.0f), fuWarnCol, uiRu("! ТОПЛИВО НА ИСХОДЕ !", "! LOW FUEL !"));
+      dl->AddText(ImVec2(ctr.x + 95.0f, stateY + (m_ship.isLanded ? 34.0f : 18.0f)), fuWarnCol, uiRu("! ТОПЛИВО НА ИСХОДЕ !", "! LOW FUEL !"));
     }
     if ((sh < 0.25f || hu < 0.30f) && !m_ship.isDocked) {
       float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime() * 8.0));
@@ -9093,6 +9123,14 @@ void AppGL::updateShip(float deltaTime) {
     if (st->type == StationType::BlackHole) {
       // Дрейф не должен утаскивать под горизонт — тот же клэмп, что в run().
       m_camera.clampNearHorizon(m_sceneManager->getSettings().rs);
+      // v5.3.0: Расчёт гравитационного приливного стресса (Tidal Stress) у чёрных дыр (Sgr A*, Kerr)
+      const double d = std::sqrt(m_camera.position.x * m_camera.position.x +
+                                 m_camera.position.y * m_camera.position.y +
+                                 m_camera.position.z * m_camera.position.z);
+      float targetStrain = (d < 25.0) ? std::clamp(static_cast<float>((25.0 - d) / 22.0), 0.0f, 1.0f) : 0.0f;
+      m_ship.tidalStrain = std::lerp(m_ship.tidalStrain, targetStrain, std::clamp(deltaTime * 4.0f, 0.0f, 1.0f));
+    } else {
+      m_ship.tidalStrain = std::lerp(m_ship.tidalStrain, 0.0f, std::clamp(deltaTime * 2.0f, 0.0f, 1.0f));
     }
     // v5.3.0: Активное диегетическое орбитальное курсирование (J)
     if (m_orbitCruiseActive && !m_captureAnim) {
@@ -10811,9 +10849,9 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
     drawParamLine(uiRu("ПРОТОКОЛ:", "PROTOCOL:"), m_hasStartedFlight ? uiRu("ТЕКУЩАЯ СЕССИЯ", "ACTIVE SESSION") : uiRu("АВТОСОХРАНЕНИЕ", "AUTOSAVE"));
   } else if (hoveredOption == 1) {
     drawParamLine(uiRu("ЭКСПЕДИЦИЯ:", "EXPEDITION:"), uiRu("ASTRO-VOYAGER I", "ASTRO-VOYAGER I"), menuui::kAccentU32);
-    drawParamLine(uiRu("ЭКИПАЖ:", "CREW:"), uiRu("ЕГОРКА, МИА САТО, РОСТОВА", "EGORKA, MIA SATO, ROSTOVA"));
-    drawParamLine(uiRu("ЦЕЛЬ:", "OBJECTIVE:"), uiRu("ИССЛЕДОВАНИЕ ЧЁРНОЙ ДЫРЫ", "KERR BLACK HOLE RESEARCH"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("СТАРТ:", "LAUNCHPAD:"), uiRu("ОРБИТАЛЬНЫЙ ДОК ЗЕМЛИ", "EARTH ORBITAL DOCK"));
+    drawParamLine(uiRu("ПРОЛОГ:", "PROLOGUE:"), uiRu("ПАРИЖ // РАЗЛОМ ВРЕМЕНИ", "PARIS // TIME FISSURE"), IM_COL32(245, 185, 30, 255));
+    drawParamLine(uiRu("ДИРЕКТИВА:", "DIRECTIVE:"), uiRu("КЛЮЧ КАЗИМИРА И КООРДИНАТЫ", "CASIMIR KEY & COORDS"), IM_COL32(16, 185, 129, 255));
+    drawParamLine(uiRu("МИССИЯ:", "MISSION:"), uiRu("ФАКТОР 9 // ПЕРВЫЙ ВАРП", "FACTOR 9 // FIRST WARP"));
   } else if (hoveredOption == 2) {
     drawParamLine(uiRu("РЕЖИМ:", "MODE:"), uiRu("СВОБОДНАЯ НАВИГАЦИЯ", "FREE EXPLORATION"), menuui::kAccentU32);
     drawParamLine(uiRu("ОБЪЕКТЫ:", "OBJECTS:"), uiRu("22 ОРБИТАЛЬНЫХ СТАНЦИИ", "22 ORBITAL STATIONS"));
@@ -10830,9 +10868,10 @@ void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station
     drawParamLine(uiRu("АУДИО ДВИЖОК:", "AUDIO ENGINE:"), uiRu("MINIAUDIO PRO", "MINIAUDIO PRO"));
     drawParamLine(uiRu("ОПТИМИЗАЦИЯ:", "OPTIMIZATION:"), uiRu("НУЛЕВОЙ ОВЕРХЕД CPU", "ZERO CPU OVERHEAD"));
   } else if (hoveredOption == 5) {
-    drawParamLine(uiRu("БАЗА ЗНАНИЙ:", "KNOWLEDGE BASE:"), uiRu("ZETTELKASTEN // 28 КАРТОЧЕК", "ZETTELKASTEN // 28 CARDS"), menuui::kAccentU32);
-    drawParamLine(uiRu("САУНДТРЕК:", "SOUNDTRACK:"), uiRu("ГОЛОСА ЭКИПАЖА И ТЕМА", "CREW VOICES & THEMES"));
-    drawParamLine(uiRu("АРХИВ НАБЛЮДЕНИЙ:", "ARCHIVES:"), uiRu("АКТИВЕН И СИНХРОНИЗИРОВАН", "ACTIVE & SYNCED"), IM_COL32(16, 185, 129, 255));
+    drawParamLine(uiRu("БОРТОВОЙ ЖУРНАЛ:", "PILOT LOGBOOK:"), uiRu("ДЕНЬ 1. ФАКТОР 9", "DAY 1. FACTOR 9"), menuui::kAccentU32);
+    drawParamLine(uiRu("БАЗА ЗНАНИЙ:", "KNOWLEDGE BASE:"), uiRu("ZETTELKASTEN // 29 КАРТОЧЕК", "ZETTELKASTEN // 29 CARDS"));
+    drawParamLine(uiRu("САУНДТРЕК:", "SOUNDTRACK:"), uiRu("ГОЛОСА ЭКИПАЖА И ТЕМА", "CREW VOICES & THEMES"), IM_COL32(16, 185, 129, 255));
+    drawParamLine(uiRu("АРХИВ НАБЛЮДЕНИЙ:", "ARCHIVES:"), uiRu("АКТИВЕН И СИНХРОНИЗИРОВАН", "ACTIVE & SYNCED"));
     drawParamLine(uiRu("СПЕКТРОМЕТРИЯ:", "SPECTROMETRY:"), uiRu("РЕГИСТРАЦИЯ БИОСИГНАТУР", "BIOSIGNATURE SCAN"));
   } else if (hoveredOption == 6) {
     drawParamLine(uiRu("ДЕЙСТВИЕ:", "ACTION:"), uiRu("ВЫХОД НА РАБОЧИЙ СТОЛ", "EXIT TO DESKTOP"), IM_COL32(239, 68, 68, 255));
@@ -10973,6 +11012,10 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   ImGui::TextColored(ImVec4(0.42f, 0.62f, 0.78f, 0.85f), "%s",
                      uiRu("СВЕРХСВЕТОВАЯ ЭКСПЕДИЦИЯ СКВОЗЬ РЕЛЯТИВИСТСКИЙ КОСМОС",
                           "FASTER-THAN-LIGHT EXPEDITION THROUGH RELATIVISTIC SPACE"));
+  ImGui::SetCursorPosX(leftMargin);
+  ImGui::TextColored(ImVec4(0.58f, 0.76f, 0.92f, 0.78f), "%s",
+                     uiRu("«Расстояние — это не стена. Это договор, который ещё не подписан»",
+                          "«Distance is not a wall. It is a pact not yet signed»"));
 
   // Декоративная тонкая неоновая линия под заголовком
   {
@@ -11061,7 +11104,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   }
 
   ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("АРХИВ И ДАННЫЕ", "DATA ARCHIVE & EXTRAS"),
+  if (drawTacticalCutButton(uiRu("БОРТОВОЙ ЖУРНАЛ И АРХИВ", "PILOT LOGBOOK & ARCHIVE"),
                            ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "06", "[A]")) {
     m_menuPage = 5;
     m_pageTransitionTimer = 0.0f;
@@ -11069,7 +11112,7 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
   }
   if (ImGui::IsItemHovered()) {
     hoveredOption = 5;
-    ImGui::SetTooltip("%s", uiRu("База знаний Zettelkasten, саундтрек и статистика", "Zettelkasten knowledge base, soundtrack and stats"));
+    ImGui::SetTooltip("%s", uiRu("Дневник Егорки, Zettelkasten, саундтрек и статистика", "Egorka's logbook, Zettelkasten, soundtrack and stats"));
   }
 
   ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -11577,6 +11620,14 @@ void AppGL::drawMenu() {
           bool voiceEnabled = m_audio.isEgorkaVoiceEnabled();
           if (ImGui::Checkbox(uiRu("Голос бортового ИИ (Егорка-6)", "Ship AI Voice (Egorka-6)"), &voiceEnabled)) {
             m_audio.setEgorkaVoiceEnabled(voiceEnabled);
+          }
+          int densityIdx = static_cast<int>(m_audio.egorkaVoiceDensity());
+          const char* densityNames[] = {
+              uiRu("Полная (все реплики и авионика)", "Full (all cues & avionics)"),
+              uiRu("Только критические (угрозы и тревоги)", "Critical Only (warnings & alarms)"),
+              uiRu("Отключено", "Muted")};
+          if (ImGui::Combo(uiRu("Плотность подсказок Егорки", "Egorka Voice Density"), &densityIdx, densityNames, 3)) {
+            m_audio.setEgorkaVoiceDensity(static_cast<astro::AudioEngine::EgorkaVoiceDensity>(densityIdx));
           }
           float voiceVol = m_audio.egorkaVoiceVolume();
           if (ImGui::SliderFloat(uiRu("Громкость голоса ИИ", "AI Voice Volume"), &voiceVol, 0.0f, 1.0f, "%.2f")) {
