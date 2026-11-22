@@ -458,7 +458,47 @@ std::string saveSerialize(const SaveGame& g) {
   out += ind(2) + "\"asteroidDodges\": " + std::to_string(g.progress.asteroidDodges) + ",\n";
   out += ind(2) + "\"discoveries\": ";
   writeStrArray(out, g.progress.discoveries);
-  out += "\n";
+  out += ",\n";
+  out += ind(2) + "\"crew\": [";
+  bool firstCrew = true;
+  for (const auto& pair : g.progress.crew.allAssigned()) {
+    if (!firstCrew) out += ", ";
+    firstCrew = false;
+    out += "{\"post\": " + std::to_string(static_cast<int>(pair.first)) +
+           ", \"id\": ";
+    writeEscaped(out, pair.second.id);
+    out += ", \"first\": ";
+    writeEscaped(out, pair.second.firstName);
+    out += ", \"last\": ";
+    writeEscaped(out, pair.second.lastName);
+    out += ", \"origin\": ";
+    writeEscaped(out, pair.second.originWorldId);
+    out += ", \"prof\": " + std::to_string(static_cast<int>(pair.second.profession)) +
+           ", \"quirk\": " + std::to_string(static_cast<int>(pair.second.quirk)) +
+           ", \"level\": " + std::to_string(pair.second.level) +
+           ", \"xp\": " + std::to_string(pair.second.xp) +
+           ", \"hp\": " + numToJson(pair.second.vitals.health) +
+           ", \"mor\": " + numToJson(pair.second.vitals.morale) + "}";
+  }
+  for (const auto& res : g.progress.crew.reserve) {
+    if (!firstCrew) out += ", ";
+    firstCrew = false;
+    out += "{\"post\": -1, \"id\": ";
+    writeEscaped(out, res.id);
+    out += ", \"first\": ";
+    writeEscaped(out, res.firstName);
+    out += ", \"last\": ";
+    writeEscaped(out, res.lastName);
+    out += ", \"origin\": ";
+    writeEscaped(out, res.originWorldId);
+    out += ", \"prof\": " + std::to_string(static_cast<int>(res.profession)) +
+           ", \"quirk\": " + std::to_string(static_cast<int>(res.quirk)) +
+           ", \"level\": " + std::to_string(res.level) +
+           ", \"xp\": " + std::to_string(res.xp) +
+           ", \"hp\": " + numToJson(res.vitals.health) +
+           ", \"mor\": " + numToJson(res.vitals.morale) + "}";
+  }
+  out += "]\n";
   out += ind(1) + "},\n";
 
   out += ind(1) + "\"customs\": [";
@@ -576,6 +616,28 @@ bool saveDeserialize(const std::string& text, SaveGame& out, std::string& err) {
     out.progress.capturedHorizon = readBool(*pr, "capturedHorizon", false);
     out.progress.asteroidDodges = readInt(*pr, "asteroidDodges", 0);
     readStrArray(*pr, "discoveries", out.progress.discoveries);
+    if (const JVal* crewArr = findOf(*pr, "crew", JVal::Kind::Arr)) {
+      for (const auto& ce : crewArr->arr) {
+        if (ce.kind != JVal::Kind::Obj) continue;
+        int postInt = readInt(ce, "post", -1);
+        Person person;
+        person.id = readStr(ce, "id", "p_crew");
+        person.firstName = readStr(ce, "first", "Crew");
+        person.lastName = readStr(ce, "last", "Member");
+        person.originWorldId = readStr(ce, "origin", "earth");
+        person.profession = static_cast<Profession>(readInt(ce, "prof", 0));
+        person.quirk = static_cast<PersonQuirk>(readInt(ce, "quirk", 0));
+        person.level = std::clamp(readInt(ce, "level", 1), 1, 5);
+        person.xp = readInt(ce, "xp", 0);
+        person.vitals.health = readFloat(ce, "hp", 100.0f);
+        person.vitals.morale = readFloat(ce, "mor", 100.0f);
+        if (postInt >= 0 && postInt < static_cast<int>(CrewPost::Count)) {
+          out.progress.crew.assign(static_cast<CrewPost>(postInt), person);
+        } else {
+          out.progress.crew.reserve.push_back(person);
+        }
+      }
+    }
   }
 
   if (const JVal* cu = findOf(root, "customs", JVal::Kind::Arr)) {

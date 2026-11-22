@@ -16,6 +16,7 @@
 
 #include "Types.h"
 #include "ColonySystem.h"
+#include "PeopleSystem.h"
 
 namespace astro {
 
@@ -84,6 +85,8 @@ struct SaveProgress {
   int asteroidDodges = 0;
   // v4.2: созвездия и научные открытия Пятой Вселенной
   std::vector<std::string> discoveries;
+  // v5.1.12: экипаж корабля
+  ShipCrewRoster crew;
 };
 
 struct SaveSession {

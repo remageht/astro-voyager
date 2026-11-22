@@ -925,6 +925,19 @@ Check 'AudioEngine and AppGL wire voice density filtering and UI combo' (($audio
 Check 'Zettelkasten defines and discovers Pilot Logbook Day 1 Factor 9 note' (($zettelH -match 'kNotePilotLogDay1\s*=\s*"z_pilot_log_day1"') -and ($zettelCpp -match 'kNotePilotLogDay1') -and ($zettelCpp -match 'Day 1\. Factor 9') -and ($zettelCpp -match 'discoverSeed\(kNotePilotLogDay1\)'))
 Check 'ShipState tracks tidalStrain and AppGL renders tidal stress HUD gauge' (($typesH -match 'float tidalStrain = 0\.0f;') -and ($appCpp -match 'm_ship\.tidalStrain') -and ($appCpp -match 'TIDAL %.0f%%') -and ($appCpp -match 'TIDAL STRAIN: STRUCTURAL HAZARD'))
 
+# --- Issue #226: Colonist Simulation, Procedural Demographics & Ship Crew Roster (v5.1.12) ---
+$peopleH = Read-File 'src/PeopleSystem.h'
+$peopleCpp = Read-File 'src/PeopleSystem.cpp'
+$saveH = Read-File 'src/SaveGame.h'
+$saveCpp = Read-File 'src/SaveGame.cpp'
+$cmakeTxt = Read-File 'CMakeLists.txt'
+
+Check 'PeopleSystem.h declares professions, quirks, vitals and ShipCrewRoster' (($peopleH -match 'enum class Profession') -and ($peopleH -match 'enum class PersonQuirk') -and ($peopleH -match 'enum class CrewPost') -and ($peopleH -match 'struct PersonVitals') -and ($peopleH -match 'struct Person') -and ($peopleH -match 'class ShipCrewRoster') -and ($peopleH -match 'struct ColonyVitals'))
+Check 'PeopleSystem.cpp implements candidate generation, vitals simulation and crew bonuses' (($peopleCpp -match 'generatePerson') -and ($peopleCpp -match 'generateColonyNotableCandidates') -and ($peopleCpp -match 'calculateColonyVitals') -and ($peopleCpp -match 'simulateColonyVitalsTick') -and ($peopleCpp -match 'warpCooldownMultiplier') -and ($peopleCpp -match 'hullAutoRepairRate'))
+Check 'SaveGame persists ShipCrewRoster assigned officers and reserve' (($saveH -match 'ShipCrewRoster crew;') -and ($saveCpp -match 'crew\.allAssigned\(\)') -and ($saveCpp -match 'crew\.reserve') -and ($saveCpp -match 'crew\.assign'))
+Check 'test_people registered in CMakeLists and ASTRO_TEST_TARGETS' (($cmakeTxt -match 'test_people') -and (Test-Path 'tests/test_people.cpp'))
+Check 'AppGL declares and wires crew roster and colony population tab' (($appH -match 'ShipCrewRoster m_crew;') -and ($appH -match 'int m_colonyTab') -and ($appCpp -match 'm_crew\.warpCooldownMultiplier\(\)') -and ($appCpp -match 'm_crew\.fuelConsumptionMultiplier\(\)') -and ($appCpp -match 'm_crew\.hullAutoRepairRate\(\)'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
