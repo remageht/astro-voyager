@@ -1817,6 +1817,8 @@ bool AppGL::upgradeColony(const std::string& id) {
       lastEn = m.nameEn;
     }
     m_codex.addResearchPoints(reward);
+    m_crew.gainXp(CrewPost::ScienceOfficer, 30);
+    m_crew.gainXp(CrewPost::ChiefEngineer, 15);
     float atmo = 0.0f, bio = 0.0f;
     colonyTerraformState(stage, atmo, bio);
     Toast mt;
@@ -1865,7 +1867,8 @@ void AppGL::updateColonyEconomy(float dt) {
     m_lastPassiveColonyTime = now;
     const int ratePerMin = colonyPassiveRatePerMin(m_colonyStages);
     if (ratePerMin > 0) {
-      const int addPoints = static_cast<int>(ratePerMin * (elapsed / 60.0));
+      const float sciBonus = m_crew.scienceYieldMultiplier();
+      const int addPoints = static_cast<int>(std::round(ratePerMin * (elapsed / 60.0) * sciBonus));
       if (addPoints > 0) {
         m_codex.addResearchPoints(addPoints);
       }
@@ -1886,7 +1889,7 @@ void AppGL::updateColonyEconomy(float dt) {
           m_ship.fuel = std::min(100.0f, m_ship.fuel + 15.0f * dt);
         }
         if (m_ship.shield < m_shieldMax) {
-          m_ship.shield = std::min(m_shieldMax, m_ship.shield + 20.0f * dt);
+          m_ship.shield = std::min(m_shieldMax, m_ship.shield + 20.0f * m_crew.shieldRegenMultiplier() * dt);
         }
         if (m_ship.hull < 100.0f) {
           m_ship.hull = std::min(100.0f, m_ship.hull + 5.0f * dt);
@@ -1982,14 +1985,19 @@ void AppGL::drawColonies() {
       ImGui::TextColored(ImVec4(0.62f, 0.95f, 0.72f, 1.0f), "* %s", perkBuf);
     }
 
-    // Progress bar across the 24 stages
     ImGui::Spacing();
-    char progressBuf[128];
-    std::snprintf(progressBuf, sizeof(progressBuf), "%s: %d / %d (%s)",
-                  uiRu("Прогресс цивилизации", "Civilization progress"),
-                  stage, kColonyStageCount,
-                  uiRu(colonyEpochNameRu(epoch), colonyEpochNameEn(epoch)));
-    ImGui::ProgressBar(static_cast<float>(stage) / kColonyStageCount, ImVec2(-1, 24), progressBuf);
+    if (ImGui::BeginTabBar("##colonyMainTabs")) {
+      if (ImGui::BeginTabItem(uiRu("🏗 Инфраструктура & Проекты", "🏗 Infrastructure & Projects"))) {
+        m_colonyTab = 0;
+
+        // Progress bar across the 24 stages
+        ImGui::Spacing();
+        char progressBuf[128];
+        std::snprintf(progressBuf, sizeof(progressBuf), "%s: %d / %d (%s)",
+                      uiRu("Прогресс цивилизации", "Civilization progress"),
+                      stage, kColonyStageCount,
+                      uiRu(colonyEpochNameRu(epoch), colonyEpochNameEn(epoch)));
+        ImGui::ProgressBar(static_cast<float>(stage) / kColonyStageCount, ImVec2(-1, 24), progressBuf);
 
     // What actually stands on the surface right now, and which power plant the
     // world runs on (fission / hydro / thermal depending on the body).
@@ -2183,7 +2191,181 @@ void AppGL::drawColonies() {
       ImGui::Spacing();
     }
     ImGui::EndChild();
+    ImGui::EndTabItem();
   }
+
+  if (ImGui::BeginTabItem(uiRu("👥 Население & Кадры", "👥 Population & Roster"))) {
+    m_colonyTab = 1;
+    const auto buildPlan = (stage > 0) ? colonyBuildPlan(m_selectedColony, stage) : std::vector<std::pair<std::string, int>>{};
+    const ColonyVitals vitals = calculateColonyVitals(m_selectedColony, stage, buildPlan);
+
+    if (stage == 0) {
+      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.10f, 0.14f, 0.85f));
+      ImGui::BeginChild("##uncolonizedPopChild", ImVec2(0.0f, 120.0f), true);
+      ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), "❖ %s",
+                         uiRu("Мир пока необитаем", "World is currently uninhabited"));
+      ImGui::TextWrapped("%s",
+                         uiRu("На этом небесном теле ещё не основан аванпост. Перейдите во вкладку 'Инфраструктура' и подлетите к планете на посадочную орбиту, чтобы основать первую колонию и привлечь поселенцев.",
+                              "No outpost has been established on this celestial body. Switch to the 'Infrastructure' tab and enter close orbital radius to deploy the initial outpost and attract colonists."));
+      ImGui::EndChild();
+      ImGui::PopStyleColor();
+    } else {
+      // Demographics & Vitals Header
+      const int curPop = colonyStages()[stage - 1].population;
+      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.09f, 0.14f, 0.85f));
+      ImGui::BeginChild("##vitalsOverview", ImVec2(0.0f, 96.0f), true);
+
+      ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "✦ %s: %s   |   %s: %d %s",
+                         uiRu("Колония", "Colony"), uiRu(selected->nameRu, selected->nameEn),
+                         uiRu("Население", "Population"), curPop, uiRu("чел.", "citizens"));
+
+      // 4 Vitals Progress Bars (Health, Nourishment, Morale, Competency)
+      const float barW = (ImGui::GetContentRegionAvail().x - 30.0f) * 0.25f;
+      char vBuf[64];
+
+      ImGui::BeginGroup();
+      std::snprintf(vBuf, sizeof(vBuf), "%s: %.0f%%", uiRu("Здоровье", "Health"), vitals.avgHealth);
+      ImGui::ProgressBar(vitals.avgHealth * 0.01f, ImVec2(barW, 16.0f), vBuf);
+      ImGui::EndGroup();
+
+      ImGui::SameLine();
+      ImGui::BeginGroup();
+      std::snprintf(vBuf, sizeof(vBuf), "%s: %.0f%%", uiRu("Питание", "Nourishment"), vitals.avgNourishment);
+      ImGui::ProgressBar(vitals.avgNourishment * 0.01f, ImVec2(barW, 16.0f), vBuf);
+      ImGui::EndGroup();
+
+      ImGui::SameLine();
+      ImGui::BeginGroup();
+      std::snprintf(vBuf, sizeof(vBuf), "%s: %.0f%%", uiRu("Мораль", "Morale"), vitals.avgMorale);
+      ImGui::ProgressBar(vitals.avgMorale * 0.01f, ImVec2(barW, 16.0f), vBuf);
+      ImGui::EndGroup();
+
+      ImGui::SameLine();
+      ImGui::BeginGroup();
+      std::snprintf(vBuf, sizeof(vBuf), "%s: %.0f%%", uiRu("Квалификация", "Competency"), vitals.avgCompetency);
+      ImGui::ProgressBar(vitals.avgCompetency * 0.01f, ImVec2(barW, 16.0f), vBuf);
+      ImGui::EndGroup();
+
+      ImGui::Spacing();
+      const float avgVital = (vitals.avgHealth + vitals.avgNourishment + vitals.avgMorale + vitals.avgCompetency) * 0.25f;
+      ImGui::TextColored(avgVital >= 70.0f ? ImVec4(0.40f, 1.0f, 0.60f, 1.0f) : ImVec4(0.95f, 0.75f, 0.30f, 1.0f),
+                         "★ %s: %.1f%%  (%s)",
+                         uiRu("Средний индекс благополучия", "Average Vitality Index"), avgVital,
+                         avgVital >= 70.0f ? uiRu("Высокий расцвет", "Flourishing") : uiRu("Развивающаяся среда", "Developing"));
+
+      ImGui::EndChild();
+      ImGui::PopStyleColor();
+
+      // Technological Surge Banner
+      ImGui::Spacing();
+      if (vitals.inTechnologicalSurge) {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.18f, 0.14f, 0.04f, 0.90f));
+        ImGui::BeginChild("##techSurgeActiveBanner", ImVec2(0.0f, 54.0f), true);
+        ImGui::TextColored(ImVec4(1.0f, 0.88f, 0.25f, 1.0f), "👑 %s",
+                           uiRu("ТЕХНОЛОГИЧЕСКИЙ ПОДЪЁМ АКТИВЕН!", "TECHNOLOGICAL SURGE ACTIVE!"));
+        ImGui::TextColored(ImVec4(0.85f, 0.95f, 0.80f, 1.0f), "%s",
+                           uiRu("Все жизненные показатели колонии превышают 70%. Активен бонус: +50% к генерации RP и подготовка элитных кадров в Академии.",
+                                "All vital indicators exceed 70%. Active bonus: +50% RP yield and elite specialist training in the Academy."));
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+      } else {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.08f, 0.12f, 0.70f));
+        ImGui::BeginChild("##techSurgeReqBanner", ImVec2(0.0f, 50.0f), true);
+        ImGui::TextColored(ImVec4(0.70f, 0.85f, 0.95f, 1.0f), "❖ %s",
+                           uiRu("Условия Технологического Подъёма:", "Technological Surge Requirements:"));
+        ImGui::TextColored(ImVec4(0.60f, 0.70f, 0.80f, 1.0f), "%s",
+                           uiRu("Для активации подъёма (+50% RP) поднимите показатели здоровья, питания, морали и квалификации выше 70% строительством новых объектов.",
+                                "To activate surge (+50% RP), raise health, nourishment, morale, and competency above 70% by building new structures."));
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+      }
+
+      // Notable Candidates / Academy Graduates
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "🎓 %s",
+                         uiRu("Выпускники Планетарной Академии & Ведущие Специалисты:",
+                              "Planetary Academy Graduates & Leading Specialists:"));
+      ImGui::BeginChild("##academyCandidatesScroll", ImVec2(0.0f, 0.0f), true);
+
+      const auto candidates = generateColonyNotableCandidates(m_selectedColony, stage);
+      for (size_t ci = 0; ci < candidates.size(); ++ci) {
+        const auto& cand = candidates[ci];
+        ImGui::PushID(static_cast<int>(ci));
+
+        // Check if already in reserve or officers
+        bool alreadyInCrew = false;
+        for (const auto& pair : m_crew.allAssigned()) {
+          if (pair.second.id == cand.id) { alreadyInCrew = true; break; }
+        }
+        if (!alreadyInCrew) {
+          for (const auto& r : m_crew.reserve) {
+            if (r.id == cand.id) { alreadyInCrew = true; break; }
+          }
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.11f, 0.16f, 0.75f));
+        ImGui::BeginChild("##candCard", ImVec2(0.0f, 92.0f), true);
+
+        ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.40f, 1.0f), "★ %s", cand.fullName().c_str());
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "| %s (Lvl %d)",
+                           uiRu(professionNameRu(cand.profession), professionNameEn(cand.profession)), cand.level);
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 1.0f), "| %s: %s",
+                           uiRu("Происхождение", "Origin"), cand.originWorldId.c_str());
+
+        ImGui::TextColored(ImVec4(0.50f, 1.0f, 0.70f, 1.0f), "  [%s]",
+                           uiRu(quirkNameRu(cand.quirk), quirkNameEn(cand.quirk)));
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.60f, 0.70f, 0.80f, 1.0f), "— %s",
+                           uiRu(quirkDescRu(cand.quirk), quirkDescEn(cand.quirk)));
+
+        ImGui::TextColored(ImVec4(0.75f, 0.80f, 0.88f, 1.0f), "  %s: %s",
+                           uiRu("Деятельность", "Activity"),
+                           uiRu(cand.currentActivityRu.c_str(), cand.currentActivityEn.c_str()));
+
+        const float recruitBtnW = 220.0f;
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - recruitBtnW);
+        if (alreadyInCrew) {
+          ImGui::TextColored(ImVec4(0.40f, 0.90f, 0.50f, 1.0f), "%s",
+                             uiRu("✓ В экипаже корабля", "✓ In ship crew"));
+        } else {
+          const int recruitCost = 100;
+          const bool canRecruit = m_codex.getTotalResearchPoints() >= recruitCost;
+          ImGui::BeginDisabled(!canRecruit);
+          char rBtn[64];
+          std::snprintf(rBtn, sizeof(rBtn), "%s (%d RP)###rec_%s",
+                        uiRu("✦ Нанять в экипаж", "✦ Recruit to Crew"), recruitCost, cand.id.c_str());
+          if (ImGui::Button(rBtn, ImVec2(recruitBtnW, 26.0f))) {
+            m_codex.spendResearchPoints(recruitCost);
+            m_crew.reserve.push_back(cand);
+            saveProfileNow(true);
+            Toast t;
+            t.title = uiRu("Специалист нанят", "Specialist Recruited");
+            char tdesc[128];
+            std::snprintf(tdesc, sizeof(tdesc), "%s (%s) %s",
+                          cand.fullName().c_str(), uiRu(professionNameRu(cand.profession), professionNameEn(cand.profession)),
+                          uiRu("принят(а) в каюты корабля.", "joined ship quarters."));
+            t.desc = tdesc;
+            t.time = static_cast<float>(glfwGetTime());
+            m_toasts.push_back(t);
+            m_audio.playChime();
+          }
+          ImGui::EndDisabled();
+        }
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::PopID();
+        ImGui::Spacing();
+      }
+      ImGui::EndChild();
+    }
+    ImGui::EndTabItem();
+  }
+  ImGui::EndTabBar();
+  }
+}
   ImGui::End();
   if (pushed) ImGui::PopFont();
 }
@@ -7245,17 +7427,18 @@ void AppGL::drawUnifiedShipTerminal() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // 5 Command Tabs
-    const char* tabNames[5] = {
+    // 6 Command Tabs
+    const char* tabNames[6] = {
       uiRu("1. НАВИГАЦИЯ & КАТАЛОГ", "1. NAVIGATION & CATALOG"),
       uiRu("2. ВТОРОЙ МОЗГ", "2. SECOND BRAIN"),
       uiRu("3. НАУКА & СПЕКТР", "3. SCIENCE & SPECTRUM"),
       uiRu("4. СИСТЕМЫ КОРАБЛЯ & ВЕРФЬ", "4. SHIP SYSTEMS & YARD"),
-      uiRu("5. ЖУРНАЛ СВЯЗИ & МИССИИ", "5. LOGS & MISSIONS")
+      uiRu("5. ЭКИПАЖ & КАЮТЫ", "5. CREW & QUARTERS"),
+      uiRu("6. ЖУРНАЛ СВЯЗИ & МИССИИ", "6. LOGS & MISSIONS")
     };
 
-    const float tabBtnW = (ImGui::GetContentRegionAvail().x - 4 * 6.0f) / 5.0f;
-    for (int t = 0; t < 5; ++t) {
+    const float tabBtnW = (ImGui::GetContentRegionAvail().x - 5 * 6.0f) / 6.0f;
+    for (int t = 0; t < 6; ++t) {
       if (t > 0) ImGui::SameLine(0.0f, 6.0f);
       const bool isSelected = (m_shipTerminalTab == t);
       if (isSelected) {
@@ -7614,7 +7797,190 @@ void AppGL::drawUnifiedShipTerminal() {
       }
 
     } else if (m_shipTerminalTab == 4) {
-      // TAB 4: Logs, Missions & Radio Chatter
+      // TAB 4: Crew Roster, Officer Stations & Quarters
+      ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "❖ %s",
+                         uiRu("КОМАНДНЫЙ СОСТАВ И КАЮТЫ ЭКИПАЖА:", "OFFICER STATIONS & CREW QUARTERS:"));
+      ImGui::Spacing();
+
+      // Top flight telemetry & buffs overview
+      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.08f, 0.13f, 0.85f));
+      ImGui::BeginChild("##crewBuffsBar", ImVec2(0.0f, 58.0f), true);
+
+      const int assigned = m_crew.assignedCount();
+      ImGui::TextColored(ImVec4(0.40f, 0.90f, 1.0f, 1.0f), "%s: %d / 4   |   %s: %d",
+                         uiRu("Офицеров на постах", "Active Officers"), assigned,
+                         uiRu("В резерве кают", "In Reserve"), static_cast<int>(m_crew.reserve.size()));
+
+      // Current multipliers
+      const float warpScale = m_crew.warpCooldownMultiplier();
+      const float hullRepair = m_crew.hullAutoRepairRate();
+      const float shieldRegen = m_crew.shieldRegenMultiplier();
+      const float rpYield = m_crew.scienceYieldMultiplier();
+      const float fuelK = m_crew.fuelConsumptionMultiplier();
+
+      char buffsText[256];
+      std::snprintf(buffsText, sizeof(buffsText),
+                    uiRu("Варп-откат: -%.0f%% | Ремонт корпуса: +%.1f/с | Щит: +%.0f%% | Наука: +%.0f%% RP | Топливо: -%.0f%%",
+                         "Warp Cooldown: -%.0f%% | Hull Repair: +%.1f/s | Shield: +%.0f%% | Science: +%.0f%% RP | Fuel: -%.0f%%"),
+                    (1.0f - warpScale) * 100.0f, hullRepair, (shieldRegen - 1.0f) * 100.0f,
+                    (rpYield - 1.0f) * 100.0f, (1.0f - fuelK) * 100.0f);
+      ImGui::TextColored(ImVec4(0.50f, 1.0f, 0.70f, 1.0f), "★ %s", buffsText);
+
+      ImGui::EndChild();
+      ImGui::PopStyleColor();
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.85f, 0.90f, 0.98f, 1.0f), "%s:",
+                         uiRu("Ключевые Офицерские Посты Корабля", "Core Ship Officer Posts"));
+
+      // 4 Officer Stations
+      static const struct {
+        CrewPost post;
+        const char* icon;
+        const char* nameRu;
+        const char* nameEn;
+        const char* dutyRu;
+        const char* dutyEn;
+      } kPosts[] = {
+        {CrewPost::ChiefEngineer, "[ENG]", "Главный Инженер", "Chief Engineer",
+         "Ускорение перезарядки варпа, регенерация щитов и авторемонт корпуса",
+         "Warp cooldown speedup, shield regeneration and hull auto-repair"},
+        {CrewPost::ScienceOfficer, "[SCI]", "Научный Офицер", "Science Officer",
+         "Повышение выхода очков исследований (RP) при сканировании и пассивном доходе",
+         "Increases Research Points (RP) yield from scans and passive colony income"},
+        {CrewPost::Navigator, "[NAV]", "Штурман-Навигатор", "Flight Navigator",
+         "Экономия квантового топлива при варп-прыжках и устойчивость к гравитационным перегрузкам",
+         "Quantum fuel economy during warp jumps and gravitational stress tolerance"},
+        {CrewPost::LifeSupportMedic, "[MED]", "Офицер Жизнеобеспечения", "Life Support Medic",
+         "Снижение расхода кислорода в открытом космосе и поддержание тонуса экипажа",
+         "Reduces EVA oxygen consumption drain and sustains crew wellness"}
+      };
+
+      ImGui::BeginChild("##officerPostsChild", ImVec2(0.0f, 240.0f), true);
+      for (const auto& pi : kPosts) {
+        ImGui::PushID(static_cast<int>(pi.post));
+        const bool hasOff = m_crew.hasPost(pi.post);
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, hasOff ? ImVec4(0.06f, 0.10f, 0.16f, 0.75f)
+                                                       : ImVec4(0.08f, 0.08f, 0.08f, 0.50f));
+        ImGui::BeginChild("##postCard", ImVec2(0.0f, 52.0f), true);
+
+        ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "%s %s", pi.icon,
+                           uiRu(pi.nameRu, pi.nameEn));
+        ImGui::SameLine();
+
+        if (hasOff) {
+          Person* off = m_crew.getPost(pi.post);
+          ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "— %s (Ур. %d)",
+                             off->fullName().c_str(), off->level);
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.50f, 1.0f, 0.70f, 1.0f), "[%s]",
+                             uiRu(quirkNameRu(off->quirk), quirkNameEn(off->quirk)));
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 1.0f), "XP: %d/%d",
+                             off->xp, nextLevelXp(off->level));
+
+          const float unassignBtnW = 160.0f;
+          ImGui::SameLine(ImGui::GetContentRegionAvail().x - unassignBtnW);
+          if (ImGui::Button(uiRu("В резерв###unass", "To Reserve###unass"), ImVec2(unassignBtnW, 20.0f))) {
+            Person* curr = m_crew.getPost(pi.post);
+            if (curr) {
+              m_crew.reserve.push_back(*curr);
+              m_crew.unassign(pi.post);
+              saveProfileNow(true);
+            }
+          }
+
+          ImGui::TextColored(ImVec4(0.65f, 0.75f, 0.85f, 1.0f), "  %s: %s",
+                             uiRu("Статус", "Status"),
+                             uiRu(off->currentActivityRu.c_str(), off->currentActivityEn.c_str()));
+        } else {
+          ImGui::TextColored(ImVec4(0.65f, 0.65f, 0.65f, 1.0f), "— %s",
+                             uiRu("[ВАКАНСИЯ]", "[VACANT]"));
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.68f, 0.85f), "(%s)",
+                             uiRu(pi.dutyRu, pi.dutyEn));
+
+          // Dropdown or button to assign from reserve
+          if (!m_crew.reserve.empty()) {
+            const float assignBtnW = 180.0f;
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - assignBtnW);
+            char comboId[32];
+            std::snprintf(comboId, sizeof(comboId), "##ass_%d", static_cast<int>(pi.post));
+            if (ImGui::BeginCombo(comboId, uiRu("Назначить...", "Assign..."), ImGuiComboFlags_HeightSmall)) {
+              for (size_t ri = 0; ri < m_crew.reserve.size(); ++ri) {
+                const auto& res = m_crew.reserve[ri];
+                char itemLabel[128];
+                std::snprintf(itemLabel, sizeof(itemLabel), "%s (Ур. %d %s)",
+                              res.fullName().c_str(), res.level, uiRu(professionNameRu(res.profession), professionNameEn(res.profession)));
+                if (ImGui::Selectable(itemLabel)) {
+                  m_crew.assign(pi.post, res);
+                  m_crew.reserve.erase(m_crew.reserve.begin() + ri);
+                  saveProfileNow(true);
+                  break;
+                }
+              }
+              ImGui::EndCombo();
+            }
+          }
+        }
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::PopID();
+      }
+      ImGui::EndChild();
+
+      // Reserve Specialists Roster
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "🛏 %s (%d):",
+                         uiRu("Специалисты в Каютах Резерва", "Reserve Specialists in Quarters"),
+                         static_cast<int>(m_crew.reserve.size()));
+
+      ImGui::BeginChild("##reserveScrollChild", ImVec2(0.0f, 0.0f), true);
+      if (m_crew.reserve.empty()) {
+        ImGui::TextColored(ImVec4(0.60f, 0.70f, 0.80f, 1.0f), "%s",
+                           uiRu("В резерве пока нет специалистов. Наймите выпускников в Академиях на колониях (клавиша C -> вкладка 'Население & Кадры').",
+                                "No reserve specialists in quarters. Hire Academy graduates from colonies (press C -> 'Population & Roster' tab)."));
+      } else {
+        for (size_t ri = 0; ri < m_crew.reserve.size(); ++ri) {
+          const auto& res = m_crew.reserve[ri];
+          ImGui::PushID(static_cast<int>(ri));
+
+          ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.08f, 0.12f, 0.65f));
+          ImGui::BeginChild("##resCard", ImVec2(0.0f, 44.0f), true);
+
+          ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.35f, 1.0f), "★ %s", res.fullName().c_str());
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.40f, 0.85f, 1.0f, 1.0f), "| %s (Ур. %d)",
+                             uiRu(professionNameRu(res.profession), professionNameEn(res.profession)), res.level);
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.50f, 1.0f, 0.70f, 1.0f), "[%s]",
+                             uiRu(quirkNameRu(res.quirk), quirkNameEn(res.quirk)));
+          ImGui::SameLine();
+          ImGui::TextColored(ImVec4(0.70f, 0.75f, 0.85f, 1.0f), "| %s: %s",
+                             uiRu("Мир", "World"), res.originWorldId.c_str());
+
+          const float dismissBtnW = 100.0f;
+          ImGui::SameLine(ImGui::GetContentRegionAvail().x - dismissBtnW);
+          if (ImGui::Button(uiRu("Уволить###dsm", "Dismiss###dsm"), ImVec2(dismissBtnW, 20.0f))) {
+            m_crew.reserve.erase(m_crew.reserve.begin() + ri);
+            saveProfileNow(true);
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+            ImGui::PopID();
+            break;
+          }
+
+          ImGui::EndChild();
+          ImGui::PopStyleColor();
+          ImGui::PopID();
+        }
+      }
+      ImGui::EndChild();
+
+    } else if (m_shipTerminalTab == 5) {
+      // TAB 5: Logs, Missions & Radio Chatter
       ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "%s",
                          uiRu("БОРТОВОЙ ЖУРНАЛ И КОНТРАКТЫ МИССИЙ:", "SHIP LOG & MISSION CONTRACTS:"));
       ImGui::Spacing();
@@ -9118,6 +9484,12 @@ void AppGL::updateShip(float deltaTime) {
     }
   }
 
+  // v5.1.12: Chief Engineer passive hull auto-repair
+  const float autoRepairRate = m_crew.hullAutoRepairRate();
+  if (autoRepairRate > 0.0f && m_ship.hull < 100.0f) {
+    m_ship.hull = std::min(100.0f, m_ship.hull + autoRepairRate * deltaTime);
+  }
+
   const float shieldBefore = m_ship.shield;
   ship::applyRadiation(m_ship, deltaTime, inRadZone, dtune.radiationK);
   // Вспышка щита (v3.3.0): импульс от потери щита + экспоненциальное затухание.
@@ -9950,6 +10322,7 @@ void AppGL::applySaveGame(const SaveGame& g) {
   // v3.6.0: колонии (профиль → менеджер сцены для маркеров).
   m_colonies = g.progress.colonies;
   m_colonyStages = g.progress.colonyStages;
+  m_crew = g.progress.crew;
   normalizeColonies(m_colonies, m_colonyStages);
   m_sceneManager->setColonies(m_colonies);
   m_sceneManager->setColonyStages(m_colonyStages);
@@ -10050,6 +10423,7 @@ void AppGL::saveProfileNow(bool quiet) {
   g.progress.route = m_route;
   g.progress.colonies = m_colonies;
   g.progress.colonyStages = m_colonyStages;
+  g.progress.crew = m_crew;
   g.progress.researchPoints = m_codex.getTotalResearchPoints();
   g.progress.asteroidDodges = m_asteroidDodges;  // v3.7.0
   g.progress.discoveries.assign(m_discoveredConstellations.begin(), m_discoveredConstellations.end());
@@ -16099,7 +16473,7 @@ void AppGL::setShipStyleNow(int style) {
 }
 
 float AppGL::warpRechargeScale() const {
-  return 1.0f / (1.0f + colonyWarpRechargeBoost(m_colonyStages));
+  return (1.0f / (1.0f + colonyWarpRechargeBoost(m_colonyStages))) * m_crew.warpCooldownMultiplier();
 }
 
 float AppGL::jumpFuelCostK(const std::string& targetId) const {
@@ -16108,7 +16482,8 @@ float AppGL::jumpFuelCostK(const std::string& targetId) const {
   const float capK = ship::warpCapacitorCostFactor(m_shipCustomization.warpCapacitorLevel);
   // Stage-24 subspace beacon makes M13 an established route: no fuel burned.
   const float beaconK = colonyGalacticVectorRoute(m_colonyStages, targetId) ? 0.0f : 1.0f;
-  return jtune.jumpCostK * casimirK * capK * beaconK;
+  const float crewK = m_crew.fuelConsumptionMultiplier();
+  return jtune.jumpCostK * casimirK * capK * beaconK * crewK;
 }
 
 void AppGL::startWarpJump(const std::string& id) {
@@ -16233,6 +16608,8 @@ bool AppGL::updateWarp(float deltaTime) {
         m_warpJumpTarget.clear();
         teleportToStation(tgt);  // штатный телепорт под вспышкой
         ship::spendJumpFuel(m_ship, jumpFuelCostK(tgt));
+        m_crew.gainXp(CrewPost::ChiefEngineer, 20);
+        m_crew.gainXp(CrewPost::Navigator, 25);
         m_warpStatus = 4;        // Cooldown
         m_warpStateT = 0.0f;
         m_warpFlash = 0.5f;  // v3.6.0: мягкая вспышка прибытия (комфорт для глаз)

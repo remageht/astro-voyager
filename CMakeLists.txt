@@ -34,6 +34,7 @@ add_executable(astro-voyager
   src/AtmosphereSystem.cpp  # === AtmosphereSystem === (Stage 5): вход в атмосферу
   src/MissionSystem.cpp  # === MissionSystem === (Stage 7 / Roadmap #5): процедурный генератор миссий
   src/GamepadSystem.cpp  # === GamepadSystem === (Stage 5 / Release 1.0): интеграция геймпадов и Steam Deck
+  src/PeopleSystem.cpp   # === PeopleSystem === (v5.1.12): симуляция людей, колонистов и экипажа
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -102,6 +103,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_save.cpp")
     tests/test_save.cpp
     src/SaveGame.cpp
     src/ColonySystem.cpp
+    src/PeopleSystem.cpp
   )
   target_include_directories(test_save PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
@@ -653,6 +655,25 @@ if(TARGET test_colony)
   add_test(NAME test_colony COMMAND test_colony)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_people.cpp")
+  add_executable(test_people
+    tests/test_people.cpp
+    src/PeopleSystem.cpp
+    src/ColonySystem.cpp
+    src/SaveGame.cpp
+  )
+  target_include_directories(test_people PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_people PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_people PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_people)
+  add_test(NAME test_people COMMAND test_people)
+endif()
+
 # Preserve assert() in tests even in Release configurations (Issue #187).
 # MSVC passes /DNDEBUG by default in Release; /UNDEBUG undefines it.
 # Clang/GCC use -UNDEBUG.
@@ -680,6 +701,7 @@ set(ASTRO_TEST_TARGETS
   test_gamepad
   test_loading
   test_colony
+  test_people
 )
 foreach(t ${ASTRO_TEST_TARGETS})
   if(TARGET ${t})

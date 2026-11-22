@@ -23,6 +23,7 @@
 #include "AtmosphereSystem.h"
 #include "MissionSystem.h"
 #include "GamepadSystem.h"
+#include "PeopleSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
 // с Tour.h-образцом, остальной хедер не тронут).
 #include "WarpJump.h"
@@ -512,6 +513,9 @@ class AppGL {
   std::string m_colonyHint;    // имя сайта в радиусе посадки ("" = нет)
   std::string m_colonyHintId;  // id сайта для hotkey
   double m_lastPassiveColonyTime = 0.0;
+  // === People & Ship Crew === (v5.1.12)
+  ShipCrewRoster m_crew;
+  int m_colonyTab = 0;  // 0: Инфраструктура, 1: Население и Кадры
   // === Science & Radio Chatter === (v4.6.0)
   ScienceCodex m_codex;
   BridgeComms m_bridgeComms;
