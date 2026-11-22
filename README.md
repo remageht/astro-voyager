@@ -1,4 +1,4 @@
-﻿# astro-voyager
+# astro-voyager
 
 [![build](https://github.com/remageht/astro-voyager/actions/workflows/build.yml/badge.svg)](https://github.com/remageht/astro-voyager/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/remageht/astro-voyager)](https://github.com/remageht/astro-voyager/releases)
@@ -21,7 +21,7 @@
 ## Скачать и играть / Download & Play
 
 Готовые автономные сборки без необходимости компиляции и установки:
-- 🎮 **Windows (x86_64)**: [astro-voyager-v5.0.0-windows-x86_64-portable.zip](https://github.com/remageht/astro-voyager/releases/latest) (полный автономный портативный архив со всеми 3D-моделями, текстурами и аудио).
+- 🎮 **Windows (x86_64)**: [astro-voyager-v5.1.0-windows-x86_64-portable.zip](https://github.com/remageht/astro-voyager/releases/latest) (полный автономный портативный архив со всеми 3D-моделями, текстурами и аудио).
 - 🐧 **Linux (x86_64)**: [astro-voyager-x86_64.AppImage](https://github.com/remageht/astro-voyager/releases/latest) (`chmod +x *.AppImage && ./*.AppImage`) или `tar.gz` портативный архив.
 - 🍏 **macOS (Apple Silicon arm64)**: [astro-voyager-macos-arm64.tar.gz](https://github.com/remageht/astro-voyager/releases/latest) (нативная сборка OpenGL 3.3 Core).
 
