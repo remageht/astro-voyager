@@ -12732,17 +12732,17 @@ static const WorkshopAssetEntry kWorkshopCatalog[] = {
 
   // === 3: Небесные тела и астероиды (Celestial 3 assets) ===
   {"asteroid_1", "Астероид Тип-С (хондрит)", "Asteroid Type-C (Chondrite)", 3,
-   "res/models/asteroid_1.obj", nullptr, nullptr, 4.5f,
+   "res/models/asteroid_1.obj", "res/models/asteroid", nullptr, 4.5f,
    "Углистый хондритовый астероид, богатый водой, летучими органическими соединениями и гидратированными глинами.",
    "Carbonaceous C-type asteroid rich in trapped water ice, volatiles, and prebiotic organic compounds."},
 
   {"asteroid_2", "Астероид Тип-S (силикат)", "Asteroid Type-S (Silicate)", 3,
-   "res/models/asteroid_2.obj", nullptr, nullptr, 4.5f,
+   "res/models/asteroid_2.obj", "res/models/asteroid", nullptr, 4.5f,
    "Каменный силикатный астероид из оливина и пироксена с вкраплениями самородного никелистого железа.",
    "Stony S-type asteroid composed of pyroxene, olivine, and native nickel-iron nodules."},
 
   {"asteroid_3", "Астероид Тип-M (металл)", "Asteroid Type-M (Metallic)", 3,
-   "res/models/asteroid_3.obj", nullptr, nullptr, 4.5f,
+   "res/models/asteroid_3.obj", "res/models/asteroid", nullptr, 4.5f,
    "Металлический астероид из чистого железа, никеля, кобальта и металлов платиновой группы — основа металлургии колонии.",
    "Metallic M-type asteroid fragment of a shattered protoplanetary core, rich in iron, nickel, cobalt, and platinum-group metals."}
 };

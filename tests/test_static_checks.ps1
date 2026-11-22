@@ -863,6 +863,39 @@ Check 'jumpgate registered in dock sites and attitude calculation' (($sceneCpp -
 Check 'jumpgate model loaded and rendered in scene' (($sceneCpp -match 's_jumpgateModel\.load\("res/models/jumpgate\.obj"\)') -and ($sceneCpp -match 's_jumpgateModel\.ready\(\)'))
 Check 'jumpgate hyper-transit interactive tab wired' (($appCpp -match 'TAB 12: JUMPGATE TRANSIT') -and ($appCpp -match 'ENGAGE HYPER-TRANSIT'))
 
+# --- Issue #214: High-poly 3D visual remaster for legacy models (probe, asteroids, station modules, warp vis) ---
+function Count-ObjFaces($relPath) {
+    $p = Join-Path $root $relPath
+    if (-not (Test-Path -LiteralPath $p)) { return 0 }
+    $count = 0
+    $reader = [System.IO.File]::OpenText($p)
+    try {
+        while (($line = $reader.ReadLine()) -ne $null) {
+            if ($line.StartsWith('f ')) { $count++ }
+        }
+    } finally {
+        $reader.Dispose()
+    }
+    return $count
+}
+
+Check 'workshop catalog registers asteroid PBR textures' (($appCpp -match '"res/models/asteroid_1\.obj",\s*"res/models/asteroid"') -and ($appCpp -match '"res/models/asteroid_2\.obj",\s*"res/models/asteroid"') -and ($appCpp -match '"res/models/asteroid_3\.obj",\s*"res/models/asteroid"'))
+Check 'workshop catalog registers probe PBR textures' ($appCpp -match '"res/models/probe\.obj",\s*"res/models/probe"')
+Check 'probe high-poly mesh exceeds 15k triangles' ((Count-ObjFaces 'res/models/probe.obj') -ge 15000)
+Check 'asteroid 1 high-poly mesh exceeds 15k triangles' ((Count-ObjFaces 'res/models/asteroid_1.obj') -ge 15000)
+Check 'asteroid 2 high-poly mesh exceeds 15k triangles' ((Count-ObjFaces 'res/models/asteroid_2.obj') -ge 15000)
+Check 'asteroid 3 high-poly mesh exceeds 15k triangles' ((Count-ObjFaces 'res/models/asteroid_3.obj') -ge 15000)
+Check 'station ring high-poly mesh exceeds 10k triangles' ((Count-ObjFaces 'res/models/station_ring.obj') -ge 10000)
+Check 'station panels high-poly mesh exceeds 10k triangles' ((Count-ObjFaces 'res/models/station_panels.obj') -ge 10000)
+Check 'warp bubble high-poly mesh exceeds 20k triangles' ((Count-ObjFaces 'res/models/warp_bubble.obj') -ge 20000)
+Check 'warp drive vis high-poly mesh exceeds 30k triangles' ((Count-ObjFaces 'res/models/warp_drive_vis.obj') -ge 30000)
+Check 'warp tunnel high-poly mesh exceeds 10k triangles' ((Count-ObjFaces 'res/models/warp_tunnel.obj') -ge 10000)
+Check 'probe PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/probe_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/probe_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/probe_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/probe_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/probe_emissive.bmp')))
+Check 'asteroid PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/asteroid_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/asteroid_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/asteroid_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/asteroid_metal.bmp')))
+Check 'warp bubble PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/warp_bubble_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_bubble_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_bubble_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_bubble_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_bubble_emissive.bmp')))
+Check 'warp drive vis PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/warp_drive_vis_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_emissive.bmp')))
+Check 'warp tunnel PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/warp_tunnel_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_emissive.bmp')))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
