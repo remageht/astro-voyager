@@ -9128,9 +9128,11 @@ void AppGL::updateShip(float deltaTime) {
                                  m_camera.position.y * m_camera.position.y +
                                  m_camera.position.z * m_camera.position.z);
       float targetStrain = (d < 25.0) ? std::clamp(static_cast<float>((25.0 - d) / 22.0), 0.0f, 1.0f) : 0.0f;
-      m_ship.tidalStrain = std::lerp(m_ship.tidalStrain, targetStrain, std::clamp(deltaTime * 4.0f, 0.0f, 1.0f));
+      const float alpha = std::clamp(deltaTime * 4.0f, 0.0f, 1.0f);
+      m_ship.tidalStrain = m_ship.tidalStrain + (targetStrain - m_ship.tidalStrain) * alpha;
     } else {
-      m_ship.tidalStrain = std::lerp(m_ship.tidalStrain, 0.0f, std::clamp(deltaTime * 2.0f, 0.0f, 1.0f));
+      const float alpha = std::clamp(deltaTime * 2.0f, 0.0f, 1.0f);
+      m_ship.tidalStrain = m_ship.tidalStrain * (1.0f - alpha);
     }
     // v5.3.0: Активное диегетическое орбитальное курсирование (J)
     if (m_orbitCruiseActive && !m_captureAnim) {

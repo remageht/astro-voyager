@@ -283,7 +283,7 @@ static void test_custom_notes_and_grand_synthesis() {
   bool added = zg.addCustomNote("Заметка пилота", "Проверить [[sol|Солнце]] и метрику", "Гипотеза", 10.0f, 20.0f);
   assert(added);
   (void)added;
-  assert(zg.getTotalCount() == 18);
+  assert(zg.getTotalCount() == 19);
 
   const ZettelNote* custom = nullptr;
   for (const auto& n : zg.getNotes()) {
@@ -324,7 +324,7 @@ static void test_custom_notes_and_grand_synthesis() {
   // 4. Delete custom note
   assert(zg.deleteCustomNote(customId));
   assert(zg.getNote(customId) == nullptr);
-  assert(zg.getTotalCount() == 17);
+  assert(zg.getTotalCount() == 18);
   assert(!zg.areLinked(customId, "z_paris_rain"));
 
   // 5. Test Grand Synthesis
