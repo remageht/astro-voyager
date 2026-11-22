@@ -896,6 +896,22 @@ Check 'warp bubble PBR texture maps exist' ((Test-Path (Join-Path $root 'res/mod
 Check 'warp drive vis PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/warp_drive_vis_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_emissive.bmp')))
 Check 'warp tunnel PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/warp_tunnel_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_emissive.bmp')))
 
+# --- Issue #218: 3D workshop dark studio backdrop, exploded view, multi-nozzle Mach diamonds thruster VFX, and LOD system ---
+$shipVert = Read-File 'shaders/ship.vert'
+$menuFrag = Read-File 'shaders/menu.frag'
+$lodH = Read-File 'src/LodSystem.h'
+$appH = Read-File 'src/AppGL.h'
+
+Check 'ship vertex shader has u_Explode uniform and displacement logic' (($shipVert -match 'uniform float u_Explode;') -and ($shipVert -match 'u_Explode > 0\.0001') -and ($shipVert -match 'compDir') -and ($shipVert -match 'normDir'))
+Check 'menu fragment shader has u_DimFactor uniform and dimming math' (($menuFrag -match 'uniform float u_DimFactor;') -and ($menuFrag -match 'u_DimFactor > 0\.0'))
+Check 'AppGL declares workshop backdrop mode and exploded view fields' (($appH -match 'm_workshopBackdropMode = 0;') -and ($appH -match 'm_workshopExplode = 0\.0f;') -and ($appH -match 'm_workshopExplodeAnim = false;'))
+Check 'AppGL implements workshop dark studio clearing and backdrop dimmer' (($appCpp -match 'glClearColor\(0\.024f, 0\.028f, 0\.038f, 1\.0f\)') -and ($appCpp -match 'dimFactor = 0\.15f') -and ($appCpp -match 'u_DimFactor'))
+Check 'AppGL passes u_Explode to workshop shader and provides UI slider' (($appCpp -match 'm_workshopShader->setUniform1f\("u_Explode", m_workshopExplode\)') -and ($appCpp -match 'Explode Dist') -and ($appCpp -match 'm_workshopExplodeAnim'))
+Check 'LodSystem defines 3-tier station LOD levels and distance thresholds' (($lodH -match 'enum class StationLodLevel') -and ($lodH -match 'LOD0_Close') -and ($lodH -match 'LOD1_Medium') -and ($lodH -match 'LOD2_Far') -and ($lodH -match 'kStationLod0Threshold') -and ($lodH -match 'kStationLod1Threshold') -and ($lodH -match 'kStationLodCullDistance'))
+Check 'LodSystem defines multi-nozzle thruster geometry layout for fleet styles' (($lodH -match 'struct ThrusterNozzle') -and ($lodH -match 'getShipNozzleLayout\(int style\)') -and ($lodH -match 'Dart: 2') -and ($lodH -match 'Shuttle: 3') -and ($lodH -match 'Mining Dreadnought: 4'))
+Check 'SceneManager implements multi-nozzle plumes with standing Mach diamonds' (($sceneCpp -match 'getShipNozzleLayout\(style\)') -and ($sceneCpp -match 'plumePoints') -and ($sceneCpp -match 'plumeMags') -and ($sceneCpp -match 'Mach Diamonds') -and ($sceneCpp -match 'shockDist') -and ($sceneCpp -match 'shockMag'))
+Check 'SceneManager implements 3-tier station LOD distance scaling and culling' (($sceneCpp -match 'kStationLodCullDistance') -and ($sceneCpp -match 'calculateStationLod\(camDist\)') -and ($sceneCpp -match 'StationLodLevel::LOD0_Close'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'

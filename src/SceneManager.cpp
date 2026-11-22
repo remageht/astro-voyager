@@ -2822,6 +2822,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             // docking corridors, attitude alignment and latching, while scaling down smoothly
             // at orbital distances so stations appear authentic in scale relative to Moon and Earth.
             const float camDist = glm::length(eye - stPos);
+            if (camDist > kStationLodCullDistance) continue;
+            const StationLodLevel lodLevel = calculateStationLod(camDist);
+
             float lodScale = 1.0f;
             if (camDist > 1.8f) {
               const float t = glm::clamp((camDist - 1.8f) / 2.7f, 0.0f, 1.0f);
@@ -2960,7 +2963,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                         glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
               customMetal = 0.92f;
               customRough = 0.25f;
-              if (s_telescopeMirrorModel.ready() && s_telescopeBodyModel.ready() && s_shipShader) {
+              if (s_telescopeMirrorModel.ready() && s_telescopeBodyModel.ready() && s_shipShader &&
+                  lodLevel == StationLodLevel::LOD0_Close) {
                 const glm::mat4 mBody = webbBase;
                 const glm::mat4 mMirror = webbBase *
                     glm::rotate(glm::mat4(1.0f), 0.18f * std::sin(0.10f * time), glm::vec3(1.0f, 0.0f, 0.0f)) *
@@ -3501,30 +3505,56 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
         }
         // v4.1: топливо обычного форсажа расходует ship::spendBoostFuel()
         // в AppGL; здесь только визуальный отклик, без второго списания.
-        // Движок: 1 крупная пульсирующая КРАСНАЯ точка за кормой.
+        // v5.3.0 / Issue #218: Multi-Nozzle Procedural Thrusters & Standing Mach Diamonds
         {
           const float sy = warpdrive::shipYaw();
-          // Model hull (стиль 3): хвост длиннее (полудлина 1.15), выносим
-          // точку дальше за корму, чем у процедурных корпусов (0.55).
-          const float engineBack = (style == 3) ? 1.45f : 0.55f;
-          const float ex = warpdrive::shipX() + engineBack * std::sin(sy);
-          const float ez = warpdrive::shipZ() + engineBack * std::cos(sy);
-          // v3.3.0: яркость и размер движка растут с тягой.
-          // v4.1: обычный форсаж на топливе (Shift) даёт заметный факел,
-          // но не включает варп-ауру — она живёт только при warpVis > 0.1.
+          const glm::vec3 fw(-std::sin(sy), 0.0f, -std::cos(sy));
+          const glm::vec3 rt(std::cos(sy), 0.0f, -std::sin(sy));
+          const glm::vec3 thrustUp(0.0f, 1.0f, 0.0f);
+          const glm::vec3 sCenter(warpdrive::shipX(), warpdrive::shipY(), warpdrive::shipZ());
+          const glm::vec3 aft = -fw;  // Кормовое направление истечения реактивной струи
+
+          const auto nozzles = getShipNozzleLayout(style);
           const float thr2 = warpdrive::thruster();
           const float boost = warpdrive::fuelAccel();
-          const float mag = (0.1f + 0.35f * std::sin(time * 18.0f)) *
-                            (0.55f + 1.45f * thr2) * (1.0f + 0.85f * boost);
-          s_engine.setStars({glm::vec3(ex, warpdrive::shipY(), ez)}, {mag});
+
+          std::vector<glm::vec3> plumePoints;
+          std::vector<float> plumeMags;
+          plumePoints.reserve(nozzles.size() * 4);
+          plumeMags.reserve(nozzles.size() * 4);
+
+          for (size_t ni = 0; ni < nozzles.size(); ++ni) {
+            const auto& n = nozzles[ni];
+            const glm::vec3 nozzlePos = sCenter + rt * n.localX + thrustUp * n.localY + aft * n.localZ;
+            const float baseFlicker = 0.15f + 0.35f * std::sin(time * 20.0f + static_cast<float>(ni) * 1.57f);
+            const float baseMag = baseFlicker * (0.55f + 1.45f * thr2) * (1.0f + 0.95f * boost) * n.scale;
+
+            // 1. Горячая точка среза сопла (Nozzle Throat Core)
+            plumePoints.push_back(nozzlePos);
+            plumeMags.push_back(baseMag);
+
+            // 2. Периодические стоячие скачки уплотнения (Mach Diamonds / Shock Cones)
+            // Длина струи расширяется с уровнем тяги и форсажем (Shift)
+            const float plumeLength = (0.28f + 0.72f * thr2) * (1.0f + 0.85f * boost) * n.scale;
+            for (int k = 1; k <= 3; ++k) {
+              const float shockDist = static_cast<float>(k) * 0.28f * plumeLength;
+              const glm::vec3 shockPos = nozzlePos + aft * shockDist;
+              const float shockFlicker = 0.80f + 0.20f * std::sin(time * 26.0f + static_cast<float>(k) * 1.7f);
+              const float shockMag = baseMag * (1.0f - static_cast<float>(k) * 0.22f) * shockFlicker;
+              plumePoints.push_back(shockPos);
+              plumeMags.push_back(shockMag);
+            }
+          }
+
+          s_engine.setStars(plumePoints, plumeMags);
           const float pixelScale = static_cast<float>(fbHeight) /
               (2.0f * std::tan(glm::radians(m_settings.fovDegrees) * 0.5f));
           m_starShader->bind();
           m_starShader->setUniformMat4f("u_MVP", mvp);
           m_starShader->setUniformMat4f("u_MV", view);
           m_starShader->setUniform1f("u_PixelScale", pixelScale);
-          m_starShader->setUniform1f("u_SizeK", 0.22f * (0.75f + 0.75f * thr2) *
-                                                   (1.0f + 0.55f * boost));
+          m_starShader->setUniform1f("u_SizeK", 0.16f * (0.75f + 0.75f * thr2) *
+                                                   (1.0f + 0.65f * boost));
           m_starShader->setUniform1f("u_Time", time);
           m_starShader->setUniform3f("u_Tint", kGlowTint[pal].x, kGlowTint[pal].y,
                                      kGlowTint[pal].z);

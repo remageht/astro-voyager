@@ -439,6 +439,9 @@ class AppGL {
   float m_workshopRotateSpeed = 20.0f;
   bool m_workshopWireframe = false;
   int m_workshopRenderMode = 0;
+  int m_workshopBackdropMode = 0;  // 0 = Dark Studio, 1 = Dimmed 85%, 2 = Open Space
+  float m_workshopExplode = 0.0f;  // 0.0 = Assembled, >0.0 = Exploded View
+  bool m_workshopExplodeAnim = false;
   float m_workshopLightAngle = 45.0f;
   float m_workshopLightIntensity = 1.6f;
   ObjModel m_workshopModel;

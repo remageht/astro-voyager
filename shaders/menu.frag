@@ -13,6 +13,7 @@ uniform int u_ScenicMode;
 uniform float u_Time;
 uniform vec2 u_Res;
 uniform float u_BgAspect;
+uniform float u_DimFactor;
 
 void main() {
   float aspect = u_Res.x / max(u_Res.y, 1.0);
@@ -61,5 +62,6 @@ void main() {
   }
 
   vec2 edge = v_TexCoord * 2.0 - 1.0;
-  fragColor = vec4(color * (1.0 - 0.18 * dot(edge, edge)), 1.0);
+  float dim = (u_DimFactor > 0.0) ? u_DimFactor : 1.0;
+  fragColor = vec4(color * (1.0 - 0.18 * dot(edge, edge)) * dim, 1.0);
 }

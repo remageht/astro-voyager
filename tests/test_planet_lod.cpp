@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <glm/glm.hpp>
 #include "audio/AudioEngine.h"
+#include "LodSystem.h"
 
 using namespace astro;
 
@@ -159,6 +160,95 @@ int main() {
     }
 
     std::cout << "PASS: Planet LOD Test 6 (Cook-Torrance GGX & Schlick Fresnel conservation)\n";
+  }
+
+  // Test 7: Multi-Nozzle Procedural Thruster Geometry Invariants (v5.3.0 / Issue #218)
+  {
+    // Style 0 (Dart): 2 twin nozzles mirrored across X axis
+    const auto dartNozzles = getShipNozzleLayout(0);
+    if (dartNozzles.size() != 2) {
+      std::cerr << "Test 7 failed: Dart should have exactly 2 nozzles, got " << dartNozzles.size() << "\n";
+      return 1;
+    }
+    if (std::abs(dartNozzles[0].localX + dartNozzles[1].localX) > 1e-5f) {
+      std::cerr << "Test 7 failed: Dart nozzles must be symmetrical across X\n";
+      return 1;
+    }
+
+    // Style 1 (Ring Ship): 1 central fusion bell
+    const auto ringNozzles = getShipNozzleLayout(1);
+    if (ringNozzles.size() != 1 || std::abs(ringNozzles[0].localX) > 1e-5f) {
+      std::cerr << "Test 7 failed: Ring Ship must have 1 central nozzle\n";
+      return 1;
+    }
+
+    // Style 2 (Shuttle): 3 main engines in triangular cluster
+    const auto shuttleNozzles = getShipNozzleLayout(2);
+    if (shuttleNozzles.size() != 3) {
+      std::cerr << "Test 7 failed: Shuttle should have 3 nozzles, got " << shuttleNozzles.size() << "\n";
+      return 1;
+    }
+    if (std::abs(shuttleNozzles[1].localX + shuttleNozzles[2].localX) > 1e-5f) {
+      std::cerr << "Test 7 failed: Shuttle lower nozzles must be symmetrical across X\n";
+      return 1;
+    }
+
+    // Style 3 (Warp Cruiser): 3 nozzles (2 twin nacelles + 1 impulse)
+    const auto warpNozzles = getShipNozzleLayout(3);
+    if (warpNozzles.size() != 3) {
+      std::cerr << "Test 7 failed: Warp Cruiser should have 3 nozzles, got " << warpNozzles.size() << "\n";
+      return 1;
+    }
+    if (std::abs(warpNozzles[0].localX + warpNozzles[1].localX) > 1e-5f) {
+      std::cerr << "Test 7 failed: Warp nacelles must be symmetrical across X\n";
+      return 1;
+    }
+
+    // Style 4 (Mining Dreadnought): 4 heavy fusion bells in 2x2 matrix
+    const auto dreadNozzles = getShipNozzleLayout(4);
+    if (dreadNozzles.size() != 4) {
+      std::cerr << "Test 7 failed: Mining Dreadnought should have 4 nozzles, got " << dreadNozzles.size() << "\n";
+      return 1;
+    }
+
+    std::cout << "PASS: Planet LOD Test 7 (Multi-nozzle procedural thruster geometry invariants)\n";
+  }
+
+  // Test 8: 3-Tier Distance-Based Station LOD and Culling Invariants (v5.3.0 / Issue #218)
+  {
+    if (calculateStationLod(5.0f) != StationLodLevel::LOD0_Close) {
+      std::cerr << "Test 8 failed: 5.0m should be LOD0_Close\n";
+      return 1;
+    }
+    if (calculateStationLod(15.0f) != StationLodLevel::LOD0_Close) {
+      std::cerr << "Test 8 failed: 15.0m boundary should be LOD0_Close\n";
+      return 1;
+    }
+    if (calculateStationLod(15.1f) != StationLodLevel::LOD1_Medium) {
+      std::cerr << "Test 8 failed: 15.1m should transition to LOD1_Medium\n";
+      return 1;
+    }
+    if (calculateStationLod(40.0f) != StationLodLevel::LOD1_Medium) {
+      std::cerr << "Test 8 failed: 40.0m boundary should be LOD1_Medium\n";
+      return 1;
+    }
+    if (calculateStationLod(40.1f) != StationLodLevel::LOD2_Far) {
+      std::cerr << "Test 8 failed: 40.1m should transition to LOD2_Far\n";
+      return 1;
+    }
+    if (calculateStationLod(100.0f) != StationLodLevel::LOD2_Far) {
+      std::cerr << "Test 8 failed: 100.0m should be LOD2_Far\n";
+      return 1;
+    }
+
+    // Verify culling boundary invariant
+    const float dCulled = 135.0f;
+    if (dCulled <= kStationLodCullDistance) {
+      std::cerr << "Test 8 failed: 135.0m should exceed kStationLodCullDistance\n";
+      return 1;
+    }
+
+    std::cout << "PASS: Planet LOD Test 8 (3-tier distance-based station LOD & culling invariants)\n";
   }
 
   std::cout << "All Planet LOD and Audio tests PASSED successfully!\n";

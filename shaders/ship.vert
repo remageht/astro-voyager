@@ -16,23 +16,31 @@ uniform mat4 u_ShipInv;    // inverse of the ship world matrix (skin space)
 uniform vec3 u_InvScale;   // inverse part scale for correct ellipsoid normals
 uniform int u_FlatNormal;  // 1 = ring: local normal +Y
 uniform float u_RingSpin;  // угол кольца Obj (rad); процедурным ставится 0
+uniform float u_Explode;   // 0 = в сборе, >0 = разнесённый вид (Exploded View)
 out vec3 v_Normal;
 out vec3 v_WorldPos;
 out vec3 v_PartPos;  // object-space позиция: панельные линии корпуса (S7)
 out vec3 v_ObjPos;   // ship-space позиция: скин Ring Ship
 out vec2 v_UV;
 void main() {
+  vec3 p = position;
+  if (u_Explode > 0.0001) {
+    vec3 compDir = sign(p) * (abs(p) * 0.75 + vec3(0.20, 0.30, 0.20));
+    vec3 normDir = (u_FlatNormal == 1) ? vec3(0.0, 1.0, 0.0) : (a_Aux * u_InvScale);
+    p += (compDir * 0.85 + normDir * 0.15) * u_Explode;
+  }
+
   // Спин колец Ring Ship (style 1): кольца — отдельные торы в XY-плоскости.
   // Каждое крепится к корпусу двумя короткими статическими пилонами (r<0.366),
   // а вращается только обод (r>=0.372) в своём z-срезе — крепления не рвутся.
   float k = 0.0;
   {
-    float rxy = length(position.xy);
+    float rxy = length(p.xy);
     // Порог 0.368..0.372: статические монтажные пилоны заканчиваются на
     // r=0.366 и остаются на месте, а тор кольца начинается с r=0.372 и
     // вращается целиком в своей плоскости.
     float radial = smoothstep(0.368, 0.372, rxy);
-    float z = position.z;
+    float z = p.z;
     float slab = max(step(-0.36, z) * step(z, -0.10),
                      max(step(0.14, z) * step(z, 0.31),
                          step(0.57, z) * step(z, 0.76)));
@@ -41,14 +49,14 @@ void main() {
   float ang = u_RingSpin * k;
   float ca = cos(ang);
   float sa = sin(ang);
-  vec4 wp = u_Model * vec4(position.x * ca - position.y * sa,
-                           position.x * sa + position.y * ca,
-                           position.z, 1.0);
+  vec4 wp = u_Model * vec4(p.x * ca - p.y * sa,
+                           p.x * sa + p.y * ca,
+                           p.z, 1.0);
   v_WorldPos = wp.xyz;
-  v_PartPos = position;
+  v_PartPos = p;
   // Скин сэмплируется в НЕКРУТЁНОЙ позиции: окраска приклеена к точке
   // материала — неон и окна едут вместе с кольцом, панели корпуса стоят.
-  vec4 wpSkin = u_Model * vec4(position, 1.0);
+  vec4 wpSkin = u_Model * vec4(p, 1.0);
   v_ObjPos = (u_ShipInv * wpSkin).xyz;
   v_UV = a_UV;
   vec3 n = (u_FlatNormal == 1) ? vec3(0.0, 1.0, 0.0)

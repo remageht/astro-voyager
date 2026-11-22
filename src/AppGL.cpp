@@ -10669,6 +10669,15 @@ void AppGL::renderMenuBackdrop(int width, int height, double time) {
   m_menuSkyShader->setUniform1i("u_AnimateDisk", m_menuBackground == 0 ? 1 : 0);
   m_menuSkyShader->setUniform1i("u_MotionMask", 3);
   m_menuSkyShader->setUniform1i("u_ScenicMode", m_menuBackground);
+  float dimFactor = 1.0f;
+  if (m_menuPage == 6) {
+    if (m_workshopBackdropMode == 1) {
+      dimFactor = 0.15f;  // Затемнение фона на 85%
+    } else if (m_workshopBackdropMode == 0) {
+      dimFactor = 0.02f;  // Тёмная студия
+    }
+  }
+  m_menuSkyShader->setUniform1f("u_DimFactor", dimFactor);
   glActiveTexture(GL_TEXTURE3);
   glBindTexture(GL_TEXTURE_2D, m_menuMotionMaskTex);
   glActiveTexture(GL_TEXTURE2);
@@ -12798,6 +12807,7 @@ void drawWorkshopTurntableGrid(Shader* shader, const glm::mat4& vp, const glm::v
     shader->setUniformMat4f("u_MVP", gridMvp);
     shader->setUniformMat4f("u_Model", gridModel);
     shader->setUniformMat4f("u_ShipInv", glm::inverse(gridModel));
+    shader->setUniform1f("u_Explode", 0.0f);
     shader->setUniform1i("u_TexOn", 0);
     shader->setUniform1i("u_EmissiveOn", 1);
     shader->setUniform3f("u_BaseColor", glm::vec3(0.12f, 0.35f, 0.55f));
@@ -12844,10 +12854,20 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
     if (m_workshopYaw >= 360.0f) m_workshopYaw -= 360.0f;
   }
 
+  if (m_workshopExplodeAnim) {
+    float cycle = 0.5f + 0.5f * std::sin(static_cast<float>(time) * 1.5f);
+    m_workshopExplode = cycle * 1.5f;
+  }
+
   glViewport(0, 0, width, height);
   glEnable(GL_DEPTH_TEST);
   glDepthMask(GL_TRUE);
-  glClear(GL_DEPTH_BUFFER_BIT);
+  if (m_workshopBackdropMode == 0) {
+    glClearColor(0.024f, 0.028f, 0.038f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  } else {
+    glClear(GL_DEPTH_BUFFER_BIT);
+  }
 
   float aspect = static_cast<float>(width) / static_cast<float>(height);
   glm::mat4 proj = glm::perspective(glm::radians(42.0f), aspect, 0.05f, 200.0f);
@@ -12938,6 +12958,7 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
       m_workshopShader->setUniformMat4f("u_MVP", mvp);
       m_workshopShader->setUniformMat4f("u_Model", modelMat);
       m_workshopShader->setUniformMat4f("u_ShipInv", glm::inverse(modelMat));
+      m_workshopShader->setUniform1f("u_Explode", m_workshopExplode);
 
       if (m_workshopRenderMode == 1) {
         // Clay / Studio
@@ -13155,6 +13176,8 @@ void AppGL::drawWorkshopPage(float colAreaH) {
       m_workshopPitch = 18.0f;
       m_workshopPan = glm::vec2(0.0f, 0.0f);
       m_workshopDist = entry.defaultDist > 0.0f ? entry.defaultDist : 5.0f;
+      m_workshopExplode = 0.0f;
+      m_workshopExplodeAnim = false;
       m_audio.playBlip();
     }
     ImGui::SameLine(0.0f, 6.0f);
@@ -13233,7 +13256,37 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // 5. Описание и лор
+    // 5. Фон и разнесённый вид
+    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ФОН И РАЗНЕСЁННЫЙ ВИД", "BACKDROP & EXPLODED VIEW"));
+    ImGui::Text("%s:", uiRu("Окружение", "Backdrop"));
+    if (ImGui::RadioButton(uiRu("Тёмная студия", "Dark Studio"), m_workshopBackdropMode == 0)) {
+      m_workshopBackdropMode = 0;
+      m_audio.playBlip();
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton(uiRu("Затемнение 85%", "Dimmed 85%"), m_workshopBackdropMode == 1)) {
+      m_workshopBackdropMode = 1;
+      m_audio.playBlip();
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton(uiRu("Космос", "Open Space"), m_workshopBackdropMode == 2)) {
+      m_workshopBackdropMode = 2;
+      m_audio.playBlip();
+    }
+
+    ImGui::SliderFloat(uiRu("Разнесение", "Explode Dist"), &m_workshopExplode, 0.0f, 2.0f, "%.2fx");
+    ImGui::SameLine();
+    const char* animText = m_workshopExplodeAnim ? uiRu("■ Стоп", "■ Stop") : uiRu("▶ Анимация", "▶ Anim");
+    if (ImGui::Button(animText, ImVec2(80.0f, 0.0f))) {
+      m_workshopExplodeAnim = !m_workshopExplodeAnim;
+      m_audio.playBlip();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 6. Описание и лор
     ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ОПИСАНИЕ И НАЗНАЧЕНИЕ", "MISSION ROLE & LORE"));
     ImGui::TextWrapped("%s", uiRu(entry.descRu, entry.descEn));
 
