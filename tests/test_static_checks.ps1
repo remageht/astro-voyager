@@ -857,7 +857,14 @@ Check 'ZettelGraph defines detective investigation cases' (($zettelH -match 'str
 Check 'ZettelGraph implements detective cases and telemetry evidence' (($zettelCpp -match 'kDetectiveCaseArsenyShuttles') -and ($zettelCpp -match 'kDetectiveCaseMiaContraband') -and ($zettelCpp -match 'initDetectiveCases') -and ($zettelCpp -match 'pollNewDetectiveEvents'))
 Check 'AppGL wires detective bridge radio barks and Thought Inspector evidence' (($appCpp -match 'detective_arseny_shuttles') -and ($appCpp -match 'detective_mia_contraband') -and ($appCpp -match 'EvidenceBox') -and ($appCpp -match 'DiscrepancyBox') -and ($appCpp -match 'CaseSolvedBox'))
 
+# --- Issue #212: Orbital Jumpgate integration into 3D workshop, dock sites, and hyper-transit ---
+Check 'jumpgate registered in workshop catalog' (($appCpp -match 'jumpgate') -and ($appCpp -match 'res/models/jumpgate\.obj'))
+Check 'jumpgate registered in dock sites and attitude calculation' (($sceneCpp -match 'dock-jumpgate') -and ($sceneCpp -match 'dock-jumpgate-sgra') -and ($appCpp -match 'dock-jumpgate'))
+Check 'jumpgate model loaded and rendered in scene' (($sceneCpp -match 's_jumpgateModel\.load\("res/models/jumpgate\.obj"\)') -and ($sceneCpp -match 's_jumpgateModel\.ready\(\)'))
+Check 'jumpgate hyper-transit interactive tab wired' (($appCpp -match 'TAB 12: JUMPGATE TRANSIT') -and ($appCpp -match 'ENGAGE HYPER-TRANSIT'))
+
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''
 Write-Output 'All checks passed.'
+
 

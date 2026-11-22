@@ -930,6 +930,7 @@ void SceneManager::updateDockSites() {
     m_dockSites.push_back(DockSite{"dock-sail", "Starshot Solar Sail", "sol", Vec3(earthPos.x + 1.9, earthPos.y + 1.3, earthPos.z - 1.2), 3.5f});
     m_dockSites.push_back(DockSite{"dock-lander", "Artemis Lunar Lander", "sol", Vec3(moonPos.x + 0.4, moonPos.y + 0.3, moonPos.z + 0.5), 3.0f});
     m_dockSites.push_back(DockSite{"dock-rover", "Perseverance Mars Rover", "sol", Vec3(marsPos.x + 0.5, marsPos.y + 0.3, marsPos.z + 0.4), 3.0f});
+    m_dockSites.push_back(DockSite{"dock-jumpgate", "Interstellar Jumpgate (Hypergate Relay)", "sol", Vec3(earthPos.x + 2.5, earthPos.y + 1.2, earthPos.z + 2.8), 6.5f});
   } else if (m_currentStation->id == "m13") {
     m_dockSites.push_back(DockSite{"dock-m13", "Cluster Station Zenith", "m13", Vec3(0.0, 2.0, 14.0), 5.0f});
   } else if (m_currentStation->id == "sgra") {
@@ -937,6 +938,7 @@ void SceneManager::updateDockSites() {
     m_dockSites.push_back(DockSite{"dock-warp-bubble", "Alcubierre Warp Bubble", "sgra", Vec3(0.0, 6.0, 22.0), 5.0f});
     m_dockSites.push_back(DockSite{"dock-warp-tunnel", "Warp Tunnel (tamminen)", "sgra", Vec3(0.0, 6.0, 26.0), 5.0f});
     m_dockSites.push_back(DockSite{"dock-warp-drive-vis", "Warp Drive Visualisation", "sgra", Vec3(0.0, 6.0, 30.0), 5.0f});
+    m_dockSites.push_back(DockSite{"dock-jumpgate-sgra", "Supermassive Jumpgate (Galactic Core Relay)", "sgra", Vec3(0.0, 7.5, 34.0), 6.5f});
   } else if (m_currentStation->id == "ori") {
     m_dockSites.push_back(DockSite{"dock-ori", "Rigel Orbital Dock", "ori", Vec3(3.0, 1.0, 15.0), 5.0f});
   } else if (m_currentStation->id == "gw170817") {
@@ -2696,6 +2698,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_warpBubbleModel;
           static ObjModel s_warpTunnelModel;
           static ObjModel s_warpDriveVisModel;
+          static ObjModel s_jumpgateModel;
           // One row per colony structure type: the plan key, how large it reads
           // on a planet as a fraction of planet radius, and the length our
           // generators normalized that mesh to. Loading, lookup and sizing all
@@ -2789,6 +2792,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
 
             s_warpDriveVisModel.load("res/models/warp_drive_vis.obj");
             s_warpDriveVisModel.loadTextures("res/models/warp_drive_vis");
+
+            s_jumpgateModel.load("res/models/jumpgate.obj");
+            s_jumpgateModel.loadTextures("res/models/jumpgate");
 
             for (int i = 0; i < kColonyAssetCount; ++i) {
               const std::string base =
@@ -2926,6 +2932,20 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               customMetal = 0.20f;
               customRough = 0.60f;
               emOverride = glm::vec3(0.05f, 0.2f, 0.6f);
+            } else if ((dock.id == "dock-jumpgate" || dock.id == "dock-jumpgate-sgra") && s_jumpgateModel.ready()) {
+              siteModel = &s_jumpgateModel;
+              stScale = 0.28f;
+              dockRingScale = 0.45f;
+              const float effScale = stScale * lodScale;
+              // Orbital Quantum Transit Hypergate: subtle stabilizing spin and pitch
+              stModel = glm::translate(glm::mat4(1.0f), stPos) *
+                        glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                        glm::rotate(glm::mat4(1.0f), 0.35f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), glm::vec3(effScale));
+              customMetal = 0.85f;
+              customRough = 0.30f;
+              const float gatePulse = 0.5f + 0.5f * std::sin(time * 3.5f);
+              emOverride = glm::vec3(0.0f, 0.65f, 1.0f) * gatePulse;
             } else if (dock.id == "dock-webb" && s_telescopeModel.ready()) {
               // 2.2-unit model * 0.135 = 0.297 world units. The observatory
               // stays below the 0.38 ISS and the 0.35 warp core, but above

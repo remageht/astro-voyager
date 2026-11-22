@@ -79,17 +79,27 @@ void main() {
     vec3 earthDir = normalize(vec3(-0.2, -0.9, 0.3));
     float earthNoL = max(dot(n, earthDir), 0.0);
 
-    vec3 texCol = textureLod(u_Albedo, v_UV, 0.0).rgb;
-    vec3 albDecoded = pow(max(texCol, vec3(0.0)), vec3(1.5));
-    vec3 baseAlb = mix(vec3(0.36), albDecoded, 0.72);
+    vec3 baseAlb;
+    float rough;
+    if (u_TexOn == 1) {
+      vec3 texCol = textureLod(u_Albedo, v_UV, 0.0).rgb;
+      vec3 albDecoded = pow(max(texCol, vec3(0.0)), vec3(1.5));
+      baseAlb = mix(vec3(0.36), albDecoded, 0.72);
+      rough = clamp(textureLod(u_RoughTex, v_UV, 0.0).r, 0.05, 1.0);
+    } else {
+      baseAlb = pow(max(u_BaseColor, vec3(0.0)), vec3(1.2));
+      rough = clamp(u_Rough, 0.05, 1.0);
+    }
 
-    vec3 sunLight = vec3(1.0, 0.96, 0.90) * (0.225 * NoL);
-    vec3 earthBounce = vec3(0.22, 0.55, 0.95) * (0.11 * earthNoL);
-    vec3 ambientGI = vec3(0.09, 0.09, 0.11);
+    vec3 sunLight = (u_TexOn == 1) ? vec3(1.0, 0.96, 0.90) * (0.225 * NoL)
+                                    : vec3(1.0, 0.96, 0.90) * (0.80 * NoL);
+    vec3 earthBounce = (u_TexOn == 1) ? vec3(0.22, 0.55, 0.95) * (0.11 * earthNoL)
+                                      : vec3(0.40, 0.65, 0.90) * (0.30 * earthNoL);
+    vec3 ambientGI = (u_TexOn == 1) ? vec3(0.09, 0.09, 0.11)
+                                    : vec3(0.28, 0.30, 0.34);
 
     vec3 H = normalize(L + V);
     float NoH = max(dot(n, H), 0.0);
-    float rough = clamp(textureLod(u_RoughTex, v_UV, 0.0).r, 0.05, 1.0);
     float specPower = mix(50.0, 8.0, rough);
     float spec = pow(NoH, specPower) * (0.35 * (1.0 - rough * 0.7));
 

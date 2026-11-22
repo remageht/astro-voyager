@@ -12725,6 +12725,11 @@ static const WorkshopAssetEntry kWorkshopCatalog[] = {
    "Аналитический симулятор силовых линий гравитационного градиента для калибровки привода перед прыжком.",
    "Analytical gravitational tensor field simulator used by flight computers to balance warp bubble symmetry."},
 
+  {"jumpgate", "Орбитальные гиперврата перехода", "Orbital Hypergate / Warp Jumpgate", 2,
+   "res/models/jumpgate.obj", "res/models/jumpgate", nullptr, 12.0f,
+   "Орбитальные врата гиперпространственного перехода диаметром 9.2м с 8 квантовыми эмиттерами, стыковочными шлюзами и навигационными маяками. Открывают стабильный транзитный коридор сквозь релятивистский космос.",
+   "Orbital hypergate megastructure (9.2m ring, 7.48m clear aperture) featuring 8 quantum plasma emitters, docking locks, and navigation beacons for zero-inertia interstellar transit."},
+
   // === 3: Небесные тела и астероиды (Celestial 3 assets) ===
   {"asteroid_1", "Астероид Тип-С (хондрит)", "Asteroid Type-C (Chondrite)", 3,
    "res/models/asteroid_1.obj", nullptr, nullptr, 4.5f,
@@ -14792,7 +14797,8 @@ int AppGL::captureWorkshopCheck(const std::string& outDir) {
   renderAndSave(3, 0, "workshop_dreadnought_pbr.png");
   renderAndSave(0, 1, "workshop_dart_clay.png");
   renderAndSave(13, 0, "workshop_colony_park_pbr.png");
-  renderAndSave(50, 0, "workshop_warp_core_pbr.png");
+  renderAndSave(51, 0, "workshop_warp_core_pbr.png");
+  renderAndSave(55, 0, "workshop_jumpgate_pbr.png");
 
   app.m_menuPage = 0;
   for (int frame = 0; frame < 6; ++frame) {
@@ -17326,6 +17332,10 @@ bool AppGL::getDockPortTransform(const std::string& dockId, float time,
     rotM = ownUpToY *
            glm::rotate(glm::mat4(1.0f), 0.03f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
            glm::rotate(glm::mat4(1.0f), 0.5f, glm::vec3(1.0f, 0.0f, 0.0f));
+  } else if (targetDock->id == "dock-jumpgate" || targetDock->id == "dock-jumpgate-sgra") {
+    portDistance = 0.55f;
+    rotM = glm::rotate(glm::mat4(1.0f), 0.05f * time, glm::vec3(0.0f, 0.0f, 1.0f)) *
+           glm::rotate(glm::mat4(1.0f), 0.35f, glm::vec3(0.0f, 1.0f, 0.0f));
   } else if (targetDock->id == "dock-sgra" || targetDock->id == "dock-m13") {
     portDistance = 0.42f;
     rotM = glm::rotate(glm::mat4(1.0f), 0.12f * time, glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -18312,6 +18322,37 @@ void AppGL::drawShipyard() {
           ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "%s",
                              uiRu("Статус: парус натянут, тяга без расхода топлива.",
                                   "Status: sail tensioned, thrust with zero propellant."));
+          ImGui::EndTabItem();
+        }
+      }
+
+      // === TAB 12: JUMPGATE TRANSIT ===
+      if (m_ship.dockedStationId == "dock-jumpgate" || m_dockHintId == "dock-jumpgate" ||
+          m_ship.dockedStationId == "dock-jumpgate-sgra" || m_dockHintId == "dock-jumpgate-sgra") {
+        if (ImGui::BeginTabItem(uiRu("Гиперврата", "Jumpgate"))) {
+          ImGui::TextColored(ImVec4(0.2f, 0.85f, 1.0f, 1.0f), "%s",
+                             uiRu("Орбитальные квантовые врата перехода (Jumpgate):",
+                                  "Orbital Quantum Transit Hypergate:"));
+          ImGui::Separator();
+          ImGui::BulletText("%s: 9.20 м", uiRu("Диаметр внешнего кольца", "Outer ring diameter"));
+          ImGui::BulletText("%s: 7.48 м", uiRu("Пролетная апертура", "Clear aperture"));
+          ImGui::BulletText("%s: 8 %s", uiRu("Квантовые эмиттеры", "Quantum emitters"),
+                            uiRu("синхронизированных плазменных генератора", "synchronized plasma generators"));
+          ImGui::BulletText("%s: %s", uiRu("Транзитный статус", "Transit status"),
+                            uiRu("Горизонт событий стабилизирован, червоточина активна",
+                                 "Event horizon stabilized, Einstein-Rosen bridge active"));
+          ImGui::Spacing();
+          const auto* curSt = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+          const bool atSol = (curSt && curSt->id == "sol");
+          const char* jumpBtnText = atSol ?
+              uiRu("⚡ СОВЕРШИТЬ ГИПЕРПЕРЕХОД -> SGR A*", "⚡ ENGAGE HYPER-TRANSIT -> SGR A*") :
+              uiRu("⚡ СОВЕРШИТЬ ГИПЕРПЕРЕХОД -> SOL", "⚡ ENGAGE HYPER-TRANSIT -> SOL");
+          if (ImGui::Button(jumpBtnText, ImVec2(-1.0f, 32.0f))) {
+            const std::string destId = atSol ? "sgra" : "sol";
+            undockFromStation();
+            teleportToStation(destId);
+            m_audio.playBlip();
+          }
           ImGui::EndTabItem();
         }
       }
