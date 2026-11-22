@@ -43,6 +43,7 @@ uniform vec3 u_AccentTint;        // v3.11.0: оттенок акцентной 
 uniform vec3 u_EmissiveTint;      // v3.11.0: оттенок плазменного свечения (1,1,1 по умолчанию)
 uniform float u_StationPbr;       // 1 = orbital station PBR lighting
 uniform float u_HullWear;         // v4.0.0: -1 off, 0 = restored, 1 = battered OBJ hull
+uniform int u_RenderMode;         // 0=PBR, 1=Clay, 2=Normals RGB, 3=Wireframe
 
 const float kPi = 3.14159265;
 
@@ -74,6 +75,10 @@ void main() {
       float scale = inversesqrt(max(dot(T, T), dot(B, B)) + 1e-12);
       n = normalize(T * (scale * nmap.x) + B * (scale * nmap.y) + n * nmap.z);
     }
+    if (u_RenderMode == 2) {
+      FragColor = vec4(n * 0.5 + 0.5, 1.0);
+      return;
+    }
     vec3 L = normalize(u_KeyDir);
     float NoL = max(dot(n, L), 0.0);
     vec3 earthDir = normalize(vec3(-0.2, -0.9, 0.3));
@@ -84,10 +89,10 @@ void main() {
     if (u_TexOn == 1) {
       vec3 texCol = textureLod(u_Albedo, v_UV, 0.0).rgb;
       vec3 albDecoded = pow(max(texCol, vec3(0.0)), vec3(1.5));
-      baseAlb = mix(vec3(0.36), albDecoded, 0.72);
+      baseAlb = mix(vec3(0.36), albDecoded, 0.72) * u_HullTint;
       rough = clamp(textureLod(u_RoughTex, v_UV, 0.0).r, 0.05, 1.0);
     } else {
-      baseAlb = pow(max(u_BaseColor, vec3(0.0)), vec3(1.2));
+      baseAlb = pow(max(u_BaseColor, vec3(0.0)), vec3(1.2)) * u_HullTint;
       rough = clamp(u_Rough, 0.05, 1.0);
     }
 
@@ -221,6 +226,11 @@ void main() {
                   clamp(rough + 0.10 * w, 0.05, 1.0), w);
       metal = mix(clamp(metal + 0.06, 0.0, 1.0), metal, w);
     }
+  }
+
+  if (u_RenderMode == 2) {
+    FragColor = vec4(n * 0.5 + 0.5, 1.0);
+    return;
   }
 
   vec3 f0 = mix(vec3(0.04), albedo, metal);
