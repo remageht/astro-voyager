@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased (после v5.0.5)
+## 5.1.11 (2026-11-22)
 
 ## What's new / Что нового
 
