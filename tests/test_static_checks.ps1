@@ -789,7 +789,7 @@ Check 'colony capture harness' (((Read-File 'src/main.cpp') -match '--capture-co
 Check 'colony stage and rp saved' (((Read-File 'src/SaveGame.cpp') -match 'colonyStages') -and ((Read-File 'src/SaveGame.cpp') -match 'researchPoints') -and ((Read-File 'tests/test_save.cpp') -match 'colonyStages'))
 $ciStray = (((Read-File '.github/workflows/build.yml') -split "`n") | Where-Object { $_ -match '^[^\s#]' -and $_ -notmatch '^(name|on|permissions|jobs|env|concurrency|defaults):' }).Count
 Check 'ci workflow yaml indent' ($ciStray -eq 0)
-Check 'v5.2.0 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
+Check 'v5.1.15 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
 
 # --- Colony 2.0 perks wired into the simulation (not panel text only) ---
 Check 'colony perk warp recharge in sim' ((((Read-File 'src/WarpJump.cpp') -match 'dur\(JumpPhase::Charge\)') -and ($appCpp -match 'colonyWarpRechargeBoost\(m_colonyStages\)')) -and ((($appCpp -match '3\.0f \* warpRechargeScale\(\)') -and ($appCpp -match '2\.0f \* warpRechargeScale\(\)')) -and ($appCpp -match 'm_jump\.dur\(JumpPhase::Cooldown\)')))
@@ -962,6 +962,15 @@ if ($hasModelPack) {
 }
 Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(deltaTime\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match '3D-ЗАСТАВКА \(ИНТРО\)'))
 Check 'workshop catalog registers bridge_interior and station_megastructure' (($appCpp -match '"bridge_interior"') -and ($appCpp -match '"station_megastructure"'))
+
+# --- Issue #236: 3D Interstellar Ark Starship, Rotating Centrifuge Habitat & Deep Space Flagship Suite (v5.1.15) ---
+Check 'workshop catalog registers ark_ship and interstellar ark entry' (($appCpp -match '"ark_ship"') -and ($appCpp -match 'Interstellar Ark'))
+if ($hasModelPack) {
+    Check 'ark ship 3D mesh exceeds 5k polygons' ((Count-ObjFaces 'res/models/ark_ship.obj') -ge 5000)
+    Check 'ark ship 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/ark_ship.obj')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_emissive.bmp')))
+} else {
+    Write-Output 'SKIP: ark ship mesh and PBR map checks (asset pack not fetched for this ref)'
+}
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

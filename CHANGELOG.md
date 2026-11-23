@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 5.1.15 (2026-11-23)
+
+## What's new / Что нового
+
+- EN: Deep Space Interstellar Ark Starship & Centrifuge Habitat Suite:
+  - Authored high-fidelity 3D model `res/models/ark_ship.obj` (124,512 triangles) and upgraded `voyager.obj` with dual rotating centrifugal gravity rings, modular spine hull with cryostasis & hydroponics, high-gain parabolic communications dish, and observation cupola.
+  - Complete 24-bit flip-safe PBR texture suite (1024x1024 BMPs): albedo, tangent normal, roughness, metallic, and cyan/amber starlight emissive channels.
+  - Registered in 3D Workshop under Fleet category (`ark_ship` and `voyager`) with real-time centrifuge rotation and telemetry.
+  - Stabilized multi-threaded CI audio tests and guarded intro model checks behind `$hasModelPack` (Fixes #234, #236).
+- RU: Межзвёздный Корабль Поколений (Колониальный Ковчег) и центрифуга обитания:
+  - Создана высокодетализированная 3D-модель `res/models/ark_ship.obj` (124 512 полигонов) и обновлён флагман `voyager.obj` с двумя вращающимися гравитационными кольцами-центрифугами, модульным фюзеляжем криосна и гидропоники, параболической антенной дальней связи и смотровым куполом.
+  - Полный комплект 24-битных PBR-текстур (1024x1024 BMP): альбедо, нормали, шероховатость, металличность и светящиеся лазурные/янтарные иллюминаторы.
+  - Зарегистрирован в каталоге 3D Мастерской (Категория 0: Флот) как `ark_ship` и обновлённый `voyager` с анимацией вращения колец и подробной телеметрией.
+  - Стабилизированы многопоточные CI-тесты аудио и защищены проверки моделей через `$hasModelPack` (Fixes #234, #236).
+
 ## 5.2.0 (2026-11-22)
 
 ## What's new / Что нового
