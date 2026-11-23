@@ -1,4 +1,4 @@
-"""
+r"""
 build_megastructure_and_bridge.py
 ==================================
 Procedural generation of:
@@ -14,7 +14,9 @@ import os
 import sys
 import math
 import struct
+import numpy as np
 import bpy
+import bmesh
 from mathutils import Vector, Matrix
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,6 +24,16 @@ MODELS_DIR = os.path.join(ROOT, "res", "models")
 SCREENS_DIR = os.path.join(ROOT, "docs", "screens")
 os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(SCREENS_DIR, exist_ok=True)
+
+GEN_SCRIPTS = os.path.join(os.path.dirname(ROOT), "astro-voyager-generators", "scripts")
+if os.path.isdir(GEN_SCRIPTS):
+    sys.path.insert(0, GEN_SCRIPTS)
+
+try:
+    import scifi_detailing_toolkit as sdt
+    HAS_SDT = True
+except ImportError:
+    HAS_SDT = False
 
 # =========================================================================
 # BMP 24-bit Writer Helper
@@ -57,7 +69,7 @@ def write_bmp24(filepath, width, height, rgb_buffer):
     data = bytearray(image_size)
     
     for y in range(height):
-        src_row = (height - 1 - y) * width * 3
+        src_row = y * width * 3
         dst_row = y * stride
         for x in range(width):
             src_idx = src_row + x * 3
@@ -79,126 +91,162 @@ def write_bmp24(filepath, width, height, rgb_buffer):
 # =========================================================================
 # 1. GENERATE PROCEDURAL PBR TEXTURES FOR MEGASTRUCTURE
 # =========================================================================
-def generate_megastructure_textures(size=1024):
-    print(f"[TEXTURES] Generating Megastructure PBR textures ({size}x{size})...")
-    albedo = bytearray(size * size * 3)
-    normal = bytearray(size * size * 3)
-    rough = bytearray(size * size * 3)
-    metal = bytearray(size * size * 3)
-    emissive = bytearray(size * size * 3)
+def generate_megastructure_textures(size=2048):
+    print(f"[TEXTURES] Generating Megastructure PBR textures ({size}x{size}) with NumPy...")
+    half = size // 2
 
-    for y in range(size):
-        v = y / size
-        for x in range(size):
-            u = x / size
-            idx = (y * size + x) * 3
+    albedo = np.full((size, size, 3), 195, dtype=np.uint8)
+    normal = np.full((size, size, 3), [128, 128, 255], dtype=np.uint8)
+    rough = np.full((size, size, 3), 110, dtype=np.uint8)
+    metal = np.full((size, size, 3), 200, dtype=np.uint8)
+    emissive = np.zeros((size, size, 3), dtype=np.uint8)
 
-            # Default baseline
-            r, g, b = 180, 190, 205      # Titanium alloy
-            nx, ny, nz = 128, 128, 255   # Flat normal
-            ro = 110                     # Semi-matte
-            me = 210                     # High metallic
-            er, eg, eb = 0, 0, 0         # No emission
+    # Global subtle panel seams (every 64 px)
+    grid_mask_x = (np.arange(size) % 64) < 2
+    grid_mask_y = (np.arange(size) % 64) < 2
+    grid_2d = grid_mask_x[None, :] | grid_mask_y[:, None]
+    albedo[grid_2d] = (albedo[grid_2d] * 0.72).astype(np.uint8)
+    normal[grid_2d, 0] = 118
+    normal[grid_2d, 1] = 118
+    rough[grid_2d] = 160
 
-            # Grid paneling effect across all quadrants
-            grid_u = (u * 32.0) % 1.0
-            grid_v = (v * 32.0) % 1.0
-            is_panel_seam = (grid_u < 0.05 or grid_v < 0.05)
-            if is_panel_seam:
-                r, g, b = int(r * 0.5), int(g * 0.5), int(b * 0.5)
-                nx = 110 if grid_u < 0.05 else 128
-                ny = 110 if grid_v < 0.05 else 128
-                ro = 180
+    # -------------------------------------------------------------------------
+    # Q1 (top-left: x < half, y >= half): Core Hub, Spire & Antennas
+    # -------------------------------------------------------------------------
+    q1_x = slice(0, half)
+    q1_y = slice(half, size)
+    albedo[q1_y, q1_x] = [170, 178, 188]
+    metal[q1_y, q1_x] = 220
+    rough[q1_y, q1_x] = 95
 
-            # Quadrant layout:
-            # Q1 (u < 0.5, v >= 0.5): Spire & Core Hub
-            if u < 0.5 and v >= 0.5:
-                # Vertical cooling vanes and dark carbon composite band
-                if ((u * 64.0) % 1.0) < 0.2:
-                    r, g, b = 50, 58, 68
-                    me = 240
-                    ro = 90
-                # Cyan status beacons and core plasma glow
-                if 0.20 < u < 0.30 and 0.70 < v < 0.80:
-                    er, eg, eb = 0, 220, 255 # Bright cyan
-                    r, g, b = 200, 245, 255
+    # Vertical cooling vanes on reactor housing
+    vane_mask = (np.arange(half) % 32) < 6
+    albedo[half:size, 0:half][:, vane_mask] = [45, 52, 62]
+    metal[half:size, 0:half][:, vane_mask] = 240
+    rough[half:size, 0:half][:, vane_mask] = 80
 
-            # Q2 (u >= 0.5, v >= 0.5): Habitation Rings
-            elif u >= 0.5 and v >= 0.5:
-                # Bands of lit observation windows (warm incandescent and lab cyan)
-                win_strip = int(v * 128) % 4
-                win_col = int(u * 128) % 3
-                if win_strip == 1 and win_col != 0:
-                    # Alternating warm golden and soft cyan windows
-                    if (int(u * 64) % 2) == 0:
-                        er, eg, eb = 255, 225, 150 # Warm golden
-                        r, g, b = 255, 240, 180
-                    else:
-                        er, eg, eb = 60, 210, 255  # Cyan lab
-                        r, g, b = 160, 230, 255
-                    ro = 30
-                    me = 40
-                elif win_strip == 3:
-                    # Hydroponic green bay glow
-                    er, eg, eb = 40, 220, 90
-                    r, g, b = 100, 255, 140
-                    ro = 40
-                    me = 30
+    # Cyan reactor plasma containment band
+    rx1, rx2 = int(half * 0.35), int(half * 0.65)
+    ry1, ry2 = half + int(half * 0.20), half + int(half * 0.32)
+    albedo[ry1:ry2, rx1:rx2] = [180, 240, 255]
+    emissive[ry1:ry2, rx1:rx2] = [0, 220, 255]
+    rough[ry1:ry2, rx1:rx2] = 20
+    metal[ry1:ry2, rx1:rx2] = 30
 
-            # Q3 (u < 0.5, v < 0.5): Trusses & Spokes
-            elif u < 0.5 and v < 0.5:
-                # High-contrast structural graphite and hazard stripes
-                r, g, b = 80, 90, 105
-                me = 220
-                ro = 130
-                # Yellow-black hazard warning strips
-                diag = int((u + v) * 64) % 4
-                if 0.15 < u < 0.35 and 0.15 < v < 0.35:
-                    if diag < 2:
-                        r, g, b = 230, 180, 20
-                    else:
-                        r, g, b = 25, 25, 30
-                    ro = 160
-                    me = 80
+    # -------------------------------------------------------------------------
+    # Q2 (top-right: x >= half, y >= half): Habitation Rings
+    # Tubular unwrap: u_norm in [0, 1] along circumference, v_norm in [0, 1] along tube
+    # -------------------------------------------------------------------------
+    # Base hull: Clean light titanium aerospace alloy
+    albedo[half:size, half:size] = [218, 224, 232]
+    metal[half:size, half:size] = 205
+    rough[half:size, half:size] = 100
 
-            # Q4 (u >= 0.5, v < 0.5): Solar Arrays & Docking Hangars
-            else:
-                # Deep blue silicon photovoltaics
-                solar_grid_x = int(u * 64) % 2
-                solar_grid_y = int(v * 64) % 2
-                r, g, b = 18, 38, 85
-                me = 190
-                ro = 45
-                if solar_grid_x == 0 or solar_grid_y == 0:
-                    r, g, b = 180, 180, 200 # Silver busbar line
-                    ro = 90
-                # Docking approach neon guidance beacons
-                if 0.70 < u < 0.80 and 0.15 < v < 0.25:
-                    er, eg, eb = 255, 60, 40 # Red warning beacons
-                    r, g, b = 255, 120, 100
+    # Repeating modular bays along circumference (32 bays)
+    bay_x = (np.arange(half) % (half // 32)) < 3
+    albedo[half:size, half:size][:, bay_x] = [160, 170, 182]
+    normal[half:size, half:size][:, bay_x, 0] = 110
+    rough[half:size, half:size][:, bay_x] = 150
 
-            # Fill buffers
-            albedo[idx] = max(0, min(255, r))
-            albedo[idx + 1] = max(0, min(255, g))
-            albedo[idx + 2] = max(0, min(255, b))
+    # 1. Outer Whipple Shield Armor Belt at outer equator (v_norm = 0.00..0.08 and 0.92..1.00)
+    outer_1 = half
+    outer_2 = half + int(half * 0.08)
+    outer_3 = half + int(half * 0.92)
+    outer_4 = size
+    albedo[outer_1:outer_2, half:size] = [118, 128, 140]
+    metal[outer_1:outer_2, half:size] = 230
+    rough[outer_1:outer_2, half:size] = 85
+    albedo[outer_3:outer_4, half:size] = [118, 128, 140]
+    metal[outer_3:outer_4, half:size] = 230
+    rough[outer_3:outer_4, half:size] = 85
 
-            normal[idx] = max(0, min(255, nx))
-            normal[idx + 1] = max(0, min(255, ny))
-            normal[idx + 2] = max(0, min(255, nz))
+    # Strobe beacons along outer Whipple belt
+    strobe_x = (np.arange(half) % (half // 16)) == 0
+    albedo[outer_1:outer_2, half:size][:, strobe_x] = [255, 255, 255]
+    emissive[outer_1:outer_2, half:size][:, strobe_x] = [255, 255, 255]
+    albedo[outer_3:outer_4, half:size][:, strobe_x] = [255, 255, 255]
+    emissive[outer_3:outer_4, half:size][:, strobe_x] = [255, 255, 255]
 
-            rough[idx] = ro; rough[idx + 1] = ro; rough[idx + 2] = ro
-            metal[idx] = me; metal[idx + 1] = me; metal[idx + 2] = me
+    # 2. Dorsal Observation Promenade (Windows at v_norm = 0.20..0.30, around phi = pi/2)
+    w_top_1 = half + int(half * 0.20)
+    w_top_2 = half + int(half * 0.30)
+    win_cell_dorsal = (np.arange(half) % 16) >= 4
+    for wy in range(w_top_1, w_top_2):
+        # Warm golden cabin glow
+        albedo[wy, half:size][win_cell_dorsal] = [255, 238, 180]
+        emissive[wy, half:size][win_cell_dorsal] = [255, 225, 140]
+        rough[wy, half:size][win_cell_dorsal] = 20
+        metal[wy, half:size][win_cell_dorsal] = 20
 
-            emissive[idx] = er
-            emissive[idx + 1] = eg
-            emissive[idx + 2] = eb
+    # 3. Inner Service & Docking Collar (at v_norm = 0.46..0.54, facing core hub)
+    inner_1 = half + int(half * 0.46)
+    inner_2 = half + int(half * 0.54)
+    albedo[inner_1:inner_2, half:size] = [105, 112, 122]
+    metal[inner_1:inner_2, half:size] = 220
+    rough[inner_1:inner_2, half:size] = 110
 
+    # 4. Ventral Observation & Science Labs Promenade (Windows at v_norm = 0.70..0.80, around phi = 3pi/2)
+    w_bot_1 = half + int(half * 0.70)
+    w_bot_2 = half + int(half * 0.80)
+    win_cell_ventral = (np.arange(half) % 16) >= 4
+    for wy in range(w_bot_1, w_bot_2):
+        # Cool cyan research laboratory glow
+        albedo[wy, half:size][win_cell_ventral] = [190, 240, 255]
+        emissive[wy, half:size][win_cell_ventral] = [100, 220, 255]
+        rough[wy, half:size][win_cell_ventral] = 20
+        metal[wy, half:size][win_cell_ventral] = 20
+
+    # -------------------------------------------------------------------------
+    # Q3 (bottom-left: x < half, y < half): Trusses, Spokes & APAS Docking Ports
+    # -------------------------------------------------------------------------
+    albedo[0:half, 0:half] = [82, 88, 98]
+    metal[0:half, 0:half] = 190
+    rough[0:half, 0:half] = 130
+
+    # Diagonal hazard chevron strips for docking slipway guides
+    diag_grid = ((np.arange(half)[:, None] + np.arange(half)[None, :]) // 16) % 2
+    haz_mask = (diag_grid == 0)
+    haz_y1, haz_y2 = int(half * 0.15), int(half * 0.35)
+    haz_x1, haz_x2 = int(half * 0.15), int(half * 0.35)
+    albedo[haz_y1:haz_y2, haz_x1:haz_x2][haz_mask[haz_y1:haz_y2, haz_x1:haz_x2]] = [240, 195, 25]
+    albedo[haz_y1:haz_y2, haz_x1:haz_x2][~haz_mask[haz_y1:haz_y2, haz_x1:haz_x2]] = [28, 30, 36]
+    rough[haz_y1:haz_y2, haz_x1:haz_x2] = 150
+    metal[haz_y1:haz_y2, haz_x1:haz_x2] = 70
+
+    # -------------------------------------------------------------------------
+    # Q4 (bottom-right: x >= half, y < half): Solar Arrays & Corrugated Radiators
+    # -------------------------------------------------------------------------
+    # Upper half of Q4: Solar Photovoltaics (navy silicon)
+    sol_y1, sol_y2 = half // 2, half
+    sol_x1, sol_x2 = half, size
+    albedo[sol_y1:sol_y2, sol_x1:sol_x2] = [18, 35, 80]
+    metal[sol_y1:sol_y2, sol_x1:sol_x2] = 175
+    rough[sol_y1:sol_y2, sol_x1:sol_x2] = 40
+    # Silver busbars
+    bus_x = (np.arange(half) % 32) < 2
+    bus_y = (np.arange(half // 2) % 16) < 2
+    bus_2d = bus_x[None, :] | bus_y[:, None]
+    albedo[sol_y1:sol_y2, sol_x1:sol_x2][bus_2d] = [210, 218, 230]
+    metal[sol_y1:sol_y2, sol_x1:sol_x2][bus_2d] = 230
+    rough[sol_y1:sol_y2, sol_x1:sol_x2][bus_2d] = 80
+
+    # Lower half of Q4: Corrugated Thermal Heat Radiators (reflective silver/white)
+    rad_y1, rad_y2 = 0, half // 2
+    albedo[rad_y1:rad_y2, sol_x1:sol_x2] = [238, 242, 248]
+    metal[rad_y1:rad_y2, sol_x1:sol_x2] = 240
+    rough[rad_y1:rad_y2, sol_x1:sol_x2] = 55
+    # Corrugated vertical normal grooves
+    vane_phase = np.sin(np.arange(half) * (2.0 * np.pi / 16.0))
+    vane_nx = np.clip(128 + vane_phase * 65, 0, 255).astype(np.uint8)
+    normal[rad_y1:rad_y2, sol_x1:sol_x2, 0] = vane_nx[None, :]
+
+    # Save all 5 BMPs
     prefix = os.path.join(MODELS_DIR, "station_megastructure")
-    write_bmp24(f"{prefix}_albedo.bmp", size, size, albedo)
-    write_bmp24(f"{prefix}_normal.bmp", size, size, normal)
-    write_bmp24(f"{prefix}_rough.bmp", size, size, rough)
-    write_bmp24(f"{prefix}_metal.bmp", size, size, metal)
-    write_bmp24(f"{prefix}_emissive.bmp", size, size, emissive)
+    write_bmp24(f"{prefix}_albedo.bmp", size, size, albedo.tobytes())
+    write_bmp24(f"{prefix}_normal.bmp", size, size, normal.tobytes())
+    write_bmp24(f"{prefix}_rough.bmp", size, size, rough.tobytes())
+    write_bmp24(f"{prefix}_metal.bmp", size, size, metal.tobytes())
+    write_bmp24(f"{prefix}_emissive.bmp", size, size, emissive.tobytes())
 
 
 # =========================================================================
@@ -328,125 +376,272 @@ def generate_bridge_interior_textures(size=1024):
 # =========================================================================
 # 3. BUILD 3D MESH: ORBITAL MEGASTRUCTURE
 # =========================================================================
+def add_torus_tubular_uv(bm, major_r, minor_r, major_segs, minor_segs,
+                         u_range=(0.5, 1.0), v_range=(0.5, 1.0), z_offset=0.0):
+    """Creates a high-poly torus in bmesh with continuous, non-overlapping tubular UV mapping."""
+    uv_layer = bm.loops.layers.uv.verify()
+    u_min, u_max = u_range
+    v_min, v_max = v_range
+
+    verts = []
+    for i in range(major_segs):
+        theta = 2.0 * math.pi * i / major_segs
+        cos_t = math.cos(theta)
+        sin_t = math.sin(theta)
+        ring = []
+        for j in range(minor_segs):
+            phi = 2.0 * math.pi * j / minor_segs
+            cos_p = math.cos(phi)
+            sin_p = math.sin(phi)
+            x = (major_r + minor_r * cos_p) * cos_t
+            y = (major_r + minor_r * cos_p) * sin_t
+            z = minor_r * sin_p + z_offset
+            v = bm.verts.new((x, y, z))
+            v.normal = Vector((cos_p * cos_t, cos_p * sin_t, sin_p)).normalized()
+            ring.append(v)
+        verts.append(ring)
+
+    bm.verts.ensure_lookup_table()
+
+    for i in range(major_segs):
+        i_next = (i + 1) % major_segs
+        u0 = u_min + (u_max - u_min) * (i / major_segs)
+        u1 = u_min + (u_max - u_min) * ((i + 1) / major_segs)
+        for j in range(minor_segs):
+            j_next = (j + 1) % minor_segs
+            v0 = v_min + (v_max - v_min) * (j / minor_segs)
+            v1 = v_min + (v_max - v_min) * ((j + 1) / minor_segs)
+
+            v_a = verts[i][j]
+            v_b = verts[i_next][j]
+            v_c = verts[i_next][j_next]
+            v_d = verts[i][j_next]
+
+            try:
+                face = bm.faces.new((v_a, v_b, v_c, v_d))
+                face.smooth = True
+                for loop in face.loops:
+                    if loop.vert == v_a:
+                        loop[uv_layer].uv = (u0, v0)
+                    elif loop.vert == v_b:
+                        loop[uv_layer].uv = (u1, v0)
+                    elif loop.vert == v_c:
+                        loop[uv_layer].uv = (u1, v1)
+                    elif loop.vert == v_d:
+                        loop[uv_layer].uv = (u0, v1)
+            except ValueError:
+                pass
+
+
 def build_megastructure_mesh():
-    print("[MESH] Building Orbital Megastructure 3D model...")
+    print("[MESH] Building Orbital Megastructure 3D model with AAA procedural detailing...")
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    parts = []
+    bm = bmesh.new()
 
-    # 1. Central Spire & Core Hub
-    # Spire needle (top)
-    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.8, radius2=0.08, depth=8.0, location=(0, 0, 6.0))
-    spire_top = bpy.context.active_object
-    spire_top.name = "SpireNeedle"
-    parts.append(spire_top)
+    # 1. Primary Habitation Torus Ring (radius 12.0, tube radius 1.15, 128x32 segments)
+    print("  Adding Primary Habitation Torus (128x32)...")
+    add_torus_tubular_uv(bm, major_r=12.0, minor_r=1.15, major_segs=128, minor_segs=32,
+                         u_range=(0.5, 1.0), v_range=(0.5, 1.0), z_offset=0.0)
 
-    # Core main cylinder
-    bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=2.4, depth=10.0, location=(0, 0, 0))
-    core_cyl = bpy.context.active_object
-    core_cyl.name = "CoreHub"
-    parts.append(core_cyl)
+    # 2. Secondary Counter-Rotating Habitation Ring (radius 7.2, tube radius 0.75, 96x24 segments)
+    print("  Adding Secondary Habitation Torus (96x24)...")
+    add_torus_tubular_uv(bm, major_r=7.2, minor_r=0.75, major_segs=96, minor_segs=24,
+                         u_range=(0.5, 1.0), v_range=(0.5, 1.0), z_offset=2.4)
 
-    # Communication dish arrays on spire
+    mesh = bpy.data.meshes.new("StationMegastructure_Mesh")
+    bm.to_mesh(mesh)
+    bm.free()
+
+    mega = bpy.data.objects.new("StationMegastructure", mesh)
+    bpy.context.collection.objects.link(mega)
+    bpy.context.view_layer.objects.active = mega
+
+    parts = [mega]
+
+    # 3. Central Core Hub & Spire (into Q1)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=2.6, depth=11.0, location=(0, 0, 0.5))
+    parts.append(bpy.context.active_object)
+
+    # Upper Command Cupola Ring
+    bpy.ops.mesh.primitive_torus_add(major_radius=2.9, minor_radius=0.35, major_segments=48, minor_segments=16,
+                                     location=(0, 0, 4.2))
+    parts.append(bpy.context.active_object)
+
+    # Upper Communication Spire & Needle
+    bpy.ops.mesh.primitive_cone_add(vertices=32, radius1=1.0, radius2=0.06, depth=9.0, location=(0, 0, 9.5))
+    parts.append(bpy.context.active_object)
+
+    # 4 Parabolic communications dishes on articulated booms
     for a in range(4):
-        angle = a * (math.pi / 2.0)
-        px = math.cos(angle) * 1.8
-        py = math.sin(angle) * 1.8
-        bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.6, depth=0.15, location=(px, py, 7.5),
-                                            rotation=(math.pi/3, 0, angle))
-        dish = bpy.context.active_object
-        parts.append(dish)
+        ang = a * (math.pi / 2.0)
+        px = math.cos(ang) * 2.2
+        py = math.sin(ang) * 2.2
+        bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.12, depth=1.6,
+                                            location=(px * 0.7, py * 0.7, 7.8),
+                                            rotation=(math.pi/4, 0, ang))
+        parts.append(bpy.context.active_object)
+        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.85, depth=0.22,
+                                            location=(px, py, 8.4),
+                                            rotation=(math.pi/3, 0, ang))
+        parts.append(bpy.context.active_object)
 
-    # 2. Primary Habitation Torus Ring (Stanford Torus scale)
-    # Outer ring radius = 12.0, tube radius = 0.95
-    bpy.ops.mesh.primitive_torus_add(major_radius=12.0, minor_radius=0.95,
-                                     major_segments=64, minor_segments=20,
-                                     location=(0, 0, 0))
-    outer_ring = bpy.context.active_object
-    outer_ring.name = "OuterHabitationRing"
-    parts.append(outer_ring)
-
-    # Secondary counter-rotating Habitation Ring
-    bpy.ops.mesh.primitive_torus_add(major_radius=7.0, minor_radius=0.65,
-                                     major_segments=48, minor_segments=16,
-                                     location=(0, 0, 1.8))
-    inner_ring = bpy.context.active_object
-    inner_ring.name = "InnerHabitationRing"
-    parts.append(inner_ring)
-
-    # 3. Six Major Spoke Struts connecting Core to Outer Ring
+    # 4. Six Major Structural Spokes connecting Core to Outer Ring
     for i in range(6):
         ang = i * (math.pi / 3.0)
         sx = math.cos(ang) * 6.0
         sy = math.sin(ang) * 6.0
-        # Cylinder strut
-        bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.35, depth=11.6,
-                                            location=(sx, sy, 0),
+        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.42, depth=11.4,
+                                            location=(sx, sy, 0.0),
                                             rotation=(math.pi/2, 0, ang + math.pi/2))
-        strut = bpy.context.active_object
-        parts.append(strut)
+        parts.append(bpy.context.active_object)
 
-        # High-speed transit pod along spoke
-        pod_x = math.cos(ang) * 4.2
-        pod_y = math.sin(ang) * 4.2
-        bpy.ops.mesh.primitive_cube_add(size=0.8, location=(pod_x, pod_y, 0))
+        hx = math.cos(ang) * 2.9
+        hy = math.sin(ang) * 2.9
+        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.62, depth=1.2,
+                                            location=(hx, hy, 0.0),
+                                            rotation=(math.pi/2, 0, ang + math.pi/2))
+        parts.append(bpy.context.active_object)
+
+        rx = math.cos(ang) * 11.2
+        ry = math.sin(ang) * 11.2
+        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.58, depth=1.1,
+                                            location=(rx, ry, 0.0),
+                                            rotation=(math.pi/2, 0, ang + math.pi/2))
+        parts.append(bpy.context.active_object)
+
+        px = math.cos(ang) * 4.6
+        py = math.sin(ang) * 4.6
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, 0.0))
         pod = bpy.context.active_object
-        pod.scale = (1.2, 0.7, 0.7)
-        bpy.ops.object.transform_apply(scale=True)
+        pod.scale = (1.6, 0.85, 0.85)
+        pod.rotation_euler = (0, 0, ang)
+        bpy.ops.object.transform_apply(scale=True, rotation=True)
         parts.append(pod)
 
-    # 4. Industrial Lower Docking Quadrant
-    bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=3.2, depth=2.5, location=(0, 0, -6.0))
-    dock_hub = bpy.context.active_object
-    parts.append(dock_hub)
+    # 4 Counter-rotating ring support struts
+    for i in range(4):
+        ang = i * (math.pi / 2.0) + (math.pi / 4.0)
+        sx = math.cos(ang) * 4.4
+        sy = math.sin(ang) * 4.4
+        bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.28, depth=5.6,
+                                            location=(sx, sy, 1.2),
+                                            rotation=(math.pi/3.5, 0, ang + math.pi/2))
+        parts.append(bpy.context.active_object)
 
-    # Four massive capital ship docking cradles / slipways
+    # 5. Lower Industrial Docking Quadrant
+    bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=3.4, depth=3.2, location=(0, 0, -6.8))
+    parts.append(bpy.context.active_object)
+
+    # 4 Heavy capital ship docking slipways / cradles
     for d in range(4):
         dang = d * (math.pi / 2.0)
-        dx = math.cos(dang) * 5.2
-        dy = math.sin(dang) * 5.2
-        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(dx, dy, -6.0))
+        dx = math.cos(dang) * 5.6
+        dy = math.sin(dang) * 5.6
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(dx, dy, -6.8))
         cradle = bpy.context.active_object
-        cradle.scale = (2.8, 0.8, 1.6)
+        cradle.scale = (3.2, 1.1, 1.8)
         cradle.rotation_euler = (0, 0, dang)
         bpy.ops.object.transform_apply(scale=True, rotation=True)
         parts.append(cradle)
 
-    # 5. Massive Radiator Fins and Solar Arrays
-    for f in range(3):
-        fang = f * (2.0 * math.pi / 3.0) + (math.pi / 6.0)
-        fx = math.cos(fang) * 4.5
-        fy = math.sin(fang) * 4.5
-        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(fx, fy, -9.5))
-        fin = bpy.context.active_object
-        fin.scale = (0.08, 2.2, 4.5)
-        fin.rotation_euler = (0, 0, fang)
-        bpy.ops.object.transform_apply(scale=True, rotation=True)
-        parts.append(fin)
+        if HAS_SDT:
+            apas = sdt.create_docking_port_apas(name=f"APAS_{d}", radius=0.55)
+            apas.location = (math.cos(dang) * 7.2, math.sin(dang) * 7.2, -6.8)
+            apas.rotation_euler = (0, math.pi/2, dang)
+            parts.append(apas)
 
-    # Join all objects into a single mesh
+    # 6. Thermal Radiator Arrays (6 large panels along lower spine)
+    for f in range(6):
+        fang = f * (math.pi / 3.0)
+        fx = math.cos(fang) * 4.8
+        fy = math.sin(fang) * 4.8
+        if HAS_SDT:
+            rad = sdt.create_radiator_panel(name=f"Radiator_{f}", length=4.5, width=1.6, vanes=18)
+            rad.location = (fx, fy, -10.5)
+            rad.rotation_euler = (0, 0, fang)
+            parts.append(rad)
+        else:
+            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(fx, fy, -10.5))
+            fin = bpy.context.active_object
+            fin.scale = (0.08, 1.8, 4.5)
+            fin.rotation_euler = (0, 0, fang)
+            bpy.ops.object.transform_apply(scale=True, rotation=True)
+            parts.append(fin)
+
+    # 7. Articulated Solar Arrays (4 large wings extending radially)
+    for s_idx in range(4):
+        sang = s_idx * (math.pi / 2.0) + (math.pi / 4.0)
+        sx = math.cos(sang) * 3.2
+        sy = math.sin(sang) * 3.2
+        if HAS_SDT:
+            solar = sdt.create_solar_array(name=f"SolarWing_{s_idx}", length=7.5, width=2.2, segments=6)
+            solar.location = (sx, sy, -2.5)
+            solar.rotation_euler = (0, 0, sang)
+            parts.append(solar)
+
+    # Join all sub-components into a unified megastructure object
     bpy.ops.object.select_all(action='DESELECT')
     for p in parts:
         p.select_set(True)
-    bpy.context.view_layer.objects.active = parts[0]
+    bpy.context.view_layer.objects.active = mega
     bpy.ops.object.join()
-    megastructure = bpy.context.active_object
-    megastructure.name = "StationMegastructure"
 
-    # Smart UV Project to unwrap cleanly
+    # Smart unwrap non-torus faces into Q1/Q3/Q4 without disturbing the torus UVs
     bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.uv.smart_project(angle_limit=66.0, island_margin=0.02)
+    bm_join = bmesh.from_edit_mesh(mega.data)
+    uv_layer = bm_join.loops.layers.uv.verify()
+
+    unwrapped_faces = []
+    for face in bm_join.faces:
+        u_vals = [loop[uv_layer].uv.x for loop in face.loops]
+        if all(u >= 0.49 for u in u_vals):
+            continue
+        unwrapped_faces.append(face)
+
+    bpy.ops.mesh.select_all(action='DESELECT')
+    for f in unwrapped_faces:
+        f.select = True
+    bmesh.update_edit_mesh(mega.data)
+
+    bpy.ops.uv.smart_project(angle_limit=66.0, island_margin=0.015)
+    bm_join = bmesh.from_edit_mesh(mega.data)
+    uv_layer = bm_join.loops.layers.uv.verify()
+    for face in bm_join.faces:
+        if face.select:
+            for loop in face.loops:
+                uv = loop[uv_layer].uv
+                loop[uv_layer].uv = (uv.x * 0.48, uv.y * 0.98)
+
+    bmesh.update_edit_mesh(mega.data)
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Recenter and normalize scale to match astro-voyager space scale (~20.0 diameter)
+    for poly in mega.data.polygons:
+        poly.use_smooth = True
+
+    bev = mega.modifiers.new(name="Bevel", type='BEVEL')
+    bev.width = 0.008
+    bev.segments = 2
+    bev.limit_method = 'ANGLE'
+    bev.angle_limit = math.radians(35.0)
+    bev.harden_normals = True
+
+    wn = mega.modifiers.new(name="WeightedNormal", type='WEIGHTED_NORMAL')
+    wn.keep_sharp = True
+    wn.weight = 80
+
+    bpy.ops.object.select_all(action='DESELECT')
+    mega.select_set(True)
+    bpy.context.view_layer.objects.active = mega
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    megastructure = mega
     megastructure.location = (0, 0, 0)
-    
-    # Export OBJ
+
     out_obj = os.path.join(MODELS_DIR, "station_megastructure.obj")
-    bpy.ops.wm.obj_export(filepath=out_obj, export_selected_objects=True)
-    print(f"[EXPORT] Megastructure saved: {out_obj}")
+    bpy.ops.wm.obj_export(filepath=out_obj, export_selected_objects=True,
+                          export_normals=True, export_uv=True, export_materials=False,
+                          export_triangulated_mesh=False, forward_axis='Y', up_axis='Z')
+    print(f"[EXPORT] Megastructure saved: {out_obj} ({len(mega.data.polygons)} polygons)")
     return megastructure
 
 
@@ -747,7 +942,7 @@ def render_showcases():
 
 def main():
     print("=== ASTRO-VOYAGER: BUILD MEGASTRUCTURE & BRIDGE ASSETS ===")
-    generate_megastructure_textures(1024)
+    generate_megastructure_textures(2048)
     generate_bridge_interior_textures(1024)
     render_showcases()
     print("=== ASSET GENERATION COMPLETED SUCCESSFULLY ===")
