@@ -13012,9 +13012,9 @@ static const WorkshopAssetEntry kWorkshopCatalog[] = {
    "Heavy-lift industrial colonial transport with magnetic grappling anchors and heavy plasma mining arrays."},
 
   {"voyager", "Звёздный странник «Вояджер»", "Star Voyager", 0,
-   "res/models/voyager.obj", "res/models/voyager", nullptr, 5.2f,
-   "Флагманский исследовательский звездолёт первой межзвёздной экспедиции к чёрной дыре Керра. Автономный научный комплекс глубокого космоса.",
-   "Flagship exploration starship of the first interstellar mission to the Kerr black hole. Autonomous deep-space scientific suite."},
+   "res/models/ark_ship.obj", "res/models/ark_ship", nullptr, 6.5f,
+   "Флагманский исследовательский звездолёт первой межзвёздной экспедиции к чёрной дыре Керра. Автономный научный комплекс глубокого космоса с центробежным кольцом обитания.",
+   "Flagship exploration starship of the first interstellar mission to the Kerr black hole. Autonomous deep-space scientific complex with centrifugal habitat ring."},
 
   {"dragon", "Пилотируемый корабль «Дракон»", "Dragon Capsule", 0,
    "res/models/dragon.obj", "res/models/dragon", nullptr, 4.5f,
@@ -13060,6 +13060,11 @@ static const WorkshopAssetEntry kWorkshopCatalog[] = {
    "res/models/bridge_interior.obj", "res/models/bridge_interior", nullptr, 4.5f,
    "Детализированный командный мостик корабля: кресло капитана, терминалы штурмана и инженера, тактический голографический стол и панорамный бронефонарь.",
    "Fully rendered 3D ship bridge interior featuring captain dais, operator stations, tactical holo-table, and reinforced observation canopy."},
+
+  {"ark_ship", "Межзвёздный Ковчег", "Interstellar Ark Starship", 0,
+   "res/models/ark_ship.obj", "res/models/ark_ship", nullptr, 6.5f,
+   "Тяжелый межзвёздный корабль поколений с двумя вращающимися центрифугами гравитации, параболической антенной дальней связи, модулями криосна и термоядерной двигательной установкой.",
+   "Heavy deep-space generation ark ship featuring dual rotating centrifugal gravity rings, high-gain parabolic comms dish, cryostasis habitat modules, and fusion reaction drive."},
 
   // === 1: Колониальная инфраструктура (Colony 28 assets) ===
   {"colony_park", "Центральный биопарк", "Central Bio-Park", 1,

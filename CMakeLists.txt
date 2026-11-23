@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 5.2.0 LANGUAGES CXX)
+project(astro-voyager VERSION 5.1.15 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -675,7 +675,7 @@ if(TARGET test_people)
   add_test(NAME test_people COMMAND test_people)
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_intro_cinematic.cpp")
+if(GLM_AVAILABLE AND EXISTS "${CMAKE_SOURCE_DIR}/tests/test_intro_cinematic.cpp")
   add_executable(test_intro_cinematic
     tests/test_intro_cinematic.cpp
     src/IntroCinematicDirector.cpp
