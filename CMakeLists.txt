@@ -675,7 +675,7 @@ if(TARGET test_people)
   add_test(NAME test_people COMMAND test_people)
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_intro_cinematic.cpp")
+if(GLM_AVAILABLE AND EXISTS "${CMAKE_SOURCE_DIR}/tests/test_intro_cinematic.cpp")
   add_executable(test_intro_cinematic
     tests/test_intro_cinematic.cpp
     src/IntroCinematicDirector.cpp
