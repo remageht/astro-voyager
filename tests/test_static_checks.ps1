@@ -750,6 +750,9 @@ Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenu
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
 Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and (($sceneCpp -match 'colonySurfaceFrame') -or ($sceneCpp -match 'colonyAnchorNormal'))) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
 Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
+# --- #ED: zero-length-vector hardening in colony math (colonyAnchorNormal/colonySurfaceFrame) ---
+Check 'colonyAnchorNormal guards zero-length anchor' ((Read-File 'src/ColonySystem.cpp') -match 'length < 1e-12f')
+Check 'colonySurfaceFrame guards zero-length tangent frame' ((Read-File 'src/ColonySystem.cpp') -match 'ul < 1e-6f|vl < 1e-6f')
 Check 'colony infrastructure assets loaded' (($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match '"nuclear"') -and ($sceneCpp -match '"hydro"') -and ($sceneCpp -match '"thermal"') -and ($sceneCpp -match '"datacenter"') -and ($sceneCpp -match '"factory"') -and ($sceneCpp -match 'kColonyAssets\[i\]\.key'))
 Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match 's_colonyAssetModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
 Check 'colony capital distance cull' (($sceneCpp -match 'camDist > 24\.0f') -and ((Read-File 'tests/test_colony.cpp') -match 'civic/housing/utility progression'))
