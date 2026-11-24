@@ -729,7 +729,7 @@ Check 'menu backgrounds are owned outside the UI texture cache' (($appCpp -match
 Check 'AppGL loads and binds the disk mask on texture unit 2' (($menuAppH -match '\bm_menuDiskMaskTex\b') -and ($appCpp -match 'res/textures/main_menu_disk_mask\.png') -and ($appCpp -match 'setUniform1i\("u_DiskMask", 2\)') -and ($appCpp -match 'glActiveTexture\s*\(\s*GL_TEXTURE2\s*\)') -and ($appCpp -match 'glBindTexture\s*\(\s*GL_TEXTURE_2D\s*,\s*m_menuDiskMaskTex\s*\)'))
 Check 'AppGL drawMainMenuBackground has shaderActive check' ($appCpp -match 'const bool shaderActive = \(m_menuSkyShader && m_menuSkyQuad\);')
 Check 'render_menu_warp_ship script exists' ((-not (Test-Path (Join-Path $root 'blender/scripts/render_menu_warp_ship.py'))) -or (Test-Path (Join-Path $root 'blender/scripts/render_menu_warp_ship.py')) -or (Test-Path (Join-Path $root 'res/textures/main_menu_disk_mask.png')))
-Check 'AppGL drawMainMenuHero draws read-only status pills' ($appCpp -match 'Пилюли только для чтения')
+Check 'AppGL drawMainMenuHero uses quiet read-only route line' ($appCpp -match 'Маршрут — только для чтения')
 Check 'AppGL drawMainMenuHero no longer clutters with heroGlassHud' (-not ($appCpp -match 'heroGlassHud'))
 Check 'Window constructor disables AUTO_ICONIFY' ((Read-File 'src/Window.cpp') -match 'GLFW_AUTO_ICONIFY, GLFW_FALSE')
 Check 'Window destructor hides window and polls events before destroy' ((Read-File 'src/Window.cpp') -match 'glfwHideWindow\(m_window\);\s*glfwPollEvents\(\);\s*glfwDestroyWindow\(m_window\);')
@@ -840,9 +840,9 @@ Check 'dreadnought captured in hud harness' (($appCpp -match 'ship_dreadnought\.
 Check 'dreadnought documented' (($readme -match 'Mining Dreadnought \(4\)') -and ($readme -match 'mining_dreadnought_showcase\.png'))
 
 # --- Issue #198: Main menu tactical button hotkeys, centralized accent, and hover gate ---
-Check 'menu tactical cut button defines unique hotkey badges' (($appCpp -match '\[ENTER\]') -and ($appCpp -match '\[N\]') -and ($appCpp -match '\[F\]') -and ($appCpp -match '\[S\]') -and ($appCpp -match '\[A\]') -and ($appCpp -match '\[ESC\]'))
-Check 'menu UI centralizes accent color in menuui::kAccentU32' ($appCpp -match '(const|constexpr)\s+ImU32\s+kAccentU32\s*=\s*IM_COL32\(\s*56\s*,\s*189\s*,\s*248\s*,\s*255\s*\);')
-Check 'menu status pills avoid duplicating warp briefing line' (($appCpp -match 'СИСТЕМЫ: НОМИНАЛ') -and ($appCpp -notmatch 'ПРИВОД: ГОТОВ 100%'))
+Check 'menu keyboard shortcuts remain wired' (($appCpp -match 'ImGuiKey_Enter') -and ($appCpp -match 'ImGuiKey_N') -and ($appCpp -match 'ImGuiKey_F') -and ($appCpp -match 'ImGuiKey_S') -and ($appCpp -match 'ImGuiKey_A') -and ($appCpp -match 'GLFW_KEY_I'))
+Check 'menu UI centralizes accent color in menuui::kAccentU32' (($appCpp -match '(const|constexpr)\s+ImU32\s+kAccentU32\s*=\s*IM_COL32\(') -and ($appCpp -match 'accentAlpha\(int a\).*kAccentU32'))
+Check 'menu status avoids duplicating warp briefing line' (($appCpp -match 'Маршрут — только для чтения') -and ($appCpp -notmatch 'drawFlightBriefingCard'))
 Check 'captureMenuCheck verifies interactive button hover and hero elements' (($appCpp -match 'Menu hero elements: hover-diff=') -and ($appCpp -match 'menu_hover_btn01\.png'))
 
 # --- Issue #202: Tier 1 diegetic flight HUD telemetry and peripheral vitals arcs ---
@@ -931,7 +931,7 @@ $typesH = Read-File 'src/Types.h'
 $zettelH = Read-File 'src/Zettelkasten.h'
 $zettelCpp = Read-File 'src/Zettelkasten.cpp'
 
-Check 'AppGL renders poetic menu motto and prologue directives' (($appCpp -match 'Distance is not a wall') -and ($appCpp -match 'CASIMIR KEY & COORDS') -and ($appCpp -match 'FACTOR 9 // FIRST WARP') -and ($appCpp -match 'PILOT LOGBOOK & ARCHIVE'))
+Check 'AppGL renders clear menu descriptor and archive entry' (($appCpp -match 'A relativistic space exploration simulator') -and ($appCpp -match 'PILOT LOGBOOK & ARCHIVE'))
 Check 'AudioEngine declares EgorkaVoiceDensity enum and getters' (($audioH -match 'enum class EgorkaVoiceDensity') -and ($audioH -match 'CriticalOnly') -and ($audioH -match 'setEgorkaVoiceDensity') -and ($audioH -match 'egorkaVoiceDensity'))
 Check 'AudioEngine and AppGL wire voice density filtering and UI combo' (($audioCpp -match 'm_egorkaVoiceDensity\.load\(\)') -and ($appCpp -match 'Egorka Voice Density') -and ($appCpp -match 'Critical Only'))
 Check 'Zettelkasten defines and discovers Pilot Logbook Day 1 Factor 9 note' (($zettelH -match 'kNotePilotLogDay1\s*=\s*"z_pilot_log_day1"') -and ($zettelCpp -match 'kNotePilotLogDay1') -and ($zettelCpp -match 'Day 1\. Factor 9') -and ($zettelCpp -match 'discoverSeed\(kNotePilotLogDay1\)'))
@@ -955,7 +955,11 @@ $introH = Read-File 'src/IntroCinematicDirector.h'
 $introCpp = Read-File 'src/IntroCinematicDirector.cpp'
 
 Check 'IntroCinematicDirector.h declares IntroPhase and spline director' (($introH -match 'enum class IntroPhase') -and ($introH -match 'VoidDrift') -and ($introH -match 'WarpBurst') -and ($introH -match 'MegastructureReveal') -and ($introH -match 'BridgeEnter') -and ($introH -match 'TitleGlory') -and ($introH -match 'class IntroCinematicDirector'))
-Check 'IntroCinematicDirector.cpp implements Catmull-Rom spline and drawHUD' (($introCpp -match 'catmullRom') -and ($introCpp -match 'evaluateSpline') -and ($introCpp -match 'drawHUD') -and ($introCpp -match 'ASTRO - VOYAGER') -and ($introCpp -match 'consumeWarpBoomTrigger'))
+Check 'IntroCinematicDirector.cpp implements time-aware Hermite spline and drawHUD' (($introCpp -match 'hermite') -and ($introCpp -match 'evaluateSpline') -and ($introCpp -match 'drawHUD') -and ($introCpp -match 'TitleGlory') -and ($introCpp -match 'consumeWarpBoomTrigger'))
+Check 'intro camera avoids stop-start easing and high-frequency drift' (($introCpp -match 'Time-aware central tangents') -and ($introCpp -notmatch 'driftX') -and ($introCpp -notmatch 'm_camRoll \+= std::sin'))
+Check 'SceneManager implements dedicated 3D intro renderer' (($sceneH -match 'void renderIntro') -and ($sceneCpp -match 'void SceneManager::renderIntro') -and ($sceneCpp -match 'res/models/warp_ship\.obj') -and ($sceneCpp -match 'res/models/station_megastructure\.obj') -and ($sceneCpp -match 'res/models/bridge_interior\.obj'))
+Check 'AppGL routes active intro through 3D renderer' (($appCpp -match 'renderIntroFrame') -and ($appCpp -match 'm_sceneManager->renderIntro'))
+Check 'AppGL exposes six-phase intro capture and CLI' (($appCpp -match 'int AppGL::captureIntroCheck') -and ($appCpp -match 'intro_%02d\.png') -and ((Read-File 'src/main.cpp') -match '--capture-intro'))
 Check 'test_intro_cinematic registered in CMakeLists and ASTRO_TEST_TARGETS' (($cmakeTxt -match 'test_intro_cinematic') -and (Test-Path 'tests/test_intro_cinematic.cpp'))
 if ($hasModelPack) {
     Check 'orbital megastructure 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/station_megastructure.obj')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_emissive.bmp')))
@@ -963,7 +967,7 @@ if ($hasModelPack) {
 } else {
     Write-Output 'SKIP: 2 intro mesh and PBR map checks (asset pack not fetched for this ref)'
 }
-Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(deltaTime\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match '3D-ЗАСТАВКА \(ИНТРО\)'))
+Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(std::min\(wallDelta,\s*0\.2f\)\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match '3D-ЗАСТАВКА \(ИНТРО\)'))
 Check 'workshop catalog registers bridge_interior and station_megastructure' (($appCpp -match '"bridge_interior"') -and ($appCpp -match '"station_megastructure"'))
 
 # --- Issue #236: 3D Interstellar Ark Starship, Rotating Centrifuge Habitat & Deep Space Flagship Suite (v5.1.15) ---

@@ -3844,4 +3844,173 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   m_postFx.endScene(fbWidth, fbHeight);
 }
 
+void SceneManager::renderIntro(const IntroRenderParams& params, int fbWidth, int fbHeight, float time) {
+  if (fbWidth <= 0 || fbHeight <= 0) return;
+
+  m_postFx.beginScene(fbWidth, fbHeight);
+  glViewport(0, 0, fbWidth, fbHeight);
+  glClearColor(0.002f, 0.004f, 0.008f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  const float aspect = static_cast<float>(fbWidth) / static_cast<float>(fbHeight);
+  const glm::vec3 eye(params.cameraPosition.x, params.cameraPosition.y, params.cameraPosition.z);
+  const glm::vec3 target(params.cameraTarget.x, params.cameraTarget.y, params.cameraTarget.z);
+  glm::vec3 fwd = glm::normalize(target - eye);
+  glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(params.cameraUp.x, params.cameraUp.y, params.cameraUp.z)));
+  glm::vec3 camUp = glm::normalize(glm::cross(right, fwd));
+  if (std::abs(params.roll) > 1e-5f) {
+    const glm::mat3 rollMat = glm::mat3(glm::rotate(glm::mat4(1.0f), params.roll, fwd));
+    right = glm::normalize(rollMat * right);
+    camUp = glm::normalize(rollMat * camUp);
+  }
+  const float fovY = glm::radians(std::clamp(params.fovDegrees, 20.0f, 120.0f));
+  const glm::mat4 view = glm::lookAt(eye, eye + fwd, camUp);
+  const glm::mat4 proj = glm::perspective(fovY, aspect, 0.05f, 10000.0f);
+  const glm::mat4 viewProj = proj * view;
+
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);
+  glDisable(GL_BLEND);
+  glDisable(GL_CULL_FACE);
+
+  static Shader s_introSkyShader("shaders/quad.vert", "shaders/sky.frag");
+  s_introSkyShader.bind();
+  s_introSkyShader.setUniform3f("u_CamFwd", fwd.x, fwd.y, fwd.z);
+  s_introSkyShader.setUniform3f("u_CamRight", right.x, right.y, right.z);
+  s_introSkyShader.setUniform3f("u_CamUp", camUp.x, camUp.y, camUp.z);
+  s_introSkyShader.setUniform1f("u_Aspect", aspect);
+  s_introSkyShader.setUniform1f("u_FovY", fovY);
+  s_introSkyShader.setUniform1i("u_Sky", 0);
+  s_introSkyShader.setUniform1f("u_Exposure", m_exposure);
+  s_introSkyShader.setUniform1f("u_BandK", 1.3f);
+  s_introSkyShader.setUniform3f("u_VelDir", 0.0f, 0.0f, 1.0f);
+  s_introSkyShader.setUniform1f("u_Beta", 0.0f);
+  m_skyboxDeep->bind(0);
+  m_screenQuad->draw();
+  s_introSkyShader.unbind();
+
+  m_bhShader->bind();
+  m_bhShader->setUniform3f("u_CameraPosition", eye.x, eye.y, eye.z);
+  m_bhShader->setUniform3f("u_CameraForward", fwd.x, fwd.y, fwd.z);
+  m_bhShader->setUniform3f("u_CameraRight", right.x, right.y, right.z);
+  m_bhShader->setUniform3f("u_CameraUp", camUp.x, camUp.y, camUp.z);
+  m_bhShader->setUniform1f("u_Aspect", aspect);
+  m_bhShader->setUniform1f("u_FovY", fovY);
+  m_bhShader->setUniform1f("u_Rs", m_settings.rs);
+  m_bhShader->setUniform1f("u_ShellRadius", m_settings.shellRadius);
+  m_bhShader->setUniform1f("u_StepSize", m_settings.stepSize);
+  m_bhShader->setUniform1i("u_MaxSteps", m_settings.maxSteps);
+  m_bhShader->setUniform1i("u_DiskOn", 1);
+  m_bhShader->setUniform1i("u_JetOn", 0);
+  m_bhShader->setUniform1f("u_Time", time);
+  m_bhShader->setUniform1f("u_Exposure", m_exposure);
+  m_bhShader->setUniform1f("u_BHRingK", 1.8f);
+  m_bhShader->setUniform1f("u_ThinDisk", 1.0f);
+  m_bhShader->setUniform1f("u_BandK", 1.3f);
+  m_bhShader->setUniform1f("u_RedshiftK", m_settings.gravRedshift ? 1.0f : 0.0f);
+  m_bhShader->setUniform1f("u_RelK", 0.0f);
+  m_bhShader->setUniform1f("u_Rkf45K", 0.0f);
+  m_bhShader->setUniform1f("u_CamDist", static_cast<float>(glm::length(eye) / std::max(m_settings.rs, 1e-3f)));
+  m_bhShader->setUniform1f("u_CompK", 0.0f);
+  m_bhShader->setUniform1f("u_CompRs", 0.0f);
+  m_bhShader->setUniform1f("u_CompR", 0.0f);
+  m_bhShader->setUniform1f("u_CompInc", 0.0f);
+  m_bhShader->setUniform1f("u_CompOmega", 0.0f);
+  m_bhShader->setUniform1f("u_CompPhase0", 0.0f);
+  m_bhShader->setUniform1f("u_DiskInK", 0.0f);
+  m_bhShader->setUniform1f("u_DiskOutK", 0.0f);
+  m_bhShader->setUniform1f("u_DiskGain", 1.0f);
+  m_bhShader->setUniform3f("u_VelDir", 0.0f, 0.0f, 1.0f);
+  m_bhShader->setUniform1f("u_Beta", 0.0f);
+  m_bhShader->setUniform1i("u_Skybox", 0);
+  m_skyboxDeep->bind(0);
+  m_screenQuad->draw();
+  m_bhShader->unbind();
+
+  static Shader s_introPbrShader("shaders/ship.vert", "shaders/ship.frag");
+  static ObjModel s_introShip;
+  static ObjModel s_introMegastructure;
+  static ObjModel s_introBridge;
+  static bool s_introModelsTried = false;
+  if (!s_introModelsTried) {
+    s_introModelsTried = true;
+    s_introShip.load("res/models/warp_ship.obj");
+    s_introShip.loadTextures("res/models/warp_ship");
+    s_introMegastructure.load("res/models/station_megastructure.obj");
+    s_introMegastructure.loadTextures("res/models/station_megastructure");
+    s_introBridge.load("res/models/bridge_interior.obj");
+    s_introBridge.loadTextures("res/models/bridge_interior");
+  }
+
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
+  glDisable(GL_CULL_FACE);
+
+  auto drawIntroActor = [&](ObjModel& model, const glm::mat4& modelMatrix,
+                            float metal, float rough, float stationPbr,
+                            const glm::vec3& emissive) {
+    if (!model.ready()) return;
+    s_introPbrShader.bind();
+    s_introPbrShader.setUniformMat4f("u_MVP", viewProj * modelMatrix);
+    s_introPbrShader.setUniformMat4f("u_Model", modelMatrix);
+    s_introPbrShader.setUniformMat4f("u_ShipInv", glm::inverse(modelMatrix));
+    s_introPbrShader.setUniform3f("u_CamPos", eye);
+    s_introPbrShader.setUniform3f("u_KeyDir", glm::normalize(glm::vec3(0.55f, 0.45f, 0.70f)));
+    s_introPbrShader.setUniform3f("u_KeyColor", glm::vec3(1.0f, 0.92f, 0.78f) * 18.0f);
+    s_introPbrShader.setUniform1f("u_Metal", metal);
+    s_introPbrShader.setUniform1f("u_Rough", rough);
+    s_introPbrShader.setUniform3f("u_Emissive", emissive);
+    s_introPbrShader.setUniform1i("u_Env", 0);
+    s_introPbrShader.setUniform1f("u_EnvMaxLod", 9.0f);
+    s_introPbrShader.setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
+    s_introPbrShader.setUniform1i("u_Albedo", 1);
+    s_introPbrShader.setUniform1i("u_NormalTex", 2);
+    s_introPbrShader.setUniform1i("u_RoughTex", 3);
+    s_introPbrShader.setUniform1i("u_MetalTex", 4);
+    s_introPbrShader.setUniform1i("u_EmissiveTex", 5);
+    s_introPbrShader.setUniform1i("u_SkinAlbedo", 6);
+    s_introPbrShader.setUniform1i("u_SkinRough", 7);
+    s_introPbrShader.setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
+    s_introPbrShader.setUniform1i("u_FlatNormal", 0);
+    s_introPbrShader.setUniform1f("u_RingSpin", 0.0f);
+    s_introPbrShader.setUniform1i("u_SkinOn", 0);
+    s_introPbrShader.setUniform3f("u_BaseColor", glm::vec3(1.0f));
+    s_introPbrShader.setUniform3f("u_HullTint", glm::vec3(1.0f));
+    s_introPbrShader.setUniform3f("u_AccentTint", glm::vec3(1.0f));
+    s_introPbrShader.setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
+    s_introPbrShader.setUniform1f("u_StationPbr", stationPbr);
+    s_introPbrShader.setUniform1f("u_HullWear", -1.0f);
+    s_introPbrShader.setUniform1i("u_TexOn", model.textured() ? 1 : 0);
+    s_introPbrShader.setUniform1i("u_EmissiveOn", (model.emissive() || glm::length(emissive) > 0.01f) ? 1 : 0);
+    glActiveTexture(GL_TEXTURE0);
+    m_skyboxLocal->bind(0);
+    if (model.textured()) model.bindTextures(1);
+    model.draw();
+    s_introPbrShader.unbind();
+  };
+
+  if (params.showShip) {
+    drawIntroActor(s_introShip, params.shipModel, 0.85f, 0.28f, 0.65f,
+                   glm::vec3(0.08f, 0.22f, 0.34f));
+  }
+  if (params.showMegastructure) {
+    drawIntroActor(s_introMegastructure, params.megastructureModel, 0.80f, 0.38f, 1.0f,
+                   glm::vec3(0.04f, 0.12f, 0.20f));
+  }
+  if (params.showBridge) {
+    drawIntroActor(s_introBridge, params.bridgeModel, 0.70f, 0.42f, 1.0f,
+                   glm::vec3(0.06f, 0.18f, 0.28f));
+  }
+
+  m_postFx.setShipFx(0.0f, 0.0f, 0.0f);
+  m_postFx.setHorizonFx(0.0f, 0.0f);
+  m_postFx.setWarpLens(0.5f, 0.5f, 0.0f, 1.0f, 0.0f);
+  m_postFx.setSpeedFx(std::clamp(params.speedFx, 0.0f, 1.0f));
+  m_postFx.setCinematography(m_settings.colorGrade, m_settings.filmicVignette);
+  m_postFx.setTime(time);
+  m_postFx.endScene(fbWidth, fbHeight);
+}
+
 }  // namespace astro

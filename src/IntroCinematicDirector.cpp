@@ -31,11 +31,13 @@ void IntroCinematicDirector::reset() {
   m_firedEngineWhoosh = false;
   m_firedBridgeOnline = false;
   m_firedTitleChime = false;
+  m_firedBassDrop = false;
 
   m_triggerWarpBoom = false;
   m_triggerEngineWhoosh = false;
   m_triggerBridgeOnline = false;
   m_triggerTitleChime = false;
+  m_triggerBassDrop = false;
 
   evaluateSpline(0.0f);
 }
@@ -63,9 +65,9 @@ void IntroCinematicDirector::setupKeyframes() {
       // Index 3: Phase 1 Warp Exit & Ship Burst
       {7.0f, glm::vec3(-12.0f, 6.0f, 22.0f), glm::vec3(0.0f, 1.2f, 4.0f), glm::vec3(0.08f, 0.99f, 0.08f), 68.0f, -4.0f},
       // Index 4: Phase 2 Ship Pass & Flank track
-      {10.5f, glm::vec3(14.0f, 8.5f, -8.0f), glm::vec3(0.0f, 2.0f, -28.0f), glm::vec3(-0.06f, 0.99f, 0.0f), 65.0f, 3.0f},
+      {10.5f, glm::vec3(14.0f, 8.5f, -8.0f), glm::vec3(0.0f, 8.0f, -45.0f), glm::vec3(-0.06f, 0.99f, 0.0f), 65.0f, 3.0f},
       // Index 5: Phase 3 Megastructure Reveal & Approach
-      {14.5f, glm::vec3(3.2f, 3.8f, -2.2f), glm::vec3(0.0f, 1.6f, 2.5f), glm::vec3(0.0f, 1.0f, 0.0f), 62.0f, 0.0f},
+      {14.5f, glm::vec3(3.2f, 3.8f, -2.2f), glm::vec3(0.0f, 12.0f, -45.0f), glm::vec3(0.0f, 1.0f, 0.0f), 62.0f, 0.0f},
       // Index 6: Phase 4 Canopy Zoom into 3D Bridge
       {18.0f, glm::vec3(0.0f, 1.45f, 1.95f), glm::vec3(0.0f, 1.15f, -1.8f), glm::vec3(0.0f, 1.0f, 0.0f), 72.0f, 0.0f},
       // Index 7: Phase 5 Hero Title Glory & Settle
@@ -75,20 +77,28 @@ void IntroCinematicDirector::setupKeyframes() {
   };
 }
 
-glm::vec3 IntroCinematicDirector::catmullRom(const glm::vec3& p0, const glm::vec3& p1,
-                                            const glm::vec3& p2, const glm::vec3& p3, float t) {
-  float t2 = t * t;
-  float t3 = t2 * t;
-  return 0.5f * ((2.0f * p1) +
-                 (-p0 + p2) * t +
-                 (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
-                 (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3);
+glm::vec3 IntroCinematicDirector::hermite(const glm::vec3& p0, const glm::vec3& p1,
+                                          const glm::vec3& m0, const glm::vec3& m1, float t) {
+  const float t2 = t * t;
+  const float t3 = t2 * t;
+  return (2.0f * t3 - 3.0f * t2 + 1.0f) * p0 +
+         (t3 - 2.0f * t2 + t) * m0 +
+         (-2.0f * t3 + 3.0f * t2) * p1 +
+         (t3 - t2) * m1;
+}
+
+float IntroCinematicDirector::hermite(float p0, float p1, float m0, float m1, float t) {
+  const float t2 = t * t;
+  const float t3 = t2 * t;
+  return (2.0f * t3 - 3.0f * t2 + 1.0f) * p0 +
+         (t3 - 2.0f * t2 + t) * m0 +
+         (-2.0f * t3 + 3.0f * t2) * p1 +
+         (t3 - t2) * m1;
 }
 
 void IntroCinematicDirector::evaluateSpline(float t) {
   if (m_keyframes.size() < 4) return;
 
-  // Find segment [idx, idx+1]
   size_t idx = 1;
   while (idx + 2 < m_keyframes.size() && m_keyframes[idx + 1].time < t) {
     ++idx;
@@ -99,14 +109,28 @@ void IntroCinematicDirector::evaluateSpline(float t) {
   const auto& k2 = m_keyframes[idx + 1];
   const auto& k3 = m_keyframes[idx + 2];
 
-  float segDuration = std::max(k2.time - k1.time, 0.001f);
-  float u = std::clamp((t - k1.time) / segDuration, 0.0f, 1.0f);
+  const float segDuration = std::max(k2.time - k1.time, 0.001f);
+  const float u = std::clamp((t - k1.time) / segDuration, 0.0f, 1.0f);
+  // Time-aware central tangents keep velocity continuous at every keyframe.
+  const float span02 = std::max(k2.time - k0.time, 0.001f);
+  const float span13 = std::max(k3.time - k1.time, 0.001f);
+  constexpr float tension = 0.85f;
+  const glm::vec3 posM1 = (k2.pos - k0.pos) * (segDuration / span02) * tension;
+  const glm::vec3 posM2 = (k3.pos - k1.pos) * (segDuration / span13) * tension;
+  const glm::vec3 targetM1 = (k2.target - k0.target) * (segDuration / span02) * tension;
+  const glm::vec3 targetM2 = (k3.target - k1.target) * (segDuration / span13) * tension;
+  const glm::vec3 upM1 = (k2.up - k0.up) * (segDuration / span02) * tension;
+  const glm::vec3 upM2 = (k3.up - k1.up) * (segDuration / span13) * tension;
 
-  m_camPos = catmullRom(k0.pos, k1.pos, k2.pos, k3.pos, u);
-  m_camTarget = catmullRom(k0.target, k1.target, k2.target, k3.target, u);
-  m_camUp = glm::normalize(catmullRom(k0.up, k1.up, k2.up, k3.up, u));
-  m_camFov = glm::mix(k1.fov, k2.fov, u);
-  m_camRoll = glm::mix(k1.roll, k2.roll, u);
+  m_camPos = hermite(k1.pos, k2.pos, posM1, posM2, u);
+  m_camTarget = hermite(k1.target, k2.target, targetM1, targetM2, u);
+  m_camUp = glm::normalize(hermite(k1.up, k2.up, upM1, upM2, u));
+  m_camFov = hermite(k1.fov, k2.fov,
+                     (k2.fov - k0.fov) * (segDuration / span02) * tension,
+                     (k3.fov - k1.fov) * (segDuration / span13) * tension, u);
+  m_camRoll = hermite(k1.roll, k2.roll,
+                      (k2.roll - k0.roll) * (segDuration / span02) * tension,
+                      (k3.roll - k1.roll) * (segDuration / span13) * tension, u);
 }
 
 void IntroCinematicDirector::update(float dt) {
@@ -140,15 +164,13 @@ void IntroCinematicDirector::update(float dt) {
       m_firedWarpBoom = true;
       m_triggerWarpBoom = true;
     }
-    // Flash spike then decay
-    float flashTime = m_timer - 3.5f;
-    if (flashTime < 0.3f) {
-      m_flashIntensity = flashTime / 0.3f;
-    } else {
-      m_flashIntensity = std::max(0.0f, 1.0f - (flashTime - 0.3f) / 1.8f);
-    }
-    m_warpDistortion = std::max(0.0f, std::sin(m_phaseProgress * 3.14159f) * 1.2f);
-    m_anamorphicStreak = m_flashIntensity * 0.85f;
+    // Soft, low-intensity flash: no full-frame white spike or strobe.
+    const float flashTime = m_timer - 3.5f;
+    m_flashIntensity = flashTime < 1.2f
+        ? 0.22f * std::sin(std::clamp(flashTime / 1.2f, 0.0f, 1.0f) * 3.14159f)
+        : 0.0f;
+    m_warpDistortion = std::max(0.0f, std::sin(m_phaseProgress * 3.14159f) * 0.45f);
+    m_anamorphicStreak = m_flashIntensity * 0.35f;
   } else if (m_timer < 10.5f) {
     m_phase = IntroPhase::ShipPass;
     m_phaseProgress = (m_timer - 7.0f) / 3.5f;
@@ -158,13 +180,13 @@ void IntroCinematicDirector::update(float dt) {
     }
     m_warpDistortion = 0.0f;
     m_flashIntensity = 0.0f;
-    m_anamorphicStreak = std::max(0.0f, 0.4f * (1.0f - m_phaseProgress));
+    m_anamorphicStreak = std::max(0.0f, 0.08f * (1.0f - m_phaseProgress));
   } else if (m_timer < 14.5f) {
     m_phase = IntroPhase::MegastructureReveal;
     m_phaseProgress = (m_timer - 10.5f) / 4.0f;
     m_warpDistortion = 0.0f;
     m_flashIntensity = 0.0f;
-    m_anamorphicStreak = 0.15f;
+    m_anamorphicStreak = 0.03f;
   } else if (m_timer < 18.0f) {
     m_phase = IntroPhase::BridgeEnter;
     m_phaseProgress = (m_timer - 14.5f) / 3.5f;
@@ -175,7 +197,7 @@ void IntroCinematicDirector::update(float dt) {
     // Subtle cockpit canopy glass flash when passing through
     float canopyHit = (m_timer - 14.5f);
     if (canopyHit > 0.4f && canopyHit < 0.9f) {
-      m_flashIntensity = std::sin((canopyHit - 0.4f) / 0.5f * 3.14159f) * 0.45f;
+      m_flashIntensity = std::sin((canopyHit - 0.4f) / 0.5f * 3.14159f) * 0.08f;
     } else {
       m_flashIntensity = 0.0f;
     }
@@ -186,7 +208,11 @@ void IntroCinematicDirector::update(float dt) {
       m_firedTitleChime = true;
       m_triggerTitleChime = true;
     }
-    m_anamorphicStreak = 0.75f;
+    if (!m_firedBassDrop && m_timer >= 18.05f) {
+      m_firedBassDrop = true;
+      m_triggerBassDrop = true;
+    }
+    m_anamorphicStreak = 0.05f;
     // Fade out during last 0.8s
     if (m_timer >= 21.2f) {
       m_fadeAlpha = (m_timer - 21.2f) / 0.8f;
@@ -219,18 +245,19 @@ glm::mat4 IntroCinematicDirector::shipModelMatrix() const {
   float bank = -std::sin(tShip * 0.45f) * 0.35f;
   m = glm::rotate(m, bank, glm::vec3(0.0f, 0.0f, 1.0f));
   m = glm::rotate(m, 3.14159f, glm::vec3(0.0f, 1.0f, 0.0f)); // Pointing forward (-Z)
+  m = glm::scale(m, glm::vec3(6.0f));
   return m;
 }
 
 glm::mat4 IntroCinematicDirector::megastructureModelMatrix() const {
   glm::mat4 m(1.0f);
-  // Placed majestically at planetary orbit distance
-  m = glm::translate(m, glm::vec3(80.0f, 40.0f, -220.0f));
+  // Placed on the reveal axis so the 10.5–14.5s camera pan keeps it in frame.
+  m = glm::translate(m, glm::vec3(0.0f, 22.0f, -95.0f));
   // Slow continuous majestic axial rotation
   float rot = m_timer * 0.045f;
   m = glm::rotate(m, rot, glm::vec3(0.0f, 0.0f, 1.0f));
   m = glm::rotate(m, 0.45f, glm::vec3(1.0f, 0.0f, 0.0f));
-  m = glm::scale(m, glm::vec3(8.5f));
+  m = glm::scale(m, glm::vec3(5.0f));
   return m;
 }
 
@@ -265,6 +292,12 @@ bool IntroCinematicDirector::consumeTitleChimeTrigger() {
   return val;
 }
 
+bool IntroCinematicDirector::consumeBassDropTrigger() {
+  bool val = m_triggerBassDrop;
+  m_triggerBassDrop = false;
+  return val;
+}
+
 void IntroCinematicDirector::drawHUD(float screenW, float screenH) {
 #ifndef ASTRO_NO_IMGUI
   if (!m_active || m_phase == IntroPhase::Finished) return;
@@ -293,8 +326,8 @@ void IntroCinematicDirector::drawHUD(float screenW, float screenH) {
   if (m_anamorphicStreak > 0.01f) {
     float streakAlpha = std::clamp(m_anamorphicStreak, 0.0f, 1.0f);
     float cy = screenH * 0.48f;
-    ImU32 cyanGlow = IM_COL32(0, 220, 255, static_cast<int>(streakAlpha * 140));
-    ImU32 coreGlow = IM_COL32(220, 245, 255, static_cast<int>(streakAlpha * 200));
+    ImU32 cyanGlow = IM_COL32(0, 220, 255, static_cast<int>(streakAlpha * 50));
+    ImU32 coreGlow = IM_COL32(220, 245, 255, static_cast<int>(streakAlpha * 80));
 
     dl->AddLine(ImVec2(0.0f, cy), ImVec2(screenW, cy), cyanGlow, 2.8f);
     dl->AddLine(ImVec2(screenW * 0.2f, cy), ImVec2(screenW * 0.8f, cy), coreGlow, 1.5f);
@@ -302,7 +335,7 @@ void IntroCinematicDirector::drawHUD(float screenW, float screenH) {
 
   // 3. Screen flash overlay
   if (m_flashIntensity > 0.01f) {
-    int fAlpha = static_cast<int>(std::clamp(m_flashIntensity, 0.0f, 1.0f) * 230);
+    int fAlpha = static_cast<int>(std::clamp(m_flashIntensity, 0.0f, 1.0f) * 70);
     dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH), IM_COL32(235, 250, 255, fAlpha));
   }
 
@@ -314,32 +347,105 @@ void IntroCinematicDirector::drawHUD(float screenW, float screenH) {
 
   // 5. Telemetry & Title Displays
   if (m_phase == IntroPhase::TitleGlory) {
-    // Grand cinematic title
-    const char* title = "ASTRO - VOYAGER";
-    const char* sub = "// ALCUBIERRE WARP TRANSIT & ORBITAL EXPEDITIONS //";
-    const char* prompt = "[ НАЖМИТЕ SPACE / ENTER / ESC ДЛЯ ВХОДА В МЕНЮ ]";
-
-    float titleW = ImGui::CalcTextSize(title).x;
-    float subW = ImGui::CalcTextSize(sub).x;
-    float promptW = ImGui::CalcTextSize(prompt).x;
-
+    float tRel = m_timer - 18.0f;
     float cy = screenH * 0.42f;
+    float cx = screenW * 0.5f;
 
-    // Glowing title backdrop shadow
-    dl->AddText(ImVec2((screenW - titleW) * 0.5f + 2.0f, cy + 2.0f),
-                IM_COL32(0, 180, 255, 180), title);
-    dl->AddText(ImVec2((screenW - titleW) * 0.5f, cy),
-                IM_COL32(245, 252, 255, 255), title);
+    // Technical Corner Framing Brackets
+    float marginX = screenW * 0.06f;
+    float marginY = screenH * 0.12f;
+    float bracketLen = 22.0f;
+    ImU32 bracketColor = IM_COL32(0, 210, 255, 120);
 
-    // Subtitle
-    dl->AddText(ImVec2((screenW - subW) * 0.5f, cy + 32.0f),
-                IM_COL32(140, 220, 245, 220), sub);
+    // Top-left
+    dl->AddLine(ImVec2(marginX, marginY), ImVec2(marginX + bracketLen, marginY), bracketColor, 1.5f);
+    dl->AddLine(ImVec2(marginX, marginY), ImVec2(marginX, marginY + bracketLen), bracketColor, 1.5f);
+    // Top-right
+    dl->AddLine(ImVec2(screenW - marginX, marginY), ImVec2(screenW - marginX - bracketLen, marginY), bracketColor, 1.5f);
+    dl->AddLine(ImVec2(screenW - marginX, marginY), ImVec2(screenW - marginX, marginY + bracketLen), bracketColor, 1.5f);
+    // Bottom-left
+    dl->AddLine(ImVec2(marginX, screenH - marginY), ImVec2(marginX + bracketLen, screenH - marginY), bracketColor, 1.5f);
+    dl->AddLine(ImVec2(marginX, screenH - marginY), ImVec2(marginX, screenH - marginY - bracketLen), bracketColor, 1.5f);
+    // Bottom-right
+    dl->AddLine(ImVec2(screenW - marginX, screenH - marginY), ImVec2(screenW - marginX - bracketLen, screenH - marginY), bracketColor, 1.5f);
+    dl->AddLine(ImVec2(screenW - marginX, screenH - marginY), ImVec2(screenW - marginX, screenH - marginY - bracketLen), bracketColor, 1.5f);
 
-    // Blinking prompt
-    float blink = std::sin(m_timer * 5.0f) * 0.5f + 0.5f;
-    int pAlpha = static_cast<int>(120 + blink * 135);
-    dl->AddText(ImVec2((screenW - promptW) * 0.5f, cy + 85.0f),
-                IM_COL32(255, 215, 120, pAlpha), prompt);
+    // Dynamic Expanding Technical Rule Line (0.0s to 0.45s)
+    float lineProgress = std::clamp(tRel / 0.45f, 0.0f, 1.0f);
+    float lineEase = 1.0f - std::pow(1.0f - lineProgress, 3.0f);
+    float halfSpan = (screenW * 0.28f) * lineEase;
+    float ruleY = cy - 14.0f;
+
+    if (halfSpan > 1.0f) {
+      dl->AddLine(ImVec2(cx - halfSpan, ruleY), ImVec2(cx + halfSpan, ruleY),
+                  IM_COL32(0, 180, 255, 140), 2.2f);
+      dl->AddLine(ImVec2(cx - halfSpan * 0.6f, ruleY), ImVec2(cx + halfSpan * 0.6f, ruleY),
+                  IM_COL32(230, 250, 255, 220), 1.0f);
+      // End ticks
+      dl->AddLine(ImVec2(cx - halfSpan, ruleY - 4.0f), ImVec2(cx - halfSpan, ruleY + 4.0f),
+                  IM_COL32(0, 220, 255, 180), 1.5f);
+      dl->AddLine(ImVec2(cx + halfSpan, ruleY - 4.0f), ImVec2(cx + halfSpan, ruleY + 4.0f),
+                  IM_COL32(0, 220, 255, 180), 1.5f);
+    }
+
+    // Telemetry Badges (fades in 0.5s to 1.1s)
+    if (tRel >= 0.5f) {
+      float badgeAlpha = std::clamp((tRel - 0.5f) / 0.6f, 0.0f, 1.0f);
+      int bAlpha = static_cast<int>(badgeAlpha * 210);
+      const char* badges = "[ WARP DRIVE: ONLINE ]    [ ORBIT: CAPTURED ]    [ SYSTEMS: NOMINAL ]";
+      float badgeW = ImGui::CalcTextSize(badges).x;
+      dl->AddText(ImVec2((screenW - badgeW) * 0.5f, ruleY - 24.0f),
+                  IM_COL32(0, 225, 255, bAlpha), badges);
+    }
+
+    // Typewriter Write-On Title Reveal (0.22s to 1.35s)
+    const std::string fullTitle = "A S T R O - V O Y A G E R";
+    size_t charCount = fullTitle.size();
+    if (tRel < 1.35f) {
+      float typeP = std::clamp((tRel - 0.22f) / 1.13f, 0.0f, 1.0f);
+      float typeEase = typeP * typeP * (3.0f - 2.0f * typeP);
+      charCount = static_cast<size_t>(typeEase * fullTitle.size());
+    }
+    std::string visibleTitle = fullTitle.substr(0, charCount);
+
+    if (!visibleTitle.empty()) {
+      float fullW = ImGui::CalcTextSize(fullTitle.c_str()).x;
+      float textStartX = (screenW - fullW) * 0.5f;
+
+      // Glow drop shadow
+      dl->AddText(ImVec2(textStartX + 2.0f, cy + 2.0f),
+                  IM_COL32(0, 180, 255, 180), visibleTitle.c_str());
+      dl->AddText(ImVec2(textStartX, cy),
+                  IM_COL32(245, 252, 255, 255), visibleTitle.c_str());
+
+      // Blinking typewriter cursor during write-on
+      if (tRel < 1.35f && charCount < fullTitle.size()) {
+        float curW = ImGui::CalcTextSize(visibleTitle.c_str()).x;
+        dl->AddRectFilled(ImVec2(textStartX + curW + 4.0f, cy + 2.0f),
+                          ImVec2(textStartX + curW + 12.0f, cy + 18.0f),
+                          IM_COL32(0, 240, 255, 220));
+      }
+    }
+
+    // Subtitle (fades in 0.8s to 1.4s)
+    if (tRel >= 0.8f) {
+      float subAlpha = std::clamp((tRel - 0.8f) / 0.6f, 0.0f, 1.0f);
+      int sAlpha = static_cast<int>(subAlpha * 220);
+      const char* sub = "// ALCUBIERRE WARP TRANSIT & ORBITAL EXPEDITIONS //";
+      float subW = ImGui::CalcTextSize(sub).x;
+      dl->AddText(ImVec2((screenW - subW) * 0.5f, cy + 34.0f),
+                  IM_COL32(140, 220, 245, sAlpha), sub);
+    }
+
+    // Blinking prompt (fades in 1.4s onward)
+    if (tRel >= 1.4f) {
+      const char* prompt = "[ НАЖМИТЕ SPACE / ENTER / ESC ДЛЯ ВХОДА В МЕНЮ ]";
+      float promptW = ImGui::CalcTextSize(prompt).x;
+      float blink = std::sin(m_timer * 5.0f) * 0.5f + 0.5f;
+      int pAlpha = static_cast<int>(120 + blink * 135);
+      dl->AddText(ImVec2((screenW - promptW) * 0.5f, cy + 85.0f),
+                  IM_COL32(255, 215, 120, pAlpha), prompt);
+    }
   } else if (m_phase == IntroPhase::VoidDrift) {
     const char* prologue = "СЕКТОР 01: ГРАВИТАЦИОННАЯ СИНГУЛЯРНОСТЬ КЕРРА";
     float w = ImGui::CalcTextSize(prologue).x;

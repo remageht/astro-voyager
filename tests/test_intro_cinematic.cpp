@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <glm/glm.hpp>
 #include "IntroCinematicDirector.h"
 
@@ -24,6 +26,45 @@ int main() {
   assert(!std::isnan(cPos.x) && !std::isnan(cPos.y) && !std::isnan(cPos.z));
   assert(std::abs(glm::length(cUp) - 1.0f) < 0.01f);
   std::cout << "  PASS: Initialization and start state\n";
+
+  // Smooth camera path: no stop-start easing at keyframes and no harsh flash spike.
+  dir.start();
+  const float smoothDt = 1.0f / 120.0f;
+  float maxFlash = 0.0f;
+  float maxStep = 0.0f;
+  glm::vec3 prevPos = dir.cameraPosition();
+  for (int i = 0; i < static_cast<int>(22.0f / smoothDt); ++i) {
+    dir.update(smoothDt);
+    const glm::vec3 pos = dir.cameraPosition();
+    maxStep = std::max(maxStep, glm::length(pos - prevPos));
+    maxFlash = std::max(maxFlash, dir.flashIntensity());
+    prevPos = pos;
+  }
+  assert(maxStep < 0.75f);
+  assert(maxFlash <= 0.221f);
+
+  const float keyframeTimes[] = {3.5f, 7.0f, 10.5f, 14.5f, 18.0f};
+  for (float boundary : keyframeTimes) {
+    dir.start();
+    while (dir.currentTime() < boundary - 0.6f) dir.update(smoothDt);
+    float minSpeed = std::numeric_limits<float>::max();
+    float maxSpeed = 0.0f;
+    prevPos = dir.cameraPosition();
+    while (dir.currentTime() < boundary + 0.6f) {
+      dir.update(smoothDt);
+      const glm::vec3 pos = dir.cameraPosition();
+      const float speed = glm::length(pos - prevPos) / smoothDt;
+      if (std::abs(dir.currentTime() - boundary) < 0.15f) {
+        minSpeed = std::min(minSpeed, speed);
+      }
+      maxSpeed = std::max(maxSpeed, speed);
+      prevPos = pos;
+    }
+    assert(minSpeed > maxSpeed * 0.15f);
+  }
+  std::cout << "  PASS: Continuous camera velocity and soft flash envelope\n";
+
+  dir.start();
 
   // 2. Progression into Warp Burst
   dir.update(4.0f); // Advance to t=4.0s

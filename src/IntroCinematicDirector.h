@@ -66,6 +66,7 @@ class IntroCinematicDirector {
   bool consumeEngineWhooshTrigger();
   bool consumeBridgeOnlineTrigger();
   bool consumeTitleChimeTrigger();
+  bool consumeBassDropTrigger();
 
  private:
   bool m_active = false;
@@ -96,18 +97,21 @@ class IntroCinematicDirector {
   bool m_triggerEngineWhoosh = false;
   bool m_triggerBridgeOnline = false;
   bool m_triggerTitleChime = false;
+  bool m_triggerBassDrop = false;
 
   bool m_firedWarpBoom = false;
   bool m_firedEngineWhoosh = false;
   bool m_firedBridgeOnline = false;
   bool m_firedTitleChime = false;
+  bool m_firedBassDrop = false;
 
   std::vector<SplineKeyframe> m_keyframes;
 
   void setupKeyframes();
   void evaluateSpline(float t);
-  static glm::vec3 catmullRom(const glm::vec3& p0, const glm::vec3& p1,
-                              const glm::vec3& p2, const glm::vec3& p3, float t);
+  static glm::vec3 hermite(const glm::vec3& p0, const glm::vec3& p1,
+                           const glm::vec3& m0, const glm::vec3& m1, float t);
+  static float hermite(float p0, float p1, float m0, float m1, float t);
 };
 
 }  // namespace astro

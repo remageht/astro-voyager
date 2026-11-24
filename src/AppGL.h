@@ -74,6 +74,7 @@ class AppGL {
   static int captureHudCheck(const std::string& outPath);
   static int captureTerminalCheck(const std::string& outPath);
   static int captureMenuCheck(const std::string& outDir);
+  static int captureIntroCheck(const std::string& outDir);
   static int captureWorkshopCheck(const std::string& outDir);
   static int captureEarthCheck(const std::string& outDir);
 
@@ -93,7 +94,6 @@ class AppGL {
   void drawMenu();
   void drawMainMenuHero(float screenW, float screenH);
   void drawMainMenuBackground(float screenW, float screenH);
-  void drawFlightBriefingCard(int hoveredOption, float cardW, const Station* curSt);
   void drawVoiceCatalogPage(float areaH);
   void drawWorkshopPage(float colAreaH);
   void renderWorkshop3D(int width, int height, double time);
@@ -430,6 +430,7 @@ class AppGL {
   bool m_menuProceduralDisk = true;
   unsigned int updateMenuVideo(double time);
   void renderMenuBackdrop(int width, int height, double time);
+  void renderIntroFrame(int width, int height, double time);
   bool m_hasStartedFlight = false;
   void requestCloseMenu();
 

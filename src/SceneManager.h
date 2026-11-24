@@ -104,6 +104,21 @@ constexpr float kTimePacePresets[] = {1.0f, 10.0f, 60.0f, 300.0f, 1000.0f};
 constexpr int kTimePacePresetCount = 5;
 }  // namespace
 
+struct IntroRenderParams {
+  Vec3 cameraPosition;
+  Vec3 cameraTarget;
+  Vec3 cameraUp{0.0, 1.0, 0.0};
+  float fovDegrees = 60.0f;
+  float roll = 0.0f;
+  glm::mat4 shipModel{1.0f};
+  glm::mat4 megastructureModel{1.0f};
+  glm::mat4 bridgeModel{1.0f};
+  bool showShip = false;
+  bool showMegastructure = false;
+  bool showBridge = false;
+  float speedFx = 0.0f;
+};
+
 class SceneManager {
  public:
   SceneManager();
@@ -114,6 +129,7 @@ class SceneManager {
 
   void teleportTo(const std::string& stationId, Camera& camera);
   void render(const Camera& camera, int fbWidth, int fbHeight, float time);
+  void renderIntro(const IntroRenderParams& params, int fbWidth, int fbHeight, float time);
   bool captureEarthCheck(const std::string& outDir);
 
   const Station* getCurrentStation() const { return m_currentStation; }
