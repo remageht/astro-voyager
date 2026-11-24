@@ -656,6 +656,44 @@ if(TARGET test_colony)
   add_test(NAME test_colony COMMAND test_colony)
 endif()
 
+# Issue #ED: регрессионные тесты colony math + orbital assist (Types.h).
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_colony_orbit.cpp")
+  add_executable(test_colony_orbit
+    tests/test_colony_orbit.cpp
+    src/ColonySystem.cpp
+  )
+  target_include_directories(test_colony_orbit PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_colony_orbit PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_colony_orbit PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_colony_orbit)
+  add_test(NAME test_colony_orbit COMMAND test_colony_orbit)
+endif()
+
+# Issue #227: тесты MissionManager (accept/board/serialize).
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_mission_contracts.cpp")
+  add_executable(test_mission_contracts
+    tests/test_mission_contracts.cpp
+    src/MissionSystem.cpp
+    src/ScienceSystem.cpp
+    src/Zettelkasten.cpp
+  )
+  target_include_directories(test_mission_contracts PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_mission_contracts PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_mission_contracts PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_mission_contracts)
+  add_test(NAME test_mission_contracts COMMAND test_mission_contracts)
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_people.cpp")
   add_executable(test_people
     tests/test_people.cpp
