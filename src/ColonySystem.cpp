@@ -450,6 +450,13 @@ const float* colonyAnchorNormal(const std::string& worldId) {
     if (worldId == a.id) {
       const float length = std::sqrt(a.n[0] * a.n[0] + a.n[1] * a.n[1] + a.n[2] * a.n[2]);
       static thread_local float out[3];
+      // #ED: деление на length без защиты — дегенерированная запись таблицы
+      // (все сейчас валидны, но улипли — NaN-у, если кто-то добавит нулевой
+      // вектор). Fallback — вертикальный направление.
+      if (length < 1e-12f) {
+        out[0] = 0.0f; out[1] = 1.0f; out[2] = 0.0f;
+        return out;
+      }
       out[0] = a.n[0] / length;
       out[1] = a.n[1] / length;
       out[2] = a.n[2] / length;
@@ -472,12 +479,22 @@ ColonySurfaceFrame colonySurfaceFrame(const std::string& worldId) {
   float uy = az * rx - ax * rz;
   float uz = ax * ry - ay * rx;
   float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
-  ux /= ul; uy /= ul; uz /= ul;
+  // #ED: ul может быть ноль (таблица развита: все анкоры ненулевые, но
+  // гуард — чтобы не делить на 0 при дегенерированном входе).
+  if (ul < 1e-6f) { ux = 1.0f; uy = 0.0f; uz = 0.0f; } else {
+    ux /= ul; uy /= ul; uz /= ul;
+  }
 
   float vx = ay * uz - az * uy;
   float vy = az * ux - ax * uz;
   float vz = ax * uy - ay * ux;
   float vl = std::sqrt(vx * vx + vy * vy + vz * vz);
+  // #ED: v — кросс с недеформированным r, для полюсных входов может быть 0;
+  // гуард перед делением ниже и по тангенсам.
+  if (vl < 1e-6f) {
+    vx = 0.0f; vy = 0.0f; vz = -1.0f;
+    vl = 1.0f;
+  }
 
   f.anchor[0] = ax; f.anchor[1] = ay; f.anchor[2] = az;
   f.tangentU[0] = ux; f.tangentU[1] = uy; f.tangentU[2] = uz;

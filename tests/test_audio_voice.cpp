@@ -225,6 +225,10 @@ int main() {
       auto pcm = std::make_shared<std::vector<float>>(4410, 0.1f);
       AudioTestAccess::pushVoice(eng, AudioTestAccess::VoiceType::File, pcm, 0);
       eng.update(0.02f);
+      if ((i & 15) == 0) std::this_thread::yield();
+    }
+    for (int retry = 0; retry < 50 && renders.load(std::memory_order_relaxed) == 0; ++retry) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     stop.store(true);
     audio.join();

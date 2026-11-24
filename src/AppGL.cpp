@@ -238,7 +238,13 @@ int AppGL::run() {
     if (m_loadingScreen.justFinished()) {
       m_loadingScreen.clearFinishedFlag();
       m_audio.playRadioBeep();
-      m_introDirector.start();
+      const std::string tourFrame =
+          resolveAssetPath("res/story/worlds_tour/frame_001.jpg");
+      if (std::filesystem::exists(tourFrame)) {
+        startUniverseTour();
+      } else {
+        m_introDirector.start();
+      }
     }
 
     // === 3D Cinematic Intro === (v5.2.0)
@@ -287,7 +293,7 @@ int AppGL::run() {
       // Main menu: showcase orbit around the current station, world renders behind.
       GLFWwindow* menuWin = m_window->getNativeWindow();
       bool menuEscDown = (glfwGetKey(menuWin, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-      if (menuEscDown && !m_prevEscPressed) {
+      if (menuEscDown && !m_prevEscPressed && !m_slidesOpen) {
         if (m_menuPage != 0) {
           m_menuPage = 0;
           m_pageTransitionTimer = 0.0f;
@@ -298,7 +304,9 @@ int AppGL::run() {
       }
       m_prevEscPressed = menuEscDown;
 
-      if (glfwGetKey(menuWin, GLFW_KEY_I) == GLFW_PRESS && !m_introDirector.isActive() && !m_loadingScreen.isActive()) {
+      if (glfwGetKey(menuWin, GLFW_KEY_I) == GLFW_PRESS &&
+          !m_introDirector.isActive() && !m_loadingScreen.isActive() &&
+          !m_slidesOpen) {
         m_introDirector.start();
         m_audio.playBlip();
       }
@@ -335,7 +343,9 @@ int AppGL::run() {
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
-      if (m_introDirector.isActive()) {
+      if (m_slidesOpen) {
+        drawSlidesOverlay();
+      } else if (m_introDirector.isActive()) {
         m_introDirector.drawHUD(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
       } else {
         drawMenu();
@@ -4360,11 +4370,25 @@ void AppGL::drawConstellationAlignment() {
   if (pushed) ImGui::PopFont();
 }
 
+void AppGL::startUniverseTour() {
+  logLaunch("UNIVERSE TOUR START");
+  m_slidesCurrent = storyUniverseTourSlides();
+  m_slidesIntro = false;
+  m_slidesPreroll = true;
+  m_slidesAdv = false;
+  m_slidesIdx = 0;
+  m_slidesOpen = true;
+  m_inMenu = true;
+  m_slideAnimIdx = -1;
+  invalidateVideoSlide();
+}
+
 void AppGL::startExpeditionIntro() {
   // === Expedition === (v3.5.0): вводные слайды (идут после Play при
   // первой игре); по завершении — высадка в Солнечной системе.
   m_slidesCurrent = storyIntroSlides();
   m_slidesIntro = true;
+  m_slidesPreroll = false;
   m_slidesAdv = false;
   m_slidesIdx = 0;
   m_slidesOpen = true;
@@ -4378,6 +4402,7 @@ void AppGL::startNewAdventure() {
   // save-adventure.json. Экспедиция сбрасывается: главы идут с "Дома".
   m_slidesCurrent = storyPrologueSlides();
   m_slidesIntro = true;
+  m_slidesPreroll = false;
   m_slidesAdv = true;
   m_slidesIdx = 0;
   m_slidesOpen = true;
@@ -4499,6 +4524,7 @@ void AppGL::openChapterSlide(int slideIdx) {
     }
   }
   m_slidesIntro = false;
+  m_slidesPreroll = false;
   m_slidesIdx = 0;
   m_slidesOpen = true;
   m_slideAnimIdx = -1;
@@ -4544,6 +4570,7 @@ void AppGL::openEndingSlide(int choice) {
   m_slidesHead = uiRu(finaleTitleRu(choice).c_str(),
                       finaleTitleEn(choice).c_str());
   m_slidesIntro = false;
+  m_slidesPreroll = false;
   m_slidesIdx = 0;
   m_slidesOpen = true;
   m_slideAnimIdx = -1;
@@ -4821,7 +4848,7 @@ void AppGL::drawSlidesOverlay() {
   }
   // Автолистание: кадры кончились — как если бы нажали Space.
   const bool videoDone = hasVideo && m_videoFrames > 0 &&
-                         vTime * 12.0 >= static_cast<double>(m_videoFrames);
+                         vTime * sl.videoFps >= static_cast<double>(m_videoFrames);
 
   // Auto-advance toggle hotkey (Tab or A)
   if (ImGui::IsKeyPressed(ImGuiKey_Tab, false) || ImGui::IsKeyPressed(ImGuiKey_A, false)) {
@@ -4866,6 +4893,14 @@ void AppGL::drawSlidesOverlay() {
       bodyChars > 0 && textDone &&
       timeSinceDone >= readingDuration;
 
+  if (m_slidesPreroll && (advance || skip || videoDone)) {
+    logLaunch("UNIVERSE TOUR END");
+    m_slidesPreroll = false;
+    m_slidesOpen = false;
+    m_slidesCurrent.clear();
+    invalidateVideoSlide();
+    return;
+  }
   if (m_slidesIntro && (advance || skip || videoDone || autoAdvance)) {
     // Пролог: Space/клик листают, Esc досматривает до конца; конец ==
     // старт миссии (teleport в sol сам завершит главу «Дом»).
@@ -4937,7 +4972,7 @@ void AppGL::drawSlidesOverlay() {
   const ImVec2 artPos((disp.x - artSize) * 0.5f, artTop);
   float textY = artPos.y + artSize + 26.0f;
   if (hasVideo && m_videoFrames > 0) {
-    int fi = static_cast<int>(vTime * 12.0);
+    int fi = static_cast<int>(vTime * sl.videoFps);
     if (fi >= m_videoFrames) fi = m_videoFrames - 1;
     if (fi != m_videoIdx) {
       char buf[512];
@@ -5028,7 +5063,7 @@ void AppGL::drawSlidesOverlay() {
     if (!sl.image.empty()) uiTex = loadUiTexture(sl.image, &iw, &ih);
 
     if (hasVideo && m_videoFrames > 0) {
-      int fi = static_cast<int>(vTime * 12.0);
+      int fi = static_cast<int>(vTime * sl.videoFps);
       if (fi >= m_videoFrames) fi = m_videoFrames - 1;
       if (fi != m_videoIdx) {
         char buf[512];
@@ -5049,6 +5084,22 @@ void AppGL::drawSlidesOverlay() {
         }
         m_videoIdx = fi;
       }
+    }
+
+    if (m_slidesPreroll) {
+      dl->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(0, 0, 0, 255));
+      if (m_videoTex != 0 && m_videoW > 0 && m_videoH > 0) {
+        const float scale = std::min(disp.x / m_videoW, disp.y / m_videoH);
+        const ImVec2 size(m_videoW * scale, m_videoH * scale);
+        const ImVec2 origin((disp.x - size.x) * 0.5f,
+                            (disp.y - size.y) * 0.5f);
+        dl->AddImage((ImTextureID)(intptr_t)m_videoTex, origin,
+                     ImVec2(origin.x + size.x, origin.y + size.y));
+      }
+      ImGui::End();
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor();
+      return;
     }
 
     const bool videoFrame = hasVideo && m_videoFrames > 0 && m_videoTex != 0;
@@ -13012,9 +13063,9 @@ static const WorkshopAssetEntry kWorkshopCatalog[] = {
    "Heavy-lift industrial colonial transport with magnetic grappling anchors and heavy plasma mining arrays."},
 
   {"voyager", "Звёздный странник «Вояджер»", "Star Voyager", 0,
-   "res/models/voyager.obj", "res/models/voyager", nullptr, 5.2f,
-   "Флагманский исследовательский звездолёт первой межзвёздной экспедиции к чёрной дыре Керра. Автономный научный комплекс глубокого космоса.",
-   "Flagship exploration starship of the first interstellar mission to the Kerr black hole. Autonomous deep-space scientific suite."},
+   "res/models/ark_ship.obj", "res/models/ark_ship", nullptr, 6.5f,
+   "Флагманский исследовательский звездолёт первой межзвёздной экспедиции к чёрной дыре Керра. Автономный научный комплекс глубокого космоса с центробежным кольцом обитания.",
+   "Flagship exploration starship of the first interstellar mission to the Kerr black hole. Autonomous deep-space scientific complex with centrifugal habitat ring."},
 
   {"dragon", "Пилотируемый корабль «Дракон»", "Dragon Capsule", 0,
    "res/models/dragon.obj", "res/models/dragon", nullptr, 4.5f,
@@ -13060,6 +13111,11 @@ static const WorkshopAssetEntry kWorkshopCatalog[] = {
    "res/models/bridge_interior.obj", "res/models/bridge_interior", nullptr, 4.5f,
    "Детализированный командный мостик корабля: кресло капитана, терминалы штурмана и инженера, тактический голографический стол и панорамный бронефонарь.",
    "Fully rendered 3D ship bridge interior featuring captain dais, operator stations, tactical holo-table, and reinforced observation canopy."},
+
+  {"ark_ship", "Межзвёздный Ковчег", "Interstellar Ark Starship", 0,
+   "res/models/ark_ship.obj", "res/models/ark_ship", nullptr, 6.5f,
+   "Тяжелый межзвёздный корабль поколений с двумя вращающимися центрифугами гравитации, параболической антенной дальней связи, модулями криосна и термоядерной двигательной установкой.",
+   "Heavy deep-space generation ark ship featuring dual rotating centrifugal gravity rings, high-gain parabolic comms dish, cryostasis habitat modules, and fusion reaction drive."},
 
   // === 1: Колониальная инфраструктура (Colony 28 assets) ===
   {"colony_park", "Центральный биопарк", "Central Bio-Park", 1,
@@ -16031,8 +16087,11 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
     }
   }
   app.m_videoFrames = 0;  // пересчитать кадры, как в живом запуске
+  const double harnessFps = app.m_slidesCurrent.empty()
+                                ? 12.0
+                                : app.m_slidesCurrent[app.m_slidesIdx].videoFps;
   for (int frame = 0; frame < 3; ++frame) {
-    app.m_slideVStart = ImGui::GetTime() - 60.0 / 12.0;
+    app.m_slideVStart = ImGui::GetTime() - 60.0 / harnessFps;
     app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -16051,6 +16110,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   app.m_slidesCurrent.clear();
   app.m_slidesIdx = 0;
   app.m_slidesAdv = false;
+  app.m_slidesPreroll = false;
   app.invalidateVideoSlide();
 
   // === MenuSky === (v3.5.0): menu.png — hero-вид главного меню (живой

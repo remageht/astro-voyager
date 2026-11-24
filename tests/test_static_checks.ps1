@@ -750,6 +750,9 @@ Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenu
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
 Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and (($sceneCpp -match 'colonySurfaceFrame') -or ($sceneCpp -match 'colonyAnchorNormal'))) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
 Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
+# --- #ED: zero-length-vector hardening in colony math (colonyAnchorNormal/colonySurfaceFrame) ---
+Check 'colonyAnchorNormal guards zero-length anchor' ((Read-File 'src/ColonySystem.cpp') -match 'length < 1e-12f')
+Check 'colonySurfaceFrame guards zero-length tangent frame' ((Read-File 'src/ColonySystem.cpp') -match 'ul < 1e-6f|vl < 1e-6f')
 Check 'colony infrastructure assets loaded' (($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match '"nuclear"') -and ($sceneCpp -match '"hydro"') -and ($sceneCpp -match '"thermal"') -and ($sceneCpp -match '"datacenter"') -and ($sceneCpp -match '"factory"') -and ($sceneCpp -match 'kColonyAssets\[i\]\.key'))
 Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match 's_colonyAssetModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
 Check 'colony capital distance cull' (($sceneCpp -match 'camDist > 24\.0f') -and ((Read-File 'tests/test_colony.cpp') -match 'civic/housing/utility progression'))
@@ -789,7 +792,7 @@ Check 'colony capture harness' (((Read-File 'src/main.cpp') -match '--capture-co
 Check 'colony stage and rp saved' (((Read-File 'src/SaveGame.cpp') -match 'colonyStages') -and ((Read-File 'src/SaveGame.cpp') -match 'researchPoints') -and ((Read-File 'tests/test_save.cpp') -match 'colonyStages'))
 $ciStray = (((Read-File '.github/workflows/build.yml') -split "`n") | Where-Object { $_ -match '^[^\s#]' -and $_ -notmatch '^(name|on|permissions|jobs|env|concurrency|defaults):' }).Count
 Check 'ci workflow yaml indent' ($ciStray -eq 0)
-Check 'v5.2.0 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
+Check 'v5.1.15 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
 
 # --- Colony 2.0 perks wired into the simulation (not panel text only) ---
 Check 'colony perk warp recharge in sim' ((((Read-File 'src/WarpJump.cpp') -match 'dur\(JumpPhase::Charge\)') -and ($appCpp -match 'colonyWarpRechargeBoost\(m_colonyStages\)')) -and ((($appCpp -match '3\.0f \* warpRechargeScale\(\)') -and ($appCpp -match '2\.0f \* warpRechargeScale\(\)')) -and ($appCpp -match 'm_jump\.dur\(JumpPhase::Cooldown\)')))
@@ -954,10 +957,26 @@ $introCpp = Read-File 'src/IntroCinematicDirector.cpp'
 Check 'IntroCinematicDirector.h declares IntroPhase and spline director' (($introH -match 'enum class IntroPhase') -and ($introH -match 'VoidDrift') -and ($introH -match 'WarpBurst') -and ($introH -match 'MegastructureReveal') -and ($introH -match 'BridgeEnter') -and ($introH -match 'TitleGlory') -and ($introH -match 'class IntroCinematicDirector'))
 Check 'IntroCinematicDirector.cpp implements Catmull-Rom spline and drawHUD' (($introCpp -match 'catmullRom') -and ($introCpp -match 'evaluateSpline') -and ($introCpp -match 'drawHUD') -and ($introCpp -match 'ASTRO - VOYAGER') -and ($introCpp -match 'consumeWarpBoomTrigger'))
 Check 'test_intro_cinematic registered in CMakeLists and ASTRO_TEST_TARGETS' (($cmakeTxt -match 'test_intro_cinematic') -and (Test-Path 'tests/test_intro_cinematic.cpp'))
-Check 'orbital megastructure 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/station_megastructure.obj')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_emissive.bmp')))
-Check 'bridge interior 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/bridge_interior.obj')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_emissive.bmp')))
+if ($hasModelPack) {
+    Check 'orbital megastructure 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/station_megastructure.obj')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_emissive.bmp')))
+    Check 'bridge interior 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/bridge_interior.obj')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/bridge_interior_emissive.bmp')))
+} else {
+    Write-Output 'SKIP: 2 intro mesh and PBR map checks (asset pack not fetched for this ref)'
+}
 Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(deltaTime\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match '3D-ЗАСТАВКА \(ИНТРО\)'))
+Check 'universe tour is a data-driven 30 fps full-screen preroll' (((Read-File 'src/StorySlides.h') -match 'videoFps') -and ((Read-File 'src/StorySlides.cpp') -match 'storyUniverseTourSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'res/story/worlds_tour') -and ($appH -match 'm_slidesPreroll') -and ($appCpp -match 'startUniverseTour') -and ($appCpp -match 'vTime \* sl\.videoFps'))
+Check 'menu renders story overlay before menu or realtime intro' ($appCpp -match '(?s)if \(m_slidesOpen\) \{\s*drawSlidesOverlay\(\);\s*\} else if \(m_introDirector\.isActive\(\)\)')
+Check 'universe tour story assets are complete' ((Test-Path 'res/story/worlds_tour/frame_001.jpg') -and (Test-Path 'res/story/worlds_tour/frame_1274.jpg') -and (Test-Path 'res/story/worlds_tour/audio.wav'))
 Check 'workshop catalog registers bridge_interior and station_megastructure' (($appCpp -match '"bridge_interior"') -and ($appCpp -match '"station_megastructure"'))
+
+# --- Issue #236: 3D Interstellar Ark Starship, Rotating Centrifuge Habitat & Deep Space Flagship Suite (v5.1.15) ---
+Check 'workshop catalog registers ark_ship and interstellar ark entry' (($appCpp -match '"ark_ship"') -and ($appCpp -match 'Interstellar Ark'))
+if ($hasModelPack) {
+    Check 'ark ship 3D mesh exceeds 5k polygons' ((Count-ObjFaces 'res/models/ark_ship.obj') -ge 5000)
+    Check 'ark ship 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/ark_ship.obj')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_emissive.bmp')))
+} else {
+    Write-Output 'SKIP: ark ship mesh and PBR map checks (asset pack not fetched for this ref)'
+}
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

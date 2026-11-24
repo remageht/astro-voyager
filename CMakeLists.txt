@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 5.2.0 LANGUAGES CXX)
+project(astro-voyager VERSION 5.1.15 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -656,6 +656,44 @@ if(TARGET test_colony)
   add_test(NAME test_colony COMMAND test_colony)
 endif()
 
+# Issue #ED: регрессионные тесты colony math + orbital assist (Types.h).
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_colony_orbit.cpp")
+  add_executable(test_colony_orbit
+    tests/test_colony_orbit.cpp
+    src/ColonySystem.cpp
+  )
+  target_include_directories(test_colony_orbit PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_colony_orbit PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_colony_orbit PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_colony_orbit)
+  add_test(NAME test_colony_orbit COMMAND test_colony_orbit)
+endif()
+
+# Issue #227: тесты MissionManager (accept/board/serialize).
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_mission_contracts.cpp")
+  add_executable(test_mission_contracts
+    tests/test_mission_contracts.cpp
+    src/MissionSystem.cpp
+    src/ScienceSystem.cpp
+    src/Zettelkasten.cpp
+  )
+  target_include_directories(test_mission_contracts PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_mission_contracts PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_mission_contracts PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_mission_contracts)
+  add_test(NAME test_mission_contracts COMMAND test_mission_contracts)
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_people.cpp")
   add_executable(test_people
     tests/test_people.cpp
@@ -675,7 +713,7 @@ if(TARGET test_people)
   add_test(NAME test_people COMMAND test_people)
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_intro_cinematic.cpp")
+if(GLM_AVAILABLE AND EXISTS "${CMAKE_SOURCE_DIR}/tests/test_intro_cinematic.cpp")
   add_executable(test_intro_cinematic
     tests/test_intro_cinematic.cpp
     src/IntroCinematicDirector.cpp
