@@ -966,7 +966,7 @@ if ($hasModelPack) {
 Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(deltaTime\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match '3D-ЗАСТАВКА \(ИНТРО\)'))
 Check 'universe tour is a data-driven 30 fps full-screen preroll' (((Read-File 'src/StorySlides.h') -match 'videoFps') -and ((Read-File 'src/StorySlides.cpp') -match 'storyUniverseTourSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'res/story/worlds_tour') -and ($appH -match 'm_slidesPreroll') -and ($appCpp -match 'startUniverseTour') -and ($appCpp -match 'vTime \* sl\.videoFps'))
 Check 'menu renders story overlay before menu or realtime intro' ($appCpp -match '(?s)if \(m_slidesOpen\) \{\s*drawSlidesOverlay\(\);\s*\} else if \(m_introDirector\.isActive\(\)\)')
-Check 'universe tour story assets are complete' ((Test-Path 'res/story/worlds_tour/frame_001.jpg') -and (Test-Path 'res/story/worlds_tour/frame_1296.jpg') -and (Test-Path 'res/story/worlds_tour/audio.wav'))
+Check 'universe tour story assets are complete' ((Test-Path 'res/story/worlds_tour/frame_001.jpg') -and (Test-Path 'res/story/worlds_tour/frame_1274.jpg') -and (Test-Path 'res/story/worlds_tour/audio.wav'))
 Check 'workshop catalog registers bridge_interior and station_megastructure' (($appCpp -match '"bridge_interior"') -and ($appCpp -match '"station_megastructure"'))
 
 # --- Issue #236: 3D Interstellar Ark Starship, Rotating Centrifuge Habitat & Deep Space Flagship Suite (v5.1.15) ---
