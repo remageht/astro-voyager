@@ -39,7 +39,7 @@ void check(bool ok, const std::string& what) {
 
 void expectFiniteVec(const astro::Vec3& v, const std::string& what) {
   char buf[128];
-  std::snprintf(buf, sizeof(buf), "%s (finite)", what);
+  std::snprintf(buf, sizeof(buf), "%s (finite)", what.c_str());
   check(finite(v), buf);
 }
 
