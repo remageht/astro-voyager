@@ -314,6 +314,14 @@ void artColony(ImDrawList* dl, const ImVec2& pos, float size) {
 
 namespace astro {
 
+const std::vector<StorySlide>& storyUniverseTourSlides() {
+  static const std::vector<StorySlide> slides = [] {
+    return std::vector<StorySlide>{
+        StorySlide{"", "", 0, "", "res/story/worlds_tour", 30.0}};
+  }();
+  return slides;
+}
+
 const std::vector<StorySlide>& storyIntroSlides() {
   static const std::vector<StorySlide> slides = [] {
     std::vector<StorySlide> s;

@@ -138,6 +138,7 @@ class AppGL {
   void drawExpeditionHud();
   void drawExpeditionMap();
   void startExpeditionIntro();
+  void startUniverseTour();
   void openChapterSlide(int slideIdx);
   // v4.1: advance the campaign for station arrivals and dock objectives.
   void advanceExpedition(const std::string& objectiveId);
@@ -306,6 +307,7 @@ class AppGL {
   std::string m_slidesHead;  // заголовок слайда главы (для done-карточек)
   bool m_slidesOpen = false;
   bool m_slidesIntro = false;
+  bool m_slidesPreroll = false;
   // v4.1: выбор концовки после M13 — модальная карточка Мии.
   bool m_finaleChoiceOpen = false;
   bool m_pendingFinaleChoice = false;
