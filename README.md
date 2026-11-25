@@ -2,7 +2,7 @@
 
 [![build](https://github.com/remageht/astro-voyager/actions/workflows/build.yml/badge.svg)](https://github.com/remageht/astro-voyager/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/remageht/astro-voyager)](https://github.com/remageht/astro-voyager/releases)
-![Version](https://img.shields.io/badge/version-v5.1.0-brightgreen)
+![Version](https://img.shields.io/badge/version-v5.1.15-brightgreen)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![OpenGL](https://img.shields.io/badge/OpenGL-3.3%20Core-green)
 ![Models](https://img.shields.io/badge/3D%20Models-58%20AAA%20PBR-orange)
@@ -11,7 +11,7 @@
 ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)
 ![MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 
-Физически корректный 3D-симулятор Вселенной на **C++17** и **OpenGL 3.3 Core**. Численное релятивистское RK4-линзирование черных дыр в реальном времени, сверхсветовой варп-привод Алькубьерре, орбитальные гиперврата перехода, интерактивная 3D Мастерская с каталогом из 58 высокополигональных моделей с 2K PBR-текстурами, 24-этапная система планетарных колоний и диегетический 3D-кокпит с Zero-UI.
+Физически корректный 3D-симулятор Вселенной на **C++17** и **OpenGL 3.3 Core**. Численное релятивистское RK4-линзирование черных дыр в реальном времени, сверхсветовой варп-привод Алькубьерре, орбитальные гиперврата перехода, кинематографичная 3D-заставка, интерактивная 3D Мастерская с каталогом из 58 высокополигональных моделей с 2K PBR-текстурами, 24-этапная система планетарных колоний и диегетический 3D-кокпит с Zero-UI.
 
 ![Sgr A*](docs/screens/pub/sgra.png)
 *Сверхмассивная чёрная дыра Sgr A*: численное RK4-линзирование в метрике Шварцшильда, тень горизонта, фотонное кольцо и тонкий аккреционный диск Новикова-Торна с релятивистским доплеровским бимингом.*
@@ -21,7 +21,7 @@
 ## Скачать и играть / Download & Play
 
 Готовые автономные сборки без необходимости компиляции и установки:
-- 🎮 **Windows (x86_64)**: [astro-voyager-v5.1.0-windows-x86_64-portable.zip](https://github.com/remageht/astro-voyager/releases/latest) (полный автономный портативный архив со всеми 3D-моделями, текстурами и аудио).
+- 🎮 **Windows (x86_64)**: [astro-voyager-windows-x86_64-portable.zip](https://github.com/remageht/astro-voyager/releases/latest) (полный автономный портативный архив со всеми 3D-моделями, текстурами и аудио).
 - 🐧 **Linux (x86_64)**: [astro-voyager-x86_64.AppImage](https://github.com/remageht/astro-voyager/releases/latest) (`chmod +x *.AppImage && ./*.AppImage`) или `tar.gz` портативный архив.
 - 🍏 **macOS (Apple Silicon arm64)**: [astro-voyager-macos-arm64.tar.gz](https://github.com/remageht/astro-voyager/releases/latest) (нативная сборка OpenGL 3.3 Core).
 
@@ -34,24 +34,19 @@
 
 ---
 
-## 🎬 Кинематографичная 3D-заставка / Cinematic 3D Opening Intro (v5.2.0+)
+## 🎬 Кинематографичное 3D-интро / Cinematic 3D Opening (v5.1.15)
 
-При запуске игры и по нажатию кнопки **«3D-ЗАСТАВКА (ИНТРО)»** в Главном Меню воспроизводится полноценная эпическая трёхмерная заставка с траекторией камеры по кубическим сплайнам Катмулла-Рома, схлопыванием варп-пузыря Алькубьерре, сверхзвуковым пролётом корабля Dart на фоне релятивистской чёрной дыры Керра, колоссальной орбитальной станцией и титрами на шрифтах Bahnschrift и Cascadia Mono.
+При запуске игры и через пункт **«Повторить интро»** в Главном Меню воспроизводится многофазная 3D-заставка: плавная Hermite-камера без рывков, выход из варп-пузыря Алькубьерре, пролёт перехватчика Dart, орбитальная мегаструктура, 3D-мостик и финальные титры Segoe UI Light/Semilight. Резкие вспышки смягчены, а `Space`, `Enter` или `Esc` мгновенно пропускают заставку.
 
-<table>
-  <tr>
-    <td width="50%" align="center">
-      <img src="docs/screens/cinematic_intro_3d_title.png" alt="3D титульный экран заставки" width="100%"><br>
-      <b>Титульный финал 3D-заставки</b><br>
-      <sub>Орбитальная мегаструктура на фоне аккреционного диска чёрной дыры Керра с чёткой типографикой Bahnschrift и кириллической телеметрией</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="docs/screens/cinematic_intro_3d_flyby.png" alt="Пролёт корабля Dart" width="100%"><br>
-      <b>Сверхзвуковой пролёт перехватчика Dart</b><br>
-      <sub>Камера следует за флагманом флота на фоне гравитационного линзирования и станции с неоновыми огнями</sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <a href="https://github.com/remageht/astro-voyager/issues/262#issuecomment-7169862789">
+    <img src="docs/screens/cinematic_intro_v5_1_15_title.png" alt="Astro Voyager cinematic intro — смотреть MP4" width="100%">
+  </a>
+  <br>
+  <sub><b>Смотреть MP4-тизер интро</b> — видео открывается во встроенном плеере GitHub Issue #262.</sub>
+</p>
+
+Для разработчиков: `astro-voyager.exe --capture-intro <dir>` сохраняет шесть контрольных кадров всех фаз заставки.
 
 ---
 
