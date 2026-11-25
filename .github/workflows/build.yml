@@ -84,6 +84,8 @@ jobs:
         run: bash packaging/fetch-gl-deps.sh
       - name: Fetch game assets (3D models + textures)
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Continue'
           ./packaging/fetch-assets.ps1 -Tag "${{ github.ref_name }}" -Repo "${{ github.repository }}"
@@ -161,6 +163,8 @@ jobs:
           Copy-Item -Recurse glew-dist/glew-2.2.0/lib Dependencies/GLEW/lib
       - name: Fetch game assets (3D models + textures)
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Continue'
           ./packaging/fetch-assets.ps1 -Tag "${{ github.ref_name }}" -Repo "${{ github.repository }}"
@@ -286,6 +290,8 @@ jobs:
         run: bash packaging/fetch-gl-deps.sh
       - name: Fetch game assets (3D models + textures)
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Continue'
           ./packaging/fetch-assets.ps1 -Tag "${{ github.ref_name }}" -Repo "${{ github.repository }}"
