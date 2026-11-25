@@ -68,6 +68,11 @@ if (-not $ok) {
 }
 
 Write-Host '    extracting...'
-Expand-Archive -LiteralPath (Join-Path $tmp $pattern) -DestinationPath $DestRoot -Force
+Push-Location $tmp
+try {
+  tar -xf $pattern -C $DestRoot
+} finally {
+  Pop-Location
+}
 $modelCount = (Get-ChildItem (Join-Path $DestRoot 'res\models') -Filter *.obj -ErrorAction SilentlyContinue).Count
 Write-Host "    done: $modelCount models unpacked into $DestRoot\res\models"

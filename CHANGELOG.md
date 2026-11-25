@@ -4,6 +4,20 @@
 
 - EN: Interstellar Ark engineering-realism remaster — the undersized exposed habitat torus was replaced by a colony-scale closed annular pressure drum, 4.70 in diameter and 2.00 long, with 48 armor panels, 36 small windows, eight observation blisters, four docking ports, service hatches, twelve cryo modules and structural rails. A smaller enclosed technical drum, four propellant tanks, two outboard 28-section radiators with manifolds and braces, RCS clusters and an APAS-style docking port now read as functional engineering rather than decoration. The needle nose and oversized gold dish were replaced by a blunt armored command module and a compact high-gain reflector; four fusion bells, one ion engine and six verniers have hollow chambers, heat-tinted lips and deeply recessed plasma cores. The final explicit triangulation yields 132,328 triangles at 6.23×7.19×5.18. The game export is explicitly triangulated for the 16-corner runtime loader, data maps are baked as linear Non-Color, emission is tone-mapped, and the generator no longer overwrites the Voyager relic (Fixes #265, #266, #267, #268).
 - RU: Ремастер Межзвёздного Ковчега в направлении инженерного реализма — маленький открытый тор заменён закрытым annular pressure drum колониального масштаба диаметром 4.70 и длиной 2.00: 48 бронепанелей, 36 малых иллюминаторов, восемь смотровых капсул, четыре стыковочных порта, сервисные люки, 12 модулей криосна и силовые рельсы. Малый закрытый технический барабан, четыре топливных бака, два вынесенных 28-секционных радиатора с магистралями и растяжками, блоки РКС и стыковочный узел APAS теперь выглядят как функциональная конструкция, а не декор. Игольчатый нос и чрезмерно крупная золотая тарелка заменены тупым бронированным командным модулем и компактной антенной; четыре термоядерных, один ионный и шесть вспомогательных двигателей получили полые камеры, теплоокрашенные кромки и глубоко утопленные плазменные ядра. Итоговая явная триангуляция даёт 132 328 треугольников при габарите 6.23×7.19×5.18. Игровой экспорт явно триангулирован для загрузчика с лимитом 16 вершин, data-карты пекутся как линейные Non-Color, emission проходит tone-map, а генератор больше не подменяет реликвию Voyager (Fixes #265, #266, #267, #268).
+## 5.1.1 (2026-11-25)
+
+## What's new / Что нового
+
+- EN: Universe Tour & Cinematic Finale:
+  - Added the 13-chapter, 30 fps full-screen Universe Tour preroll with the `Build` music mix and a 12-second 3D cinematic finale.
+  - The finale now holds the colony and wordmark on a true black frame without the legacy Dart pass.
+  - Workshop subsystem buttons are clickable again, models support manual orbit/pan/zoom, and studio lighting is brighter.
+  - Fixed reversed BMP row order for Ark, Warp Bubble and Warp Drive PBR atlases, removing triangular foreign-color artifacts.
+- RU: Тур по Вселенной и кинематографичный финал:
+  - Добавлен полноэкранный преролл из 13 глав на 30 fps с музыкой `Build` и 12-секундным 3D-финалом.
+  - Финальный кадр удерживает колонию и надпись на настоящем чёрном фоне без старого пролёта Dart.
+  - Кнопки подсистем ангара снова работают, модели можно вращать/панорамировать/масштабировать вручную, студийный свет стал ярче.
+  - Исправлен обратный порядок строк BMP для Ark, Warp Bubble и Warp Drive — цветные треугольные артефакты удалены.
 
 ## 5.1.15 (2026-11-23)
 

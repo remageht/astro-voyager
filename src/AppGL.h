@@ -468,7 +468,7 @@ class AppGL {
   float m_workshopExplode = 0.0f;  // 0.0 = Assembled, >0.0 = Exploded View
   bool m_workshopExplodeAnim = false;
   float m_workshopLightAngle = 45.0f;
-  float m_workshopLightIntensity = 1.6f;
+  float m_workshopLightIntensity = 2.0f;
   ObjModel m_workshopModel;
   std::unique_ptr<Shader> m_workshopShader;
   bool m_workshopShaderTried = false;

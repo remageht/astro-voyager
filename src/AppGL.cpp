@@ -13509,7 +13509,7 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
 
     float lightAzRad = glm::radians(m_workshopLightAngle);
     glm::vec3 keyDir = glm::normalize(glm::vec3(std::sin(lightAzRad) * 0.8f, 0.7f, std::cos(lightAzRad) * 0.8f));
-    glm::vec3 keyCol = glm::vec3(1.0f, 0.98f, 0.95f) * (m_workshopLightIntensity * 14.0f);
+    glm::vec3 keyCol = glm::vec3(1.0f, 0.98f, 0.95f) * (m_workshopLightIntensity * 16.0f);
     m_workshopShader->setUniform3f("u_KeyDir", keyDir);
     m_workshopShader->setUniform3f("u_KeyColor", keyCol);
 
@@ -13518,12 +13518,12 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
       glGenTextures(1, &s_studioCubemap);
       glBindTexture(GL_TEXTURE_CUBE_MAP, s_studioCubemap);
       const float faceColors[6][3] = {
-        {0.30f, 0.38f, 0.46f},
-        {0.26f, 0.32f, 0.40f},
-        {0.55f, 0.65f, 0.78f},
-        {0.14f, 0.17f, 0.22f},
-        {0.42f, 0.50f, 0.60f},
-        {0.24f, 0.29f, 0.36f}
+        {0.36f, 0.46f, 0.55f},
+        {0.31f, 0.38f, 0.48f},
+        {0.66f, 0.78f, 0.94f},
+        {0.17f, 0.20f, 0.26f},
+        {0.50f, 0.60f, 0.72f},
+        {0.29f, 0.35f, 0.43f}
       };
       for (int face = 0; face < 6; ++face) {
         glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGB16F,
@@ -13547,7 +13547,7 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
     m_workshopShader->setUniform1i("u_SkinAlbedo", 6);
     m_workshopShader->setUniform1i("u_SkinRough", 7);
     m_workshopShader->setUniform1f("u_EnvMaxLod", 9.0f);
-    m_workshopShader->setUniform1f("u_ReflK", 0.8f);
+    m_workshopShader->setUniform1f("u_ReflK", 0.9f);
     m_workshopShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
     m_workshopShader->setUniform1i("u_FlatNormal", 0);
     m_workshopShader->setUniform1f("u_RingSpin", 0.0f);
@@ -13574,7 +13574,7 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
     m_workshopShader->setUniform3f("u_HullTint", hullTint);
     m_workshopShader->setUniform3f("u_AccentTint", accentTint);
     m_workshopShader->setUniform3f("u_EmissiveTint", glm::vec3(m_workshopEmissiveScale));
-    m_workshopShader->setUniform1f("u_StationPbr", 1.0f);
+    m_workshopShader->setUniform1f("u_StationPbr", 0.0f);
     m_workshopShader->setUniform1f("u_HullWear", -1.0f);
     m_workshopShader->setUniform1i("u_RenderMode", m_workshopRenderMode);
 
@@ -13768,29 +13768,6 @@ void AppGL::drawWorkshopPage(float colAreaH) {
                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
     const auto& entry = kWorkshopCatalog[m_workshopModelIdx];
 
-    // Кнопка захвата мыши для орбиты/зума/панорамы
-    ImGui::InvisibleButton("##WorkshopCanvas", ImVec2(canvasW, colAreaH - 40.0f));
-    if (ImGui::IsItemActive()) {
-      if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-        m_workshopYaw += io.MouseDelta.x * 0.5f;
-        m_workshopPitch += io.MouseDelta.y * 0.5f;
-        m_workshopPitch = std::clamp(m_workshopPitch, -85.0f, 85.0f);
-        m_workshopLerpActive = false;
-      }
-      if (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
-        float panSpeed = 0.0035f * m_workshopDist;
-        m_workshopPan.x += io.MouseDelta.x * panSpeed;
-        m_workshopPan.y -= io.MouseDelta.y * panSpeed;
-        m_workshopLerpActive = false;
-      }
-    }
-    if (ImGui::IsItemHovered()) {
-      if (io.MouseWheel != 0.0f) {
-        m_workshopDist = std::clamp(m_workshopDist - io.MouseWheel * 0.45f, 1.0f, 25.0f);
-        m_workshopLerpActive = false;
-      }
-    }
-
     // Onscreen HUD DrawList
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 cp = ImGui::GetWindowPos();
@@ -13872,6 +13849,27 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     drawSubsystemBtn(uiRu("Крылья", "Wings"), WorkshopSubsystem::WingsRadiators, subBtnW);
     ImGui::SameLine(0.0f, 4.0f);
     drawSubsystemBtn(uiRu("Шлюз", "Airlock"), WorkshopSubsystem::DockingPort, subBtnW);
+
+    ImGui::SetCursorPos(ImVec2(0.0f, 70.0f));
+    ImGui::InvisibleButton("##WorkshopCanvas", ImVec2(canvasW, std::max(40.0f, colAreaH - 110.0f)));
+    if (ImGui::IsItemActive()) {
+      if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        m_workshopYaw += io.MouseDelta.x * 0.5f;
+        m_workshopPitch += io.MouseDelta.y * 0.5f;
+        m_workshopPitch = std::clamp(m_workshopPitch, -85.0f, 85.0f);
+        m_workshopLerpActive = false;
+      }
+      if (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+        float panSpeed = 0.0035f * m_workshopDist;
+        m_workshopPan.x += io.MouseDelta.x * panSpeed;
+        m_workshopPan.y -= io.MouseDelta.y * panSpeed;
+        m_workshopLerpActive = false;
+      }
+    }
+    if (ImGui::IsItemHovered() && io.MouseWheel != 0.0f) {
+      m_workshopDist = std::clamp(m_workshopDist - io.MouseWheel * 0.45f, 1.0f, 25.0f);
+      m_workshopLerpActive = false;
+    }
 
     // Нижняя панель быстрых действий визора
     ImGui::SetCursorPos(ImVec2(10.0f, colAreaH - 34.0f));
