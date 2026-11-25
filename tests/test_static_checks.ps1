@@ -899,15 +899,21 @@ if ($hasModelPack) {
     Check 'warp bubble high-poly mesh exceeds 20k triangles' ((Count-ObjFaces 'res/models/warp_bubble.obj') -ge 20000)
     Check 'warp drive vis high-poly mesh exceeds 30k triangles' ((Count-ObjFaces 'res/models/warp_drive_vis.obj') -ge 30000)
     Check 'warp tunnel high-poly mesh exceeds 10k triangles' ((Count-ObjFaces 'res/models/warp_tunnel.obj') -ge 10000)
-    Check 'ring ship MCP remaster exceeds 60k triangles' ((Count-ObjFaces 'res/models/ring_ship.obj') -ge 60000)
-    Check 'ring ship MCP remaster PBR maps exist' ((Test-Path (Join-Path $root 'res/models/ring_ship_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_emissive.bmp')))
     Check 'probe PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/probe_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/probe_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/probe_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/probe_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/probe_emissive.bmp')))
     Check 'asteroid PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/asteroid_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/asteroid_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/asteroid_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/asteroid_metal.bmp')))
     Check 'warp bubble PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/warp_bubble_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_bubble_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_bubble_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_bubble_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_bubble_emissive.bmp')))
     Check 'warp drive vis PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/warp_drive_vis_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_drive_vis_emissive.bmp')))
     Check 'warp tunnel PBR texture maps exist' ((Test-Path (Join-Path $root 'res/models/warp_tunnel_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/warp_tunnel_emissive.bmp')))
 } else {
-    Write-Output 'SKIP: 16 high-poly mesh and PBR map checks (asset pack not fetched for this ref)'
+    Write-Output 'SKIP: 14 high-poly mesh and PBR map checks (asset pack not fetched for this ref)'
+}
+
+$hasRingShipRemaster = Test-Path (Join-Path $root 'res/models/ring_ship_remaster.meta')
+if ($hasModelPack -and $hasRingShipRemaster) {
+    Check 'ring ship MCP remaster exceeds 60k triangles' ((Count-ObjFaces 'res/models/ring_ship.obj') -ge 60000)
+    Check 'ring ship MCP remaster PBR maps exist' ((Test-Path (Join-Path $root 'res/models/ring_ship_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_emissive.bmp')))
+} elseif ($hasModelPack) {
+    Write-Output 'SKIP: 2 Ring Ship MCP remaster checks (asset pack predates the remaster)'
 }
 
 # --- Issue #218: 3D workshop dark studio backdrop, exploded view, multi-nozzle Mach diamonds thruster VFX, and LOD system ---
