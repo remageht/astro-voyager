@@ -792,7 +792,7 @@ Check 'colony capture harness' (((Read-File 'src/main.cpp') -match '--capture-co
 Check 'colony stage and rp saved' (((Read-File 'src/SaveGame.cpp') -match 'colonyStages') -and ((Read-File 'src/SaveGame.cpp') -match 'researchPoints') -and ((Read-File 'tests/test_save.cpp') -match 'colonyStages'))
 $ciStray = (((Read-File '.github/workflows/build.yml') -split "`n") | Where-Object { $_ -match '^[^\s#]' -and $_ -notmatch '^(name|on|permissions|jobs|env|concurrency|defaults):' }).Count
 Check 'ci workflow yaml indent' ($ciStray -eq 0)
-Check 'v5.1.15 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
+Check 'v5.1.1 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
 
 # --- Colony 2.0 perks wired into the simulation (not panel text only) ---
 Check 'colony perk warp recharge in sim' ((((Read-File 'src/WarpJump.cpp') -match 'dur\(JumpPhase::Charge\)') -and ($appCpp -match 'colonyWarpRechargeBoost\(m_colonyStages\)')) -and ((($appCpp -match '3\.0f \* warpRechargeScale\(\)') -and ($appCpp -match '2\.0f \* warpRechargeScale\(\)')) -and ($appCpp -match 'm_jump\.dur\(JumpPhase::Cooldown\)')))
@@ -918,6 +918,10 @@ Check 'ship vertex shader has u_Explode uniform and displacement logic' (($shipV
 Check 'menu fragment shader has u_DimFactor uniform and dimming math' (($menuFrag -match 'uniform float u_DimFactor;') -and ($menuFrag -match 'u_DimFactor > 0\.0'))
 Check 'AppGL declares workshop backdrop mode and exploded view fields' (($appH -match 'm_workshopBackdropMode = 0;') -and ($appH -match 'm_workshopExplode = 0\.0f;') -and ($appH -match 'm_workshopExplodeAnim = false;'))
 Check 'AppGL implements workshop dark studio clearing and backdrop dimmer' (($appCpp -match 'glClearColor\(0\.024f, 0\.028f, 0\.038f, 1\.0f\)') -and ($appCpp -match 'dimFactor = 0\.15f') -and ($appCpp -match 'u_DimFactor'))
+$workshopToolbarIdx = $appCpp.IndexOf('WorkshopSubsystem::DockingPort, subBtnW);')
+$workshopCanvasIdx = $appCpp.IndexOf('ImGui::InvisibleButton("##WorkshopCanvas"')
+Check 'workshop subsystem toolbar precedes the orbit canvas' (($workshopToolbarIdx -ge 0) -and ($workshopCanvasIdx -gt $workshopToolbarIdx))
+Check 'workshop uses the full PBR lighting path' ($appCpp -match 'm_workshopShader->setUniform1f\("u_StationPbr", 0\.0f\)')
 Check 'AppGL passes u_Explode to workshop shader and provides UI slider' (($appCpp -match 'm_workshopShader->setUniform1f\("u_Explode", m_workshopExplode\)') -and ($appCpp -match 'Explode Dist') -and ($appCpp -match 'm_workshopExplodeAnim'))
 Check 'LodSystem defines 3-tier station LOD levels and distance thresholds' (($lodH -match 'enum class StationLodLevel') -and ($lodH -match 'LOD0_Close') -and ($lodH -match 'LOD1_Medium') -and ($lodH -match 'LOD2_Far') -and ($lodH -match 'kStationLod0Threshold') -and ($lodH -match 'kStationLod1Threshold') -and ($lodH -match 'kStationLodCullDistance'))
 Check 'LodSystem defines multi-nozzle thruster geometry layout for fleet styles' (($lodH -match 'struct ThrusterNozzle') -and ($lodH -match 'getShipNozzleLayout\(int style\)') -and ($lodH -match 'Dart: 2') -and ($lodH -match 'Shuttle: 3') -and ($lodH -match 'Mining Dreadnought: 4'))
@@ -971,6 +975,8 @@ Check 'workshop catalog registers bridge_interior and station_megastructure' (($
 
 # --- Issue #236: 3D Interstellar Ark Starship, Rotating Centrifuge Habitat & Deep Space Flagship Suite (v5.1.15) ---
 Check 'workshop catalog registers ark_ship and interstellar ark entry' (($appCpp -match '"ark_ship"') -and ($appCpp -match 'Interstellar Ark'))
+$arkBmpWriter = Read-File 'tools/build_interstellar_ark.py'
+Check 'ark BMP writer preserves runtime row order' ($arkBmpWriter -match 'src_row = y \* width \* 3')
 if ($hasModelPack) {
     Check 'ark ship 3D mesh exceeds 5k polygons' ((Count-ObjFaces 'res/models/ark_ship.obj') -ge 5000)
     Check 'ark ship 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/ark_ship.obj')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_emissive.bmp')))

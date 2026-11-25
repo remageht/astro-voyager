@@ -61,7 +61,7 @@ def write_bmp24(filepath, width, height, rgb_buffer):
     # Pixel data (bottom-up, BGR order)
     data = bytearray(image_size)
     for y in range(height):
-        src_row = (height - 1 - y) * width * 3
+        src_row = y * width * 3
         dst_row = y * stride
         for x in range(width):
             src_idx = src_row + x * 3
