@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Unreleased
+
+- EN: Ring Ship MCP remaster — the approved Blender-MCP prototype was reproduced in the versioned generator. The hull is broader and more mechanical, with side armor fairings, vented panels, service hatches, fasteners, cable runs, segmented 24-clamp warp rings, two static mounts per ring, larger canopy and a ribbed stern engine cluster. Explicit triangulation yields 74,414 triangles and 55,773 vertices at 0.830×0.830×2.320; the five 2048×2048 PBR maps and showcase are rebaked.
+- RU: Ремастер Ring Ship через MCP — утверждённый прототип воспроизведён версионируемым генератором. Корпус стал шире и механичнее: боковые броневые обтекатели, вентили, сервисные люки, болты, кабели, сегментированные кольца с 24 хомутами, по два статических пилона на кольцо, увеличенная кабина и ребристая корма. Явная триангуляция даёт 74 414 треугольников и 55 773 вершину при габарите 0.830×0.830×2.320; пять PBR-карт 2048×2048 и витрина перезапечены.
+
 ## 5.1.15 (2026-11-23)
 
 ## What's new / Что нового
