@@ -317,6 +317,21 @@ Check 'story journal test wired' (($cmake -match 'tests/test_story\.cpp') -and (
 # --- v3.5.0 expedition pass ---
 Check 'expedition core module' (((Read-File 'src/Expedition.h') -match 'class ExpeditionState') -and ((Read-File 'src/Expedition.cpp') -match 'expeditionChapters') -and ($cmake -match 'src/Expedition\.cpp'))
 Check 'expedition slides module' (((Read-File 'src/StorySlides.h') -match 'storyIntroSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'drawStoryArt') -and ($cmake -match 'src/StorySlides\.cpp'))
+$cinematicStoryArt = @(
+  'res/story/cinematic/expedition_00_mia_stars.png',
+  'res/story/cinematic/expedition_01_academy.png',
+  'res/story/cinematic/expedition_02_dimming_sun.png',
+  'res/story/cinematic/expedition_03_cities_dark.png',
+  'res/story/cinematic/expedition_04_bridge.png',
+  'res/story/cinematic/expedition_05_launch.png',
+  'res/story/cinematic/expedition_06_photon_ring.png',
+  'res/story/cinematic/story_07_relativistic_jet.png',
+  'res/story/cinematic/story_08_quasar.png',
+  'res/story/cinematic/story_09_cluster.png',
+  'res/story/cinematic/story_10_colony.png'
+)
+Check 'cinematic story art set is complete' (($cinematicStoryArt.Count -eq 11) -and (@($cinematicStoryArt | Where-Object { -not (Test-Path (Join-Path $root $_)) }).Count -eq 0))
+Check 'story slides prefer cinematic art with vector fallback' (($appCpp -match 'storyArtImage\(sl\.art\)') -and ((Read-File 'src/StorySlides.cpp') -match 'story_10_colony\.png'))
 Check 'expedition play hook' (($appCpp -match 'startExpeditionIntro') -and ($appCpp -match 'startNewAdventure'))
 Check 'free flight button' ($appCpp -match 'FREE FLIGHT')
 Check 'expedition map key N' (($appCpp -match 'm_keyMap') -and ($appCpp -match 'm_expeditionMapOpen'))

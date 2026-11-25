@@ -4968,7 +4968,8 @@ void AppGL::drawSlidesOverlay() {
   int iw = 0;
   int ih = 0;
   unsigned int uiTex = 0;
-  if (!sl.image.empty()) uiTex = loadUiTexture(sl.image, &iw, &ih);
+  const char* storyImage = sl.image.empty() ? storyArtImage(sl.art) : sl.image.c_str();
+  if (storyImage && storyImage[0] != '\0') uiTex = loadUiTexture(storyImage, &iw, &ih);
   const ImVec2 artPos((disp.x - artSize) * 0.5f, artTop);
   float textY = artPos.y + artSize + 26.0f;
   if (hasVideo && m_videoFrames > 0) {
@@ -5060,7 +5061,8 @@ void AppGL::drawSlidesOverlay() {
     int iw = 0;
     int ih = 0;
     unsigned int uiTex = 0;
-    if (!sl.image.empty()) uiTex = loadUiTexture(sl.image, &iw, &ih);
+    const char* storyImage = sl.image.empty() ? storyArtImage(sl.art) : sl.image.c_str();
+    if (storyImage && storyImage[0] != '\0') uiTex = loadUiTexture(storyImage, &iw, &ih);
 
     if (hasVideo && m_videoFrames > 0) {
       int fi = static_cast<int>(vTime * sl.videoFps);
