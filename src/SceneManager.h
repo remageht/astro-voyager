@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -436,6 +437,7 @@ class SceneManager {
   RingMesh m_saturnRing;
   BeltPoints m_belt;
   LineMesh m_orbits;
+  std::map<std::string, std::unique_ptr<LineMesh>> m_colonyRoadMeshes;
   std::vector<BodyState> m_lastBodies;
 
   // Object editor state (empty at spawn, only UI spawns).

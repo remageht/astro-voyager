@@ -502,6 +502,135 @@ ColonySurfaceFrame colonySurfaceFrame(const std::string& worldId) {
   return f;
 }
 
+const std::array<ColonyAssetSpec, kColonyAssetCount>& colonyAssetSpecs() {
+  static const std::array<ColonyAssetSpec, kColonyAssetCount> specs = {{
+      {"dome", 0.0200f, 3.0f, ColonyDistrict::Residential},
+      {"pad", 0.0220f, 3.2f, ColonyDistrict::Logistics},
+      {"factory", 0.0280f, 3.4f, ColonyDistrict::Industrial},
+      {"datacenter", 0.0300f, 4.2f, ColonyDistrict::Research},
+      {"nuclear", 0.0340f, 4.2f, ColonyDistrict::Energy},
+      {"thermal", 0.0340f, 4.6f, ColonyDistrict::Energy},
+      {"hydro", 0.0380f, 4.6f, ColonyDistrict::Energy},
+      {"townhall", 0.0320f, 3.6f, ColonyDistrict::Civic},
+      {"parliament", 0.0360f, 4.0f, ColonyDistrict::Civic},
+      {"police", 0.0300f, 3.6f, ColonyDistrict::Security},
+      {"warehouse", 0.0340f, 4.2f, ColonyDistrict::Logistics},
+      {"military", 0.0380f, 4.2f, ColonyDistrict::Security},
+      {"houses", 0.0320f, 3.8f, ColonyDistrict::Residential},
+      {"apartments", 0.0300f, 4.2f, ColonyDistrict::Residential},
+      {"pipeline", 0.0400f, 4.4f, ColonyDistrict::Energy},
+      {"powerline", 0.0400f, 4.4f, ColonyDistrict::Energy},
+      {"solar", 0.0380f, 4.4f, ColonyDistrict::Energy},
+      {"diesel", 0.0300f, 4.0f, ColonyDistrict::Energy},
+      {"inverter", 0.0300f, 4.0f, ColonyDistrict::Energy},
+      {"wind", 0.0400f, 4.4f, ColonyDistrict::Energy},
+      {"hospital", 0.0350f, 4.4f, ColonyDistrict::Medical},
+      {"clinic", 0.0270f, 3.4f, ColonyDistrict::Medical},
+      {"park", 0.0310f, 3.8f, ColonyDistrict::Recreation},
+      {"market", 0.0330f, 4.0f, ColonyDistrict::Civic},
+      {"school", 0.0330f, 4.2f, ColonyDistrict::Civic},
+      {"fire", 0.0290f, 3.6f, ColonyDistrict::Security},
+      {"water", 0.0360f, 4.4f, ColonyDistrict::Energy},
+      {"greenhouse", 0.0340f, 4.2f, ColonyDistrict::Industrial},
+  }};
+  return specs;
+}
+
+const ColonyAssetSpec* colonyAssetSpec(const std::string& key) {
+  for (const auto& spec : colonyAssetSpecs())
+    if (key == spec.key) return &spec;
+  return nullptr;
+}
+
+void colonySurfaceDirection(const ColonySurfaceFrame& frame, float theta,
+                            float phi, float out[3]) {
+  const float ct = std::cos(theta);
+  const float st = std::sin(theta);
+  const float cp = std::cos(phi);
+  const float sp = std::sin(phi);
+  out[0] = frame.anchor[0] * ct +
+           (frame.tangentU[0] * cp + frame.tangentV[0] * sp) * st;
+  out[1] = frame.anchor[1] * ct +
+           (frame.tangentU[1] * cp + frame.tangentV[1] * sp) * st;
+  out[2] = frame.anchor[2] * ct +
+           (frame.tangentU[2] * cp + frame.tangentV[2] * sp) * st;
+  const float length = std::sqrt(out[0] * out[0] + out[1] * out[1] +
+                                 out[2] * out[2]);
+  if (length > 1e-6f) {
+    out[0] /= length;
+    out[1] /= length;
+    out[2] /= length;
+  }
+}
+
+std::vector<ColonyPlacement> colonySurfaceLayout(const std::string& worldId,
+                                                 int stage) {
+  constexpr int kDistrictCount = static_cast<int>(ColonyDistrict::Count);
+  struct Center { float theta; float phi; };
+  static constexpr Center kCenters[kDistrictCount] = {
+      {0.055f, 0.00f}, {0.26f, 3.14159265f}, {0.30f, -1.57079633f},
+      {0.28f, 1.57079633f}, {0.40f, -2.35619449f}, {0.38f, 2.35619449f},
+      {0.23f, 1.04719755f}, {0.21f, -1.04719755f}, {0.34f, 0.00f},
+  };
+  const auto plan = colonyBuildPlan(worldId, stage);
+  std::array<int, kDistrictCount> counts{};
+  std::array<float, kDistrictCount> spacing{};
+  for (const auto& entry : plan) {
+    const ColonyAssetSpec* spec = colonyAssetSpec(entry.first);
+    if (!spec) continue;
+    const int district = static_cast<int>(spec->district);
+    counts[district] += entry.second;
+    spacing[district] = std::max(spacing[district],
+                                 std::max(0.032f, spec->footprint * 1.85f));
+  }
+
+  std::array<std::vector<ColonyPlacement>, kDistrictCount> slots;
+  for (int district = 0; district < kDistrictCount; ++district) {
+    slots[district].reserve(counts[district]);
+    const Center center = kCenters[district];
+    for (int i = 0; i < counts[district]; ++i) {
+      const float rho = spacing[district] * std::sqrt(static_cast<float>(i) + 0.5f);
+      const float local = i * 2.39996323f + district * 0.71f;
+      const float theta = std::clamp(center.theta + rho * std::cos(local),
+                                     0.018f, 0.62f);
+      const float phi = center.phi + rho * std::sin(local) /
+                        std::max(std::sin(center.theta), 0.45f);
+      slots[district].push_back({"", static_cast<ColonyDistrict>(district),
+                                 theta, phi, phi, i});
+    }
+  }
+
+  std::vector<ColonyPlacement> out;
+  out.reserve(colonyStructureCount(worldId, stage));
+  std::array<int, kDistrictCount> cursor{};
+  bool firstPad = true;
+  for (const auto& entry : plan) {
+    const ColonyAssetSpec* spec = colonyAssetSpec(entry.first);
+    if (!spec) continue;
+    const int district = static_cast<int>(spec->district);
+    for (int i = 0; i < entry.second; ++i) {
+      ColonyPlacement placement = slots[district][cursor[district]++];
+      placement.asset = spec->key;
+      placement.ordinal = static_cast<int>(out.size());
+      if (firstPad && entry.first == "pad") {
+        placement.theta = 0.018f;
+        placement.phi = 0.0f;
+        placement.heading = 0.0f;
+        firstPad = false;
+      }
+      out.push_back(placement);
+    }
+  }
+  return out;
+}
+
+float colonySurfaceLayoutRadius(const std::string& worldId, int stage) {
+  float radius = 0.02f;
+  for (const auto& placement : colonySurfaceLayout(worldId, stage))
+    radius = std::max(radius, placement.theta + 0.025f);
+  return radius;
+}
+
 const std::vector<ColonyMilestone>& colonyTerraformMilestones() {
   // Ordered by stage. Rewards are one-off RP grants, paid when the player
   // crosses the milestone by building a stage.

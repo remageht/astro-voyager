@@ -2,6 +2,7 @@
 #include "Types.h"
 
 #include <cassert>
+#include <cmath>
 #include <iostream>
 
 using namespace astro;
@@ -447,6 +448,43 @@ int main() {
     std::cout << "PASS: Test 9 perks applied to warp, shields, unlocks and routes\n";
   }
 
-  std::cout << "[test_colony] ALL 9 TESTS PASSED!\n";
+  // Test 10: functional district layout is deterministic and colony-scale.
+  {
+    const auto capital = colonySurfaceLayout("mars", kColonyStageCount);
+    if (capital.size() != static_cast<size_t>(colonyStructureCount("mars", kColonyStageCount))) {
+      std::cerr << "Test 10 failed: layout does not place every structure\n";
+      return 1;
+    }
+    const auto repeated = colonySurfaceLayout("mars", kColonyStageCount);
+    std::array<bool, static_cast<size_t>(ColonyDistrict::Count)> districts{};
+    bool centralPad = false;
+    for (size_t i = 0; i < capital.size(); ++i) {
+      const ColonyPlacement& p = capital[i];
+      const ColonyAssetSpec* spec = colonyAssetSpec(p.asset);
+      if (!spec || spec->district != p.district || !std::isfinite(p.theta) ||
+          !std::isfinite(p.phi) || p.theta < 0.0f || p.theta > 0.65f) {
+        std::cerr << "Test 10 failed: invalid placement " << i << "\n";
+        return 1;
+      }
+      if (std::fabs(p.theta - repeated[i].theta) > 1e-6f ||
+          std::fabs(p.phi - repeated[i].phi) > 1e-6f) {
+        std::cerr << "Test 10 failed: layout is not deterministic\n";
+        return 1;
+      }
+      districts[static_cast<size_t>(p.district)] = true;
+      if (std::string(p.asset) == "pad" && p.theta < 0.03f) centralPad = true;
+    }
+    int districtCount = 0;
+    for (bool present : districts) if (present) ++districtCount;
+    const float radius = colonySurfaceLayoutRadius("mars", kColonyStageCount);
+    if (districtCount < 7 || radius < 0.45f || radius > 0.65f || !centralPad) {
+      std::cerr << "Test 10 failed: expected a spread, multi-district capital, got "
+                << districtCount << " districts and radius " << radius << "\n";
+      return 1;
+    }
+    std::cout << "PASS: Test 10 functional district layout\n";
+  }
+
+  std::cout << "[test_colony] ALL 10 TESTS PASSED!\n";
   return 0;
 }
