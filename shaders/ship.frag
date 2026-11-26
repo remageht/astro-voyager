@@ -42,7 +42,8 @@ uniform vec3 u_HullTint;          // v3.11.0: базовый оттенок ко
 uniform vec3 u_AccentTint;        // v3.11.0: оттенок акцентной ливреи (1,1,1 по умолчанию)
 uniform vec3 u_EmissiveTint;      // v3.11.0: оттенок плазменного свечения (1,1,1 по умолчанию)
 uniform float u_StationPbr;       // 1 = orbital station PBR lighting
-uniform float u_HullWear;         // v4.0.0: -1 off, 0 = restored, 1 = battered OBJ hull
+uniform float u_ContactGround;     // local-height AO for surface infrastructure
+uniform float u_HullWear;         // v4.0.0: -1 off; 0 = restored; 1 = battered OBJ hull
 uniform int u_RenderMode;         // 0=PBR, 1=Clay, 2=Normals RGB, 3=Wireframe
 
 const float kPi = 3.14159265;
@@ -114,6 +115,10 @@ void main() {
       col += emMap;
     }
     col += u_Emissive * u_EmissiveTint;
+    if (u_ContactGround > 0.5) {
+      float contact = smoothstep(0.0, 0.28, max(v_ObjPos.z, 0.0));
+      col *= mix(0.52, 1.0, contact);
+    }
     FragColor = vec4(col, 1.0);
     return;
   }

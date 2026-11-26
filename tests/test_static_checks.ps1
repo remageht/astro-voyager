@@ -762,6 +762,8 @@ Check 'colony service assets loaded' ((($sceneCpp -match '"hospital"') -and ($sc
 Check 'colony service plan order' ((($planSrc -match '4 water loop') -and ($planSrc -match '11 medical centre') -and ($planSrc -match '13 township') -and ($planSrc -match '15 research campus')))
 Check 'colony service demand layers tested' ((($colonyTestSrc -match 'hospital') -and ($colonyTestSrc -match 'greenhouse')))
 Check 'colony district scale pinned' ((($sceneCpp -match '0\.032f \* std::sqrt') -and ($sceneCpp -match '0\.30f')) -and (($appCpp -match 'surface-occluded') -and ($appCpp -match '0\.11f')))
+Check 'colony meshes keep exported Z-up on the surface normal' (($sceneCpp -cnotmatch 'align \* ownUpToY') -and ($sceneCpp -match 'align\[2\] = glm::vec4\(dir, 0\.0f\)'))
+Check 'colony buildings use local contact grounding' (($sceneCpp -match 'u_ContactGround') -and ((Read-File 'shaders/ship.frag') -match 'u_ContactGround') -and ((Read-File 'shaders/ship.frag') -match 'smoothstep\(0\.0, 0\.28, max\(v_ObjPos\.z, 0\.0\)\)'))
 $extGenDir = if ($env:ASTRO_GENERATORS_DIR -and (Test-Path $env:ASTRO_GENERATORS_DIR)) {
     $env:ASTRO_GENERATORS_DIR
 } elseif (Test-Path (Join-Path $root '../astro-voyager-generators/scripts')) {

@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Unreleased
+
+- EN: Colony surface grounding — exported Z-up colony meshes no longer receive the extra 90° rotation that put their vertical axis into the tangent plane. Buildings now sit on the local surface normal, use the real sun direction in Sol, and receive local-height contact darkening at their foundations. Industrial concrete is cooler, darker and rougher instead of warm beige (Fixes #272).
+- RU: Контакт колоний с поверхностью — экспортированные Z-up меши больше не получают лишний поворот 90°, который направлял их вертикаль в касательную плоскость. Здания стоят на локальной нормали, освещаются реальным направлением Солнца в Солнечной системе и затемняются у фундамента по локальной высоте. Промышленный бетон стал холоднее, темнее и матовее вместо тёплого бежевого (Fixes #272).
+
 ## 5.1.1 (2026-11-25)
 
 ## What's new / Что нового
