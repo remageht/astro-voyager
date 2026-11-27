@@ -778,20 +778,20 @@ Check 'power-down sequence runs to the dot before the window closes' (($appCpp -
 Check 'native exit regression captures the power-down frames' (($appCpp -match 'AppGL::captureExitCheck') -and ((Read-File 'src/main.cpp') -match '--capture-exit') -and ($appCpp -match 'exit_06_black\.png'))
 
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
-Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and (($sceneCpp -match 'colonySurfaceFrame') -or ($sceneCpp -match 'colonyAnchorNormal'))) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
+Check 'colony stage plan' ((($sceneCpp -match 'colonySurfaceLayout') -and ($sceneCpp -match 'colonySurfaceFrame')) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
 Check 'colony power plant per world' ((Read-File 'src/ColonySystem.cpp') -match 'colonyEnergyAsset')
 # --- #ED: zero-length-vector hardening in colony math (colonyAnchorNormal/colonySurfaceFrame) ---
 Check 'colonyAnchorNormal guards zero-length anchor' ((Read-File 'src/ColonySystem.cpp') -match 'length < 1e-12f')
 Check 'colonySurfaceFrame guards zero-length tangent frame' ((Read-File 'src/ColonySystem.cpp') -match 'ul < 1e-6f|vl < 1e-6f')
-Check 'colony infrastructure assets loaded' (($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match '"nuclear"') -and ($sceneCpp -match '"hydro"') -and ($sceneCpp -match '"thermal"') -and ($sceneCpp -match '"datacenter"') -and ($sceneCpp -match '"factory"') -and ($sceneCpp -match 'kColonyAssets\[i\]\.key'))
-Check 'colony civic housing utility assets loaded' ((((($sceneCpp -match 'kColonyAssets') -and ($sceneCpp -match 's_colonyAssetModels')) -and ($sceneCpp -match '"townhall"') -and ($sceneCpp -match '"apartments"')) -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6')) -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
+Check 'colony infrastructure assets loaded' (($sceneCpp -match 'colonyAssetSpecs') -and ((Read-File 'src/ColonySystem.cpp') -match '"nuclear"') -and ((Read-File 'src/ColonySystem.cpp') -match '"hydro"') -and ((Read-File 'src/ColonySystem.cpp') -match '"thermal"') -and ((Read-File 'src/ColonySystem.cpp') -match '"datacenter"') -and ((Read-File 'src/ColonySystem.cpp') -match '"factory"') -and ($sceneCpp -match 'kColonyAssets\[i\]\.key'))
+Check 'colony civic housing utility assets loaded' (($sceneCpp -match 's_colonyAssetModels') -and ((Read-File 'src/ColonySystem.cpp') -match '"townhall"') -and ((Read-File 'src/ColonySystem.cpp') -match '"apartments"') -and ((Read-File 'src/ColonySystem.h') -match 'kColonyPlanSlots = 6') -and ((Read-File 'src/ColonySystem.cpp') -match '"parliament"'))
 Check 'colony capital distance cull' (($sceneCpp -match 'camDist > 24\.0f') -and ((Read-File 'tests/test_colony.cpp') -match 'civic/housing/utility progression'))
 $planSrc = Read-File 'src/ColonySystem.cpp'
 $colonyTestSrc = Read-File 'tests/test_colony.cpp'
-Check 'colony service assets loaded' ((($sceneCpp -match '"hospital"') -and ($sceneCpp -match '"clinic"') -and ($sceneCpp -match '"park"') -and ($sceneCpp -match '"market"') -and ($sceneCpp -match '"school"') -and ($sceneCpp -match '"fire"') -and ($sceneCpp -match '"water"') -and ($sceneCpp -match '"greenhouse"')))
+Check 'colony service assets loaded' (((Read-File 'src/ColonySystem.cpp') -match '"hospital"') -and ((Read-File 'src/ColonySystem.cpp') -match '"clinic"') -and ((Read-File 'src/ColonySystem.cpp') -match '"park"') -and ((Read-File 'src/ColonySystem.cpp') -match '"market"') -and ((Read-File 'src/ColonySystem.cpp') -match '"school"') -and ((Read-File 'src/ColonySystem.cpp') -match '"fire"') -and ((Read-File 'src/ColonySystem.cpp') -match '"water"') -and ((Read-File 'src/ColonySystem.cpp') -match '"greenhouse"'))
 Check 'colony service plan order' ((($planSrc -match '4 water loop') -and ($planSrc -match '11 medical centre') -and ($planSrc -match '13 township') -and ($planSrc -match '15 research campus')))
 Check 'colony service demand layers tested' ((($colonyTestSrc -match 'hospital') -and ($colonyTestSrc -match 'greenhouse')))
-Check 'colony district scale pinned' ((($sceneCpp -match '0\.032f \* std::sqrt') -and ($sceneCpp -match '0\.30f')) -and (($appCpp -match 'surface-occluded') -and ($appCpp -match '0\.11f')))
+Check 'colony district layout and roads are shared' (($sceneCpp -match 'colonySurfaceLayout') -and ($sceneCpp -match 'm_colonyRoadMeshes') -and ($appCpp -match 'colonySurfaceLayoutRadius') -and ((Read-File 'src/ColonySystem.cpp') -match 'ColonyDistrict::Count') -and ((Read-File 'tests/test_colony.cpp') -match 'Test 10 functional district layout'))
 $extGenDir = if ($env:ASTRO_GENERATORS_DIR -and (Test-Path $env:ASTRO_GENERATORS_DIR)) {
     $env:ASTRO_GENERATORS_DIR
 } elseif (Test-Path (Join-Path $root '../astro-voyager-generators/scripts')) {

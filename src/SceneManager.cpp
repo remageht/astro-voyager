@@ -2820,43 +2820,12 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           static ObjModel s_warpTunnelModel;
           static ObjModel s_warpDriveVisModel;
           static ObjModel s_jumpgateModel;
-          // One row per colony structure type: the plan key, how large it reads
-          // on a planet as a fraction of planet radius, and the length our
-          // generators normalized that mesh to. Loading, lookup and sizing all
-          // index this one table, so a new structure type is a new ROW. Before
-          // this the same fact lived in three places - a 13-entry key array, an
-          // if-chain over seven named statics, and a second 13-entry size array -
-          // and drifting them apart failed silently at runtime as "asset not
-          // found" instead of at build time.
-          struct ColonyAssetSpec {
-            const char* key;
-            float footprint;
-            float modelLength;
-          };
-          static const ColonyAssetSpec kColonyAssets[] = {
-              {"dome", 0.0200f, 3.0f},        {"pad", 0.0220f, 3.2f},
-              {"factory", 0.0280f, 3.4f},     {"datacenter", 0.0300f, 4.2f},
-              {"nuclear", 0.0340f, 4.2f},     {"thermal", 0.0340f, 4.6f},
-              {"hydro", 0.0380f, 4.6f},       {"townhall", 0.0320f, 3.6f},
-              {"parliament", 0.0360f, 4.0f},  {"police", 0.0300f, 3.6f},
-              {"warehouse", 0.0340f, 4.2f},   {"military", 0.0380f, 4.2f},
-              {"houses", 0.0320f, 3.8f},      {"apartments", 0.0300f, 4.2f},
-              {"pipeline", 0.0400f, 4.4f},    {"powerline", 0.0400f, 4.4f},
-              {"solar", 0.0380f, 4.4f},       {"diesel", 0.0300f, 4.0f},
-              {"inverter", 0.0300f, 4.0f},    {"wind", 0.0400f, 4.4f},
-              // Healthcare, retail, recreation and real water services were the
-              // functional gaps a settlement cannot be called a town without.
-              // modelLength must equal the target the generator normalizes that
-              // mesh to, or every colony scales the building wrong.
-              {"hospital", 0.0350f, 4.4f},    {"clinic", 0.0270f, 3.4f},
-              {"park", 0.0310f, 3.8f},        {"market", 0.0330f, 4.0f},
-              {"school", 0.0330f, 4.2f},      {"fire", 0.0290f, 3.6f},
-              {"water", 0.0360f, 4.4f},       {"greenhouse", 0.0340f, 4.2f},
-          };
-          static constexpr int kColonyAssetCount =
-              static_cast<int>(sizeof(kColonyAssets) / sizeof(kColonyAssets[0]));
+          // Asset size, runtime model length and functional district share one
+          // table with the layout planner and the capture harness.
+          const auto& kColonyAssets = colonyAssetSpecs();
+          static constexpr int colonyAssetModelCount = astro::kColonyAssetCount;
           // One model slot per table row, loaded once on first use.
-          static ObjModel s_colonyAssetModels[kColonyAssetCount];
+          static ObjModel s_colonyAssetModels[colonyAssetModelCount];
           static bool s_spaceAssetsTried = false;
           if (!s_spaceAssetsTried) {
             s_spaceAssetsTried = true;
@@ -2917,7 +2886,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_jumpgateModel.load("res/models/jumpgate.obj");
             s_jumpgateModel.loadTextures("res/models/jumpgate");
 
-            for (int i = 0; i < kColonyAssetCount; ++i) {
+            for (int i = 0; i < colonyAssetModelCount; ++i) {
               const std::string base =
                   std::string("res/models/colony_") + kColonyAssets[i].key;
               s_colonyAssetModels[i].load(base + ".obj");
@@ -3511,31 +3480,15 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           }
 
           // === Colony surface infrastructure ===
-          // Every completed stage adds real buildings to the world: domes,
-          // refineries, pads, the power plant that fits that world and, later,
-          // data campuses. Layout is a golden-angle spiral from the site anchor,
-          // so the same stage always produces the same settlement.
+          // Buildings are grouped into functional districts around a central
+          // landing/civic anchor. Roads branch from each district hub, leaving
+          // readable plazas and service corridors instead of one dense module.
           const glm::mat4 ownUpToY(glm::rotate(glm::mat4(1.0f), -1.5707963f,
                                                glm::vec3(1.0f, 0.0f, 0.0f)));
           auto colonyAsset = [&](const std::string& key) -> ObjModel* {
-            for (int i = 0; i < kColonyAssetCount; ++i)
+            for (int i = 0; i < colonyAssetModelCount; ++i)
               if (key == kColonyAssets[i].key) return &s_colonyAssetModels[i];
             return nullptr;
-          };
-          // Footprint of each structure as a fraction of the planet radius, and
-          // the length our generators normalized that mesh to. The two together
-          // give the model-matrix scale, so a refinery reads the same relative
-          // size on Mars and on Europa instead of dwarfing both. Both numbers
-          // come from the same kColonyAssets row that owns the mesh.
-          auto colonyAssetSize = [](const std::string& key, float& footprint,
-                                    float& modelLength) {
-            for (const auto& e : kColonyAssets)
-              if (key == e.key) {
-                footprint = e.footprint;
-                modelLength = e.modelLength;
-                return true;
-              }
-            return false;
           };
           for (const auto& site : m_colonySites) {
             if (!m_currentStation || site.stationId != m_currentStation->id) continue;
@@ -3546,58 +3499,87 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                       static_cast<float>(site.pos.y),
                                       static_cast<float>(site.pos.z));
             const float planetRadius = std::max(static_cast<float>(site.radius), 0.02f);
-
-            // Settlement anchor and tangent basis from the shared colony data,
-            // so the capture harness and the renderer always agree on where the
-            // town is and which way it faces.
             const ColonySurfaceFrame frame = colonySurfaceFrame(site.id);
             const glm::vec3 anchor(frame.anchor[0], frame.anchor[1], frame.anchor[2]);
-            const glm::vec3 tangentU(frame.tangentU[0], frame.tangentU[1], frame.tangentU[2]);
-            const glm::vec3 tangentV(frame.tangentV[0], frame.tangentV[1], frame.tangentV[2]);
+            const auto layout = colonySurfaceLayout(site.id, stage);
+            auto surfaceDir = [&](float theta, float phi) {
+              float direction[3] = {};
+              colonySurfaceDirection(frame, theta, phi, direction);
+              return glm::vec3(direction[0], direction[1], direction[2]);
+            };
 
-            const auto plan = colonyBuildPlan(site.id, stage);
-            int placed = 0;
-            for (const auto& entry : plan) {
-              ObjModel* model = colonyAsset(entry.first);
-              float footprint = 0.0f, modelLength = 1.0f;
-              if (!model || !model->ready()) continue;
-              if (!colonyAssetSize(entry.first, footprint, modelLength)) continue;
-              const float worldSize = planetRadius * footprint;
-              for (int i = 0; i < entry.second; ++i, ++placed) {
-                // Golden-angle spiral: neighbour spacing stays around one
-                // footprint, so buildings neither merge nor overlap.
-                const float phi = placed * 2.39996323f;
-                const float theta = std::min(0.032f * std::sqrt(static_cast<float>(placed + 1)), 0.30f);
-                const glm::vec3 dir = glm::normalize(
-                    anchor * std::cos(theta) +
-                    (tangentU * std::cos(phi) + tangentV * std::sin(phi)) * std::sin(theta));
-                const glm::vec3 foot = planetPos + dir * (planetRadius - worldSize * 0.16f);
-
-                const float camDist = glm::length(eye - foot);
-                // A civilization capital holds 80+ meshes; past this range the
-                // whole settlement is a speck, so skip the draw entirely.
-                if (camDist > 24.0f) continue;
-                float lodScale = 1.0f;
-                if (camDist > 1.8f) {
-                  const float t = glm::clamp((camDist - 1.8f) / 6.0f, 0.0f, 1.0f);
-                  lodScale = glm::mix(1.0f, 0.42f, t * t * (3.0f - 2.0f * t));
+            const std::string roadKey = site.id + ":" + std::to_string(stage);
+            auto& roadMesh = m_colonyRoadMeshes[roadKey];
+            if (!roadMesh && !layout.empty()) {
+              roadMesh = std::make_unique<LineMesh>();
+              std::vector<glm::vec3> roadVertices;
+              std::vector<unsigned int> roadIndices;
+              std::array<bool, static_cast<size_t>(ColonyDistrict::Count)> hasHub{};
+              auto addRoad = [&](const glm::vec3& from, const glm::vec3& to) {
+                constexpr int kSegments = 10;
+                const unsigned int base = static_cast<unsigned int>(roadVertices.size());
+                for (int i = 0; i <= kSegments; ++i) {
+                  const float t = static_cast<float>(i) / kSegments;
+                  const glm::vec3 direction = glm::normalize(glm::mix(from, to, t));
+                  roadVertices.push_back(planetPos + direction * (planetRadius + 0.0015f));
+                  if (i < kSegments) {
+                    roadIndices.push_back(base + i);
+                    roadIndices.push_back(base + i + 1);
+                  }
                 }
-                const float eff = (worldSize / modelLength) * lodScale;
-
-                const glm::vec3 localUp = std::abs(dir.y) < 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f)
-                                                                : glm::vec3(1.0f, 0.0f, 0.0f);
-                const glm::vec3 bx = glm::normalize(glm::cross(dir, localUp));
-                const glm::vec3 by = glm::cross(dir, bx);
-                glm::mat4 align(1.0f);
-                align[0] = glm::vec4(bx, 0.0f);
-                align[1] = glm::vec4(by, 0.0f);
-                align[2] = glm::vec4(dir, 0.0f);
-
-                const glm::mat4 m = glm::translate(glm::mat4(1.0f), foot) * align * ownUpToY *
-                                    glm::rotate(glm::mat4(1.0f), phi, glm::vec3(0.0f, 0.0f, 1.0f)) *
-                                    glm::scale(glm::mat4(1.0f), glm::vec3(eff));
-                drawStationObjModel(model, m, 0.62f, 0.42f, glm::vec3(0.0f));
+              };
+              for (const auto& placement : layout) {
+                const glm::vec3 direction = surfaceDir(placement.theta, placement.phi);
+                const size_t district = static_cast<size_t>(placement.district);
+                if (!hasHub[district]) {
+                  hasHub[district] = true;
+                  addRoad(anchor, direction);
+                }
               }
+              roadMesh->setGeometry(roadVertices, roadIndices);
+            }
+            if (m_linesShader && !layout.empty()) {
+              m_linesShader->bind();
+              m_linesShader->setUniformMat4f("u_MVP", mvp);
+              m_linesShader->setUniformMat4f("u_Model", glm::mat4(1.0f));
+              m_linesShader->setUniform3f("u_LineColor", 0.30f, 0.32f, 0.35f);
+              glLineWidth(1.6f);
+              roadMesh->drawLines();
+              glLineWidth(1.0f);
+              m_linesShader->unbind();
+            }
+
+            for (const auto& placement : layout) {
+              ObjModel* model = colonyAsset(placement.asset);
+              const ColonyAssetSpec* spec = colonyAssetSpec(placement.asset);
+              if (!model || !model->ready() || !spec) continue;
+              const float worldSize = planetRadius * spec->footprint;
+              const glm::vec3 dir = surfaceDir(placement.theta, placement.phi);
+              const glm::vec3 foot = planetPos + dir * (planetRadius - worldSize * 0.16f);
+
+              const float camDist = glm::length(eye - foot);
+              if (camDist > 24.0f) continue;
+              float lodScale = 1.0f;
+              if (camDist > 1.8f) {
+                const float t = glm::clamp((camDist - 1.8f) / 6.0f, 0.0f, 1.0f);
+                lodScale = glm::mix(1.0f, 0.42f, t * t * (3.0f - 2.0f * t));
+              }
+              const float eff = (worldSize / spec->modelLength) * lodScale;
+
+              const glm::vec3 localUp = std::abs(dir.y) < 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                                              : glm::vec3(1.0f, 0.0f, 0.0f);
+              const glm::vec3 bx = glm::normalize(glm::cross(dir, localUp));
+              const glm::vec3 by = glm::cross(dir, bx);
+              glm::mat4 align(1.0f);
+              align[0] = glm::vec4(bx, 0.0f);
+              align[1] = glm::vec4(by, 0.0f);
+              align[2] = glm::vec4(dir, 0.0f);
+
+              const glm::mat4 m = glm::translate(glm::mat4(1.0f), foot) * align * ownUpToY *
+                                  glm::rotate(glm::mat4(1.0f), placement.heading,
+                                              glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                  glm::scale(glm::mat4(1.0f), glm::vec3(eff));
+              drawStationObjModel(model, m, 0.62f, 0.42f, glm::vec3(0.0f));
             }
           }
 

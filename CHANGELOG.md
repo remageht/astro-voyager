@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Unreleased
+
+- EN: Colony districts — the late-game settlement no longer reads as one dense module. Buildings are placed in nine functional districts with footprint-aware spacing, a central landing/civic anchor and nine main roads to the district hubs. Asset size, district classification, renderer placement and the close-up capture harness now share one deterministic layout table; the capital district radius grows from 0.30 to up to 0.65 rad while keeping the 2–4% planetary-radius building footprints.
+- RU: Районы колонии — поздняя застройка больше не выглядит как один плотный модуль. Здания раскладываются по девяти функциональным районам с зазорами от footprint, центральным посадочным/гражданским якорем и девятью главными дорогами к хабам районов. Размеры ассетов, классификация районов, рендер и close-up harness используют одну детерминированную таблицу; радиус столичного района увеличен с 0.30 до 0.65 рад при сохранении footprint 2–4% радиуса планеты.
+
 ## 5.1.1 (2026-11-25)
 
 ## What's new / Что нового

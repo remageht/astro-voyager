@@ -69,6 +69,36 @@ struct ColonyStructure {
   int count;
 };
 
+enum class ColonyDistrict : int {
+  Civic = 0,
+  Residential,
+  Industrial,
+  Logistics,
+  Energy,
+  Research,
+  Medical,
+  Recreation,
+  Security,
+  Count
+};
+
+struct ColonyAssetSpec {
+  const char* key;
+  float footprint;
+  float modelLength;
+  ColonyDistrict district;
+};
+inline constexpr int kColonyAssetCount = 28;
+
+struct ColonyPlacement {
+  const char* asset;
+  ColonyDistrict district;
+  float theta;
+  float phi;
+  float heading;
+  int ordinal;
+};
+
 constexpr int kColonyPlanSlots = 6;
 constexpr const char* kColonyPowerAsset = "power";
 
@@ -117,15 +147,22 @@ int colonyStructureCount(const std::string& worldId, int stage);
 // renderer and the capture harness so a screenshot always faces the town.
 const float* colonyAnchorNormal(const std::string& worldId);
 // Orthonormal basis at the settlement anchor: the normal plus the two tangents
-// the golden-angle spiral is built from. The renderer and the capture harness
-// both need it, and a close-up screenshot only shows what the player descends
-// into if they agree on which way the town faces.
+// the functional district layout is built from. The renderer and the capture
+// harness both need it, and a close-up screenshot only shows what the player
+// descends into if they agree on which way the town faces.
 struct ColonySurfaceFrame {
   float anchor[3];
   float tangentU[3];
   float tangentV[3];
 };
 ColonySurfaceFrame colonySurfaceFrame(const std::string& worldId);
+const std::array<ColonyAssetSpec, kColonyAssetCount>& colonyAssetSpecs();
+const ColonyAssetSpec* colonyAssetSpec(const std::string& key);
+std::vector<ColonyPlacement> colonySurfaceLayout(const std::string& worldId,
+                                                 int stage);
+float colonySurfaceLayoutRadius(const std::string& worldId, int stage);
+void colonySurfaceDirection(const ColonySurfaceFrame& frame, float theta,
+                            float phi, float out[3]);
 int colonyResearchBonus(const ColonyStages& stages);
 int colonyTotalPopulation(const ColonyStages& stages);
 int colonyPassiveRatePerMin(const ColonyStages& stages);

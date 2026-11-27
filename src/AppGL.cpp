@@ -16236,8 +16236,8 @@ int AppGL::captureColonyCheck(const std::string& outDir) {
   // drawn: at three planetary radii every building is a speck and nothing in
   // the service layer is actually verifiable. Stand a couple of building
   // footprints above the town anchor and look along the curved surface, which
-  // is what a player sees on descent, using the same basis the renderer places
-  // the spiral with.
+  // is what a player sees on descent, using the same basis and district layout
+  // the renderer places buildings with.
   {
     ++checks;
     setStages(true);
@@ -16255,14 +16255,11 @@ int AppGL::captureColonyCheck(const std::string& outDir) {
       const ColonySurfaceFrame basis = colonySurfaceFrame("europa");
       const Vec3 a(basis.anchor[0], basis.anchor[1], basis.anchor[2]);
       const float r = town->radius;
-      // Frame from the settlement's own extent instead of a guessed constant:
-      // the spiral reaches min(0.032*sqrt(n), 0.30) rad, so the district arc is
-      // that angle times the planetary radius. But the projection near plane is
-      // 0.1 world units and Europa's radius is 0.09 - the camera cannot stand
-      // closer to the surface than the whole planet is wide, so the shot takes
-      // the larger of the district framing and the nearest legal altitude.
+      // Frame from the shared district layout's actual angular radius. The
+      // projection near plane is 0.1 world units while Europa's radius is 0.09,
+      // so the shot keeps the larger of district framing and legal altitude.
       const int count = colonyStructureCount("europa", 22);
-      const float cap = std::min(0.032f * std::sqrt(static_cast<float>(count)), 0.30f);
+      const float cap = colonySurfaceLayoutRadius("europa", 22);
       const float arc = cap * r;
       const float alt = std::max(arc * 1.15f, 0.11f);
       const Vec3 eye(town->pos.x + a.x * (r + alt),
