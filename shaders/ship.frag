@@ -43,6 +43,7 @@ uniform vec3 u_AccentTint;        // v3.11.0: оттенок акцентной 
 uniform vec3 u_EmissiveTint;      // v3.11.0: оттенок плазменного свечения (1,1,1 по умолчанию)
 uniform float u_StationPbr;       // 1 = orbital station PBR lighting
 uniform float u_HullWear;         // v4.0.0: -1 off, 0 = restored, 1 = battered OBJ hull
+uniform float u_EntryPlasma;      // v5.1.0: atmospheric re-entry bow-shock plasma glow (0..1)
 uniform int u_RenderMode;         // 0=PBR, 1=Clay, 2=Normals RGB, 3=Wireframe
 
 const float kPi = 3.14159265;
@@ -261,5 +262,15 @@ void main() {
   col += envDiff * albedo * kd * 2.6;  // ambient gain: sky is dim HDR
   col += envSpec * fEnv * (1.0 - 0.55 * rough) * u_ReflK;
   col += u_Emissive * u_EmissiveTint + mapEm;  // S5/S8: сопла, навогни, кабина + Model эмиссив
+  // v5.1.0: External 3rd-person atmospheric re-entry bow-shock plasma sheath
+  if (u_EntryPlasma > 0.005) {
+    vec3 objN = normalize(mat3(u_ShipInv) * geomN);
+    float bowFace = clamp(dot(objN, vec3(0.0, 0.0, -1.0)), 0.0, 1.0);
+    float noseGrad = smoothstep(0.65, -1.10, v_ObjPos.z);
+    float streakWave = 0.65 + 0.35 * sin(v_ObjPos.z * 18.0 + (v_ObjPos.x + v_ObjPos.y) * 9.0);
+    float sheath = clamp((bowFace * 0.75 + 0.25) * noseGrad * streakWave * u_EntryPlasma, 0.0, 1.35);
+    vec3 plasmaGlow = mix(vec3(1.0, 0.34, 0.06), vec3(1.0, 0.88, 0.68), pow(bowFace * noseGrad, 1.8));
+    col += plasmaGlow * sheath * 2.2;
+  }
   FragColor = vec4(col, 1.0);
 }

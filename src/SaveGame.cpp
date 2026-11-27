@@ -730,7 +730,8 @@ std::string saveSerializeSettings(const SaveSettings& s) {
          (s.highContrastReticle ? "true" : "false") + ",\n";
   out += ind(1) + "\"menuBackground\": " + std::to_string(s.menuBackground) + ",\n";
   out += ind(1) + std::string("\"menuProceduralDisk\": ") +
-         (s.menuProceduralDisk ? "true" : "false") + "\n";
+         (s.menuProceduralDisk ? "true" : "false") + ",\n";
+  out += ind(1) + "\"kerrSpin\": " + numToJson(s.kerrSpin) + "\n";
   out += "}\n";
   return out;
 }
@@ -777,6 +778,8 @@ bool saveDeserializeSettings(const std::string& text, SaveSettings& out,
   out.highContrastReticle = readBool(root, "highContrastReticle", out.highContrastReticle);
   out.menuBackground = std::clamp(readInt(root, "menuBackground", out.menuBackground), 0, 4);
   out.menuProceduralDisk = readBool(root, "menuProceduralDisk", out.menuProceduralDisk);
+  const float rawSpin = readFloat(root, "kerrSpin", out.kerrSpin);
+  out.kerrSpin = std::isfinite(rawSpin) ? std::clamp(rawSpin, 0.0f, 0.998f) : 0.0f;
   return true;
 }
 

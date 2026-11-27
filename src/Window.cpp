@@ -14,6 +14,7 @@
 #endif
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#include <dwmapi.h>
 #endif
 
 #include <stdexcept>
@@ -145,20 +146,20 @@ Window::Window(int width, int height, const char* title, bool visible) {
 #ifdef _WIN32
   {
     HMODULE module = GetModuleHandleW(nullptr);
-    HICON big = static_cast<HICON>(LoadImageW(
+    HICON bigIcon = static_cast<HICON>(LoadImageW(
         module, MAKEINTRESOURCEW(1), IMAGE_ICON,
         GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
-    HICON small = static_cast<HICON>(LoadImageW(
+    HICON smallIcon = static_cast<HICON>(LoadImageW(
         module, MAKEINTRESOURCEW(1), IMAGE_ICON,
         GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
     HWND hwnd = glfwGetWin32Window(m_window);
-    if (hwnd && big) {
-      SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(big));
-      m_iconBig = big;
+    if (hwnd && bigIcon) {
+      SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(bigIcon));
+      m_iconBig = bigIcon;
     }
-    if (hwnd && small) {
-      SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(small));
-      m_iconSmall = small;
+    if (hwnd && smallIcon) {
+      SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
+      m_iconSmall = smallIcon;
     }
   }
 #else
@@ -170,6 +171,46 @@ Window::Window(int width, int height, const char* title, bool visible) {
       GLFWimage image{iconW, iconH, pixels};
       glfwSetWindowIcon(m_window, 1, &image);
       stbi_image_free(pixels);
+    }
+  }
+#endif
+
+#ifdef _WIN32
+  // Нативное тёмное оформление заголовка (DWM), иначе главное меню выглядит
+  // как dev-сборка: белая полоса заголовка спорит с космическим фоном.
+  // Атрибуты появились в Windows 10 1809/20H1, поэтому номера дублируем
+  // локально: старые SDK их не знают, а неподдерживаемая система просто
+  // вернёт ошибку из DwmSetWindowAttribute и оставит системное оформление.
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_BORDER_COLOR
+#define DWMWA_BORDER_COLOR 34
+#endif
+#ifndef DWMWA_CAPTION_COLOR
+#define DWMWA_CAPTION_COLOR 35
+#endif
+#ifndef DWMWA_TEXT_COLOR
+#define DWMWA_TEXT_COLOR 36
+#endif
+  {
+    HWND hwnd = glfwGetWin32Window(m_window);
+    if (hwnd) {
+      BOOL dark = TRUE;
+      if (FAILED(DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                                       &dark, sizeof(dark)))) {
+        // Windows 10 1809-1909 знали этот атрибут под номером 19.
+        DwmSetWindowAttribute(hwnd, 19, &dark, sizeof(dark));
+      }
+      COLORREF captionColor = RGB(5, 9, 14);
+      DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &captionColor,
+                            sizeof(captionColor));
+      COLORREF textColor = RGB(230, 238, 245);
+      DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &textColor,
+                            sizeof(textColor));
+      COLORREF borderColor = RGB(35, 55, 68);
+      DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &borderColor,
+                            sizeof(borderColor));
     }
   }
 #endif

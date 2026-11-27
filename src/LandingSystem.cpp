@@ -490,4 +490,228 @@ std::string formatCoreSampleZettel(const std::string& bodyId, const std::string&
   return s;
 }
 
+// === v5.1.0 Stage 6 Autonomous Surface Reconnaissance Drone (10 km Radius) ===
+ReconDroneTelemetry createReconDroneMission(const std::string& bodyId) {
+  ReconDroneTelemetry drone;
+  std::string bid = bodyId;
+  for (char& c : bid) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  drone.bodyId = bid;
+
+  auto addAnom = [&](const char* id, const char* ru, const char* en,
+                     const char* typeRu, const char* typeEn,
+                     float xKm, float zKm, float sig, int rp) {
+    // Strictly clamp every anomaly coordinate inside the 10 km reconnaissance perimeter.
+    const float dist = std::sqrt(xKm * xKm + zKm * zKm);
+    const float maxR = std::max(0.5f, drone.rangeRadiusKm - 0.5f);
+    if (dist > maxR && dist > 1e-4f) {
+      const float k = maxR / dist;
+      xKm *= k;
+      zKm *= k;
+    }
+    SurfaceAnomaly a;
+    a.id = id;
+    a.nameRu = ru;
+    a.nameEn = en;
+    a.typeRu = typeRu;
+    a.typeEn = typeEn;
+    a.posXKm = xKm;
+    a.posZKm = zKm;
+    a.distanceKm = std::sqrt(xKm * xKm + zKm * zKm);
+    a.signalStrength = sig;
+    a.rpReward = rp;
+    drone.anomalies.push_back(std::move(a));
+  };
+
+  if (bid == "mars") {
+    addAnom("mars_tube", "Провал лавовой трубки", "Lava Tube Skylight", "Геология", "Geology", 3.2f, 2.4f, 0.94f, 90);
+    addAnom("mars_brine", "Выход соляного рассола", "Subsurface Brine Seep", "Гидрология", "Hydrology", -4.8f, 3.6f, 0.88f, 110);
+    addAnom("mars_hem", "Россыпь гематитовых сфер", "Hematite Concretion Field", "Минералогия", "Mineralogy", 5.5f, -5.1f, 0.82f, 85);
+    addAnom("mars_caldera", "Кальдера оливинового конуса", "Olivine Basalt Caldera", "Тектоника", "Tectonics", -2.9f, -7.2f, 0.91f, 105);
+  } else if (bid == "titan") {
+    addAnom("titan_seep", "Выход жидкого метана", "Hydrocarbon Methane Seep", "Гидрология", "Hydrology", 2.8f, 4.1f, 0.96f, 120);
+    addAnom("titan_dune", "Гребень толиновой дюны", "Organic Tholin Mega-Dune", "Органика", "Organics", -5.2f, 2.2f, 0.85f, 95);
+    addAnom("titan_cryo", "Криовулканический канал", "Cryovolcanic Conduit", "Криовулканизм", "Cryovolcanism", 6.1f, -4.4f, 0.92f, 115);
+    addAnom("titan_hyd", "Обнажение клатрата CH4", "Methane Hydrate Outcrop", "Минералогия", "Mineralogy", -3.4f, -6.5f, 0.89f, 100);
+  } else if (bid == "europa") {
+    addAnom("eur_plume", "Плюм солёной воды", "Saline Chaos Plume", "Гидрология", "Hydrology", 3.6f, -2.9f, 0.98f, 130);
+    addAnom("eur_lin", "Хребет сульфатных линей", "Lineae Sulphate Ridge", "Тектоника", "Tectonics", -4.3f, 4.8f, 0.90f, 105);
+    addAnom("eur_lens", "Подлёдная линза рассола", "Sub-Ice Brine Lens", "Океанология", "Oceanography", 6.8f, 3.1f, 0.93f, 120);
+    addAnom("eur_chaos", "Раздробленный ледяной плот", "Fractured Chaos Raft", "Гляциология", "Glaciology", -5.9f, -5.0f, 0.86f, 95);
+  } else if (bid == "hercules-b" || bid == "hercules_b") {
+    addAnom("hb_reef", "Бирюзовый коралловый шельф", "Turquoise Reef Shelf", "Биосфера", "Biosphere", 2.5f, 3.9f, 0.97f, 135);
+    addAnom("hb_vent", "Прибрежный гидротермальный плюм", "Coastal Hydrothermal Vent", "Гидрология", "Hydrology", -4.1f, 5.2f, 0.94f, 125);
+    addAnom("hb_canyon", "Базальтовый каньон кратона", "Ancient Basalt Canyon", "Геология", "Geology", 5.8f, -4.6f, 0.89f, 110);
+    addAnom("hb_quartz", "Кварцевый монолит M13", "Silicate Quartz Monolith", "Минералогия", "Mineralogy", -3.7f, -6.8f, 0.92f, 115);
+  } else {
+    addAnom("gen_reg", "Импактный кратерный вал", "Impact Crater Rim", "Геология", "Geology", 2.9f, 2.6f, 0.90f, 80);
+    addAnom("gen_mag", "Магнитная аномалия коры", "Crustal Magnetic Anomaly", "Геофизика", "Geophysics", -4.4f, 3.3f, 0.86f, 90);
+    addAnom("gen_ice", "Ловушка летучих в тени", "Shadowed Volatile Pocket", "Ресурсы", "Resources", 5.0f, -4.9f, 0.84f, 85);
+    addAnom("gen_fiss", "Тектонический сброс породы", "Tectonic Fault Scarp", "Тектоника", "Tectonics", -3.2f, -6.2f, 0.88f, 95);
+  }
+  return drone;
+}
+
+bool deployReconDrone(ReconDroneTelemetry& drone) {
+  if (drone.state != ReconDroneState::Docked && drone.state != ReconDroneState::DockedComplete) {
+    return false;
+  }
+  if (drone.batteryPct < 20.0f) {
+    return false;
+  }
+  drone.state = ReconDroneState::Deploying;
+  drone.targetIndex = -1;
+  drone.scanDwellSec = 0.0f;
+  drone.reportLogged = false;
+  return true;
+}
+
+void recallReconDrone(ReconDroneTelemetry& drone) {
+  if (drone.state == ReconDroneState::Deploying || drone.state == ReconDroneState::Scouting) {
+    drone.state = ReconDroneState::Returning;
+    drone.targetIndex = -1;
+    drone.scanDwellSec = 0.0f;
+  }
+}
+
+void updateReconDrone(ReconDroneTelemetry& drone, float deltaTime, bool isLanded, int& outRpEarned) {
+  outRpEarned = 0;
+  if (deltaTime <= 0.0f) return;
+
+  if (!isLanded && (drone.state == ReconDroneState::Deploying || drone.state == ReconDroneState::Scouting)) {
+    recallReconDrone(drone);
+  }
+
+  if (drone.state == ReconDroneState::Docked || drone.state == ReconDroneState::DockedComplete) {
+    drone.speedKmh = 0.0f;
+    drone.altitudeM = 0.0f;
+    drone.posXKm = 0.0f;
+    drone.posZKm = 0.0f;
+    if (isLanded && drone.batteryPct < 100.0f) {
+      drone.batteryPct = std::min(100.0f, drone.batteryPct + 12.0f * deltaTime);
+    }
+    return;
+  }
+
+  if (drone.state == ReconDroneState::Deploying) {
+    drone.altitudeM += 24.0f * deltaTime;
+    drone.speedKmh = 35.0f;
+    drone.batteryPct = std::max(0.0f, drone.batteryPct - 0.6f * deltaTime);
+    if (drone.altitudeM >= 65.0f) {
+      drone.altitudeM = 65.0f;
+      drone.state = ReconDroneState::Scouting;
+    }
+    return;
+  }
+
+  auto steerTowards = [&](float tx, float tz, float cruiseKmh) -> float {
+    const float dx = tx - drone.posXKm;
+    const float dz = tz - drone.posZKm;
+    const float dist = std::sqrt(dx * dx + dz * dz);
+    if (dist <= 1e-5f) {
+      drone.speedKmh = 0.0f;
+      return 0.0f;
+    }
+    const float stepKm = std::min(dist, (cruiseKmh / 3600.0f) * deltaTime);
+    drone.posXKm += (dx / dist) * stepKm;
+    drone.posZKm += (dz / dist) * stepKm;
+    // Clamp drone position within declared 10 km scouting perimeter
+    const float rad = std::sqrt(drone.posXKm * drone.posXKm + drone.posZKm * drone.posZKm);
+    if (rad > drone.rangeRadiusKm) {
+      const float k = drone.rangeRadiusKm / rad;
+      drone.posXKm *= k;
+      drone.posZKm *= k;
+    }
+    drone.distanceTraveledKm += stepKm;
+    drone.speedKmh = cruiseKmh;
+    drone.headingDeg = std::atan2(dx, -dz) * (180.0f / 3.14159265f);
+    return std::max(0.0f, dist - stepKm);
+  };
+
+  if (drone.state == ReconDroneState::Scouting) {
+    // Safety low-battery failsafe triggers autonomous return before reserve depletes
+    if (drone.batteryPct <= 25.0f) {
+      drone.state = ReconDroneState::Returning;
+      drone.targetIndex = -1;
+      drone.scanDwellSec = 0.0f;
+      return;
+    }
+
+    // Select nearest unscanned anomaly within 10 km range
+    int bestIdx = -1;
+    float bestDist = 1e9f;
+    for (int i = 0; i < static_cast<int>(drone.anomalies.size()); ++i) {
+      const auto& a = drone.anomalies[i];
+      if (a.scanned) continue;
+      const float dx = a.posXKm - drone.posXKm;
+      const float dz = a.posZKm - drone.posZKm;
+      const float d = std::sqrt(dx * dx + dz * dz);
+      if (d < bestDist && a.distanceKm <= drone.rangeRadiusKm) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx < 0) {
+      drone.state = ReconDroneState::Returning;
+      drone.targetIndex = -1;
+      drone.scanDwellSec = 0.0f;
+      return;
+    }
+
+    drone.targetIndex = bestIdx;
+    auto& target = drone.anomalies[bestIdx];
+    const float rem = steerTowards(target.posXKm, target.posZKm, 1800.0f);
+    drone.batteryPct = std::max(0.0f, drone.batteryPct - 0.9f * deltaTime);
+
+    if (rem <= 0.08f) {
+      drone.speedKmh = 15.0f;
+      drone.scanDwellSec += deltaTime;
+      if (drone.scanDwellSec >= 1.0f) {
+        target.scanned = true;
+        drone.scanDwellSec = 0.0f;
+        ++drone.scannedCount;
+        drone.totalRpEarned += target.rpReward;
+        outRpEarned += target.rpReward;
+      }
+    }
+    return;
+  }
+
+  if (drone.state == ReconDroneState::Returning) {
+    const float rem = steerTowards(0.0f, 0.0f, 2160.0f);
+    drone.batteryPct = std::max(0.0f, drone.batteryPct - 0.7f * deltaTime);
+    if (rem <= 0.06f) {
+      drone.posXKm = 0.0f;
+      drone.posZKm = 0.0f;
+      drone.speedKmh = 0.0f;
+      drone.altitudeM = std::max(0.0f, drone.altitudeM - 32.0f * deltaTime);
+      if (drone.altitudeM <= 0.05f) {
+        drone.altitudeM = 0.0f;
+        drone.state = ReconDroneState::DockedComplete;
+      }
+    }
+  }
+}
+
+std::string formatReconDroneZettel(const std::string& bodyId, const std::string& bodyNameRu,
+                                   const ReconDroneTelemetry& drone) {
+  std::string s;
+  s += "### Отчёт автономного дрона-разведчика (10 км): " + bodyNameRu + "\n\n";
+  s += "**Идентификатор тела**: `" + bodyId + "`\n";
+  s += "**Периметр разведки**: 10.0 км от посадочной площадки\n";
+  s += "**Изучено аномалий**: " + std::to_string(drone.scannedCount) + " / " +
+       std::to_string(drone.anomalies.size()) + "\n";
+  s += "**Пройденная дистанция**: " + std::to_string(static_cast<int>(std::round(drone.distanceTraveledKm))) + " км\n";
+  s += "**Начислено RP**: +" + std::to_string(drone.totalRpEarned) + "\n\n";
+  s += "#### Обнаруженные объекты:\n";
+  for (const auto& a : drone.anomalies) {
+    char buf[160];
+    std::snprintf(buf, sizeof(buf), "- **%s** (%s) — R=%.1f км [%.1f, %.1f] %s\n",
+                  a.nameRu.c_str(), a.typeRu.c_str(), a.distanceKm, a.posXKm, a.posZKm,
+                  a.scanned ? "[ИЗУЧЕНО]" : "[ПРОПУЩЕНО]");
+    s += buf;
+  }
+  return s;
+}
+
 }  // namespace astro

@@ -4,6 +4,8 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+struct ImFont;
+
 namespace astro {
 
 enum class IntroPhase : int {
@@ -34,7 +36,8 @@ class IntroCinematicDirector {
   void reset();
 
   void update(float dt);
-  void drawHUD(float screenW, float screenH);
+  void drawHUD(float screenW, float screenH, ImFont* titleFont = nullptr,
+               ImFont* bodyFont = nullptr);
 
   bool isActive() const { return m_active && m_phase != IntroPhase::Finished; }
   bool isFinished() const { return m_phase == IntroPhase::Finished; }

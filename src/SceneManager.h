@@ -41,6 +41,8 @@ struct RenderSettings {
   // v4.4.0: Режим кинорежиссёра и цветокоррекция (Beta Stage)
   int colorGrade = 0;             // 0: Neutral, 1: Interstellar Amber, 2: Cyberpunk Neon, 3: NASA Mono Tri-X, 4: Technicolor Vintage
   float filmicVignette = 0.0f;    // 0.0..1.0 smooth lens vignette
+  // v5.2.0: Вращающаяся метрика Керра (0.0 = Шварцшильд для детерминированных эталонов, 0.0..0.998 = спин a/M)
+  float kerrSpin = 0.0f;
 };
 
 // User-spawned object (flexible object editor, v3.2.0).
@@ -460,5 +462,20 @@ class SceneManager {
   int m_customSeq = 0;
   std::string m_selectedId;
 };
+
+namespace warpdrive {
+struct SpaceEventVisual {
+  int type = 0;  // 0: SosBeacon, 1: RogueAsteroid, 2: RelicProbe
+  float x = 0.0f;
+  float y = 0.0f;
+  float z = 0.0f;
+  float vx = 0.0f;
+  float vy = 0.0f;
+  float vz = 0.0f;
+  float progressRatio = 0.0f;
+  unsigned int seed = 1u;
+};
+void setSpaceEventVisuals(const std::vector<SpaceEventVisual>& events);
+}  // namespace warpdrive
 
 }  // namespace astro

@@ -43,7 +43,10 @@ const std::vector<StorySlide>& storyChapterSlides();
 // at Zemlya ("Дом").
 const std::vector<StorySlide>& storyPrologueSlides();
 
-// Procedural vector art for slide id (dark glass drawing list style).
+// Cinematic image for a procedural story-art id; empty/null keeps the vector fallback.
+const char* storyArtImage(int art);
+
+// Procedural vector fallback for slide id (dark glass drawing list style).
 void drawStoryArt(ImDrawList* dl, int art, const ImVec2& pos, float size);
 
 // Returns slide index in storyChapterSlides() corresponding to the given finale choice.

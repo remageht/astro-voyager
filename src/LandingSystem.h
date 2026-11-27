@@ -127,4 +127,53 @@ CoreDrillTelemetry generateCoreDrillProfile(const std::string& bodyId, float sur
 std::string formatCoreSampleZettel(const std::string& bodyId, const std::string& bodyNameRu,
                                    const CoreDrillTelemetry& drill);
 
+// === v5.1.0 Stage 6 Autonomous Surface Reconnaissance Drone (10 km Radius) ===
+enum class ReconDroneState {
+  Docked = 0,
+  Deploying = 1,
+  Scouting = 2,
+  Returning = 3,
+  DockedComplete = 4
+};
+
+struct SurfaceAnomaly {
+  std::string id;
+  std::string nameRu;
+  std::string nameEn;
+  std::string typeRu;
+  std::string typeEn;
+  float posXKm = 0.0f;
+  float posZKm = 0.0f;
+  float distanceKm = 0.0f;
+  float signalStrength = 1.0f;
+  int rpReward = 80;
+  bool scanned = false;
+};
+
+struct ReconDroneTelemetry {
+  std::string bodyId = "mars";
+  ReconDroneState state = ReconDroneState::Docked;
+  float posXKm = 0.0f;
+  float posZKm = 0.0f;
+  float rangeRadiusKm = 10.0f;
+  float batteryPct = 100.0f;
+  float altitudeM = 0.0f;
+  float speedKmh = 0.0f;
+  float distanceTraveledKm = 0.0f;
+  float headingDeg = 0.0f;
+  int targetIndex = -1;
+  int scannedCount = 0;
+  int totalRpEarned = 0;
+  float scanDwellSec = 0.0f;
+  bool reportLogged = false;
+  std::vector<SurfaceAnomaly> anomalies;
+};
+
+ReconDroneTelemetry createReconDroneMission(const std::string& bodyId);
+bool deployReconDrone(ReconDroneTelemetry& drone);
+void recallReconDrone(ReconDroneTelemetry& drone);
+void updateReconDrone(ReconDroneTelemetry& drone, float deltaTime, bool isLanded, int& outRpEarned);
+std::string formatReconDroneZettel(const std::string& bodyId, const std::string& bodyNameRu,
+                                   const ReconDroneTelemetry& drone);
+
 }  // namespace astro
