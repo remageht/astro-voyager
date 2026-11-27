@@ -944,6 +944,14 @@ if ($hasModelPack) {
     Write-Output 'SKIP: 14 high-poly mesh and PBR map checks (asset pack not fetched for this ref)'
 }
 
+$hasRingShipRemaster = Test-Path (Join-Path $root 'res/models/ring_ship_remaster.meta')
+if ($hasModelPack -and $hasRingShipRemaster) {
+    Check 'ring ship MCP remaster exceeds 60k triangles' ((Count-ObjFaces 'res/models/ring_ship.obj') -ge 60000)
+    Check 'ring ship MCP remaster PBR maps exist' ((Test-Path (Join-Path $root 'res/models/ring_ship_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ring_ship_emissive.bmp')))
+} elseif ($hasModelPack) {
+    Write-Output 'SKIP: 2 Ring Ship MCP remaster checks (asset pack predates the remaster)'
+}
+
 # --- Issue #218: 3D workshop dark studio backdrop, exploded view, multi-nozzle Mach diamonds thruster VFX, and LOD system ---
 $shipVert = Read-File 'shaders/ship.vert'
 $menuFrag = Read-File 'shaders/menu.frag'
