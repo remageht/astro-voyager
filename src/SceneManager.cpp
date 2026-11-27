@@ -12,6 +12,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <cmath>
+#include <cstdlib>
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
@@ -54,7 +55,17 @@ static bool g_dockSitesVisible = true;
 // (корабль в (0,0,0), warpK=1). Без переменной поведение байт-в-байт, а
 // ней можно прогнать --screenshot-all в зеркале для ручного тюнинга шейда.
 bool warpDemo() {
-  static const bool v = std::getenv("AV_WARP_DEMO") != nullptr;
+  static const bool v = []() {
+#if defined(_MSC_VER)
+    char* buf = nullptr;
+    size_t len = 0;
+    const bool ok = (_dupenv_s(&buf, &len, "AV_WARP_DEMO") == 0 && buf != nullptr);
+    if (buf) std::free(buf);
+    return ok;
+#else
+    return std::getenv("AV_WARP_DEMO") != nullptr;
+#endif
+  }();
   return v;
 }
 }  // namespace
@@ -158,6 +169,41 @@ float dockProjDistVisual() { return g_dockProjDist; }
 float rcsVisualTimer() { return g_rcsTimer; }
 int rcsVisualMask() { return g_rcsMask; }
 const std::string& activeDockIdVisual() { return g_activeDockId; }
+
+// v5.1.0: External atmospheric entry plasma & 3D surface recon drone visuals
+struct ReconDroneVisual {
+  bool active = false;
+  std::string bodyId;
+  float posXKm = 0.0f;
+  float posZKm = 0.0f;
+  float altitudeM = 0.0f;
+  float headingDeg = 0.0f;
+  std::vector<float> anomXZ;
+  std::vector<bool> anomScanned;
+};
+static float g_entryPlasma = 0.0f;
+static ReconDroneVisual g_reconVisual;
+static std::vector<SpaceEventVisual> g_spaceEventVisuals;
+
+void setEntryPlasma(float k) {
+  g_entryPlasma = (k < 0.0f) ? 0.0f : ((k > 1.5f) ? 1.5f : k);
+}
+float entryPlasma() { return g_entryPlasma; }
+void setReconDroneVisual(bool active, const std::string& bodyId,
+                         float posXKm, float posZKm, float altitudeM, float headingDeg,
+                         const std::vector<float>& anomXZ, const std::vector<bool>& anomScanned) {
+  g_reconVisual.active = active;
+  g_reconVisual.bodyId = bodyId;
+  g_reconVisual.posXKm = posXKm;
+  g_reconVisual.posZKm = posZKm;
+  g_reconVisual.altitudeM = altitudeM;
+  g_reconVisual.headingDeg = headingDeg;
+  g_reconVisual.anomXZ = anomXZ;
+  g_reconVisual.anomScanned = anomScanned;
+}
+void setSpaceEventVisuals(const std::vector<SpaceEventVisual>& events) {
+  g_spaceEventVisuals = events;
+}
 }  // namespace warpdrive
 
 SceneManager::SceneManager() {
@@ -353,6 +399,8 @@ bool SceneManager::captureEarthCheck(const std::string& outDir) {
     m_planetShader->setUniform1f("u_SpinAngle", glm::radians(longitude - 90.0f) + spinOffset);
     m_planetShader->setUniform1f("u_Spot", 0.0f);
     m_planetShader->setUniform1f("u_Clouds", clouds);
+    m_planetShader->setUniform1f("u_Terraform", 0.0f);
+    m_planetShader->setUniform4f("u_Wake", 0.0f, 1.0f, 0.0f, 0.0f);
     m_planetShader->setUniform1i("u_RingOn", 0);
     m_planetShader->setUniform1i("u_MoonOccN", 0);
     m_planetShader->setUniform1i("u_PlanetRelief", 1);
@@ -885,6 +933,9 @@ void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
     if (m_preset != PerfPreset::Custom) {
       applyPreset(m_preset);
     }
+    if (m_settings.autoKerrSpin) {
+      m_settings.kerrSpin = static_cast<float>(std::clamp(st->params.kerrSpin, 0.0, 0.998));
+    }
     // v3.9.1: OJ 287 / hyperdisk need a bigger march shell and budget
     // than any preset gives (companion orbit 4.8 Rs needs deflection
     // room; hyperdisk rOut 26 Rs needs shell >= spawn 45+13).
@@ -1081,6 +1132,31 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_RelK", m_physicalRel ? 1.0f : 0.0f);
     // v3.10: RKF45 адаптивный шаг марша предметно-LID (0 = legacy rk4+step law).
     m_bhShader->setUniform1f("u_Rkf45K", m_settings.rkf45Adaptive ? 1.0f : 0.0f);
+    // v5.2.0: Спин вращающейся черной дыры Керра a/M (0 = legacy Шварцшильд) + CPU прекомпьют.
+    const float spinK = std::clamp(m_settings.kerrSpin, 0.0f, 0.998f);
+    m_bhShader->setUniform1f("u_KerrSpin", spinK);
+    if (spinK > 0.001f) {
+      const double rsD = static_cast<double>(m_settings.rs);
+      const double aD = static_cast<double>(spinK);
+      const double rPlus = 0.5 * rsD * (1.0 + std::sqrt(std::max(1.0 - aD * aD, 0.0)));
+      const double c1 = std::cbrt(std::max(1.0 - aD * aD, 1e-6));
+      const double c2 = std::cbrt(1.0 + aD) + std::cbrt(std::max(1.0 - aD, 1e-6));
+      const double z1 = 1.0 + c1 * c2;
+      const double z2 = std::sqrt(3.0 * aD * aD + z1 * z1);
+      const double rInKerr = 0.5 * rsD *
+          (3.0 + z2 - std::sqrt(std::max((3.0 - z1) * (3.0 + z1 + 2.0 * z2), 0.0)));
+      const double rCam = std::max(
+          std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z), rPlus * 1.001);
+      const double cosCam = std::clamp(cp.y / rCam, -1.0, 1.0);
+      const double aCam = aD * 0.5 * rsD;
+      const double fCamKerr = std::clamp(
+          1.0 - (rsD * rCam) / std::max(rCam * rCam + aCam * aCam * cosCam * cosCam, 1e-5),
+          0.0, 1.0);
+      m_bhShader->setUniform4f("u_KerrPrecomp", static_cast<float>(rPlus),
+                               static_cast<float>(rInKerr), static_cast<float>(fCamKerr), 1.0f);
+    } else {
+      m_bhShader->setUniform4f("u_KerrPrecomp", 0.0f, 0.0f, 0.0f, 0.0f);
+    }
     // Close-camera distance in Rs: drives disk-detail smoothing and pole
     // damping in bh.frag (u_CamDist <= 0 means far/legacy on shader side).
     {
@@ -1510,9 +1586,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                      static_cast<float>(cb.y),
                                      static_cast<float>(cb.z));
         m_planetShader->setUniform1f("u_Spot", 0.0f);
-        m_planetShader->setUniform1f("u_Clouds", 0.0f);
+        m_planetShader->setUniform1f("u_Clouds", body == 12 ? 0.45f : 0.0f);
         m_planetShader->setUniform1f("u_SpinAngle", 0.0f);
         m_planetShader->setUniform1f("u_Radius", static_cast<float>(radius));
+        m_planetShader->setUniform1f("u_Terraform", body == 12 ? 1.0f : 0.0f);
+        m_planetShader->setUniform4f("u_Wake", 0.0f, 1.0f, 0.0f, 0.0f);
         m_planetShader->setUniform1i("u_RingOn", 0);
         m_planetShader->setUniform1f("u_RingInner", 0.0f);
         m_planetShader->setUniform1f("u_RingOuter", 0.0f);
@@ -1527,10 +1605,9 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       m_planetShader->setUniform3f("u_CamPos", static_cast<float>(cp.x),
                                    static_cast<float>(cp.y),
                                    static_cast<float>(cp.z));
-      // v3.6.0: Hercules Prime — звезда-ядро (рисуется билбордом в
-      // m_clusterBright), здесь только планета Hercules b + кольцо колонии.
-      drawPlanet(hbPos, 0.22, 2, 2, 3.0f, Vec3(0.85, 0.8, 1.0),
-                 Vec3(0.7, 0.6, 0.9));
+      // v5.1.0: Hercules-b exoplanet rendered with turquoise archipelagos, flora and clouds
+      drawPlanet(hbPos, 0.22, 2, 12, 3.0f, Vec3(0.04, 0.18, 0.40),
+                 Vec3(0.18, 0.56, 0.30));
       // v3.6.0: сайт колонии на Hercules b — каталог + кольцо-маркер.
       m_colonySites.push_back(ColonySite{"hercules-b", "Hercules b", "m13", hbPos,
                                          1.5f});
@@ -1682,18 +1759,44 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
       glm::vec3 colB = glm::vec3(static_cast<float>(def->colB.x),
                                  static_cast<float>(def->colB.y),
                                  static_cast<float>(def->colB.z));
-      // Terraformed worlds visibly greening and gaining open water.
-      {
-        float atmo = 0.0f, bio = 0.0f;
-        colonyTerraformState(colonyStage(m_colonyStages, def->id), atmo, bio);
-        colA = glm::mix(colA, glm::vec3(0.22f, 0.46f, 0.24f), bio * 0.75f);
-        colB = glm::mix(colB, glm::vec3(0.08f, 0.30f, 0.58f), atmo * 0.70f);
-      }
+      // Terraformed worlds visibly greening, developing shorelines & cloud cover (v5.1.0).
+      float atmo = 0.0f, bio = 0.0f;
+      colonyTerraformState(colonyStage(m_colonyStages, def->id), atmo, bio);
+      colA = glm::mix(colA, glm::vec3(0.22f, 0.46f, 0.24f), bio * 0.75f);
+      colB = glm::mix(colB, glm::vec3(0.08f, 0.30f, 0.58f), atmo * 0.70f);
+      const float terraform = std::clamp(0.55f * bio + 0.45f * atmo, 0.0f, 1.0f);
+      const float baseClouds = (def->id == "earth") ? 0.55f : 0.0f;
+      const float clouds = std::max(baseClouds, atmo * 0.58f);
+      const float spinAngle = def->spinRate * m_simTime;
       m_planetShader->setUniform3f("u_ColA", colA.x, colA.y, colA.z);
       m_planetShader->setUniform3f("u_ColB", colB.x, colB.y, colB.z);
       m_planetShader->setUniform1f("u_Spot", def->id == "jupiter" ? 1.0f : 0.0f);
-      m_planetShader->setUniform1f("u_Clouds", def->id == "earth" ? 0.55f : 0.0f);
-      m_planetShader->setUniform1f("u_SpinAngle", def->spinRate * m_simTime);
+      m_planetShader->setUniform1f("u_Clouds", clouds);
+      m_planetShader->setUniform1f("u_SpinAngle", spinAngle);
+      m_planetShader->setUniform1f("u_Terraform", terraform);
+      // Low-altitude flight wake over liquid worlds (Earth, Titan methane seas, terraformed ocean worlds)
+      glm::vec4 wakeParam(0.0f, 1.0f, 0.0f, 0.0f);
+      const bool hasLiquidSurface =
+          (def->id == "earth" || def->id == "titan" || terraform > 0.20f);
+      if (hasLiquidSurface && warpdrive::shipVisible()) {
+        const glm::vec3 shipRel(warpdrive::shipX() - bpos.x,
+                                warpdrive::shipY() - bpos.y,
+                                warpdrive::shipZ() - bpos.z);
+        const float shipDist = glm::length(shipRel);
+        const float skimBand = def->radius * 0.22f;
+        if (shipDist > 1e-4f && shipDist < def->radius + skimBand) {
+          const float altK = 1.0f - std::clamp((shipDist - def->radius) / std::max(skimBand, 1e-4f), 0.0f, 1.0f);
+          glm::vec3 localDir = shipRel / shipDist;
+          if (spinAngle != 0.0f) {
+            const float c = std::cos(spinAngle);
+            const float s = std::sin(spinAngle);
+            localDir = glm::vec3(c * localDir.x + s * localDir.z, localDir.y,
+                                 -s * localDir.x + c * localDir.z);
+          }
+          wakeParam = glm::vec4(localDir, altK);
+        }
+      }
+      m_planetShader->setUniform4f("u_Wake", wakeParam.x, wakeParam.y, wakeParam.z, wakeParam.w);
       // Relief bump mapping LOD: skip multi-tap procedural noise when body is small on screen
       bool enableRelief = m_settings.planetRelief && (projPixels >= 32.0f);
       m_planetShader->setUniform1i("u_PlanetRelief", enableRelief ? 1 : 0);
@@ -2282,6 +2385,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_shipShader->setUniform1f("u_StationPbr", isStationPbr);
           s_shipShader->setUniform1f("u_ContactGround", contactGround);
           s_shipShader->setUniform1f("u_HullWear", -1.0f);
+          s_shipShader->setUniform1f("u_EntryPlasma", 0.0f);
           s_shipShader->setUniform1f("u_Metal", customMetal);
           s_shipShader->setUniform1f("u_Rough", customRough);
 
@@ -2452,6 +2556,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_shipShader->setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
           s_shipShader->setUniform1f("u_StationPbr", 0.0f);
           s_shipShader->setUniform1f("u_HullWear", hullWear);
+          s_shipShader->setUniform1f("u_EntryPlasma", warpdrive::entryPlasma());
           const ShipCustomization& shipCust = warpdrive::shipCustomization();
           s_shipShader->setUniform3f("u_HullTint", shipCust.primaryColor[0], shipCust.primaryColor[1], shipCust.primaryColor[2]);
           s_shipShader->setUniform3f("u_AccentTint", shipCust.accentColor[0], shipCust.accentColor[1], shipCust.accentColor[2]);
@@ -2677,6 +2782,19 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_shipShader->unbind();
         }
         }  // end if (warpdrive::shipVisible()) [solid hull]
+
+        // Shared asteroid meshes used by both deep-space rogue encounters and warp barrage.
+        static ObjModel s_asteroidModels[3];
+        static bool s_astModelsTried = false;
+        if (!s_astModelsTried) {
+          s_astModelsTried = true;
+          s_asteroidModels[0].load("res/models/asteroid_1.obj");
+          s_asteroidModels[0].loadTextures("res/models/asteroid");
+          s_asteroidModels[1].load("res/models/asteroid_2.obj");
+          s_asteroidModels[1].shareTexturesFrom(s_asteroidModels[0]);
+          s_asteroidModels[2].load("res/models/asteroid_3.obj");
+          s_asteroidModels[2].shareTexturesFrom(s_asteroidModels[0]);
+        }
 
         // === v3.11.0: Orbital Space Station, Observatory & Probe Rendering ===
         // Decoupled from shipVisible(): rendered in 1st-person cockpit view, 2nd & 3rd-person views!
@@ -3307,6 +3425,93 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             }
           }
 
+          // === v5.1.0: 3D Flying Autonomous Surface Recon Drone & Anomaly Waypoints ===
+          if (warpdrive::g_reconVisual.active && s_probeModel.ready() && m_planetShader) {
+            const auto& rv = warpdrive::g_reconVisual;
+            glm::vec3 targetCenter(0.0f);
+            float targetR = 0.0f;
+            bool bodyMatch = false;
+            for (const auto& b : m_lastBodies) {
+              if (b.def && b.def->id == rv.bodyId) {
+                targetCenter = glm::vec3(static_cast<float>(b.pos.x),
+                                         static_cast<float>(b.pos.y),
+                                         static_cast<float>(b.pos.z));
+                targetR = std::max(b.def->radius, 0.04f);
+                bodyMatch = true;
+                break;
+              }
+            }
+            if (!bodyMatch && rv.bodyId == "hercules-b" && m_currentStation && m_currentStation->id == "m13") {
+              for (const auto& site : m_colonySites) {
+                if (site.id == "hercules-b") {
+                  targetCenter = glm::vec3(static_cast<float>(site.pos.x),
+                                           static_cast<float>(site.pos.y),
+                                           static_cast<float>(site.pos.z));
+                  targetR = std::max(site.radius, 0.04f);
+                  bodyMatch = true;
+                  break;
+                }
+              }
+            }
+            if (bodyMatch) {
+              const ColonySurfaceFrame frame = colonySurfaceFrame(rv.bodyId);
+              const glm::vec3 anchor(frame.anchor[0], frame.anchor[1], frame.anchor[2]);
+              const glm::vec3 tangentU(frame.tangentU[0], frame.tangentU[1], frame.tangentU[2]);
+              const glm::vec3 tangentV(frame.tangentV[0], frame.tangentV[1], frame.tangentV[2]);
+              const float kmToRad = 0.028f;
+              auto surfacePoint = [&](float xKm, float zKm, float altM) {
+                const glm::vec3 tangent = tangentU * (xKm * kmToRad) + tangentV * (zKm * kmToRad);
+                const float angle = glm::length(tangent);
+                const glm::vec3 dir = (angle > 1e-6f)
+                    ? glm::normalize(anchor * std::cos(angle) + (tangent / angle) * std::sin(angle))
+                    : anchor;
+                const float altOffset = (altM / 1000.0f) * targetR * 0.14f + targetR * 0.012f;
+                return targetCenter + dir * (targetR + altOffset);
+              };
+
+              const glm::vec3 droneWorld = surfacePoint(rv.posXKm, rv.posZKm, rv.altitudeM);
+              const glm::vec3 radialUp = glm::normalize(droneWorld - targetCenter);
+              glm::vec3 basisX = glm::normalize(glm::cross(tangentV, radialUp));
+              glm::vec3 basisZ = glm::normalize(glm::cross(radialUp, basisX));
+              glm::mat4 droneRot(1.0f);
+              droneRot[0] = glm::vec4(basisX, 0.0f);
+              droneRot[1] = glm::vec4(radialUp, 0.0f);
+              droneRot[2] = glm::vec4(basisZ, 0.0f);
+              const float droneScale = targetR * 0.026f;
+              const glm::mat4 droneM =
+                  glm::translate(glm::mat4(1.0f), droneWorld) *
+                  droneRot *
+                  glm::rotate(glm::mat4(1.0f), glm::radians(-rv.headingDeg), glm::vec3(0.0f, 1.0f, 0.0f)) *
+                  glm::scale(glm::mat4(1.0f), glm::vec3(droneScale));
+              drawStationObjModel(&s_probeModel, droneM, 0.85f, 0.25f,
+                                  glm::vec3(0.08f, 0.72f, 0.95f), 16.0f, 0.0f);
+
+              // Render glowing waypoint beacons at 10 km perimeter anomalies
+              m_planetShader->bind();
+              m_planetShader->setUniformMat4f("u_MVP", mvp);
+              m_planetShader->setUniform1i("u_Type", 0);
+              m_planetShader->setUniform1i("u_Body", 1);
+              m_planetShader->setUniform1f("u_Time", time);
+              m_planetShader->setUniform1f("u_Exposure", m_exposure);
+              m_planetShader->setUniform3f("u_CamPos", eye.x, eye.y, eye.z);
+              const float pulse = 0.75f + 0.25f * std::sin(time * 5.0f);
+              const size_t nAnom = rv.anomXZ.size() / 2;
+              for (size_t ai = 0; ai < nAnom; ++ai) {
+                const bool scanned = (ai < rv.anomScanned.size()) ? rv.anomScanned[ai] : false;
+                const glm::vec3 ap = surfacePoint(rv.anomXZ[ai * 2], rv.anomXZ[ai * 2 + 1], 18.0f);
+                const glm::vec3 col = scanned ? glm::vec3(0.20f, 0.95f, 0.58f)
+                                              : glm::vec3(1.00f, 0.72f, 0.18f) * pulse;
+                m_planetShader->setUniform3f("u_ColA", col.x, col.y, col.z);
+                m_planetShader->setUniform3f("u_ColB", col.x * 1.4f, col.y * 1.4f, col.z * 1.4f);
+                glm::mat4 bm = glm::translate(glm::mat4(1.0f), ap) *
+                               glm::scale(glm::mat4(1.0f), glm::vec3(targetR * 0.014f));
+                m_planetShader->setUniformMat4f("u_Model", bm);
+                m_sphere.draw();
+              }
+              m_planetShader->unbind();
+            }
+          }
+
           // === Colony surface infrastructure ===
           // Every completed stage adds real buildings to the world: domes,
           // refineries, pads, the power plant that fits that world and, later,
@@ -3443,22 +3648,63 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
               }
             }
           }
+
+          // === v5.2.0: Deep Space Emergent Events (SOS beacons, rogue asteroids, relic probes) ===
+          if (!warpdrive::g_spaceEventVisuals.empty() && m_planetShader) {
+            for (const auto& ev : warpdrive::g_spaceEventVisuals) {
+              const glm::vec3 evPos(ev.x, ev.y, ev.z);
+              const float spinAng = time * (0.45f + 0.15f * static_cast<float>(ev.seed % 5u));
+              if (ev.type == 1 && s_asteroidModels[0].ready()) {
+                // Rogue asteroid: tumbling rocky mass with threat flare
+                ObjModel& am = s_asteroidModels[ev.seed % 3u];
+                const glm::mat4 astMat =
+                    glm::translate(glm::mat4(1.0f), evPos) *
+                    glm::rotate(glm::mat4(1.0f), spinAng, glm::vec3(0.55f, 0.80f, 0.25f)) *
+                    glm::scale(glm::mat4(1.0f), glm::vec3(0.32f));
+                drawStationObjModel(&am, astMat, 0.20f, 0.85f,
+                                    glm::vec3(1.0f, 0.35f, 0.12f),
+                                    2.5f + 4.0f * ev.progressRatio, 0.0f);
+              } else if (s_probeModel.ready()) {
+                // SOS Beacon or Relic Probe
+                const float sc = (ev.type == 0) ? 0.14f : 0.20f;
+                const glm::vec3 tint = (ev.type == 0)
+                                           ? glm::vec3(1.0f, 0.42f, 0.22f)
+                                           : glm::vec3(0.30f, 0.92f, 0.82f);
+                const glm::mat4 prMat =
+                    glm::translate(glm::mat4(1.0f), evPos) *
+                    glm::rotate(glm::mat4(1.0f), spinAng * 0.6f, glm::vec3(0.2f, 1.0f, 0.1f)) *
+                    glm::scale(glm::mat4(1.0f), glm::vec3(sc));
+                drawStationObjModel(&s_probeModel, prMat, 0.82f, 0.28f, tint, 8.0f, 0.0f);
+              }
+
+              // Pulsing tactical locator core glow
+              const float pulse = 0.65f + 0.35f * std::sin(time * (ev.type == 0 ? 7.0f : 3.5f));
+              const glm::vec3 col =
+                  (ev.type == 0) ? glm::vec3(1.0f, 0.28f, 0.18f) * pulse
+                                 : ((ev.type == 1) ? glm::vec3(1.0f, 0.58f, 0.15f) * pulse
+                                                   : glm::vec3(0.25f, 0.95f, 0.78f) * pulse);
+              m_planetShader->bind();
+              m_planetShader->setUniformMat4f("u_MVP", mvp);
+              m_planetShader->setUniform1i("u_Type", 0);
+              m_planetShader->setUniform1i("u_Body", 1);
+              m_planetShader->setUniform1f("u_Time", time);
+              m_planetShader->setUniform1f("u_Exposure", m_exposure);
+              m_planetShader->setUniform3f("u_CamPos", eye.x, eye.y, eye.z);
+              m_planetShader->setUniform3f("u_ColA", col.x, col.y, col.z);
+              m_planetShader->setUniform3f("u_ColB", col.x * 1.5f, col.y * 1.5f, col.z * 1.5f);
+              const float beaconR = 0.09f + 0.04f * ev.progressRatio;
+              const glm::mat4 bm = glm::translate(glm::mat4(1.0f), evPos + glm::vec3(0.0f, 0.32f, 0.0f)) *
+                                   glm::scale(glm::mat4(1.0f), glm::vec3(beaconR));
+              m_planetShader->setUniformMat4f("u_Model", bm);
+              m_sphere.draw();
+              m_planetShader->unbind();
+            }
+          }
         } // end if (warpdrive::dockSitesVisible())
 
         // Pass 3: Exterior Ship Effects & Asteroid Hazard (when shipVisible is true)
         if (warpdrive::shipVisible()) {
-          // 3D Asteroid Barrage during warp travel hazard
-          static ObjModel s_asteroidModels[3];
-          static bool s_astModelsTried = false;
-          if (!s_astModelsTried) {
-            s_astModelsTried = true;
-            s_asteroidModels[0].load("res/models/asteroid_1.obj");
-            s_asteroidModels[0].loadTextures("res/models/asteroid");
-            s_asteroidModels[1].load("res/models/asteroid_2.obj");
-            s_asteroidModels[1].shareTexturesFrom(s_asteroidModels[0]);
-            s_asteroidModels[2].load("res/models/asteroid_3.obj");
-            s_asteroidModels[2].shareTexturesFrom(s_asteroidModels[0]);
-          }
+          // 3D Asteroid Barrage during warp travel hazard (reuses shared s_asteroidModels)
           const float astFieldK = warpdrive::astK();
           if (astFieldK > 0.01f && s_asteroidModels[0].ready() && s_shipShader) {
             const float lane = warpdrive::astLane();
@@ -3476,6 +3722,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             s_shipShader->setUniform1i("u_SkinOn", 0);
             s_shipShader->setUniform3f("u_BaseColor", glm::vec3(0.6f, 0.58f, 0.55f));
             s_shipShader->setUniform1f("u_StationPbr", 1.0f);
+            s_shipShader->setUniform1f("u_EntryPlasma", 0.0f);
             s_shipShader->setUniform1f("u_Metal", 0.20f);
             s_shipShader->setUniform1f("u_Rough", 0.85f);
             s_shipShader->setUniform1i("u_EmissiveOn", 0);
@@ -3888,6 +4135,188 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
   m_postFx.setSpeedFx(m_speedFx);
   // === Cinematography Director & Filmic Grading === (v4.4.0)
   m_postFx.setCinematography(m_settings.colorGrade, m_settings.filmicVignette);
+  m_postFx.setTime(time);
+  m_postFx.endScene(fbWidth, fbHeight);
+}
+
+void SceneManager::renderIntro(const IntroRenderParams& params, int fbWidth, int fbHeight, float time) {
+  if (fbWidth <= 0 || fbHeight <= 0) return;
+
+  m_postFx.beginScene(fbWidth, fbHeight);
+  glViewport(0, 0, fbWidth, fbHeight);
+  glClearColor(0.002f, 0.004f, 0.008f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  const float aspect = static_cast<float>(fbWidth) / static_cast<float>(fbHeight);
+  const glm::vec3 eye(params.cameraPosition.x, params.cameraPosition.y, params.cameraPosition.z);
+  const glm::vec3 target(params.cameraTarget.x, params.cameraTarget.y, params.cameraTarget.z);
+  glm::vec3 fwd = glm::normalize(target - eye);
+  glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(params.cameraUp.x, params.cameraUp.y, params.cameraUp.z)));
+  glm::vec3 camUp = glm::normalize(glm::cross(right, fwd));
+  if (std::abs(params.roll) > 1e-5f) {
+    const glm::mat3 rollMat = glm::mat3(glm::rotate(glm::mat4(1.0f), params.roll, fwd));
+    right = glm::normalize(rollMat * right);
+    camUp = glm::normalize(rollMat * camUp);
+  }
+  const float fovY = glm::radians(std::clamp(params.fovDegrees, 20.0f, 120.0f));
+  const glm::mat4 view = glm::lookAt(eye, eye + fwd, camUp);
+  const glm::mat4 proj = glm::perspective(fovY, aspect, 0.05f, 10000.0f);
+  const glm::mat4 viewProj = proj * view;
+
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);
+  glDisable(GL_BLEND);
+  glDisable(GL_CULL_FACE);
+
+  static Shader s_introSkyShader("shaders/quad.vert", "shaders/sky.frag");
+  s_introSkyShader.bind();
+  s_introSkyShader.setUniform3f("u_CamFwd", fwd.x, fwd.y, fwd.z);
+  s_introSkyShader.setUniform3f("u_CamRight", right.x, right.y, right.z);
+  s_introSkyShader.setUniform3f("u_CamUp", camUp.x, camUp.y, camUp.z);
+  s_introSkyShader.setUniform1f("u_Aspect", aspect);
+  s_introSkyShader.setUniform1f("u_FovY", fovY);
+  s_introSkyShader.setUniform1i("u_Sky", 0);
+  s_introSkyShader.setUniform1f("u_Exposure", m_exposure);
+  s_introSkyShader.setUniform1f("u_BandK", 1.3f);
+  s_introSkyShader.setUniform3f("u_VelDir", 0.0f, 0.0f, 1.0f);
+  s_introSkyShader.setUniform1f("u_Beta", 0.0f);
+  m_skyboxDeep->bind(0);
+  m_screenQuad->draw();
+  s_introSkyShader.unbind();
+
+  const float introRs = 3.2f;
+  const float introShell = std::max(m_settings.shellRadius * 2.5f, glm::length(eye) + 45.0f);
+  m_bhShader->bind();
+  m_bhShader->setUniform3f("u_CameraPosition", eye.x, eye.y, eye.z);
+  m_bhShader->setUniform3f("u_CameraForward", fwd.x, fwd.y, fwd.z);
+  m_bhShader->setUniform3f("u_CameraRight", right.x, right.y, right.z);
+  m_bhShader->setUniform3f("u_CameraUp", camUp.x, camUp.y, camUp.z);
+  m_bhShader->setUniform1f("u_Aspect", aspect);
+  m_bhShader->setUniform1f("u_FovY", fovY);
+  m_bhShader->setUniform1f("u_Rs", introRs);
+  m_bhShader->setUniform1f("u_ShellRadius", introShell);
+  m_bhShader->setUniform1f("u_StepSize", std::min(m_settings.stepSize, 0.045f));
+  m_bhShader->setUniform1i("u_MaxSteps", std::max(m_settings.maxSteps, 700));
+  m_bhShader->setUniform1i("u_DiskOn", 1);
+  m_bhShader->setUniform1i("u_JetOn", 0);
+  m_bhShader->setUniform1f("u_Time", time);
+  m_bhShader->setUniform1f("u_Exposure", m_exposure);
+  m_bhShader->setUniform1f("u_BHRingK", 1.8f);
+  m_bhShader->setUniform1f("u_ThinDisk", 1.0f);
+  m_bhShader->setUniform1f("u_BandK", 1.3f);
+  m_bhShader->setUniform1f("u_RedshiftK", m_settings.gravRedshift ? 1.0f : 0.0f);
+  m_bhShader->setUniform1f("u_RelK", 0.0f);
+  m_bhShader->setUniform1f("u_Rkf45K", 0.0f);
+  m_bhShader->setUniform1f("u_KerrSpin", 0.0f);
+  m_bhShader->setUniform4f("u_KerrPrecomp", 0.0f, 0.0f, 0.0f, 0.0f);
+  m_bhShader->setUniform1f("u_CamDist", static_cast<float>(glm::length(eye) / introRs));
+  m_bhShader->setUniform1f("u_CompK", 0.0f);
+  m_bhShader->setUniform1f("u_CompRs", 0.0f);
+  m_bhShader->setUniform1f("u_CompR", 0.0f);
+  m_bhShader->setUniform1f("u_CompInc", 0.0f);
+  m_bhShader->setUniform1f("u_CompOmega", 0.0f);
+  m_bhShader->setUniform1f("u_CompPhase0", 0.0f);
+  m_bhShader->setUniform1f("u_DiskInK", 0.0f);
+  m_bhShader->setUniform1f("u_DiskOutK", 0.0f);
+  m_bhShader->setUniform1f("u_DiskGain", 1.0f);
+  m_bhShader->setUniform3f("u_VelDir", 0.0f, 0.0f, 1.0f);
+  m_bhShader->setUniform1f("u_Beta", 0.0f);
+  m_bhShader->setUniform1i("u_Skybox", 0);
+  m_skyboxDeep->bind(0);
+  m_screenQuad->draw();
+  m_bhShader->unbind();
+
+  static Shader s_introPbrShader("shaders/ship.vert", "shaders/ship.frag");
+  static ObjModel s_introShip;
+  static ObjModel s_introMegastructure;
+  static ObjModel s_introBridge;
+  static bool s_introModelsTried = false;
+  if (!s_introModelsTried) {
+    s_introModelsTried = true;
+    s_introShip.load("res/models/warp_ship.obj");
+    s_introShip.loadTextures("res/models/warp_ship");
+    s_introMegastructure.load("res/models/station_megastructure.obj");
+    s_introMegastructure.loadTextures("res/models/station_megastructure");
+    s_introBridge.load("res/models/bridge_interior.obj");
+    s_introBridge.loadTextures("res/models/bridge_interior");
+  }
+
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
+  glDisable(GL_CULL_FACE);
+
+  auto drawIntroActor = [&](ObjModel& model, const glm::mat4& modelMatrix,
+                            float metal, float rough, float stationPbr,
+                            const glm::vec3& keyDir, const glm::vec3& keyColor,
+                            const glm::vec3& emissiveTint) {
+    if (!model.ready()) return;
+    s_introPbrShader.bind();
+    s_introPbrShader.setUniformMat4f("u_MVP", viewProj * modelMatrix);
+    s_introPbrShader.setUniformMat4f("u_Model", modelMatrix);
+    s_introPbrShader.setUniformMat4f("u_ShipInv", glm::inverse(modelMatrix));
+    s_introPbrShader.setUniform3f("u_CamPos", eye);
+    s_introPbrShader.setUniform3f("u_KeyDir", glm::normalize(keyDir));
+    s_introPbrShader.setUniform3f("u_KeyColor", keyColor);
+    s_introPbrShader.setUniform1f("u_Metal", metal);
+    s_introPbrShader.setUniform1f("u_Rough", rough);
+    s_introPbrShader.setUniform3f("u_Emissive", glm::vec3(0.0f));
+    s_introPbrShader.setUniform1i("u_Env", 0);
+    s_introPbrShader.setUniform1f("u_EnvMaxLod", 9.0f);
+    s_introPbrShader.setUniform1f("u_ReflK", m_settings.shipReflections ? 1.0f : 0.0f);
+    s_introPbrShader.setUniform1i("u_Albedo", 1);
+    s_introPbrShader.setUniform1i("u_NormalTex", 2);
+    s_introPbrShader.setUniform1i("u_RoughTex", 3);
+    s_introPbrShader.setUniform1i("u_MetalTex", 4);
+    s_introPbrShader.setUniform1i("u_EmissiveTex", 5);
+    s_introPbrShader.setUniform1i("u_SkinAlbedo", 6);
+    s_introPbrShader.setUniform1i("u_SkinRough", 7);
+    s_introPbrShader.setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
+    s_introPbrShader.setUniform1i("u_FlatNormal", 0);
+    s_introPbrShader.setUniform1f("u_RingSpin", 0.0f);
+    s_introPbrShader.setUniform1i("u_SkinOn", 0);
+    s_introPbrShader.setUniform3f("u_BaseColor", glm::vec3(1.0f));
+    s_introPbrShader.setUniform3f("u_HullTint", glm::vec3(1.0f));
+    s_introPbrShader.setUniform3f("u_AccentTint", glm::vec3(1.0f));
+    s_introPbrShader.setUniform3f("u_EmissiveTint", emissiveTint);
+    s_introPbrShader.setUniform1f("u_StationPbr", stationPbr);
+    s_introPbrShader.setUniform1f("u_HullWear", -1.0f);
+    s_introPbrShader.setUniform1i("u_TexOn", model.textured() ? 1 : 0);
+    s_introPbrShader.setUniform1i("u_EmissiveOn", model.emissive() ? 1 : 0);
+    glActiveTexture(GL_TEXTURE0);
+    m_skyboxLocal->bind(0);
+    if (model.textured()) model.bindTextures(1);
+    model.draw();
+    s_introPbrShader.unbind();
+  };
+
+  // Warm key light from the Kerr accretion disk at the origin + subtle elevation.
+  const glm::vec3 diskKeyCol = glm::vec3(1.0f, 0.82f, 0.58f) * 14.0f;
+  if (params.showShip) {
+    const glm::vec3 shipPos(params.shipModel[3]);
+    drawIntroActor(s_introShip, params.shipModel, 0.85f, 0.28f, 0.0f,
+                   glm::vec3(0.0f, 3.0f, 0.0f) - shipPos, diskKeyCol,
+                   glm::vec3(1.45f, 1.55f, 1.75f));
+  }
+  if (params.showMegastructure) {
+    const glm::vec3 megaPos(params.megastructureModel[3]);
+    drawIntroActor(s_introMegastructure, params.megastructureModel, 0.82f, 0.34f, 0.0f,
+                   glm::vec3(0.0f, 4.0f, 0.0f) - megaPos, diskKeyCol,
+                   glm::vec3(1.30f, 1.30f, 1.45f));
+  }
+  if (params.showBridge) {
+    drawIntroActor(s_introBridge, params.bridgeModel, 0.72f, 0.36f, 0.0f,
+                   glm::vec3(-0.15f, 0.35f, -0.95f),
+                   glm::vec3(1.0f, 0.85f, 0.65f) * 10.0f,
+                   glm::vec3(1.35f, 1.50f, 1.65f));
+  }
+
+  m_postFx.setShipFx(0.0f, 0.0f, 0.0f);
+  m_postFx.setHorizonFx(0.0f, 0.0f);
+  m_postFx.setWarpLens(0.5f, 0.5f, 0.0f, 1.0f, 0.0f);
+  m_postFx.setSpeedFx(std::clamp(params.speedFx, 0.0f, 1.0f));
+  m_postFx.setCinematography(m_settings.colorGrade, std::max(m_settings.filmicVignette, 0.42f));
   m_postFx.setTime(time);
   m_postFx.endScene(fbWidth, fbHeight);
 }

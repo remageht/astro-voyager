@@ -156,6 +156,8 @@ class AudioEngine {
   // v4.0: файл-голос для катсцен (wav, декодируется miniaudio в float
   // моно kSampleRate синхронно при запуске; каталог с аудио рядом).
   void playFile(const std::string& path, float db);
+  void stopFileVoices();
+  void setMusicSuppressed(bool suppressed) { m_musicSuppressed.store(suppressed); }
 
   void setVolume(float v);  // 0..1
   float volume() const { return m_volume.load(); }
@@ -213,6 +215,7 @@ class AudioEngine {
 
   std::atomic<float> m_volume{0.7f};
   std::atomic<bool> m_muted{false};
+  std::atomic<bool> m_musicSuppressed{false};
   std::atomic<bool> m_menuTarget{false};
   std::atomic<float> m_warpTarget{0.0f};
   std::atomic<float> m_warpCurrent{0.0f};

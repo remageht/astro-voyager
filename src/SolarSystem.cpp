@@ -127,7 +127,7 @@ std::vector<PlanetDef> initDefs() {
     d.parentId = "jupiter";
     d.facts = {"Diameter 3,122 km", "Ice shell over a global ocean"};
     d.spinRate = d.angleSpeed;
-    d.detail = 5;
+    d.detail = 14;  // v5.1.0: fractured ice shell + MgSO4 lineae
     d.mass = 0.02f;
     list.push_back(d);
   }
@@ -171,7 +171,7 @@ std::vector<PlanetDef> initDefs() {
     d.parentId = "saturn";
     d.facts = {"Diameter 5,150 km", "Thick nitrogen atmosphere"};
     d.spinRate = d.angleSpeed;
-    d.detail = 5;
+    d.detail = 13;  // v5.1.0: tholin dunes + liquid methane seas
     d.mass = 0.02f;
     list.push_back(d);
   }
