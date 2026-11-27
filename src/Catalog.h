@@ -11,6 +11,7 @@ struct StationParams {
   double shellRadius = 30.0;
   double step = 0.05;
   int maxSteps = 600;
+  double kerrSpin = 0.0;  // Optional catalog Kerr spin a/M in [0.0, 0.998]
 };
 
 struct Station {

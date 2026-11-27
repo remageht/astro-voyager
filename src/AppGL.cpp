@@ -9,6 +9,7 @@
 #include <cfloat>
 #include <ctime>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -33,8 +34,15 @@
 #include "Shader.h"
 #include "Version.h"
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 namespace {
 static bool fuzzyMatch(const std::string& text, const std::string& query) {
@@ -53,6 +61,8 @@ static bool fuzzyMatch(const std::string& text, const std::string& query) {
 }
 
 static float s_mouseWheelAccum = 0.0f;
+// Длительность power-down: нужна и игровому циклу (закрытие окна), и отрисовке.
+constexpr float kPowerDownSeconds = 1.30f;
 static GLFWscrollfun s_prevGlfwScrollCallback = nullptr;
 
 static void appGlfwScrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
@@ -84,6 +94,7 @@ ImFont* loadCineFont() {
   ImGuiIO& io = ImGui::GetIO();
   static const char* kPaths[] = {
       "C:\\Windows\\Fonts\\segoeui.ttf",
+      "C:\\Windows\\Fonts\\bahnschrift.ttf",
       "C:\\Windows\\Fonts\\arial.ttf",
       "/System/Library/Fonts/Supplemental/Arial.ttf",
       "/System/Library/Fonts/Supplemental/Verdana.ttf",
@@ -92,7 +103,75 @@ ImFont* loadCineFont() {
   };
   for (const char* p : kPaths) {
     ImFont* f = io.Fonts->AddFontFromFileTTF(
-        p, 16.0f, nullptr, kCyrillicAndSymbolsRanges);
+        p, 17.0f, nullptr, kCyrillicAndSymbolsRanges);
+    if (f) return f;
+  }
+  return nullptr;
+}
+
+ImFont* loadHeadingFont() {
+  ImGuiIO& io = ImGui::GetIO();
+  static const char* kPaths[] = {
+      "C:\\Windows\\Fonts\\bahnschrift.ttf",
+      "C:\\Windows\\Fonts\\seguisb.ttf",
+      "C:\\Windows\\Fonts\\segoeui.ttf",
+      "C:\\Windows\\Fonts\\arial.ttf",
+      "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+  };
+  for (const char* p : kPaths) {
+    ImFont* f = io.Fonts->AddFontFromFileTTF(
+        p, 18.0f, nullptr, kCyrillicAndSymbolsRanges);
+    if (f) return f;
+  }
+  return nullptr;
+}
+
+ImFont* loadMainMenuFont(bool title) {
+  ImGuiIO& io = ImGui::GetIO();
+  static const char* kTitlePaths[] = {
+      "C:\\Windows\\Fonts\\georgiab.ttf",
+      "C:\\Windows\\Fonts\\corbelb.ttf",
+      "C:\\Windows\\Fonts\\segoeuib.ttf",
+      "C:\\Windows\\Fonts\\segoeuil.ttf",
+      "C:\\Windows\\Fonts\\segoeuisl.ttf",
+      "C:\\Windows\\Fonts\\segoeui.ttf",
+      "/System/Library/Fonts/Supplemental/Helvetica Neue.ttc",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans-ExtraLight.ttf",
+      nullptr,
+  };
+  static const char* kBodyPaths[] = {
+      "C:\\Windows\\Fonts\\segoeuisl.ttf",
+      "C:\\Windows\\Fonts\\segoeuil.ttf",
+      "C:\\Windows\\Fonts\\segoeui.ttf",
+      "/System/Library/Fonts/Supplemental/Helvetica Neue.ttc",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      nullptr,
+  };
+  const char* const* paths = title ? kTitlePaths : kBodyPaths;
+  const float size = title ? 22.0f : 18.0f;
+  for (int i = 0; paths[i]; ++i) {
+    ImFont* f = io.Fonts->AddFontFromFileTTF(
+        paths[i], size, nullptr, kCyrillicAndSymbolsRanges);
+    if (f) return f;
+  }
+  return nullptr;
+}
+
+ImFont* loadMainMenuTaglineFont() {
+  ImGuiIO& io = ImGui::GetIO();
+  static const char* kPaths[] = {
+      "C:\\Windows\\Fonts\\georgiai.ttf",
+      "C:\\Windows\\Fonts\\timesi.ttf",
+      "C:\\Windows\\Fonts\\georgia.ttf",
+      "C:\\Windows\\Fonts\\segoeuii.ttf",
+      "/System/Library/Fonts/Supplemental/Times New Roman Italic.ttf",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
+      nullptr,
+  };
+  for (int i = 0; kPaths[i]; ++i) {
+    ImFont* f = io.Fonts->AddFontFromFileTTF(
+        kPaths[i], 17.0f, nullptr, kCyrillicAndSymbolsRanges);
     if (f) return f;
   }
   return nullptr;
@@ -159,11 +238,12 @@ AppGL::AppGL(int width, int height, bool visible) {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
   ImGui::StyleColorsDark();
-  // === Cinematic === begin (агент C): шрифт с кириллицей для русских строк.
-  // Дефолтный шрифт не заменяем (иначе поплывут эталонные скриншоты):
-  // киношрифт используется только внутри drawCinematic().
+  // Основной шрифт интерфейса и отдельный semi-bold для заголовков.
   m_cineFont = loadCineFont();
-  // === Cinematic === end
+  m_headingFont = loadHeadingFont();
+  m_mainMenuFont = loadMainMenuFont(false);
+  m_mainMenuTitleFont = loadMainMenuFont(true);
+  m_mainMenuTaglineFont = loadMainMenuTaglineFont();
 
   ImGui_ImplGlfw_InitForOpenGL(m_window->getNativeWindow(), true);
   s_prevGlfwScrollCallback = glfwSetScrollCallback(
@@ -193,6 +273,9 @@ AppGL::~AppGL() {
   if (m_menuVideoTex != 0) {
     glDeleteTextures(1, &m_menuVideoTex);
   }
+  m_videoIntroSeq.releaseTexture();
+  m_exitDestructionSeq.releaseTexture();
+  m_entryVideoSeq.releaseTexture();
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
@@ -207,6 +290,7 @@ int AppGL::run() {
   loadExpeditionFileNow();  // === Expedition === (v3.5.0): свой сейв арки.
   loadZettelkastenFileNow(); // === Zettelkasten === (v4.8.0): Второй мозг Егорки.
   loadMissionsFileNow(); // === MissionSystem === (Stage 7 / Roadmap #5)
+  loadSpaceEventsFileNow(); // === SpaceEventsSystem === (v5.2.0)
   m_zettelkasten.refresh(m_visited, m_minBhDistance, m_journeyExported);
   // === Loading Screen === (v5.0.8): холодный старт с логами квантовых систем
   m_loadingScreen.startColdBoot();
@@ -219,10 +303,53 @@ int AppGL::run() {
 
   while (!m_window->shouldClose()) {
     float currentTime = static_cast<float>(glfwGetTime());
-    float deltaTime = currentTime - lastTime;
+    float wallDelta = currentTime - lastTime;
+    float deltaTime = wallDelta;
     lastTime = currentTime;
     if (deltaTime > 0.1f) deltaTime = 0.1f;
     if (deltaTime < 0.0f) deltaTime = 0.0f;
+
+    // Кинематографичное выключение: таймер живёт в игровом цикле, а не в отрисовке,
+    // чтобы кадры харнесса --capture-exit снимались ровно на заданных метках.
+    if (m_exitSequence) {
+      m_exitTimer += deltaTime;
+      if (m_exitTimer >= kPowerDownSeconds) {
+        m_exitSequence = false;
+        glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
+      }
+    }
+
+    // === Ship Destruction Exit Sequence (res/video/exit) ===
+    if (m_exitDestructionSeq.isActive()) {
+      GLFWwindow* win = m_window->getNativeWindow();
+      const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+      const bool skipExit =
+          (!escDown && m_prevEscPressed) ? false
+          : (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ||
+             glfwGetKey(win, GLFW_KEY_ENTER) == GLFW_PRESS ||
+             glfwGetKey(win, GLFW_KEY_KP_ENTER) == GLFW_PRESS ||
+             (escDown && !m_prevEscPressed));
+      m_prevEscPressed = escDown;
+      bool needAudio = false;
+      int targetFrame = 0;
+      const auto stepRes = skipExit
+          ? FrameSequencePlayer::StepResult::Finished
+          : m_exitDestructionSeq.step(wallDelta, needAudio, targetFrame);
+      if (needAudio) {
+        m_audio.setMusicSuppressed(true);
+        m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+        m_audio.ensureInitialized();
+        m_audio.playFile(m_exitDestructionSeq.audioPath(), -1.0f);
+      }
+      if (stepRes == FrameSequencePlayer::StepResult::Finished) {
+        m_exitDestructionSeq.stop();
+        m_audio.stopFileVoices();
+        glfwSetWindowShouldClose(win, GLFW_TRUE);
+      } else if (stepRes == FrameSequencePlayer::StepResult::Playing) {
+        m_exitDestructionSeq.uploadFrame(
+            targetFrame, [this](const unsigned char* px, int w, int h) { return uploadRgba(px, w, h); });
+      }
+    }
 
     // === Loading Screen & Transitions === (v5.0.8)
     if (m_loadingScreen.isActive()) {
@@ -235,7 +362,7 @@ int AppGL::run() {
       }
     }
     m_loadingScreen.update(deltaTime);
-    if (m_loadingScreen.justFinished()) {
+    if (m_inMenu && m_loadingScreen.justFinished()) {
       m_loadingScreen.clearFinishedFlag();
       m_audio.playRadioBeep();
       const std::string tourFrame =
@@ -243,20 +370,50 @@ int AppGL::run() {
       if (std::filesystem::exists(tourFrame)) {
         startUniverseTour();
       } else {
-        m_introDirector.start();
+        startIntroPlayback();
       }
     }
 
-    // === 3D Cinematic Intro === (v5.2.0)
-    if (m_introDirector.isActive()) {
+    // === Cinematic Intro (Pre-rendered MP4 stream or 3D Engine Fallback) ===
+    if (m_videoIntroSeq.isActive()) {
       GLFWwindow* win = m_window->getNativeWindow();
+      const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+      const bool skipHit =
+          glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_ENTER) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_KP_ENTER) == GLFW_PRESS ||
+          escDown;
+      if (skipHit) {
+        if (escDown) m_prevEscPressed = true;
+        stopIntroPlayback();
+      } else {
+        bool needAudio = false;
+        int targetFrame = 0;
+        const auto stepRes = m_videoIntroSeq.step(wallDelta, needAudio, targetFrame);
+        if (needAudio) {
+          m_audio.setMusicSuppressed(true);
+          m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+          m_audio.ensureInitialized();
+          m_audio.playFile(m_videoIntroSeq.audioPath(), -1.5f);
+        }
+        if (stepRes == FrameSequencePlayer::StepResult::Finished) {
+          stopIntroPlayback();
+        } else if (stepRes == FrameSequencePlayer::StepResult::Playing) {
+          m_videoIntroSeq.uploadFrame(
+              targetFrame, [this](const unsigned char* px, int w, int h) { return uploadRgba(px, w, h); });
+        }
+      }
+    } else if (m_introDirector.isActive()) {
+      GLFWwindow* win = m_window->getNativeWindow();
+      const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
       if (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ||
           glfwGetKey(win, GLFW_KEY_ENTER) == GLFW_PRESS ||
           glfwGetKey(win, GLFW_KEY_KP_ENTER) == GLFW_PRESS ||
-          glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+          escDown) {
+        if (escDown) m_prevEscPressed = true;
         m_introDirector.skip();
       }
-      m_introDirector.update(deltaTime);
+      m_introDirector.update(std::min(wallDelta, 0.2f));
       if (m_introDirector.consumeWarpBoomTrigger()) {
         m_audio.playJump();
       }
@@ -268,6 +425,9 @@ int AppGL::run() {
       }
       if (m_introDirector.consumeTitleChimeTrigger()) {
         m_audio.playEurekaChime();
+      }
+      if (m_introDirector.consumeBassDropTrigger()) {
+        m_audio.playJump();
       }
     }
 
@@ -292,23 +452,24 @@ int AppGL::run() {
     if (m_inMenu) {
       // Main menu: showcase orbit around the current station, world renders behind.
       GLFWwindow* menuWin = m_window->getNativeWindow();
-      bool menuEscDown = (glfwGetKey(menuWin, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-      if (menuEscDown && !m_prevEscPressed && !m_slidesOpen) {
-        if (m_menuPage != 0) {
-          m_menuPage = 0;
-          m_pageTransitionTimer = 0.0f;
-          m_audio.playBlip();
-        } else if (!m_menuClosing && !m_menuBooting) {
-          requestCloseMenu();
+      if (!m_exitDestructionSeq.isActive()) {
+        bool menuEscDown = (glfwGetKey(menuWin, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+        if (menuEscDown && !m_prevEscPressed && !m_slidesOpen) {
+          if (!closeTopModal()) {
+            if (m_menuPage != 0) {
+              menuGoBack();
+            } else if (!m_menuClosing && !m_menuBooting) {
+              requestCloseMenu();
+            }
+          }
         }
-      }
-      m_prevEscPressed = menuEscDown;
+        m_prevEscPressed = menuEscDown;
 
-      if (glfwGetKey(menuWin, GLFW_KEY_I) == GLFW_PRESS &&
-          !m_introDirector.isActive() && !m_loadingScreen.isActive() &&
-          !m_slidesOpen) {
-        m_introDirector.start();
-        m_audio.playBlip();
+        if (glfwGetKey(menuWin, GLFW_KEY_I) == GLFW_PRESS &&
+            !isIntroPlaying() && !m_loadingScreen.isActive() && !m_slidesOpen) {
+          startIntroPlayback();
+          m_audio.playBlip();
+        }
       }
 
       m_window->pollEvents();
@@ -318,7 +479,7 @@ int AppGL::run() {
         auto camTgt = m_introDirector.cameraTarget();
         m_camera.position = Vec3(camPos.x, camPos.y, camPos.z);
         computeLookYawPitch(m_camera.position, Vec3(camTgt.x, camTgt.y, camTgt.z), m_camera.yaw, m_camera.pitch);
-      } else {
+      } else if (!m_videoIntroSeq.isActive()) {
         const Station* menuSt = m_sceneManager->getCurrentStation();
         double menuSpawn = (menuSt ? menuSt->spawnDistanceRs : 20.0);
         float menuRadius = static_cast<float>(menuSpawn * 1.25 + 4.0);
@@ -336,17 +497,30 @@ int AppGL::run() {
         glfwWaitEventsTimeout(0.05);
         continue;
       }
-      renderMenuBackdrop(menuFbW, menuFbH, currentTime);
+      if (m_exitDestructionSeq.isActive() || m_videoIntroSeq.isActive()) {
+        glViewport(0, 0, menuFbW, menuFbH);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+      } else if (m_introDirector.isActive()) {
+        renderIntroFrame(menuFbW, menuFbH, currentTime);
+      } else {
+        renderMenuBackdrop(menuFbW, menuFbH, currentTime);
+      }
 
       // Render ImGui UI
       ImGui_ImplOpenGL3_NewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
-      if (m_slidesOpen) {
+      if (m_exitDestructionSeq.isActive()) {
+        drawExitDestructionOverlay(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
+      } else if (m_videoIntroSeq.isActive()) {
+        drawVideoIntroOverlay(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
+      } else if (m_slidesOpen) {
         drawSlidesOverlay();
       } else if (m_introDirector.isActive()) {
-        m_introDirector.drawHUD(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
+        m_introDirector.drawHUD(static_cast<float>(menuFbW), static_cast<float>(menuFbH),
+                                m_mainMenuTitleFont, m_mainMenuFont);
       } else {
         drawMenu();
       }
@@ -386,14 +560,61 @@ int AppGL::run() {
       m_ship.gravVel = Vec3(0.0, 0.0, 0.0);
     }
 
+    // === Pre-rendered Menu-to-Gameplay Transition Video (res/video/entry) ===
+    if (m_entryVideoSeq.isActive()) {
+      GLFWwindow* win = m_window->getNativeWindow();
+      const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+      const bool skipEntry =
+          glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_ENTER) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_KP_ENTER) == GLFW_PRESS ||
+          (escDown && !m_prevEscPressed);
+      if (escDown) m_prevEscPressed = true;
+      if (skipEntry) {
+        stopEntryTransitionVideo();
+      } else {
+        bool startAudio = false;
+        int targetFrame = 1;
+        const auto stepRes = m_entryVideoSeq.step(static_cast<double>(wallDelta),
+                                                  startAudio, targetFrame);
+        if (startAudio) {
+          m_audio.setMusicSuppressed(true);
+          m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+          m_audio.ensureInitialized();
+          m_audio.playFile(m_entryVideoSeq.audioPath(), -1.5f);
+        }
+        if (stepRes == FrameSequencePlayer::StepResult::Finished) {
+          stopEntryTransitionVideo();
+        } else if (stepRes == FrameSequencePlayer::StepResult::Playing) {
+          m_entryVideoSeq.uploadFrame(targetFrame, [this](const unsigned char* px, int w, int h) {
+            return uploadRgba(px, w, h);
+          });
+        }
+      }
+    }
+
+    // === Universe-to-Ship Entry Transition ===
+    if (m_entryFlightActive) {
+      GLFWwindow* win = m_window->getNativeWindow();
+      const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+      if (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_ENTER) == GLFW_PRESS ||
+          glfwGetKey(win, GLFW_KEY_KP_ENTER) == GLFW_PRESS ||
+          (escDown && !m_prevEscPressed)) {
+        if (escDown) m_prevEscPressed = true;
+        stopEntryFlight(true);
+      }
+      if (escDown) m_prevEscPressed = true;
+    }
+
     // === Physics === begin: столкновения и захват горизонтом.
     Vec3 prevCamPos = m_camera.position;
-    if (!m_captureAnim && !storyActive) {
+    if (!m_captureAnim && !storyActive && !m_entryFlightActive && !m_entryVideoSeq.isActive()) {
       processInput(deltaTime);
       processMouse();
     }
     const Station* physSt = m_sceneManager->getCurrentStation();
-    if (!m_captureAnim && !storyActive && physSt &&
+    if (!m_captureAnim && !storyActive && !m_entryFlightActive && !m_entryVideoSeq.isActive() && physSt &&
         physSt->type == StationType::BlackHole) {
       const double rsNow =
           static_cast<double>(m_sceneManager->getSettings().rs);
@@ -483,6 +704,38 @@ int AppGL::run() {
           m_missions.onProximityObservation(st->id, camDist);
         }
       }
+      // === SpaceEventsSystem === (v5.2.0): SOS, rogue asteroids & relic probes
+      const bool gameplayActive = !m_inMenu && !m_sceneManager->isPaused() && !m_slidesOpen;
+      if (gameplayActive) {
+        const double realDt = static_cast<double>(deltaTime);
+        m_spaceEvents.ensureSectorEvents(curStation, 0xA570ULL);
+        m_spaceEvents.update(realDt, curStation, true);
+        double nearDist = 0.0;
+        const DeepSpaceEvent* nearEv =
+            m_spaceEvents.findNearestActive(m_camera.position, curStation, &nearDist);
+        GLFWwindow* fWin = m_window->getNativeWindow();
+        if (nearEv && nearDist <= nearEv->interactRadius && fWin &&
+            !ImGui::GetIO().WantCaptureKeyboard && !m_shipTerminalOpen && m_slidesCurrent.empty() &&
+            glfwGetKey(fWin, GLFW_KEY_F) == GLFW_PRESS) {
+          const std::string evId = nearEv->id;
+          const SpaceEventType evType = nearEv->type;
+          const bool wasActive = (nearEv->status == SpaceEventStatus::Active);
+          if (m_spaceEvents.engageEvent(evId, m_camera.position, realDt,
+                                        &m_codex, &m_bridgeComms, &m_zettelkasten)) {
+            for (const auto& updated : m_spaceEvents.events()) {
+              if (updated.id == evId && wasActive && updated.status == SpaceEventStatus::Resolved) {
+                m_audio.playChime();
+                if (evType == SpaceEventType::SosBeacon) {
+                  m_ship.shield = std::min(100.0f, m_ship.shield + 15.0f);
+                }
+                saveSpaceEventsFileNow();
+                saveProfileNow(true);
+                break;
+              }
+            }
+          }
+        }
+      }
     }
     // v4.0.0: износ корпуса -> шейдер OBJ-корпуса (побитый/восстановленный).
     warpdrive::setShipHull(m_ship.hull / 100.0f);
@@ -506,22 +759,27 @@ int AppGL::run() {
 
     // === Camera views + speed FX === (v3.3.0): скорость камеры/варпа =>
     // доплер+стрики+микро-FOV; камера кадра со сносом вида; корабль в кадре.
-    updateSpeedFx(deltaTime);
-    // v4.0: сглаживание зума колёсиком (быстрый лерк, без поп-эффекта).
-    {
-      const float zk = 1.0f - std::exp(-deltaTime * 10.0f);
-      m_viewZoom += (m_viewZoomT - m_viewZoom) * zk;
-      if (std::fabs(m_viewZoomT - m_viewZoom) < 0.002f) m_viewZoom = m_viewZoomT;
-    }
-    applyViewCamera(m_renderCam);
-    if (!m_jumpCine) {
-      if (m_viewMode != view::ViewMode::Cockpit && !m_inMenu) {
-        warpdrive::setShip(true, static_cast<float>(m_camera.position.x),
-                           static_cast<float>(m_camera.position.y),
-                           static_cast<float>(m_camera.position.z),
-                           static_cast<float>(m_camera.yaw));
-      } else {
-        warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+    if (m_entryFlightActive) {
+      updateEntryFlight(deltaTime);
+      m_renderCam = m_camera;
+    } else {
+      updateSpeedFx(deltaTime);
+      // v4.0: сглаживание зума колёсиком (быстрый лерк, без поп-эффекта).
+      {
+        const float zk = 1.0f - std::exp(-deltaTime * 10.0f);
+        m_viewZoom += (m_viewZoomT - m_viewZoom) * zk;
+        if (std::fabs(m_viewZoomT - m_viewZoom) < 0.002f) m_viewZoom = m_viewZoomT;
+      }
+      applyViewCamera(m_renderCam);
+      if (!m_jumpCine) {
+        if (m_viewMode != view::ViewMode::Cockpit && !m_inMenu) {
+          warpdrive::setShip(true, static_cast<float>(m_camera.position.x),
+                             static_cast<float>(m_camera.position.y),
+                             static_cast<float>(m_camera.position.z),
+                             static_cast<float>(m_camera.yaw));
+        } else {
+          warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+        }
       }
     }
 
@@ -555,11 +813,42 @@ int AppGL::run() {
                                    shipDist, projDist, m_rcsTimer, m_rcsMask, activeDock);
     }
 
+    {
+      std::vector<warpdrive::SpaceEventVisual> visEvents;
+      const std::string curStId = (m_sceneManager && m_sceneManager->getCurrentStation())
+                                      ? m_sceneManager->getCurrentStation()->id
+                                      : "sol";
+      if (!m_inMenu) {
+        for (const auto& ev : m_spaceEvents.events()) {
+          if (ev.status != SpaceEventStatus::Active || ev.stationId != curStId) continue;
+          warpdrive::SpaceEventVisual ve;
+          ve.type = static_cast<int>(ev.type);
+          ve.x = static_cast<float>(ev.pos.x);
+          ve.y = static_cast<float>(ev.pos.y);
+          ve.z = static_cast<float>(ev.pos.z);
+          ve.vx = static_cast<float>(ev.vel.x);
+          ve.vy = static_cast<float>(ev.vel.y);
+          ve.vz = static_cast<float>(ev.vel.z);
+          ve.progressRatio = (ev.requiredProgress > 0.0)
+                                 ? static_cast<float>(std::clamp(ev.progress / ev.requiredProgress, 0.0, 1.0))
+                                 : 0.0f;
+          ve.seed = ev.seed;
+          visEvents.push_back(ve);
+        }
+      }
+      warpdrive::setSpaceEventVisuals(visEvents);
+    }
+
     // Render active scene
-    m_sceneManager->render(m_renderCam, fbWidth, fbHeight, currentTime);
+    if (m_entryVideoSeq.isActive()) {
+      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+      glClear(GL_COLOR_BUFFER_BIT);
+    } else {
+      m_sceneManager->render(m_renderCam, fbWidth, fbHeight, currentTime);
+    }
 
     // === Diegetic 3D Cockpit === (v4.2.0 Alpha): кабина пилота и HUD от 1-го лица
-    if (m_viewMode == view::ViewMode::Cockpit && !m_inMenu && !m_hideUI) {
+    if (m_viewMode == view::ViewMode::Cockpit && !m_inMenu && !m_hideUI && !m_entryFlightActive && !m_entryVideoSeq.isActive()) {
       drawCockpit(fbWidth, fbHeight, deltaTime, currentTime);
     }
 
@@ -571,25 +860,31 @@ int AppGL::run() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    if (!m_hideUI) {
-      drawImGui();
+    if (m_entryVideoSeq.isActive()) {
+      drawEntryVideoOverlay(static_cast<float>(fbWidth), static_cast<float>(fbHeight));
+    } else if (m_entryFlightActive) {
+      drawEntryFlightHud(static_cast<float>(fbWidth), static_cast<float>(fbHeight));
+    } else {
+      if (!m_hideUI) {
+        drawImGui();
+      }
+      if (m_benchmarkMode) {
+        drawBenchmarkOverlay();
+      }
+      if (m_photoMode) {
+        drawPhotoPopup();
+      }
+      if (m_helpOverlay) {
+        drawHelpOverlay();
+      }
+      drawWorldLabels();
+      drawDockingHud(fbWidth, fbHeight);
+      // === Cinematic === begin (агент C): тур/карточки/HUD только в игре.
+      // Харнесс (captureAllScreenshots) сюда не заходит: PNG чистые.
+      drawCinematic();
+      // === Cinematic === end
+      drawHorizonCapture(ImGui::GetForegroundDrawList());  // === Physics ===
     }
-    if (m_benchmarkMode) {
-      drawBenchmarkOverlay();
-    }
-    if (m_photoMode) {
-      drawPhotoPopup();
-    }
-    if (m_helpOverlay) {
-      drawHelpOverlay();
-    }
-    drawWorldLabels();
-    drawDockingHud(fbWidth, fbHeight);
-    // === Cinematic === begin (агент C): тур/карточки/HUD только в игре.
-    // Харнесс (captureAllScreenshots) сюда не заходит: PNG чистые.
-    drawCinematic();
-    // === Cinematic === end
-    drawHorizonCapture(ImGui::GetForegroundDrawList());  // === Physics ===
     if (m_loadingScreen.isActive()) {
       m_loadingScreen.draw(static_cast<float>(fbWidth), static_cast<float>(fbHeight));
     }
@@ -605,6 +900,7 @@ int AppGL::run() {
   saveExpeditionFileNow();   // === Expedition === (v3.5.0).
   saveZettelkastenFileNow(); // === Zettelkasten === (v4.8.0).
   saveMissionsFileNow();     // === MissionSystem === (Stage 7 / Roadmap #5).
+  saveSpaceEventsFileNow();  // === SpaceEventsSystem === (v5.2.0).
 
   m_audio.shutdown();
 
@@ -1025,7 +1321,8 @@ void AppGL::processInput(float deltaTime) {
     for (const auto& b : bodies) {
       if (!b.def || b.def->radius <= 0.01f) continue;
       const bool hasAtm = (b.def->detail == 4 || b.def->detail == 3 ||
-                           b.def->detail == 6 || b.def->type == 1);
+                           b.def->detail == 6 || b.def->detail == 12 ||
+                           b.def->detail == 13 || b.def->type == 1);
       if (!hasAtm) continue;
       const double dx = m_camera.position.x - b.pos.x;
       const double dy = m_camera.position.y - b.pos.y;
@@ -2436,7 +2733,7 @@ void AppGL::drawCodex() {
     int points = m_codex.getTotalResearchPoints();
 
     ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f),
-                       "✦ %s: %d RP  |  %s: %d / %d",
+                       "%s: %d RP  |  %s: %d / %d",
                        uiRu("ОЧКИ ИССЛЕДОВАНИЙ", "RESEARCH POINTS"), points,
                        uiRu("ОТКРЫТО ОБЪЕКТОВ", "DISCOVERIES"), scannedCount, totalCount);
     ImGui::Separator();
@@ -3613,7 +3910,7 @@ void AppGL::drawStoryPanel() {
     int totalCount = static_cast<int>(m_story.entries().size());
 
     // Top status banner with chronograph counter
-    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "✦ %s [%d / %d]",
+    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s [%d / %d]",
                        uiRu("ХРОНИКА ЭКСПЕДИЦИИ", "EXPEDITION CHRONICLE"),
                        unlockedCount, totalCount);
     ImGui::Separator();
@@ -3628,7 +3925,7 @@ void AppGL::drawStoryPanel() {
 
       if (e.unlocked) {
         // Unlocked story card: amber accent bar on left
-        ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.35f, 1.0f), "⏱  %s",
+        ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.35f, 1.0f), "%s",
                            uiRu(e.titleRu.c_str(), e.titleEn.c_str()));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.82f, 0.85f, 0.90f, 1.00f));
         ImGui::TextWrapped("%s", uiRu(e.textRu.c_str(), e.textEn.c_str()));
@@ -3644,7 +3941,7 @@ void AppGL::drawStoryPanel() {
                     IM_COL32(50, 70, 95, 75), 1.0f);
       } else {
         // Locked encrypted slot: teaser with mission objective hint
-        std::string encTitle = std::string("[🔒 ") + uiRu("ЗАШИФРОВАНО: ", "ENCRYPTED: ") +
+        std::string encTitle = std::string("[") + uiRu("ЗАШИФРОВАНО: ", "ENCRYPTED: ") +
                                uiRu(e.titleRu.c_str(), e.titleEn.c_str()) + "]";
         ImGui::TextColored(ImVec4(0.48f, 0.53f, 0.62f, 1.0f), "%s", encTitle.c_str());
 
@@ -4639,6 +4936,22 @@ void AppGL::loadMissionsFileNow() {
   m_missions.deserialize(buf.str());
 }
 
+void AppGL::saveSpaceEventsFileNow() {
+  if (!m_saveInteractive) return;
+  const std::string dir = saveProfileDir();
+  std::string err;
+  saveWriteFile(dir + "/space_events.json", m_spaceEvents.serialize(), err);
+}
+
+void AppGL::loadSpaceEventsFileNow() {
+  const std::string dir = saveProfileDir();
+  std::ifstream f(dir + "/space_events.json", std::ios::binary);
+  if (!f.is_open()) return;
+  std::ostringstream buf;
+  buf << f.rdbuf();
+  m_spaceEvents.deserialize(buf.str());
+}
+
 namespace {
 
 constexpr double kSlideCharsPerSec = 42.0;
@@ -4917,6 +5230,7 @@ void AppGL::drawSlidesOverlay() {
       }
       invalidateVideoSlide();
       teleportToStation("sol");
+      startEntryTransitionVideo();
       return;
     }
     ++m_slidesIdx;
@@ -5471,6 +5785,57 @@ void AppGL::drawExpeditionHud() {
   ImGui::End();
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor(2);
+  if (fontPushed) ImGui::PopFont();
+}
+
+void AppGL::drawSpaceEventHud() {
+  if (m_inMenu || m_slidesOpen || m_hideUI || !m_sceneManager) return;
+  const Station* curSt = m_sceneManager->getCurrentStation();
+  const std::string curStId = curSt ? curSt->id : "sol";
+  double dist = 0.0;
+  const DeepSpaceEvent* ev = m_spaceEvents.findNearestActive(m_camera.position, curStId, &dist);
+  if (!ev) return;
+
+  const bool fontPushed = modernPushFont();
+  const ImGuiIO& io = ImGui::GetIO();
+  const bool inRange = (dist <= ev->interactRadius);
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, 74.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+  ImGui::SetNextWindowBgAlpha(inRange ? 0.94f : 0.84f);
+  const ImVec4 borderCol = (ev->type == SpaceEventType::RogueAsteroid)
+                               ? ImVec4(1.0f, 0.45f, 0.22f, 0.90f)
+                               : ((ev->type == SpaceEventType::SosBeacon)
+                                      ? ImVec4(1.0f, 0.30f, 0.30f, 0.90f)
+                                      : ImVec4(0.28f, 0.92f, 0.80f, 0.90f));
+  ImGui::PushStyleColor(ImGuiCol_Border, borderCol);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+  ImGuiWindowFlags fl = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoFocusOnAppearing |
+                        ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings;
+  if (ImGui::Begin("##spaceEventHud", nullptr, fl)) {
+    const char* badge = (ev->type == SpaceEventType::RogueAsteroid)
+                            ? uiRu("[УГРОЗА: БОЛИД]", "[THREAT: ASTEROID]")
+                            : ((ev->type == SpaceEventType::SosBeacon)
+                                   ? uiRu("[СИГНАЛ SOS]", "[SOS BEACON]")
+                                   : uiRu("[ЗОНД-РЕЛИКТ]", "[RELIC PROBE]"));
+    ImGui::TextColored(borderCol, "%s", badge);
+    ImGui::SameLine();
+    ImGui::TextUnformatted(uiRu(ev->titleRu.c_str(), ev->titleEn.c_str()));
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.70f, 0.80f, 0.92f, 1.0f), "| %.2f u | %.0fs", dist, ev->timeRemainingSec);
+    if (inRange) {
+      const float frac = (ev->requiredProgress > 0.0)
+                             ? static_cast<float>(std::clamp(ev->progress / ev->requiredProgress, 0.0, 1.0))
+                             : 0.0f;
+      ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.65f, 1.0f), "%s",
+                         uiRu("ДИСТАНЦИЯ ЗАХВАТА: Удерживайте [F] для взаимодействия",
+                              "IN RANGE: Hold [F] to engage deflector / stabilize"));
+      ImGui::SameLine();
+      ImGui::ProgressBar(frac, ImVec2(110.0f, 14.0f));
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor();
   if (fontPushed) ImGui::PopFont();
 }
 
@@ -6936,9 +7301,7 @@ bool AppGL::closeTopModal() {
   }
   if (m_inMenu) {
     if (m_menuPage != 0) {
-      m_menuPage = 0;
-      m_pageTransitionTimer = 0.0f;
-      m_audio.playBlip();
+      menuGoBack();
     } else if (!m_menuClosing && !m_menuBooting) {
       requestCloseMenu();
     }
@@ -8110,6 +8473,57 @@ void AppGL::drawUnifiedShipTerminal() {
       ImGui::EndChild();
 
       ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // Deep Space Emergent Events Radar (v5.2.0)
+      const std::string curStId = (m_sceneManager && m_sceneManager->getCurrentStation())
+                                      ? m_sceneManager->getCurrentStation()->id
+                                      : "sol";
+      ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "%s (%d)",
+                         uiRu("РАДАР СОБЫТИЙ ГЛУБОКОГО КОСМОСА:", "DEEP SPACE EVENT RADAR:"),
+                         m_spaceEvents.activeCount(curStId));
+      ImGui::SameLine();
+      const double pingCd = m_spaceEvents.scannerCooldownRemaining();
+      char pingLbl[64];
+      if (pingCd > 0.5) {
+        std::snprintf(pingLbl, sizeof(pingLbl), "%s (%.0fs)",
+                      uiRu("Пинг радара", "Ping Scanner"), std::ceil(pingCd));
+        ImGui::BeginDisabled();
+        ImGui::SmallButton(pingLbl);
+        ImGui::EndDisabled();
+      } else {
+        if (ImGui::SmallButton(uiRu("Пинг радара", "Ping Scanner"))) {
+          if (m_spaceEvents.pingSectorScanner(curStId, static_cast<uint64_t>(glfwGetTime() * 1000.0) + 17ULL)) {
+            m_audio.playBlip();
+            saveSpaceEventsFileNow();
+          }
+        }
+      }
+      ImGui::BeginChild("##SpaceEventsChild", ImVec2(0.0f, 130.0f), true);
+      bool anySectorEvent = false;
+      for (const auto& ev : m_spaceEvents.events()) {
+        if (ev.status != SpaceEventStatus::Active || ev.stationId != curStId) continue;
+        anySectorEvent = true;
+        const double dx = m_camera.position.x - ev.pos.x;
+        const double dy = m_camera.position.y - ev.pos.y;
+        const double dz = m_camera.position.z - ev.pos.z;
+        const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        ImGui::TextColored(ev.type == SpaceEventType::RogueAsteroid
+                               ? ImVec4(1.0f, 0.45f, 0.25f, 1.0f)
+                               : ImVec4(0.35f, 0.92f, 0.80f, 1.0f),
+                           "◈ %s  [%.2f u | %.0fs | +%d RP]",
+                           uiRu(ev.titleRu.c_str(), ev.titleEn.c_str()),
+                           dist, ev.timeRemainingSec, ev.rewardRP);
+        ImGui::TextWrapped("  %s", uiRu(ev.descRu.c_str(), ev.descEn.c_str()));
+      }
+      if (!anySectorEvent) {
+        ImGui::TextDisabled("%s", uiRu("Активных аномалий в секторе нет. Нажмите «Пинг радара».",
+                                       "No active anomalies in sector. Click Ping Scanner."));
+      }
+      ImGui::EndChild();
+
+      ImGui::Spacing();
       if (ImGui::Button(uiRu("📖 Открыть полный журнал (J)", "📖 Open Full Journal (J)"), ImVec2(240.0f, 32.0f))) {
         m_storyOpen = true;
         m_shipTerminalOpen = false;
@@ -8489,6 +8903,7 @@ if (s_harnessPinFps) ImGui::GetIO().Framerate = 60.0f;
     // #135 mission HUD visible in Zero-UI too: активный контракт не должен
     // исчезать в минималистичном HUD — иначе квест невозможно выполнить.
     drawMissionHud();
+    drawSpaceEventHud();
     if (m_expeditionMapOpen) drawExpeditionMap();
   }
   // === Scientific GW Instrument === (v4.4.0): детектор гравитационных волн
@@ -10051,7 +10466,8 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
         nearestBodyPos = bPos;
         nearestBodyRadius = b.def->radius;
         nearestHasAtmosphere = (b.def->detail == 4 || b.def->detail == 3 ||
-                                b.def->detail == 6 || b.def->type == 1);
+                                b.def->detail == 6 || b.def->detail == 12 ||
+                                b.def->detail == 13 || b.def->type == 1);
       }
     }
     if (nearestBodyRadius <= 0.001f && m_sceneManager->getCurrentStation()) {
@@ -10168,8 +10584,9 @@ void AppGL::drawCockpit(int fbWidth, int fbHeight, float deltaTime, float curren
     }
   }
 
-  // v4.9.0: Drive procedural atmospheric hypersonic roar audio
+  // v4.9.0 / v5.1.0: Drive procedural atmospheric hypersonic roar audio and 3rd-person entry plasma
   m_audio.setAtmosphereRoar(std::clamp(hudData.entryPlasma * 1.2f + hudData.atmoDensity * (m_camSpeed / 60.0f) * 0.45f, 0.0f, 1.0f));
+  warpdrive::setEntryPlasma(nearestHasAtmosphere ? hudData.entryPlasma : 0.0f);
 
   m_cockpitRenderer.render(fbWidth,
                            fbHeight,
@@ -10368,6 +10785,8 @@ void AppGL::applySaveSettings(const SaveSettings& s) {
   RenderSettings& rs = m_sceneManager->getSettings();
   rs.shipReflections = s.shipReflections;
   rs.enginePalette = std::min(std::max(s.enginePalette, 0), 3);
+  rs.kerrSpin = std::clamp(s.kerrSpin, 0.0f, 0.998f);
+  rs.autoKerrSpin = s.autoKerrSpin;
   if (preset == 3) {
     if (s.renderScale > 0.0f) rs.rs = s.renderScale;
     if (s.shellRadius > 0.0f) rs.shellRadius = s.shellRadius;
@@ -10484,6 +10903,8 @@ void AppGL::saveProfileNow(bool quiet) {
   const RenderSettings& rsNow = m_sceneManager->getSettings();
   st.shipReflections = rsNow.shipReflections;
   st.enginePalette = rsNow.enginePalette;
+  st.kerrSpin = std::clamp(rsNow.kerrSpin, 0.0f, 0.998f);
+  st.autoKerrSpin = rsNow.autoKerrSpin;
   if (st.perfPreset == static_cast<int>(PerfPreset::Custom)) {
     // Кастомный рейтмарчинг; sentinel 0 означает «параметр не менялся».
     st.renderScale = rsNow.rs;
@@ -10692,136 +11113,259 @@ void AppGL::drawHelpOverlay() {
 
 namespace {
 
-// Единая холодная палитра меню: обсидиан + бирюза, без «радуги» тактических цветов.
+// Палитра «тихой обсерватории»: фон уступает живому Kerr/кораблю, акцент только для действия.
 namespace menuui {
-const ImVec4 kAccent(0.22f, 0.74f, 0.97f, 1.0f);
-const ImVec4 kAccentDim(0.24f, 0.52f, 0.68f, 1.0f);
-const ImVec4 kText(0.90f, 0.95f, 0.99f, 1.0f);
-const ImVec4 kTextDim(0.55f, 0.66f, 0.76f, 1.0f);
-const ImVec4 kTextMute(0.40f, 0.50f, 0.60f, 1.0f);
-const ImU32 kNavBorder = IM_COL32(88, 148, 184, 190);
-const ImU32 kNavBg = IM_COL32(9, 17, 27, 225);
-const ImU32 kNavPrimaryBorder = IM_COL32(120, 205, 240, 235);
-const ImU32 kNavPrimaryBg = IM_COL32(14, 36, 54, 235);
-const ImU32 kLed = IM_COL32(90, 205, 240, 255);
-const ImU32 kAccentU32 = IM_COL32(56, 189, 248, 255);
-inline ImU32 accentAlpha(int a) { return IM_COL32(56, 189, 248, a); }
+const ImVec4 kAccent(0.435f, 0.827f, 0.910f, 1.0f);
+const ImVec4 kAccentDim(0.28f, 0.58f, 0.70f, 1.0f);
+const ImVec4 kText(0.940f, 0.972f, 0.990f, 1.0f);
+const ImVec4 kTextDim(0.720f, 0.790f, 0.850f, 1.0f);
+const ImVec4 kTextMute(0.620f, 0.700f, 0.770f, 1.0f);
+const ImU32 kNavBorder = IM_COL32(45, 72, 92, 150);
+const ImU32 kNavBg = IM_COL32(8, 16, 26, 220);
+const ImU32 kNavPrimaryBorder = IM_COL32(111, 211, 232, 210);
+const ImU32 kNavPrimaryBg = IM_COL32(13, 30, 44, 240);
+const ImU32 kLed = IM_COL32(111, 211, 232, 255);
+const ImU32 kAccentU32 = IM_COL32(111, 211, 232, 255);
+const ImU32 kRuleU32 = IM_COL32(36, 59, 74, 150);
+const ImU32 kActionHoverBg = IM_COL32(15, 31, 45, 235);
+const ImU32 kActionPressedBg = IM_COL32(22, 48, 65, 245);
+const ImU32 kActionPrimaryHoverBg = IM_COL32(20, 52, 70, 245);
+const ImU32 kActionText = IM_COL32(214, 228, 238, 255);
+const ImU32 kActionSubtitle = IM_COL32(176, 198, 214, 255);
+const ImU32 kRailBg = IM_COL32(5, 9, 14, 255);
+const ImU32 kRailLine = IM_COL32(35, 55, 68, 180);
+const ImU32 kPrimaryFill = IM_COL32(111, 211, 232, 255);
+const ImU32 kPrimaryHoverFill = IM_COL32(145, 225, 244, 255);
+const ImU32 kPrimaryPressedFill = IM_COL32(80, 180, 210, 255);
+const ImU32 kPrimaryText = IM_COL32(5, 15, 22, 255);
+const ImU32 kPrimarySubtitle = IM_COL32(20, 55, 70, 240);
+const ImU32 kRowHoverBg = IM_COL32(14, 25, 36, 235);
+const ImU32 kRowPressedBg = IM_COL32(20, 38, 52, 245);
+const ImU32 kBrass = IM_COL32(199, 165, 106, 255);
+const ImU32 kBrassDim = IM_COL32(170, 140, 92, 235);
+const ImVec4 kBrassLabel(0.780f, 0.650f, 0.430f, 1.0f);
+
+// v5.2.0: стеклянные панели, тонкие hairline-линии и статусные цвета.
+// Бирюза остаётся цветом действия, латунь — цветом маршрута и «лорных» подписей.
+const ImU32 kPanelBg = IM_COL32(9, 16, 25, 210);
+const ImU32 kPanelBgSolid = IM_COL32(9, 16, 25, 245);
+const ImU32 kPanelBorder = IM_COL32(120, 160, 180, 42);
+const ImU32 kHairline = IM_COL32(255, 255, 255, 20);
+const ImU32 kAccentSoft = IM_COL32(111, 211, 232, 28);
+const ImU32 kAccentBorder = IM_COL32(111, 211, 232, 150);
+const ImU32 kAccentText = IM_COL32(214, 245, 252, 255);
+const ImU32 kSuccess = IM_COL32(123, 216, 143, 255);
+const ImU32 kWarning = IM_COL32(224, 179, 106, 255);
+const ImU32 kDanger = IM_COL32(224, 122, 106, 255);
+const ImU32 kKeycapBg = IM_COL32(12, 20, 30, 255);
+const ImU32 kKeycapBorder = IM_COL32(45, 72, 92, 220);
+inline ImU32 accentAlpha(int a) {
+  return (kAccentU32 & 0x00FFFFFFu) | (static_cast<ImU32>(a) << 24);
+}
+inline ImU32 alphaOf(ImU32 col, int a) {
+  return (col & 0x00FFFFFFu) | (static_cast<ImU32>(a) << 24);
+}
 }  // namespace menuui
 
-// Тактическая кнопка со скошенным правым верхним углом в стиле Quantum Console
-bool drawTacticalCutButton(const char* label, const ImVec2& size, ImU32 borderColor, ImU32 bgColor,
-                           float cut = 10.0f, const char* subtitle = nullptr, const char* indexStr = nullptr,
-                           const char* hotkeyBadge = nullptr) {
-  ImVec2 p0 = ImGui::GetCursorScreenPos();
-  ImVec2 p1(p0.x + size.x, p0.y + size.y);
-  bool pressed = ImGui::InvisibleButton(label, size);
-  bool hovered = ImGui::IsItemHovered();
-  bool held = ImGui::IsItemActive();
+float drawTrackedText(ImDrawList* dl, ImFont* font, float size, ImVec2 p,
+                      ImU32 col, const char* text, float tracking) {
+  if (!font) font = ImGui::GetFont();
+  float x = p.x;
+  const char* current = text;
+  while (*current) {
+    const char* next = current;
+    unsigned int codepoint = static_cast<unsigned char>(*next++);
+    if (codepoint >= 0xC0 && (codepoint & 0xE0) == 0xC0 && *next) {
+      codepoint = ((codepoint & 0x1F) << 6) | (static_cast<unsigned char>(*next++) & 0x3F);
+    } else if (codepoint >= 0xE0 && (codepoint & 0xF0) == 0xE0 && next[0] && next[1]) {
+      codepoint = ((codepoint & 0x0F) << 12) |
+                  ((static_cast<unsigned char>(next[0]) & 0x3F) << 6) |
+                  (static_cast<unsigned char>(next[1]) & 0x3F);
+      next += 2;
+    }
+    (void)codepoint;
+    dl->AddText(font, size, ImVec2(x, p.y), col, current, next);
+    x += font->CalcTextSizeA(size, FLT_MAX, 0.0f, current, next).x + tracking;
+    current = next;
+  }
+  return x - p.x;
+}
+
+// Тонкий шеврон вправо; рисуется линиями, чтобы не зависеть от глифов шрифта.
+void drawChevron(ImDrawList* dl, ImVec2 c, float s, ImU32 col, float th = 1.5f) {
+  dl->AddLine(ImVec2(c.x - s * 0.32f, c.y - s * 0.5f),
+              ImVec2(c.x + s * 0.32f, c.y), col, th);
+  dl->AddLine(ImVec2(c.x + s * 0.32f, c.y),
+              ImVec2(c.x - s * 0.32f, c.y + s * 0.5f), col, th);
+}
+
+// Клавиша-подсказка: 16 px, стеклянная рамка, по центру.
+void drawKeycap(ImDrawList* dl, ImVec2 p, const char* key) {
+  const ImVec2 ts = ImGui::CalcTextSize(key);
+  const float w = std::max(18.0f, ts.x + 8.0f);
+  const float h = 16.0f;
+  dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), menuui::kKeycapBg, 3.0f);
+  dl->AddRect(p, ImVec2(p.x + w, p.y + h), menuui::kKeycapBorder, 3.0f, 0, 1.0f);
+  dl->AddText(ImVec2(p.x + (w - ts.x) * 0.5f, p.y + (h - ts.y) * 0.5f),
+              ImGui::GetColorU32(menuui::kTextDim), key);
+}
+
+// Keycap + подпись в одну строку. Возвращает суммарную ширину.
+float drawKeyHint(const char* key, const char* label) {
+  const ImVec2 p = ImGui::GetCursorScreenPos();
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  drawKeycap(dl, p, key);
+  const ImVec2 ts = ImGui::CalcTextSize(label);
+  const float w = std::max(18.0f, ImGui::CalcTextSize(key).x + 8.0f);
+  dl->AddText(ImVec2(p.x + w + 6.0f, p.y + 1.5f),
+              ImGui::GetColorU32(menuui::kTextMute), label);
+  const float total = w + 6.0f + ts.x;
+  ImGui::Dummy(ImVec2(total, 16.0f));
+  return total;
+}
+
+// Заголовок секции в главном меню: подпись + короткая волосяная линия
+// фиксированной длины. Линия до края колонки превращала правый край рейла
+// в гребёнку разной длины.
+void drawSectionLabel(const char* label, float width) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImVec2 p = ImGui::GetCursorScreenPos();
+  const float labelSize = ImGui::GetFontSize() * 1.15f;
+  const float textW = drawTrackedText(dl, ImGui::GetFont(), labelSize, p,
+                                      ImGui::GetColorU32(menuui::kTextMute), label, 1.1f);
+  const float textH = ImGui::GetTextLineHeight() * 1.15f;
+  const float lineY = p.y + textH * 0.55f;
+  const float lineX = p.x + textW + 12.0f;
+  dl->AddLine(ImVec2(lineX, lineY), ImVec2(lineX + 28.0f, lineY),
+              menuui::accentAlpha(76), 1.0f);
+  ImGui::Dummy(ImVec2(width, textH));
+}
+
+// Секция настроек: акцентный тик + заголовок + hairline.
+void menuSection(ImFont* headingFont, const char* label) {
+  ImGui::Dummy(ImVec2(0.0f, 10.0f));
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImVec2 p = ImGui::GetCursorScreenPos();
+  const float avail = ImGui::GetContentRegionAvail().x;
+  if (headingFont) ImGui::PushFont(headingFont);
+  const ImVec2 ts = ImGui::CalcTextSize(label);
+  dl->AddRectFilled(ImVec2(p.x, p.y + 2.0f), ImVec2(p.x + 2.0f, p.y + ts.y - 1.0f),
+                    menuui::kAccentU32, 1.0f);
+  dl->AddText(ImVec2(p.x + 10.0f, p.y), ImGui::GetColorU32(menuui::kText), label);
+  if (headingFont) ImGui::PopFont();
+  const float lineX = p.x + 10.0f + ts.x + 12.0f;
+  if (lineX < p.x + avail) {
+    dl->AddLine(ImVec2(lineX, p.y + ts.y * 0.55f),
+                ImVec2(p.x + avail, p.y + ts.y * 0.55f),
+                menuui::kHairline, 1.0f);
+  }
+  ImGui::Dummy(ImVec2(0.0f, ts.y + 2.0f));
+}
+
+// Заголовок внутренней страницы: [ 02 ] НАСТРОЙКИ + подзаголовок + линия.
+void pageHeading(ImFont* headingFont, const char* index, const char* title, const char* subtitle) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImVec2 p = ImGui::GetCursorScreenPos();
+  const float avail = ImGui::GetContentRegionAvail().x;
+  ImFont* font = headingFont ? headingFont : ImGui::GetFont();
+  const float titleSize = ImGui::GetFontSize() * 1.38f;
+  const ImVec2 tsz = font->CalcTextSizeA(titleSize, 10000.0f, 0.0f, title);
+  const float indexW = ImGui::CalcTextSize(index).x;
+  const float titleX = p.x + 10.0f + indexW + 12.0f;
+
+  dl->AddRectFilled(ImVec2(p.x, p.y + 3.0f), ImVec2(p.x + 2.0f, p.y + 20.0f),
+                    menuui::kAccentU32, 1.0f);
+  dl->AddText(ImVec2(p.x + 10.0f, p.y + 6.0f), menuui::kAccentU32, index);
+  dl->AddText(font, titleSize, ImVec2(titleX, p.y - 2.0f),
+              ImGui::GetColorU32(menuui::kText), title);
+
+  const float blockH = std::max(tsz.y, ImGui::GetTextLineHeight());
+  const float subY = p.y + blockH + 3.0f;
+  dl->AddText(ImVec2(p.x, subY), ImGui::GetColorU32(menuui::kTextDim), subtitle);
+  const float lineY = subY + ImGui::GetTextLineHeight() + 4.0f;
+  dl->AddLine(ImVec2(p.x, lineY), ImVec2(p.x + avail, lineY), menuui::kHairline, 1.0f);
+  ImGui::Dummy(ImVec2(0.0f, blockH + ImGui::GetTextLineHeight() + 12.0f));
+}
+
+// Кнопка «назад»: шеврон, подпись и Esc-клавиша справа.
+bool drawBackRow(const char* label) {
+  const ImVec2 p0 = ImGui::GetCursorScreenPos();
+  const ImVec2 size(250.0f, 34.0f);
+  const bool pressed = ImGui::InvisibleButton(label, size);
+  const bool hovered = ImGui::IsItemHovered();
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImVec2 p1(p0.x + size.x, p0.y + size.y);
+  if (hovered) {
+    dl->AddRectFilled(p0, p1, menuui::kRowHoverBg, 4.0f);
+  }
+  dl->AddRect(p0, p1, hovered ? menuui::kNavPrimaryBorder : menuui::kPanelBorder,
+              4.0f, 0, 1.0f);
+  const float cy = p0.y + size.y * 0.5f;
+  const ImU32 backCol = hovered ? menuui::kAccentU32 : ImGui::GetColorU32(menuui::kTextMute);
+  dl->AddLine(ImVec2(p0.x + 18.0f, cy), ImVec2(p0.x + 11.0f, cy), backCol, 1.4f);
+  dl->AddLine(ImVec2(p0.x + 11.0f, cy), ImVec2(p0.x + 15.0f, cy - 4.0f), backCol, 1.4f);
+  dl->AddLine(ImVec2(p0.x + 11.0f, cy), ImVec2(p0.x + 15.0f, cy + 4.0f), backCol, 1.4f);
+  dl->AddText(ImVec2(p0.x + 28.0f, p0.y + (size.y - ImGui::GetTextLineHeight()) * 0.5f),
+              hovered ? menuui::kAccentText : menuui::kActionText, label);
+  const char* esc = "Esc";
+  const ImVec2 es = ImGui::CalcTextSize(esc);
+  const float kw = std::max(18.0f, es.x + 8.0f);
+  drawKeycap(dl, ImVec2(p1.x - kw - 10.0f, p0.y + (size.y - 16.0f) * 0.5f), esc);
+  return pressed;
+}
+
+// Mission-control action: стеклянный primary и тихие строки навигации.
+bool drawMenuAction(const char* label, const ImVec2& size, bool primary = false,
+                    const char* subtitle = nullptr) {
+  const ImVec2 p0 = ImGui::GetCursorScreenPos();
+  const ImVec2 p1(p0.x + size.x, p0.y + size.y);
+  const bool pressed = ImGui::InvisibleButton(label, size);
+  const bool hovered = ImGui::IsItemHovered();
+  const bool held = ImGui::IsItemActive();
+  const bool focused = ImGui::IsItemFocused();
 
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  ImVec2 pts[5] = {
-      p0,
-      ImVec2(p1.x - cut, p0.y),
-      ImVec2(p1.x, p0.y + cut),
-      p1,
-      ImVec2(p0.x, p1.y)
-  };
+  if (primary) {
+    const ImU32 fill = held ? menuui::alphaOf(menuui::kAccentU32, 58)
+                            : (hovered || focused ? menuui::alphaOf(menuui::kAccentU32, 44)
+                                                  : menuui::alphaOf(menuui::kAccentU32, 26));
+    const ImU32 border = (hovered || focused) ? menuui::kAccentU32 : menuui::kAccentBorder;
+    dl->AddRectFilled(p0, p1, fill, 4.0f);
+    dl->AddRect(p0, p1, border, 4.0f, 0, 1.0f);
+    dl->AddRectFilled(ImVec2(p0.x, p0.y + 10.0f), ImVec2(p0.x + 2.0f, p1.y - 10.0f),
+                      menuui::kAccentU32, 1.0f);
+    if (focused) {
+      dl->AddRect(ImVec2(p0.x - 3.0f, p0.y - 3.0f), ImVec2(p1.x + 3.0f, p1.y + 3.0f),
+                  menuui::alphaOf(menuui::kAccentU32, 90), 6.0f, 0, 1.0f);
+    }
 
-  // Дышащий мягкий пульс для главной кнопки "Продолжить"
-  const bool isPrimary = (borderColor == menuui::kNavPrimaryBorder);
-  float pulse = isPrimary ? (0.5f + 0.5f * std::sin(static_cast<float>(glfwGetTime()) * 3.2f)) : 0.0f;
-
-  // Холодное обсидиановое стекло с градиентным откликом
-  ImU32 fill = held ? IM_COL32(35, 110, 160, 180)
-                    : (hovered ? IM_COL32(20, 58, 92, 210)
-                                : (isPrimary ? IM_COL32(14, 38, 58, 235) : bgColor));
-  dl->AddConvexPolyFilled(pts, 5, fill);
-
-  // Свечение и контур
-  ImU32 activeBorder = hovered ? menuui::kAccentU32
-                               : (isPrimary ? IM_COL32(90 + static_cast<int>(35 * pulse), 190 + static_cast<int>(30 * pulse), 245, 230 + static_cast<int>(25 * pulse))
-                                            : borderColor);
-  float borderThickness = hovered ? 1.8f : (isPrimary ? (1.2f + 0.5f * pulse) : 1.1f);
-  dl->AddPolyline(pts, 5, activeBorder, ImDrawFlags_Closed, borderThickness);
-
-  // Неоновый срез в правом верхнем углу
-  if (hovered || isPrimary) {
-    dl->AddLine(ImVec2(p1.x - cut, p0.y), ImVec2(p1.x, p0.y + cut),
-                hovered ? IM_COL32(125, 225, 255, 255) : menuui::accentAlpha(160 + static_cast<int>(80 * pulse)),
-                hovered ? 2.4f : 1.6f);
-  }
-
-  // Акцентная кромка слева: тусклая в покое, светящаяся бирюзовая при наведении
-  if (hovered || held) {
-    dl->AddRectFilled(ImVec2(p0.x, p0.y + 2.0f), ImVec2(p0.x + 3.5f, p1.y - 2.0f),
-                      menuui::kAccentU32);
-    dl->AddRectFilled(ImVec2(p0.x + 3.5f, p0.y + 4.0f), ImVec2(p0.x + 6.0f, p1.y - 4.0f),
-                      menuui::accentAlpha(80));
-  } else if (isPrimary) {
-    dl->AddRectFilled(ImVec2(p0.x, p0.y + 3.0f), ImVec2(p0.x + 3.0f, p1.y - 3.0f),
-                      menuui::accentAlpha(180 + static_cast<int>(75 * pulse)));
+    const float textX = p0.x + 18.0f;
+    const ImVec2 tsz = ImGui::CalcTextSize(label);
+    const ImVec2 ssz = subtitle ? ImGui::CalcTextSize(subtitle) : ImVec2(0.0f, 0.0f);
+    const float totalH = tsz.y + (subtitle ? 4.0f + ssz.y : 0.0f);
+    const float textY = p0.y + (size.y - totalH) * 0.5f;
+    dl->AddText(ImVec2(textX, textY), menuui::kAccentText, label);
+    if (subtitle) {
+      dl->AddText(ImVec2(textX, textY + tsz.y + 4.0f), menuui::kActionSubtitle, subtitle);
+    }
+    drawChevron(dl, ImVec2(p1.x - 18.0f, p0.y + size.y * 0.5f), 10.0f,
+                menuui::kAccentU32, 1.6f);
   } else {
-    dl->AddRectFilled(ImVec2(p0.x, p0.y + 4.0f), ImVec2(p0.x + 2.0f, p1.y - 4.0f),
-                      IM_COL32(40, 85, 115, 140));
-  }
-
-  // Микро-скобки на углах при наведении
-  if (hovered) {
-    float cLen = 5.0f;
-    dl->AddLine(p0, ImVec2(p0.x + cLen, p0.y), IM_COL32(125, 225, 255, 220), 1.2f);
-    dl->AddLine(p0, ImVec2(p0.x, p0.y + cLen), IM_COL32(125, 225, 255, 220), 1.2f);
-    dl->AddLine(ImVec2(p0.x, p1.y), ImVec2(p0.x + cLen, p1.y), IM_COL32(125, 225, 255, 220), 1.2f);
-    dl->AddLine(ImVec2(p0.x, p1.y), ImVec2(p0.x, p1.y - cLen), IM_COL32(125, 225, 255, 220), 1.2f);
-  }
-
-  float textX = p0.x + 14.0f;
-  if (indexStr && indexStr[0] != '\0') {
-    // Высокотехнологичный индекс блока: "01", "02" и т.д.
-    ImU32 idxCol = hovered ? menuui::kAccentU32 : IM_COL32(80, 125, 155, 180);
-    dl->AddText(ImVec2(textX, p0.y + (subtitle ? 8.0f : (size.y - ImGui::GetFontSize()) * 0.5f)),
-                idxCol, indexStr);
-    textX += ImGui::CalcTextSize(indexStr).x + 10.0f;
-    // Разделительная микро-чёрточка
-    float midY = p0.y + size.y * 0.5f;
-    dl->AddLine(ImVec2(textX - 5.0f, midY - 6.0f), ImVec2(textX - 5.0f, midY + 6.0f),
-                hovered ? menuui::accentAlpha(160) : IM_COL32(50, 85, 110, 110), 1.0f);
-    textX += 4.0f;
-  }
-
-  ImVec2 tsz = ImGui::CalcTextSize(label);
-  if (subtitle) {
-    dl->AddText(ImVec2(textX, p0.y + 7.0f),
-                hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(230, 240, 250, 255), label);
-    dl->AddText(ImVec2(textX, p0.y + 7.0f + tsz.y + 3.0f),
-                hovered ? IM_COL32(160, 225, 255, 250) : IM_COL32(115, 160, 188, 220), subtitle);
-  } else {
-    ImVec2 tp(textX, p0.y + (size.y - tsz.y) * 0.5f);
-    dl->AddText(tp, hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(228, 238, 248, 255), label);
-  }
-
-  // Горячая клавиша справа (бейдж)
-  if (hotkeyBadge && hotkeyBadge[0] != '\0') {
-    ImVec2 hsz = ImGui::CalcTextSize(hotkeyBadge);
-    float badgeW = hsz.x + 10.0f;
-    float badgeH = 18.0f;
-    float bx = p1.x - cut - badgeW - (hovered ? 14.0f : 8.0f);
-    float by = p0.y + (size.y - badgeH) * 0.5f;
-    dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + badgeW, by + badgeH),
-                      hovered ? IM_COL32(16, 42, 66, 230) : IM_COL32(8, 16, 26, 170), 3.0f);
-    dl->AddRect(ImVec2(bx, by), ImVec2(bx + badgeW, by + badgeH),
-                hovered ? menuui::accentAlpha(180) : IM_COL32(38, 72, 100, 120), 3.0f, 0, 1.0f);
-    dl->AddText(ImVec2(bx + 5.0f, by + (badgeH - hsz.y) * 0.5f),
-                hovered ? IM_COL32(200, 242, 255, 255) : IM_COL32(115, 155, 182, 190), hotkeyBadge);
-  }
-
-  // Правый тактический шеврон при наведении
-  if (hovered) {
-    float chevX = p1.x - 14.0f;
-    float chevY = p0.y + size.y * 0.5f;
-    dl->AddLine(ImVec2(chevX - 4.0f, chevY - 5.0f), ImVec2(chevX + 1.0f, chevY),
-                menuui::kAccentU32, 2.0f);
-    dl->AddLine(ImVec2(chevX + 1.0f, chevY), ImVec2(chevX - 4.0f, chevY + 5.0f),
-                menuui::kAccentU32, 2.0f);
+    if (hovered || held || focused) {
+      dl->AddRectFilled(p0, p1, held ? menuui::kRowPressedBg : menuui::kRowHoverBg, 4.0f);
+      dl->AddRectFilled(ImVec2(p0.x, p0.y + 9.0f), ImVec2(p0.x + 2.0f, p1.y - 9.0f),
+                        menuui::kAccentU32, 1.0f);
+    }
+    if (focused) {
+      dl->AddRect(p0, p1, menuui::kNavPrimaryBorder, 4.0f, 0, 1.0f);
+    }
+    const float textX = p0.x + 16.0f;
+    const ImVec2 tsz = ImGui::CalcTextSize(label);
+    dl->AddText(ImVec2(textX, p0.y + (size.y - tsz.y) * 0.5f), menuui::kActionText, label);
+    if (hovered || focused) {
+      drawChevron(dl, ImVec2(p1.x - 16.0f, p0.y + size.y * 0.5f), 8.0f,
+                  menuui::alphaOf(menuui::kAccentU32, 180), 1.2f);
+    }
   }
 
   return pressed;
@@ -11017,8 +11561,8 @@ bool drawAnimatedTactileToggle(const char* label, bool& state, float& animPos, f
 // CRT Анимация включения (раскрытие апертуры)
 void drawCrtBootSequence(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
   ImVec2 center(pos.x + size.x * 0.5f, pos.y + size.y * 0.5f);
-  if (t < 0.12f) {
-    float k = t / 0.12f;
+  if (t < 0.06f) {
+    float k = t / 0.06f;
     float halfW = (size.x * 0.5f) * k;
     float beamH = 2.5f;
     dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0, 0, 0, 255));
@@ -11028,8 +11572,8 @@ void drawCrtBootSequence(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
     dl->AddRectFilled(ImVec2(center.x - halfW, center.y - beamH * 3.0f),
                       ImVec2(center.x + halfW, center.y + beamH * 3.0f),
                       IM_COL32(56, 189, 248, 140), 4.0f);
-  } else if (t < 0.30f) {
-    float k = (t - 0.12f) / 0.18f;
+  } else if (t < 0.15f) {
+    float k = (t - 0.06f) / 0.09f;
     float easeK = 1.0f - std::pow(1.0f - k, 3.0f);
     float halfH = (size.y * 0.5f) * easeK;
 
@@ -11042,8 +11586,8 @@ void drawCrtBootSequence(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
     int alpha = static_cast<int>(110.0f * (1.0f - k));
     dl->AddRectFilled(ImVec2(pos.x, center.y - halfH), ImVec2(pos.x + size.x, center.y + halfH),
                       IM_COL32(56, 189, 248, alpha));
-  } else if (t < 0.38f) {
-    float k = (t - 0.30f) / 0.08f;
+  } else if (t < 0.19f) {
+    float k = (t - 0.15f) / 0.04f;
     int alpha = static_cast<int>(50.0f * (1.0f - k));
     dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(255, 255, 255, alpha));
   }
@@ -11052,15 +11596,15 @@ void drawCrtBootSequence(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
 // CRT Анимация выключения (схлопывание луча)
 void drawCrtShutdownSequence(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
   ImVec2 center(pos.x + size.x * 0.5f, pos.y + size.y * 0.5f);
-  if (t < 0.12f) {
-    float k = t / 0.12f;
+  if (t < 0.06f) {
+    float k = t / 0.06f;
     float halfH = (size.y * 0.5f) * (1.0f - k);
     dl->AddRectFilled(pos, ImVec2(pos.x + size.x, center.y - halfH), IM_COL32(0, 0, 0, 255));
     dl->AddRectFilled(ImVec2(pos.x, center.y + halfH), ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0, 0, 0, 255));
     dl->AddLine(ImVec2(pos.x, center.y - halfH), ImVec2(pos.x + size.x, center.y - halfH), IM_COL32(255, 255, 255, 255), 2.0f);
     dl->AddLine(ImVec2(pos.x, center.y + halfH), ImVec2(pos.x + size.x, center.y + halfH), IM_COL32(255, 255, 255, 255), 2.0f);
   } else {
-    float k = (t - 0.12f) / 0.06f;
+    float k = (t - 0.06f) / 0.03f;
     float halfW = (size.x * 0.5f) * (1.0f - k);
     dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0, 0, 0, 255));
     if (halfW > 1.0f) {
@@ -11073,8 +11617,8 @@ void drawCrtShutdownSequence(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
 
 // CRT Микро-глитч при переключении страниц
 void drawCrtPageGlitch(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
-  if (t >= 0.20f) return;
-  float k = 1.0f - (t / 0.20f);
+  if (t >= 0.10f) return;
+  float k = 1.0f - (t / 0.10f);
   for (int i = 0; i < 3; ++i) {
     float bandY = pos.y + size.y * (0.18f + 0.28f * i + 0.08f * std::sin(t * 35.0f + i));
     float bandH = 10.0f + 6.0f * k;
@@ -11086,6 +11630,71 @@ void drawCrtPageGlitch(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
   }
 }
 
+// Кинематографичное выключение: питание садится, кадр схлопывается в щель,
+// щель становится лучом и гаснет точкой. Медленнее и спокойнее CRT-shutdown,
+// в акцентном цвете меню, чтобы не спорить с интерфейсом.
+void drawPowerDownSequence(ImDrawList* dl, ImVec2 pos, ImVec2 size, float t) {
+  const ImVec2 center(pos.x + size.x * 0.5f, pos.y + size.y * 0.5f);
+  const ImU32 ink = IM_COL32(0, 0, 0, 255);
+  if (t < 0.30f) {
+    const float k = t / 0.30f;
+    dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                      IM_COL32(0, 0, 0, static_cast<int>(150.0f * k)));
+    const float sweepY = pos.y + size.y * k;
+    dl->AddLine(ImVec2(pos.x, sweepY), ImVec2(pos.x + size.x, sweepY),
+                menuui::accentAlpha(static_cast<int>(64.0f * (1.0f - k))), 1.0f);
+    return;
+  }
+  if (t < 0.72f) {
+    const float k = (t - 0.30f) / 0.42f;
+    const float ease = k * k * (3.0f - 2.0f * k);
+    const float halfH = std::max(3.0f, (size.y * 0.5f) * (1.0f - ease));
+    dl->AddRectFilled(pos, ImVec2(pos.x + size.x, center.y - halfH), ink);
+    dl->AddRectFilled(ImVec2(pos.x, center.y + halfH),
+                      ImVec2(pos.x + size.x, pos.y + size.y), ink);
+    const ImU32 edge =
+        menuui::alphaOf(menuui::kAccentU32, 120 + static_cast<int>(135.0f * ease));
+    dl->AddLine(ImVec2(pos.x, center.y - halfH), ImVec2(pos.x + size.x, center.y - halfH), edge, 1.0f);
+    dl->AddLine(ImVec2(pos.x, center.y + halfH), ImVec2(pos.x + size.x, center.y + halfH), edge, 1.0f);
+    return;
+  }
+  dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), ink);
+  if (t < 0.96f) {
+    const float k = (t - 0.72f) / 0.24f;
+    const float halfW = (size.x * 0.5f) * (1.0f - k * k);
+    if (halfW > 1.0f) {
+      dl->AddRectFilled(ImVec2(center.x - halfW, center.y - 5.0f),
+                        ImVec2(center.x + halfW, center.y + 5.0f),
+                        menuui::accentAlpha(70));
+      dl->AddRectFilled(ImVec2(center.x - halfW, center.y - 1.5f),
+                        ImVec2(center.x + halfW, center.y + 1.5f),
+                        IM_COL32(226, 250, 255, 255));
+    }
+    return;
+  }
+  const float k = std::min(1.0f, (t - 0.96f) / (kPowerDownSeconds - 0.96f));
+  const float r = 5.0f * (1.0f - k) + 0.6f;
+  const int a = static_cast<int>(255.0f * (1.0f - k));
+  dl->AddCircleFilled(center, r * 3.2f, menuui::accentAlpha(a / 5));
+  dl->AddCircleFilled(center, r * 1.7f, menuui::accentAlpha(a / 2));
+  dl->AddCircleFilled(center, r, IM_COL32(236, 252, 255, a));
+}
+
+// Глиф питания: разомкнутая дуга со штрихом. Линии, а не глиф шрифта —
+// иначе разойдётся с локалью и с набором кириллических юникодов.
+void drawPowerGlyph(ImDrawList* dl, ImVec2 c, float r, ImU32 col) {
+  const float gap = 0.42f;
+  const float arc = 6.2831853f - 2.0f * gap;
+  const int segs = 16;
+  for (int i = 0; i < segs; ++i) {
+    const float a0 = -1.5707963f + gap + arc * i / segs;
+    const float a1 = -1.5707963f + gap + arc * (i + 1) / segs;
+    dl->AddLine(ImVec2(c.x + std::cos(a0) * r, c.y + std::sin(a0) * r),
+                ImVec2(c.x + std::cos(a1) * r, c.y + std::sin(a1) * r), col, 1.4f);
+  }
+  dl->AddLine(ImVec2(c.x, c.y - r * 1.35f), ImVec2(c.x, c.y - r * 0.12f), col, 1.6f);
+}
+
 }  // namespace
 
 void AppGL::requestCloseMenu() {
@@ -11093,6 +11702,15 @@ void AppGL::requestCloseMenu() {
   m_menuClosing = true;
   m_menuCloseTimer = 0.0f;
   m_audio.playWhoosh();
+}
+
+void AppGL::requestAppExit() {
+  if (m_exitDestructionSeq.isActive() || m_exitSequence) return;
+  startExitDestruction();
+  if (m_exitDestructionSeq.isActive()) return;
+  m_exitSequence = true;
+  m_exitTimer = 0.0f;
+  m_audio.playJump();  // разряд питания: синус 200->30 Гц
 }
 
 unsigned int AppGL::updateMenuVideo(double time) {
@@ -11257,6 +11875,374 @@ void AppGL::renderMenuBackdrop(int width, int height, double time) {
   }
 }
 
+namespace {
+
+void drawFullscreenVideoFrame(unsigned int tex, int texW, int texH,
+                              float screenW, float screenH) {
+  ImDrawList* bgDl = ImGui::GetBackgroundDrawList();
+  if (!bgDl) return;
+  bgDl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH), IM_COL32(0, 0, 0, 255));
+  if (tex != 0 && texW > 0 && texH > 0) {
+    const float srcAspect = static_cast<float>(texW) / static_cast<float>(texH);
+    const float dstAspect = screenW / std::max(screenH, 1.0f);
+    float drawW = screenW;
+    float drawH = screenH;
+    if (dstAspect > srcAspect) {
+      drawW = screenH * srcAspect;
+    } else {
+      drawH = screenW / srcAspect;
+    }
+    const float x0 = 0.5f * (screenW - drawW);
+    const float y0 = 0.5f * (screenH - drawH);
+    bgDl->AddImage((ImTextureID)(intptr_t)tex,
+                   ImVec2(x0, y0), ImVec2(x0 + drawW, y0 + drawH));
+  }
+}
+
+}  // namespace
+
+void AppGL::startIntroPlayback() {
+  const std::string probe = resolveAssetPath("res/video/intro/frame_0001.jpg");
+  if (m_videoIntroSeq.start(probe, 30.0)) {
+    m_audio.stopFileVoices();
+    m_audio.setMusicSuppressed(true);
+    m_videoIntroSeq.uploadFrame(1, [this](const unsigned char* px, int w, int h) {
+      return uploadRgba(px, w, h);
+    });
+  } else {
+    m_audio.playRadioBeep();
+    m_introDirector.start();
+  }
+}
+
+void AppGL::stopIntroPlayback() {
+  if (!m_videoIntroSeq.isActive()) return;
+  m_videoIntroSeq.stop();
+  m_audio.stopFileVoices();
+  m_audio.setMusicSuppressed(false);
+}
+
+void AppGL::drawVideoIntroOverlay(float screenW, float screenH) {
+  drawFullscreenVideoFrame(m_videoIntroSeq.textureId(), m_videoIntroSeq.width(),
+                           m_videoIntroSeq.height(), screenW, screenH);
+  ImDrawList* bgDl = ImGui::GetBackgroundDrawList();
+  if (!bgDl) return;
+
+  const double tIntro = m_videoIntroSeq.elapsed();
+  const float fade = tIntro < 0.8 ? static_cast<float>(tIntro / 0.8) : 1.0f;
+  const int alpha = static_cast<int>(175.0f * std::clamp(fade, 0.0f, 1.0f));
+  ImFont* font = m_mainMenuFont ? m_mainMenuFont : ImGui::GetFont();
+  const float fontSize = std::clamp(screenH * 0.019f, 13.0f, 18.0f);
+  const char* hint = uiRu("[ ПРОБЕЛ / ESC : ПРОПУСТИТЬ ]", "[ SPACE / ESC : SKIP ]");
+  const ImVec2 sz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, hint);
+  const ImVec2 pos(screenW - sz.x - 28.0f, screenH - sz.y - 22.0f);
+  bgDl->AddRectFilled(ImVec2(pos.x - 10.0f, pos.y - 5.0f),
+                      ImVec2(pos.x + sz.x + 10.0f, pos.y + sz.y + 5.0f),
+                      IM_COL32(6, 10, 16, static_cast<int>(135.0f * fade)), 4.0f);
+  bgDl->AddText(font, fontSize, pos, IM_COL32(190, 225, 240, alpha), hint);
+}
+
+void AppGL::startExitDestruction() {
+  const std::string probe = resolveAssetPath("res/video/exit/frame_0001.jpg");
+  if (m_exitDestructionSeq.start(probe, 30.0)) {
+    m_audio.stopFileVoices();
+    m_audio.setMusicSuppressed(true);
+    m_exitDestructionSeq.uploadFrame(1, [this](const unsigned char* px, int w, int h) {
+      return uploadRgba(px, w, h);
+    });
+  }
+}
+
+void AppGL::drawExitDestructionOverlay(float screenW, float screenH) {
+  drawFullscreenVideoFrame(m_exitDestructionSeq.textureId(), m_exitDestructionSeq.width(),
+                           m_exitDestructionSeq.height(), screenW, screenH);
+  ImDrawList* fgDl = ImGui::GetForegroundDrawList();
+  if (!fgDl) return;
+
+  const double tExit = m_exitDestructionSeq.elapsed();
+  const float fadeIn = std::clamp(static_cast<float>(tExit / 0.35), 0.0f, 1.0f);
+  const float fadeOut = (tExit > 3.2)
+      ? std::clamp(static_cast<float>((3.95 - tExit) / 0.75), 0.0f, 1.0f)
+      : 1.0f;
+  const float alphaK = fadeIn * fadeOut;
+  ImFont* font = m_mainMenuFont ? m_mainMenuFont : ImGui::GetFont();
+  const float fontSize = std::clamp(screenH * 0.019f, 13.0f, 18.0f);
+  const char* warn = uiRu("КРИТИЧЕСКИЙ СБОЙ // ПОГЛОЩЕНИЕ ГОРИЗОНТОМ СОБЫТИЙ",
+                          "CRITICAL BREACH // EVENT HORIZON COLLAPSE");
+  const ImVec2 wsz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, warn);
+  const ImVec2 wpos(28.0f, 24.0f);
+  fgDl->AddRectFilled(ImVec2(wpos.x - 10.0f, wpos.y - 6.0f),
+                      ImVec2(wpos.x + wsz.x + 12.0f, wpos.y + wsz.y + 6.0f),
+                      IM_COL32(24, 6, 8, static_cast<int>(165.0f * alphaK)), 4.0f);
+  fgDl->AddRectFilled(ImVec2(wpos.x - 10.0f, wpos.y - 6.0f),
+                      ImVec2(wpos.x - 7.0f, wpos.y + wsz.y + 6.0f),
+                      IM_COL32(255, 78, 56, static_cast<int>(230.0f * alphaK)), 1.0f);
+  fgDl->AddText(font, fontSize, wpos,
+                IM_COL32(255, 198, 188, static_cast<int>(235.0f * alphaK)), warn);
+
+  const char* hint = uiRu("[ ПРОБЕЛ / ESC : ВЫЙТИ СЕЙЧАС ]", "[ SPACE / ESC : EXIT NOW ]");
+  const ImVec2 hsz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, hint);
+  const ImVec2 hpos(screenW - hsz.x - 28.0f, screenH - hsz.y - 22.0f);
+  fgDl->AddText(font, fontSize, hpos,
+                IM_COL32(220, 190, 190, static_cast<int>(170.0f * alphaK)), hint);
+}
+
+void AppGL::startEntryTransitionVideo() {
+  const Station* st = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+  m_entryTargetLabel = st ? st->name : "SOL";
+  const std::string probe = resolveAssetPath("res/video/entry/frame_0001.jpg");
+
+  if (m_entryVideoSeq.start(probe, 30.0)) {
+    m_audio.stopFileVoices();
+    m_audio.setMusicSuppressed(true);
+    m_entryVideoSeq.uploadFrame(1, [this](const unsigned char* px, int w, int h) {
+      return uploadRgba(px, w, h);
+    });
+  } else {
+    startEntryFlight();
+  }
+}
+
+void AppGL::stopEntryTransitionVideo() {
+  if (!m_entryVideoSeq.isActive()) return;
+  m_entryVideoSeq.stop();
+  m_audio.stopFileVoices();
+  m_audio.setMusicSuppressed(false);
+  m_audio.playWarpReadyChime();
+  m_prevSpeedPos = m_camera.position;
+  m_camSpeed = 0.0f;
+}
+
+void AppGL::drawEntryVideoOverlay(float screenW, float screenH) {
+  drawFullscreenVideoFrame(m_entryVideoSeq.textureId(), m_entryVideoSeq.width(),
+                           m_entryVideoSeq.height(), screenW, screenH);
+  ImDrawList* fg = ImGui::GetForegroundDrawList();
+  if (!fg) return;
+
+  const float u = std::clamp(
+      static_cast<float>(m_entryVideoSeq.elapsed() /
+                         std::max(m_entryVideoSeq.durationSec(), 0.1)),
+      0.0f, 1.0f);
+  const float alphaK = (u < 0.10f) ? (u / 0.10f) : ((u > 0.86f) ? ((1.0f - u) / 0.14f) : 1.0f);
+  const int aText = static_cast<int>(220.0f * std::clamp(alphaK, 0.0f, 1.0f));
+  const int aBg = static_cast<int>(150.0f * std::clamp(alphaK, 0.0f, 1.0f));
+
+  const std::string line = std::string(uiRu(
+      "МАРШРУТ // ВСЕЛЕННАЯ -> ", "COURSE // UNIVERSE -> ")) + m_entryTargetLabel;
+  ImFont* font = m_mainMenuFont ? m_mainMenuFont : ImGui::GetFont();
+  const float fontSize = std::clamp(screenH * 0.019f, 13.0f, 18.0f);
+  const ImVec2 sz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, line.c_str());
+  const ImVec2 pos(28.0f, screenH - sz.y - 36.0f);
+
+  fg->AddRectFilled(ImVec2(pos.x - 10.0f, pos.y - 6.0f),
+                    ImVec2(pos.x + sz.x + 12.0f, pos.y + sz.y + 12.0f),
+                    IM_COL32(6, 12, 18, aBg), 4.0f);
+  fg->AddText(font, fontSize, pos, IM_COL32(196, 236, 250, aText), line.c_str());
+  fg->AddRectFilled(ImVec2(pos.x, pos.y + sz.y + 4.0f),
+                    ImVec2(pos.x + sz.x * u, pos.y + sz.y + 6.0f),
+                    IM_COL32(54, 212, 245, aText), 1.0f);
+
+  const char* hint = uiRu("[ ПРОБЕЛ / ESC : ПРОПУСК ]", "[ SPACE / ESC : SKIP ]");
+  const ImVec2 hsz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, hint);
+  fg->AddText(font, fontSize, ImVec2(screenW - hsz.x - 28.0f, screenH - hsz.y - 24.0f),
+              IM_COL32(180, 215, 232, static_cast<int>(165.0f * alphaK)), hint);
+}
+
+void AppGL::startEntryFlight() {
+  m_entryEndPos = m_camera.position;
+  m_entryEndYaw = m_camera.yaw;
+  m_entryEndPitch = m_camera.pitch;
+  m_entryEndFov = m_sceneManager ? m_sceneManager->getSettings().fovDegrees : 60.0f;
+  m_entryFlightTime = 0.0f;
+  m_entryFlightDuration = 3.8f;
+  m_entryFlightActive = true;
+
+  const Station* st = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
+  m_entryTargetLabel = st ? st->name : "SOL";
+  m_audio.playWhoosh();
+  updateEntryFlight(0.0f);
+}
+
+void AppGL::stopEntryFlight(bool snapToTarget) {
+  if (!m_entryFlightActive) return;
+  m_entryFlightActive = false;
+  if (snapToTarget) {
+    m_camera.position = m_entryEndPos;
+    m_camera.yaw = m_entryEndYaw;
+    m_camera.pitch = m_entryEndPitch;
+  }
+  m_prevSpeedPos = m_camera.position;
+  m_camSpeed = 0.0f;
+  warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+  warpdrive::setThruster(0.0f);
+  warpdrive::setState(m_warpOn ? m_warpK : 0.0f, 0.0f);
+  if (m_sceneManager) {
+    m_sceneManager->getSettings().fovDegrees = m_entryEndFov;
+    m_sceneManager->setSpeedFx(0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    m_sceneManager->resetRelativity();
+  }
+}
+
+void AppGL::updateEntryFlight(float deltaTime) {
+  m_entryFlightTime += deltaTime;
+  const float u = std::clamp(m_entryFlightTime / m_entryFlightDuration, 0.0f, 1.0f);
+  if (u >= 1.0f) {
+    stopEntryFlight(true);
+    return;
+  }
+
+  // Smooth cubic easing: deep universe vista -> steep dive toward destination -> soft helm settle
+  const float s = u * u * (3.0f - 2.0f * u);
+  const double endLen = std::sqrt(m_entryEndPos.x * m_entryEndPos.x +
+                                  m_entryEndPos.y * m_entryEndPos.y +
+                                  m_entryEndPos.z * m_entryEndPos.z);
+  Vec3 radialDir = (endLen > 0.5)
+      ? Vec3(m_entryEndPos.x / endLen, m_entryEndPos.y / endLen, m_entryEndPos.z / endLen)
+      : Vec3(0.45, 0.25, 0.85);
+  const double dirNorm = std::sqrt(radialDir.x * radialDir.x + radialDir.y * radialDir.y +
+                                   radialDir.z * radialDir.z);
+  radialDir = Vec3(radialDir.x / dirNorm, radialDir.y / dirNorm, radialDir.z / dirNorm);
+
+  Vec3 side(-radialDir.z, 0.0, radialDir.x);
+  const double sideLen = std::sqrt(side.x * side.x + side.z * side.z);
+  side = (sideLen > 0.01) ? Vec3(side.x / sideLen, 0.0, side.z / sideLen) : Vec3(1.0, 0.0, 0.0);
+  const Vec3 orthoUp(
+      radialDir.y * side.z - radialDir.z * side.y,
+      radialDir.z * side.x - radialDir.x * side.z,
+      radialDir.x * side.y - radialDir.y * side.x);
+
+  const double spawnR = std::max(endLen, 12.0);
+  const double cosmicR = std::max(spawnR * 6.5, 110.0);
+  const double midR = spawnR * 2.15;
+
+  const Vec3 p0(
+      (radialDir.x * 0.62 - side.x * 0.64 + orthoUp.x * 0.45) * cosmicR,
+      (radialDir.y * 0.62 - side.y * 0.64 + orthoUp.y * 0.45) * cosmicR,
+      (radialDir.z * 0.62 - side.z * 0.64 + orthoUp.z * 0.45) * cosmicR);
+  const Vec3 p1(
+      (radialDir.x * 0.92 - side.x * 0.30 + orthoUp.x * 0.24) * midR,
+      (radialDir.y * 0.92 - side.y * 0.30 + orthoUp.y * 0.24) * midR,
+      (radialDir.z * 0.92 - side.z * 0.30 + orthoUp.z * 0.24) * midR);
+  const Vec3& p2 = m_entryEndPos;
+
+  const float omt = 1.0f - s;
+  const Vec3 camPos(
+      omt * omt * p0.x + 2.0f * omt * s * p1.x + s * s * p2.x,
+      omt * omt * p0.y + 2.0f * omt * s * p1.y + s * s * p2.y,
+      omt * omt * p0.z + 2.0f * omt * s * p1.z + s * s * p2.z);
+
+  Vec3 vel(
+      2.0f * omt * (p1.x - p0.x) + 2.0f * s * (p2.x - p1.x),
+      2.0f * omt * (p1.y - p0.y) + 2.0f * s * (p2.y - p1.y),
+      2.0f * omt * (p1.z - p0.z) + 2.0f * s * (p2.z - p1.z));
+  const double vLen = std::sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+  Vec3 velDir = (vLen > 1e-4) ? Vec3(vel.x / vLen, vel.y / vLen, vel.z / vLen) : radialDir;
+
+  // Ship flies smoothly ahead into target well before dissolving cleanly into cockpit at u >= 0.88
+  const double lead = 10.5 * static_cast<double>(omt) * (1.0 - 0.3 * s) + 1.2 * std::sin(3.14159 * u);
+  const Vec3 shipPos(
+      camPos.x + velDir.x * lead + side.x * (0.4 * std::sin(3.14159 * u)),
+      camPos.y + velDir.y * lead - 0.45 * static_cast<double>(omt),
+      camPos.z + velDir.z * lead + side.z * (0.4 * std::sin(3.14159 * u)));
+
+  double shipYaw = 0.0, shipPitch = 0.0;
+  computeLookYawPitch(shipPos, Vec3(shipPos.x + velDir.x * 10.0, shipPos.y + velDir.y * 10.0, shipPos.z + velDir.z * 10.0),
+                      shipYaw, shipPitch);
+  if (u < 0.88f) {
+    warpdrive::setShip(true, static_cast<float>(shipPos.x), static_cast<float>(shipPos.y),
+                       static_cast<float>(shipPos.z), static_cast<float>(shipYaw));
+  } else {
+    warpdrive::setShip(false, 0.0f, 0.0f, 0.0f, 0.0f);
+  }
+
+  const double cp = std::cos(m_entryEndPitch);
+  const Vec3 endFwd(cp * std::cos(m_entryEndYaw), std::sin(m_entryEndPitch), cp * std::sin(m_entryEndYaw));
+  const Vec3 endLook(m_entryEndPos.x + endFwd.x * 24.0,
+                     m_entryEndPos.y + endFwd.y * 24.0,
+                     m_entryEndPos.z + endFwd.z * 24.0);
+  const float lookBlend = std::clamp((s - 0.55f) / 0.45f, 0.0f, 1.0f);
+  const float lbSmooth = lookBlend * lookBlend * (3.0f - 2.0f * lookBlend);
+  const Vec3 lookPt(
+      shipPos.x * (1.0f - lbSmooth) * 0.55f + endLook.x * lbSmooth,
+      shipPos.y * (1.0f - lbSmooth) * 0.55f + endLook.y * lbSmooth,
+      shipPos.z * (1.0f - lbSmooth) * 0.55f + endLook.z * lbSmooth);
+
+  m_camera.position = camPos;
+  computeLookYawPitch(m_camera.position, lookPt, m_camera.yaw, m_camera.pitch);
+
+  const float warpCurve = std::sin(3.14159f * std::clamp((u - 0.04f) / 0.72f, 0.0f, 1.0f));
+  const float warpK = 0.82f * std::max(0.0f, warpCurve);
+  const float speedK = 0.30f + 0.70f * std::sin(3.14159f * std::clamp(u / 0.90f, 0.0f, 1.0f));
+  warpdrive::setThruster(speedK);
+  warpdrive::setState(warpK, 0.0f);
+  if (m_sceneManager) {
+    m_sceneManager->setSpeedFx(speedK * 0.45f, speedK,
+                               static_cast<float>(velDir.x),
+                               static_cast<float>(velDir.y),
+                               static_cast<float>(velDir.z), warpK);
+    m_sceneManager->getSettings().fovDegrees = m_entryEndFov + 13.0f * speedK;
+  }
+}
+
+void AppGL::drawEntryFlightHud(float screenW, float screenH) {
+  ImDrawList* fg = ImGui::GetForegroundDrawList();
+  if (!fg) return;
+
+  const float u = std::clamp(m_entryFlightTime / std::max(m_entryFlightDuration, 0.1f), 0.0f, 1.0f);
+  const float alphaK = (u < 0.12f) ? (u / 0.12f) : ((u > 0.85f) ? ((1.0f - u) / 0.15f) : 1.0f);
+  const int aText = static_cast<int>(225.0f * std::clamp(alphaK, 0.0f, 1.0f));
+  const int aBg = static_cast<int>(155.0f * std::clamp(alphaK, 0.0f, 1.0f));
+
+  const char* phaseRu = (u < 0.38f)
+      ? "01 // МАСШТАБ ВСЕЛЕННОЙ · ГИПЕРПРЫЖОК"
+      : ((u < 0.76f) ? "02 // ПОДЛЁТ К ОБЪЕКТУ НАЗНАЧЕНИЯ"
+                     : "03 // СТЫКОВКА С КОРАБЛЁМ · ВХОД В КОКПИТ");
+  const char* phaseEn = (u < 0.38f)
+      ? "01 // COSMIC SCALE · HYPER-APPROACH"
+      : ((u < 0.76f) ? "02 // APPROACHING TARGET SECTOR"
+                     : "03 // SHIP RENDEZVOUS · HELM LOCK");
+
+  std::string line = std::string(uiRu(phaseRu, phaseEn)) + "  [" + m_entryTargetLabel + "]";
+  ImFont* font = m_mainMenuFont ? m_mainMenuFont : ImGui::GetFont();
+  const float fontSize = std::clamp(screenH * 0.019f, 13.0f, 18.0f);
+  const ImVec2 sz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, line.c_str());
+  const ImVec2 pos(28.0f, screenH - sz.y - 36.0f);
+
+  fg->AddRectFilled(ImVec2(pos.x - 10.0f, pos.y - 6.0f),
+                    ImVec2(pos.x + sz.x + 12.0f, pos.y + sz.y + 12.0f),
+                    IM_COL32(6, 12, 18, aBg), 4.0f);
+  fg->AddText(font, fontSize, pos, IM_COL32(196, 236, 250, aText), line.c_str());
+  fg->AddRectFilled(ImVec2(pos.x, pos.y + sz.y + 4.0f),
+                    ImVec2(pos.x + sz.x * u, pos.y + sz.y + 6.0f),
+                    IM_COL32(54, 212, 245, aText), 1.0f);
+
+  const char* hint = uiRu("[ ПРОБЕЛ / ESC : ПРОПУСК ]", "[ SPACE / ESC : SKIP ]");
+  const ImVec2 hsz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, hint);
+  fg->AddText(font, fontSize, ImVec2(screenW - hsz.x - 28.0f, screenH - hsz.y - 24.0f),
+              IM_COL32(180, 215, 232, static_cast<int>(165.0f * alphaK)), hint);
+}
+
+void AppGL::renderIntroFrame(int width, int height, double time) {
+  IntroRenderParams params;
+  const glm::vec3 pos = m_introDirector.cameraPosition();
+  const glm::vec3 target = m_introDirector.cameraTarget();
+  const glm::vec3 up = m_introDirector.cameraUp();
+  params.cameraPosition = Vec3(pos.x, pos.y, pos.z);
+  params.cameraTarget = Vec3(target.x, target.y, target.z);
+  params.cameraUp = Vec3(up.x, up.y, up.z);
+  params.fovDegrees = m_introDirector.cameraFov();
+  params.roll = m_introDirector.cameraRoll();
+  params.shipModel = m_introDirector.shipModelMatrix();
+  params.megastructureModel = m_introDirector.megastructureModelMatrix();
+  params.bridgeModel = m_introDirector.bridgeModelMatrix();
+  const float introTime = m_introDirector.currentTime();
+  params.showShip = introTime >= 3.5f && introTime < 15.5f;
+  params.showMegastructure = introTime >= 6.5f;
+  params.showBridge = introTime >= 14.5f;
+  params.speedFx = m_introDirector.warpDistortion();
+  m_sceneManager->renderIntro(params, width, height, static_cast<float>(time));
+}
+
 void AppGL::drawMainMenuBackground(float screenW, float screenH) {
   ensureMenuBackground();
 
@@ -11273,146 +12259,9 @@ void AppGL::drawMainMenuBackground(float screenW, float screenH) {
       const ImVec2 uv1(0.5f + 0.5f * scale.x, 0.5f + 0.5f * scale.y);
       bgDl->AddImage((ImTextureID)(intptr_t)m_menuBgTex, ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH), uv0, uv1);
     } else {
-      // Фоллбэк: глубокий космический градиент
-      bgDl->AddRectFilledMultiColor(ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH),
-                                    IM_COL32(2, 4, 10, 255), IM_COL32(5, 12, 28, 255),
-                                    IM_COL32(10, 20, 40, 255), IM_COL32(1, 3, 8, 255));
+      bgDl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH), menuui::kRailBg);
     }
   }
-
-  // Кинематографичное затемнение левой трети экрана (под командное меню) для идеальной читаемости
-  bgDl->AddRectFilledMultiColor(ImVec2(0.0f, 0.0f), ImVec2(screenW * 0.52f, screenH),
-                                IM_COL32(3, 6, 12, 235), IM_COL32(3, 6, 12, 0),
-                                IM_COL32(3, 6, 12, 0), IM_COL32(3, 6, 12, 235));
-
-  // Верхняя и нижняя синематичные виньетки
-  bgDl->AddRectFilledMultiColor(ImVec2(0.0f, 0.0f), ImVec2(screenW, 90.0f),
-                                IM_COL32(2, 4, 8, 220), IM_COL32(2, 4, 8, 220),
-                                IM_COL32(2, 4, 8, 0), IM_COL32(2, 4, 8, 0));
-  bgDl->AddRectFilledMultiColor(ImVec2(0.0f, screenH - 75.0f), ImVec2(screenW, screenH),
-                                IM_COL32(2, 4, 8, 0), IM_COL32(2, 4, 8, 0),
-                                IM_COL32(2, 4, 8, 230), IM_COL32(2, 4, 8, 230));
-
-}
-
-void AppGL::drawFlightBriefingCard(int hoveredOption, float cardW, const Station* curSt) {
-  ImVec2 p0 = ImGui::GetCursorScreenPos();
-  float cardH = 124.0f;
-  ImVec2 p1(p0.x + cardW, p0.y + cardH);
-  float cut = 10.0f;
-
-  ImDrawList* dl = ImGui::GetWindowDrawList();
-  ImVec2 pts[5] = {
-      p0,
-      ImVec2(p1.x - cut, p0.y),
-      ImVec2(p1.x, p0.y + cut),
-      p1,
-      ImVec2(p0.x, p1.y)
-  };
-
-  // Обсидиановое стекло карточки с тонкой границей
-  dl->AddConvexPolyFilled(pts, 5, IM_COL32(7, 14, 24, 225));
-  dl->AddPolyline(pts, 5, IM_COL32(36, 75, 105, 170), ImDrawFlags_Closed, 1.2f);
-  // Акцентная планка слева (изумрудная для live индикации)
-  dl->AddRectFilled(ImVec2(p0.x, p0.y + 4.0f), ImVec2(p0.x + 2.5f, p1.y - 4.0f),
-                    IM_COL32(16, 185, 129, 210));
-
-  // Шапка карточки
-  float padX = 14.0f;
-  float curY = p0.y + 8.0f;
-
-  // Индикатор live: пульсирующая зелёная точка
-  dl->AddCircleFilled(ImVec2(p0.x + padX + 3.0f, curY + 6.0f), 3.0f, IM_COL32(16, 185, 129, 255));
-  dl->AddCircle(ImVec2(p0.x + padX + 3.0f, curY + 6.0f), 5.0f, IM_COL32(16, 185, 129, 110), 12, 1.0f);
-
-  const char* headerTitle = uiRu("ТЕЛЕМЕТРИЯ // СТАТУС КОРАБЛЯ", "TELEMETRY // SHIP STATUS");
-  if (hoveredOption == 0) headerTitle = uiRu("ТЕЛЕМЕТРИЯ // ВОЗОБНОВЛЕНИЕ", "TELEMETRY // RESUME FLIGHT");
-  else if (hoveredOption == 1) headerTitle = uiRu("ЭКСПЕДИЦИОННЫЙ ПРОТОКОЛ // СТАРТ", "EXPEDITION // START MISSION");
-  else if (hoveredOption == 2) headerTitle = uiRu("РЕЖИМ НАВИГАЦИИ // SANDBOX", "NAVIGATION // FREE FLIGHT");
-  else if (hoveredOption == 3) headerTitle = uiRu("3D МАСТЕРСКАЯ // АНГАР МОДЕЛЕЙ", "3D WORKSHOP // HANGAR CATALOG");
-  else if (hoveredOption == 4) headerTitle = uiRu("СИСТЕМНЫЕ СЛУЖБЫ // КОНФИГУРАЦИЯ", "SYSTEM CONFIG // SETTINGS");
-  else if (hoveredOption == 5) headerTitle = uiRu("АРХИВ ДАННЫХ // ZETTELKASTEN", "ARCHIVE // EXTRA MATERIALS");
-  else if (hoveredOption == 6) headerTitle = uiRu("ЗАВЕРШЕНИЕ СЕАНСА // ВЫХОД", "SESSION // EXIT TO DESKTOP");
-
-  dl->AddText(ImVec2(p0.x + padX + 14.0f, curY), menuui::accentAlpha(230), headerTitle);
-
-  // Живой квантовый осциллограф в шапке карточки
-  {
-    float waveW = 54.0f;
-    float waveX = p1.x - padX - waveW;
-    float waveY = curY + 6.0f;
-    float curTime = static_cast<float>(glfwGetTime());
-    dl->AddLine(ImVec2(waveX, waveY), ImVec2(waveX + waveW, waveY), IM_COL32(30, 65, 90, 110), 1.0f);
-    ImVec2 wavePts[16];
-    for (int i = 0; i < 16; ++i) {
-      float u = static_cast<float>(i) / 15.0f;
-      float env = std::sin(u * 3.14159f);
-      float val = std::sin(curTime * 4.5f + u * 12.0f) * 0.65f + std::sin(curTime * 9.0f + u * 24.0f) * 0.35f;
-      wavePts[i] = ImVec2(waveX + u * waveW, waveY + val * 4.0f * env);
-    }
-    dl->AddPolyline(wavePts, 16, menuui::accentAlpha(200), 0, 1.2f);
-  }
-
-  // Разделительная линия в карточке
-  curY += 19.0f;
-  dl->AddLine(ImVec2(p0.x + padX, curY), ImVec2(p1.x - padX, curY), IM_COL32(30, 65, 90, 130), 1.0f);
-  curY += 6.0f;
-
-  // Контент телеметрии по строкам
-  auto drawParamLine = [&](const char* tag, const char* val, ImU32 valCol = IM_COL32(230, 245, 255, 255)) {
-    dl->AddText(ImVec2(p0.x + padX, curY), IM_COL32(110, 155, 185, 220), tag);
-    ImVec2 vSz = ImGui::CalcTextSize(val);
-    dl->AddText(ImVec2(p1.x - padX - vSz.x, curY), valCol, val);
-    curY += 18.0f;
-  };
-
-  std::string stName = curSt ? curSt->name : uiRu("СОЛНЕЧНАЯ СИСТЕМА", "SOL SYSTEM");
-
-  if (hoveredOption == 0) {
-    drawParamLine(uiRu("ТОЧКА ВОЗВРАТА:", "RETURN POINT:"), stName.c_str(), menuui::kAccentU32);
-    drawParamLine(uiRu("СОСТОЯНИЕ ЯДРА:", "CORE STATUS:"), uiRu("ГОТОВ К ПЕРЕХОДУ", "READY FOR WARP"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("СИСТЕМЫ СВЯЗИ:", "COMMS:"), uiRu("КВАНТОВЫЙ ЛИНК OK", "QUANTUM LINK OK"), IM_COL32(245, 158, 11, 255));
-    drawParamLine(uiRu("ПРОТОКОЛ:", "PROTOCOL:"), m_hasStartedFlight ? uiRu("ТЕКУЩАЯ СЕССИЯ", "ACTIVE SESSION") : uiRu("АВТОСОХРАНЕНИЕ", "AUTOSAVE"));
-  } else if (hoveredOption == 1) {
-    drawParamLine(uiRu("ЭКСПЕДИЦИЯ:", "EXPEDITION:"), uiRu("ASTRO-VOYAGER I", "ASTRO-VOYAGER I"), menuui::kAccentU32);
-    drawParamLine(uiRu("ПРОЛОГ:", "PROLOGUE:"), uiRu("ПАРИЖ // РАЗЛОМ ВРЕМЕНИ", "PARIS // TIME FISSURE"), IM_COL32(245, 185, 30, 255));
-    drawParamLine(uiRu("ДИРЕКТИВА:", "DIRECTIVE:"), uiRu("КЛЮЧ КАЗИМИРА И КООРДИНАТЫ", "CASIMIR KEY & COORDS"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("МИССИЯ:", "MISSION:"), uiRu("ФАКТОР 9 // ПЕРВЫЙ ВАРП", "FACTOR 9 // FIRST WARP"));
-  } else if (hoveredOption == 2) {
-    drawParamLine(uiRu("РЕЖИМ:", "MODE:"), uiRu("СВОБОДНАЯ НАВИГАЦИЯ", "FREE EXPLORATION"), menuui::kAccentU32);
-    drawParamLine(uiRu("ОБЪЕКТЫ:", "OBJECTS:"), uiRu("22 ОРБИТАЛЬНЫХ СТАНЦИИ", "22 ORBITAL STATIONS"));
-    drawParamLine(uiRu("ФИЗИКА:", "PHYSICS:"), uiRu("РЕЛЯТИВИСТСКИЕ МЕТРИКИ", "RELATIVISTIC METRICS"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("ПОСАДКА:", "LANDING:"), uiRu("ПЛАНЕТАРНЫЙ ВАРИОМЕТР", "PLANETARY VARIOMETER"));
-  } else if (hoveredOption == 3) {
-    drawParamLine(uiRu("КАТАЛОГ:", "CATALOG:"), uiRu("57 АКТИВНЫХ 3D-ОБЪЕКТОВ", "57 ACTIVE 3D ASSETS"), menuui::kAccentU32);
-    drawParamLine(uiRu("РЕНДЕРЕР:", "RENDERER:"), uiRu("PBR TURNTABLE / ПЬЕДЕСТАЛ", "PBR TURNTABLE / PEDESTAL"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("СИСТЕМЫ:", "SYSTEMS:"), uiRu("ФЛОТ, КОЛОНИИ, СТАНЦИИ", "FLEET, COLONIES, STATIONS"));
-    drawParamLine(uiRu("ДИАГНОСТИКА:", "DIAGNOSTICS:"), uiRu("СЕТКА / PBR / CLAY / NORMALS", "WIRE / PBR / CLAY / NORMALS"));
-  } else if (hoveredOption == 4) {
-    drawParamLine(uiRu("ПОДСИСТЕМА:", "SUBSYSTEM:"), uiRu("ГРАФИКА / ЗВУК / ВВОД", "GRAPHICS / AUDIO / INPUT"), menuui::kAccentU32);
-    drawParamLine(uiRu("АККРЕЦИОННЫЙ ДИСК:", "ACCRETION DISK:"), uiRu("ПРОЦЕДУРНЫЙ GLSL", "PROCEDURAL GLSL"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("АУДИО ДВИЖОК:", "AUDIO ENGINE:"), uiRu("MINIAUDIO PRO", "MINIAUDIO PRO"));
-    drawParamLine(uiRu("ОПТИМИЗАЦИЯ:", "OPTIMIZATION:"), uiRu("НУЛЕВОЙ ОВЕРХЕД CPU", "ZERO CPU OVERHEAD"));
-  } else if (hoveredOption == 5) {
-    drawParamLine(uiRu("БОРТОВОЙ ЖУРНАЛ:", "PILOT LOGBOOK:"), uiRu("ДЕНЬ 1. ФАКТОР 9", "DAY 1. FACTOR 9"), menuui::kAccentU32);
-    drawParamLine(uiRu("БАЗА ЗНАНИЙ:", "KNOWLEDGE BASE:"), uiRu("ZETTELKASTEN // 29 КАРТОЧЕК", "ZETTELKASTEN // 29 CARDS"));
-    drawParamLine(uiRu("САУНДТРЕК:", "SOUNDTRACK:"), uiRu("ГОЛОСА ЭКИПАЖА И ТЕМА", "CREW VOICES & THEMES"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("АРХИВ НАБЛЮДЕНИЙ:", "ARCHIVES:"), uiRu("АКТИВЕН И СИНХРОНИЗИРОВАН", "ACTIVE & SYNCED"));
-    drawParamLine(uiRu("СПЕКТРОМЕТРИЯ:", "SPECTROMETRY:"), uiRu("РЕГИСТРАЦИЯ БИОСИГНАТУР", "BIOSIGNATURE SCAN"));
-  } else if (hoveredOption == 6) {
-    drawParamLine(uiRu("ДЕЙСТВИЕ:", "ACTION:"), uiRu("ВЫХОД НА РАБОЧИЙ СТОЛ", "EXIT TO DESKTOP"), IM_COL32(239, 68, 68, 255));
-    drawParamLine(uiRu("СОХРАНЕНИЕ:", "AUTOSAVE:"), uiRu("ПРОФИЛЬ ЗАПИСАН", "PROFILE SYNCED"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("РЕСУРСЫ GPU:", "GPU RESOURCES:"), uiRu("БЕЗОПАСНАЯ ВЫГРУЗКА", "SAFE RELEASE"));
-    drawParamLine(uiRu("ЗАВЕРШЕНИЕ:", "SHUTDOWN:"), uiRu("БЕЗ МЕРЦАНИЯ ЭКРАНА", "CLEAN / NO FLICKER"));
-  } else {
-    // Дефолтный статус телеметрии корабля
-    drawParamLine(uiRu("КОРАБЛЬ:", "VESSEL:"), uiRu("СТРАННИК [ALCUBIERRE]", "VOYAGER [ALCUBIERRE]"), menuui::kAccentU32);
-    drawParamLine(uiRu("ТЕКУЩИЙ СЕКТОР:", "CURRENT SECTOR:"), stName.c_str());
-    drawParamLine(uiRu("ВАРП-ПРИВОД:", "WARP DRIVE:"), m_toggleWarpStandby ? uiRu("100% НОМИНАЛ // ГОТОВ", "100% NOMINAL // READY") : uiRu("ОЖИДАНИЕ ИНИЦИАЛИЗАЦИИ", "STANDBY // READY"), IM_COL32(16, 185, 129, 255));
-    drawParamLine(uiRu("КВАНТОВЫЙ ЛИНК:", "QUANTUM LINK:"), uiRu("СИНХРОНИЗИРОВАН", "SYNCHRONIZED"), IM_COL32(245, 158, 11, 255));
-  }
-
-  ImGui::Dummy(ImVec2(cardW, cardH));
 }
 
 void AppGL::drawMainMenuHero(float screenW, float screenH) {
@@ -11423,268 +12272,225 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
                            ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground;
 
   ImGui::Begin("MainMenuHero", nullptr, flags);
+  const bool mainMenuFontPushed = m_mainMenuFont != nullptr;
+  if (mainMenuFontPushed) ImGui::PushFont(m_mainMenuFont);
 
-  ImDrawList* hudDl = ImGui::GetWindowDrawList();
-  // Оптические HUD микро-скобки по углам визора
-  {
-    const float cInset = 16.0f;
-    const float bLen = 22.0f;
-    const ImU32 bCol = menuui::accentAlpha(80);
-    // Верхний левый
-    hudDl->AddLine(ImVec2(cInset, cInset), ImVec2(cInset + bLen, cInset), bCol, 1.2f);
-    hudDl->AddLine(ImVec2(cInset, cInset), ImVec2(cInset, cInset + bLen), bCol, 1.2f);
-    // Верхний правый
-    hudDl->AddLine(ImVec2(screenW - cInset, cInset), ImVec2(screenW - cInset - bLen, cInset), bCol, 1.2f);
-    hudDl->AddLine(ImVec2(screenW - cInset, cInset), ImVec2(screenW - cInset, cInset + bLen), bCol, 1.2f);
-    // Нижний левый
-    hudDl->AddLine(ImVec2(cInset, screenH - cInset), ImVec2(cInset + bLen, screenH - cInset), bCol, 1.2f);
-    hudDl->AddLine(ImVec2(cInset, screenH - cInset), ImVec2(cInset, screenH - cInset - bLen), bCol, 1.2f);
-    // Нижний правый
-    hudDl->AddLine(ImVec2(screenW - cInset, screenH - cInset), ImVec2(screenW - cInset - bLen, screenH - cInset), bCol, 1.2f);
-    hudDl->AddLine(ImVec2(screenW - cInset, screenH - cInset), ImVec2(screenW - cInset, screenH - cInset - bLen), bCol, 1.2f);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const float railW = std::clamp(screenW * 0.34f, 380.0f, 440.0f);
+  const float leftMargin = 44.0f;
+  const float contentW = railW - leftMargin * 2.0f;
+  const bool compact = screenH < 760.0f;
+  ImGui::SetWindowFontScale(compact ? 1.16f : 1.20f);
+
+  // Рейл растворяется в кадре: длинное многоостановочное затухание. Короткий
+  // линейный спад обрывался ровно на яркой части диска и читался как обрезка кадра.
+  // Внутри каждого отрезка альфа интерполируется, а не квантуется полосами:
+  // на светлом диске даже 30-пиксельные ступени дают видимый бандинг.
+  static constexpr float kRailStops[][2] = {
+      {0.0f, 1.0f},   {250.0f, 1.0f},  {420.0f, 0.86f}, {580.0f, 0.64f},
+      {740.0f, 0.42f}, {900.0f, 0.25f}, {1060.0f, 0.13f}, {1180.0f, 0.05f},
+      {1260.0f, 0.0f}};
+  const int kRailStopCount = static_cast<int>(sizeof(kRailStops) / sizeof(kRailStops[0]));
+  const float railScale = std::min(1.0f, screenW / 1260.0f);
+  for (int s = 0; s + 1 < kRailStopCount; ++s) {
+    const float x0 = kRailStops[s][0] * railScale;
+    const float x1 = kRailStops[s + 1][0] * railScale;
+    const int a0 = static_cast<int>(255.0f * kRailStops[s][1]);
+    const int a1 = static_cast<int>(255.0f * kRailStops[s + 1][1]);
+    dl->AddRectFilledMultiColor(ImVec2(x0, 0.0f), ImVec2(x1, screenH),
+                                IM_COL32(5, 8, 13, a0), IM_COL32(5, 8, 13, a1),
+                                IM_COL32(5, 8, 13, a1), IM_COL32(5, 8, 13, a0));
   }
 
-  float leftMargin = std::max(screenW * 0.045f, 44.0f);
-  float topMargin = (screenH >= 900.0f) ? std::max((screenH - 660.0f) * 0.45f, 40.0f)
-                                        : std::max((screenH - 620.0f) * 0.35f, 22.0f);
-
-  // 1. Верхний блок бренда: статус-пилюли и логотип
-  ImGui::SetCursorPos(ImVec2(leftMargin, topMargin));
+  // Виньетка на арте: верх, низ и правый край.
+  const float v = 110.0f;
+  dl->AddRectFilledMultiColor(ImVec2(railW, 0.0f), ImVec2(screenW, v),
+                              IM_COL32(0, 0, 0, 90), IM_COL32(0, 0, 0, 90),
+                              IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 0));
+  dl->AddRectFilledMultiColor(ImVec2(railW, screenH - v), ImVec2(screenW, screenH),
+                              IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 0),
+                              IM_COL32(0, 0, 0, 110), IM_COL32(0, 0, 0, 110));
+  dl->AddRectFilledMultiColor(ImVec2(screenW - v, 0.0f), ImVec2(screenW, screenH),
+                              IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 80),
+                              IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 80));
 
   const Station* curSt = m_sceneManager->getCurrentStation();
-  std::string sectorBadge = std::string(uiRu("МАРШРУТ: ", "ROUTE: ")) +
-                            (curSt ? curSt->name : uiRu("НЕИЗВЕСТНО", "UNKNOWN"));
-  {
-    // Пилюли только для чтения: рисуем вручную, без ложной кликабельности ImGui::Button.
-    ImDrawList* bdl = ImGui::GetWindowDrawList();
-    ImVec2 bp = ImGui::GetCursorScreenPos();
-    const std::string pills[3] = {
-        uiRu("КОРАБЛЬ: СТРАННИК [ALCUBIERRE]", "SHIP: VOYAGER [ALCUBIERRE]"),
-        m_toggleWarpStandby ? uiRu("СИСТЕМЫ: НОМИНАЛ", "SYSTEMS: NOMINAL")
-                            : uiRu("СИСТЕМЫ: ОЖИДАНИЕ", "SYSTEMS: STANDBY"),
-        sectorBadge};
-    const ImU32 dotColors[3] = {
-        menuui::kAccentU32, // Cyan LED
-        m_toggleWarpStandby ? IM_COL32(16, 185, 129, 255) : IM_COL32(245, 158, 11, 255), // Emerald / Amber LED
-        menuui::accentAlpha(230)  // Cyan LED
-    };
-    const ImU32 pillText[3] = {
-        IM_COL32(200, 235, 255, 240),
-        m_toggleWarpStandby ? IM_COL32(180, 245, 215, 240) : IM_COL32(240, 210, 150, 220),
-        IM_COL32(180, 215, 240, 220)};
+  const std::string contSubtitle =
+      curSt ? (curSt->name + uiRu(" · последнее сохранение", " · last save"))
+            : uiRu("Нет сохранения", "No save");
+  const char* contLabel = m_hasStartedFlight ? uiRu("Вернуться к штурвалу", "Resume flight")
+                                             : uiRu("Продолжить", "Continue");
 
-    float px = bp.x;
-    for (int i = 0; i < 3; ++i) {
-      ImVec2 ts = ImGui::CalcTextSize(pills[i].c_str());
-      float pw = ts.x + 28.0f;
-      ImVec2 q0(px, bp.y);
-      ImVec2 q1(px + pw, bp.y + 22.0f);
+  float y = compact ? 34.0f : 46.0f;
 
-      // Высокотехнологичная капсула со скруглением
-      bdl->AddRectFilled(q0, q1, IM_COL32(8, 18, 30, 210), 11.0f);
-      bdl->AddRect(q0, q1, IM_COL32(40, 85, 120, 140), 11.0f, 0, 1.0f);
+  // Редакционный титр: маленький знак, крупное имя и курсивный девиз.
+  dl->AddRectFilled(ImVec2(leftMargin, y + 8.0f), ImVec2(leftMargin + 22.0f, y + 10.0f),
+                    menuui::kAccentU32, 1.0f);
+  ImGui::SetCursorPos(ImVec2(leftMargin + 32.0f, y));
+  const ImVec2 astroPos = ImGui::GetCursorScreenPos();
+  drawTrackedText(dl, ImGui::GetFont(), ImGui::GetFontSize(), astroPos,
+                  menuui::kAccentU32, "ASTRO", 3.2f);
+  y += compact ? 26.0f : 30.0f;
 
-      // Светящаяся микро-точка статуса
-      ImVec2 dotC(px + 10.0f, bp.y + 11.0f);
-      bdl->AddCircleFilled(dotC, 2.5f, dotColors[i]);
-      bdl->AddCircle(dotC, 4.5f, (dotColors[i] & 0x00FFFFFF) | 0x44000000, 12, 1.0f);
+  ImGui::SetCursorPos(ImVec2(leftMargin, y));
+  if (m_mainMenuTitleFont) ImGui::PushFont(m_mainMenuTitleFont);
+  ImGui::SetWindowFontScale(compact ? 2.35f : 2.50f);
+  const ImVec2 titlePos = ImGui::GetCursorScreenPos();
+  const float titleSize = ImGui::GetFontSize();
+  drawTrackedText(dl, ImGui::GetFont(), titleSize, ImVec2(titlePos.x, titlePos.y + 2.0f),
+                  IM_COL32(0, 0, 0, 180), "VOYAGER", 0.3f);
+  drawTrackedText(dl, ImGui::GetFont(), titleSize, ImVec2(titlePos.x, titlePos.y - 1.0f),
+                  IM_COL32(255, 255, 255, 28), "VOYAGER", 0.3f);
+  drawTrackedText(dl, ImGui::GetFont(), titleSize, titlePos,
+                  ImGui::GetColorU32(menuui::kText), "VOYAGER", 0.3f);
+  if (m_mainMenuTitleFont) ImGui::PopFont();
+  ImGui::SetWindowFontScale(compact ? 1.16f : 1.20f);
+  y += compact ? 54.0f : 60.0f;
 
-      bdl->AddText(ImVec2(px + 18.0f, bp.y + 3.0f), pillText[i], pills[i].c_str());
-      px = q1.x + 8.0f;
-    }
-
-    // Астрофизическая телеметрия чёрной дыры Керра в правом верхнем углу
-    {
-      const char* kerrBadge = uiRu("ОБСЕРВАТОРИЯ: КЕРР a/M=0.94 // Rg=29.5 km",
-                                   "OBSERVATORY: KERR a/M=0.94 // Rg=29.5 km");
-      ImVec2 kSz = ImGui::CalcTextSize(kerrBadge);
-      float kw = kSz.x + 28.0f;
-      float kx = screenW - leftMargin - kw;
-      ImVec2 kq0(kx, bp.y);
-      ImVec2 kq1(kx + kw, bp.y + 22.0f);
-      bdl->AddRectFilled(kq0, kq1, IM_COL32(8, 18, 30, 210), 11.0f);
-      bdl->AddRect(kq0, kq1, IM_COL32(40, 85, 120, 140), 11.0f, 0, 1.0f);
-      ImVec2 kDot(kx + 10.0f, bp.y + 11.0f);
-      bdl->AddCircleFilled(kDot, 2.5f, menuui::kAccentU32);
-      bdl->AddCircle(kDot, 4.5f, menuui::accentAlpha(70), 12, 1.0f);
-      bdl->AddText(ImVec2(kx + 18.0f, bp.y + 3.0f), IM_COL32(180, 225, 245, 230), kerrBadge);
-    }
-
-    ImGui::Dummy(ImVec2(0.0f, 22.0f));
-  }
-
-  float cmdW = std::min(screenW * 0.32f, 380.0f);
-  if (cmdW < 290.0f) cmdW = 290.0f;
-
-  // Кибернетический префикс и логотип
-  ImGui::SetCursorPosX(leftMargin);
-  ImGui::Dummy(ImVec2(0.0f, 4.0f));
-  ImGui::SetCursorPosX(leftMargin);
-  ImGui::TextColored(ImVec4(0.22f, 0.65f, 0.88f, 0.85f), "%s",
-                     uiRu("КВАНТОВАЯ НАВИГАЦИОННАЯ СИСТЕМА // QUANTUM FLIGHT CONSOLE",
-                          "QUANTUM NAVIGATION CONSOLE // RELATIVISTIC FLIGHT"));
-
-  ImGui::SetCursorPosX(leftMargin);
-  ImGui::SetWindowFontScale(1.68f);
-  {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 tp = ImGui::GetCursorScreenPos();
-    dl->AddText(ImVec2(tp.x + 1.5f, tp.y + 1.5f), IM_COL32(2, 6, 12, 230), "A S T R O  —  V O Y A G E R");
-    ImGui::TextColored(ImVec4(0.97f, 0.98f, 1.00f, 1.0f), "A S T R O  —  V O Y A G E R");
-  }
+  ImGui::SetCursorPos(ImVec2(leftMargin, y));
   ImGui::SetWindowFontScale(1.0f);
+  if (m_mainMenuTaglineFont) ImGui::PushFont(m_mainMenuTaglineFont);
+  ImGui::PushStyleColor(ImGuiCol_Text, menuui::kTextDim);
+  ImGui::Text("%s", uiRu("Путешествие сквозь\nрелятивистскую вселенную",
+                          "A journey through\na relativistic universe"));
+  ImGui::PopStyleColor();
+  if (m_mainMenuTaglineFont) ImGui::PopFont();
+  ImGui::SetWindowFontScale(compact ? 1.16f : 1.20f);
+  y += compact ? 44.0f : 48.0f;
 
-  ImGui::SetCursorPosX(leftMargin);
-  ImGui::TextColored(ImVec4(0.42f, 0.62f, 0.78f, 0.85f), "%s",
-                     uiRu("СВЕРХСВЕТОВАЯ ЭКСПЕДИЦИЯ СКВОЗЬ РЕЛЯТИВИСТСКИЙ КОСМОС",
-                          "FASTER-THAN-LIGHT EXPEDITION THROUGH RELATIVISTIC SPACE"));
-  ImGui::SetCursorPosX(leftMargin);
-  ImGui::TextColored(ImVec4(0.58f, 0.76f, 0.92f, 0.78f), "%s",
-                     uiRu("«Расстояние — это не стена. Это договор, который ещё не подписан»",
-                          "«Distance is not a wall. It is a pact not yet signed»"));
-
-  // Декоративная тонкая неоновая линия под заголовком
-  {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 divP = ImGui::GetCursorScreenPos();
-    dl->AddLine(ImVec2(divP.x, divP.y + 5.0f), ImVec2(divP.x + cmdW, divP.y + 5.0f),
-                IM_COL32(32, 68, 96, 140), 1.0f);
-    dl->AddLine(ImVec2(divP.x, divP.y + 5.0f), ImVec2(divP.x + 42.0f, divP.y + 5.0f),
-                menuui::accentAlpha(220), 2.0f);
-    dl->AddCircleFilled(ImVec2(divP.x + 42.0f, divP.y + 5.0f), 2.5f, IM_COL32(125, 225, 255, 255));
-  }
-  ImGui::Dummy(ImVec2(0.0f, 10.0f));
-
-  // 2. Левая навигация: шесть тактических пунктов с индексами 01..06
-  float cmdY = ImGui::GetCursorPosY();
-  ImGui::SetCursorPos(ImVec2(leftMargin, cmdY));
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 6.0f));
-  ImGui::SetWindowFontScale(1.08f);
-
-  const ImU32 navBorder = menuui::kNavBorder;
-  const ImU32 navBg = menuui::kNavBg;
-
-  int hoveredOption = -1;
-
-  std::string contSubtitle = curSt ? curSt->name : uiRu("ПОСЛЕДНИЙ МАРШРУТ", "LAST ROUTE");
-  const char* contLabel = m_hasStartedFlight ? uiRu("ПРОДОЛЖИТЬ ПОЛЁТ", "RESUME FLIGHT")
-                                             : uiRu("ПРОДОЛЖИТЬ", "CONTINUE");
-  if (drawTacticalCutButton(contLabel, ImVec2(cmdW, 54.0f),
-                           menuui::kNavPrimaryBorder, menuui::kNavPrimaryBg, 11.0f,
-                           contSubtitle.c_str(), "01", "[ENTER]")) {
+  // Продолжить — главное действие экрана, поэтому primary-панель на том же языке,
+  // что и строки навигации: залитый акцент, тикет слева, шеврон справа.
+  ImGui::SetCursorPos(ImVec2(leftMargin, y));
+  ImGui::SetItemDefaultFocus();
+  const ImVec2 ctaSize(contentW, compact ? 62.0f : 72.0f);
+  if (drawMenuAction(contLabel, ctaSize, true, contSubtitle.c_str())) {
     if (!m_hasStartedFlight) {
-      m_loadingScreen.startContinueWarp(contSubtitle);
       m_audio.playWarpReadyChime();
       m_hasStartedFlight = true;
     }
     requestCloseMenu();
   }
-  if (ImGui::IsItemHovered()) hoveredOption = 0;
+  y += ctaSize.y + (compact ? 20.0f : 26.0f);
 
-  ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("НОВАЯ ЭКСПЕДИЦИЯ", "NEW EXPEDITION"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "02", "[N]")) {
-    m_loadingScreen.startNewGameWarp(uiRu("НАЧИНАЕМ НОВУЮ ЭКСПЕДИЦИЮ", "STARTING A NEW EXPEDITION"));
+  auto section = [&](const char* label) {
+    y += compact ? 18.0f : 22.0f;  // единый отступ перед заголовком группы
+    ImGui::SetCursorPos(ImVec2(leftMargin, y));
+    drawSectionLabel(label, contentW);
+    y += ImGui::GetTextLineHeight() + (compact ? 6.0f : 8.0f);
+  };
+  auto item = [&](const char* label, auto&& action, const char* tip) {
+    ImGui::SetCursorPos(ImVec2(leftMargin, y));
+    if (drawMenuAction(label, ImVec2(contentW, compact ? 36.0f : 40.0f))) {
+      action();
+    }
+    if (tip && ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", tip);
+    }
+    y += (compact ? 36.0f : 40.0f) + 4.0f;
+  };
+
+  section(uiRu("ПОЛЁТ", "FLIGHT"));
+  item(uiRu("Новая экспедиция", "New expedition"), [&] {
     m_audio.playJump();
     m_hasStartedFlight = true;
     startNewAdventure();
-  }
-  if (ImGui::IsItemHovered()) {
-    hoveredOption = 1;
-    ImGui::SetTooltip("%s", uiRu("Начать новую сюжетную экспедицию", "Start a new story expedition"));
-  }
-
-  ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("СВОБОДНЫЙ ПОЛЁТ", "FREE FLIGHT"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "03", "[F]")) {
+  }, uiRu("Начать новую сюжетную экспедицию", "Start a new story expedition"));
+  item(uiRu("Свободный полёт", "Free flight"), [&] {
     m_hasStartedFlight = true;
     requestCloseMenu();
-  }
-  if (ImGui::IsItemHovered()) {
-    hoveredOption = 2;
-    ImGui::SetTooltip("%s", uiRu("Исследование галактики без ограничений", "Explore galaxy without story limits"));
-  }
+  }, uiRu("Исследование галактики без сюжетных ограничений", "Explore without story limits"));
 
-  ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("МАСТЕРСКАЯ 3D", "3D WORKSHOP"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "04", "[W]")) {
+  section(uiRu("ИССЛЕДОВАНИЕ", "EXPLORATION"));
+  item(uiRu("Ангар моделей", "Model hangar"), [&] {
+    m_prevMenuPage = 0;
     m_menuPage = 6;
     m_pageTransitionTimer = 0.0f;
     m_audio.playBlip();
-  }
-  if (ImGui::IsItemHovered()) {
-    hoveredOption = 3;
-    ImGui::SetTooltip("%s", uiRu("Интерактивный 3D-ангар моделей: флот, базы, станции", "Interactive 3D model hangar: fleet, colonies, stations"));
-  }
-
-  ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("СИСТЕМНЫЕ НАСТРОЙКИ", "SYSTEM SETTINGS"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "05", "[S]")) {
-    m_menuPage = 1;
-    m_pageTransitionTimer = 0.0f;
-    m_audio.playBlip();
-  }
-  if (ImGui::IsItemHovered()) {
-    hoveredOption = 4;
-    ImGui::SetTooltip("%s", uiRu("Графика, звук, симуляция и управление", "Graphics, audio, simulation and controls"));
-  }
-
-  ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("БОРТОВОЙ ЖУРНАЛ И АРХИВ", "PILOT LOGBOOK & ARCHIVE"),
-                           ImVec2(cmdW, 42.0f), navBorder, navBg, 10.0f, nullptr, "06", "[A]")) {
+  }, uiRu("Флот, колонии и станции в интерактивном ангаре", "Fleet, colonies and stations"));
+  item(uiRu("Архив и кодекс", "Archive & codex"), [&] {
+    m_prevMenuPage = 0;
     m_menuPage = 5;
     m_pageTransitionTimer = 0.0f;
     m_audio.playBlip();
-  }
-  if (ImGui::IsItemHovered()) {
-    hoveredOption = 5;
-    ImGui::SetTooltip("%s", uiRu("Дневник Егорки, Zettelkasten, саундтрек и статистика", "Egorka's logbook, Zettelkasten, soundtrack and stats"));
-  }
+  }, uiRu("Журнал, открытия, голоса, справка и заметки релиза", "Journal, discoveries, voices, help and release notes"));
 
-  ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("3D-ЗАСТАВКА (ИНТРО)", "3D INTRO CINEMATIC"),
-                           ImVec2(cmdW, 38.0f), navBorder, navBg, 10.0f, nullptr, ">>", "[I]")) {
-    m_introDirector.start();
+  section(uiRu("СИСТЕМА", "SYSTEM"));
+  item(uiRu("Настройки", "Settings"), [&] {
+    m_prevMenuPage = 0;
+    m_menuPage = 1;
+    m_pageTransitionTimer = 0.0f;
+    m_audio.playBlip();
+  }, uiRu("Графика, звук, симуляция и управление", "Graphics, audio, simulation and controls"));
+
+  // Системный блок привязан к нижнему краю экрана, а не к списку: навигация
+  // заканчивается на последней группе и не выглядит оборванной.
+  const float exitH = compact ? 34.0f : 38.0f;
+  const float footBase = screenH - (compact ? 26.0f : 44.0f);
+  const float exitTop = footBase - 26.0f - exitH;
+  const float ruleY = exitTop - 14.0f;
+  const char* exitLabel = m_exitSequence ? uiRu("Питание отключается", "Powering down")
+                                         : uiRu("Выход", "Exit");
+
+  // Выход — системное действие, а не пункт навигации: тот же язык, что у primary,
+  // но в статусном цвете опасности.
+  ImGui::SetCursorPos(ImVec2(leftMargin, exitTop));
+  const ImVec2 exitPos = ImGui::GetCursorScreenPos();
+  const ImVec2 exitSize(contentW, exitH);
+  const ImVec2 exitEnd(exitPos.x + exitSize.x, exitPos.y + exitSize.y);
+  const bool exitPressed = ImGui::InvisibleButton("mainmenu_exit", exitSize);
+  const bool exitLit = ImGui::IsItemHovered() || ImGui::IsItemFocused() ||
+                       ImGui::IsItemActive() || m_exitSequence;
+  const ImU32 kDangerU32 = menuui::kDanger;
+  dl->AddRectFilled(exitPos, exitEnd,
+                    ImGui::IsItemActive() ? menuui::alphaOf(kDangerU32, 54)
+                                          : (exitLit ? menuui::alphaOf(kDangerU32, 30) : 0),
+                    4.0f);
+  dl->AddRectFilled(ImVec2(exitPos.x, exitPos.y + 9.0f),
+                    ImVec2(exitPos.x + 2.0f, exitEnd.y - 9.0f),
+                    exitLit ? kDangerU32 : menuui::alphaOf(kDangerU32, 90), 1.0f);
+  const ImU32 dangerText = exitLit ? IM_COL32(250, 214, 206, 255)
+                                   : menuui::alphaOf(kDangerU32, 190);
+  drawPowerGlyph(dl, ImVec2(exitPos.x + 25.0f, exitPos.y + exitSize.y * 0.5f), 7.0f,
+                 exitLit ? IM_COL32(250, 214, 206, 255) : menuui::alphaOf(kDangerU32, 150));
+  dl->AddText(ImVec2(exitPos.x + 44.0f,
+                     exitPos.y + (exitSize.y - ImGui::GetTextLineHeight()) * 0.5f),
+              dangerText, exitLabel);
+  if (exitPressed) requestAppExit();
+
+  dl->AddLine(ImVec2(leftMargin, ruleY), ImVec2(leftMargin + contentW, ruleY),
+              menuui::kHairline, 1.0f);
+
+  // Колофон: версия слева и тихая ссылка повтора интро справа, на одной базовой линии.
+  const std::string verTag = std::string("v") + kVersion;
+  ImFont* footFont = m_mainMenuFont ? m_mainMenuFont : ImGui::GetFont();
+  const float footSize = compact ? 13.0f : 15.0f;
+  dl->AddText(footFont, footSize, ImVec2(leftMargin, footBase - 10.0f),
+              ImGui::GetColorU32(menuui::kTextMute), verTag.c_str());
+  const char* replayLabel = uiRu("Повторить интро", "Replay intro");
+  const float replayW = footFont->CalcTextSizeA(footSize, 10000.0f, 0.0f, replayLabel).x;
+  const ImVec2 replayPos(leftMargin + contentW - replayW, footBase - 11.0f);
+  ImGui::SetCursorPos(ImVec2(replayPos.x - 4.0f, replayPos.y - 4.0f));
+  const bool replayPressed = ImGui::InvisibleButton("mainmenu_replay", ImVec2(replayW + 8.0f, 20.0f));
+  dl->AddText(footFont, footSize, replayPos,
+              ImGui::IsItemHovered() ? menuui::kAccentU32
+                                     : menuui::alphaOf(menuui::kActionSubtitle, 200),
+              replayLabel);
+  if (replayPressed && !m_exitSequence) {
+    startIntroPlayback();
     m_audio.playBlip();
   }
-  if (ImGui::IsItemHovered()) {
-    hoveredOption = 7;
-    ImGui::SetTooltip("%s", uiRu("Повторить кинематографичную 3D-заставку игры", "Replay the real-time 3D cinematic opening"));
+
+  if (m_exitSequence) {
+    // На время анимации мышь перехвачена, чтобы повторный клик не породил второй проход.
+    ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+    ImGui::InvisibleButton("mainmenu_exit_blocker", ImVec2(screenW, screenH));
+    drawPowerDownSequence(dl, ImVec2(0.0f, 0.0f), ImVec2(screenW, screenH), m_exitTimer);
   }
 
-  ImGui::Dummy(ImVec2(0.0f, 4.0f));
-  ImGui::SetCursorPosX(leftMargin);
-  if (drawTacticalCutButton(uiRu("ВЫХОД ИЗ СИСТЕМЫ", "EXIT SYSTEM"),
-                           ImVec2(cmdW, 38.0f), IM_COL32(70, 110, 140, 130), navBg, 10.0f, nullptr, "07", "[ESC]")) {
-    glfwSetWindowShouldClose(m_window->getNativeWindow(), GLFW_TRUE);
-  }
-  if (ImGui::IsItemHovered()) {
-    hoveredOption = 6;
-    ImGui::SetTooltip("%s", uiRu("Штатное завершение сеанса и сохранение", "Graceful shutdown and save telemetry"));
-  }
-
-  ImGui::SetWindowFontScale(1.0f);
-  ImGui::PopStyleVar(); // ItemSpacing
-
-  // Звуковой отклик при наведении на пункты меню
-  static int s_prevHeroHovered = -1;
-  if (hoveredOption != -1 && hoveredOption != s_prevHeroHovered) {
-    m_audio.playBlip();
-  }
-  s_prevHeroHovered = hoveredOption;
-
-  // Быстрые клавиши навигации в главном меню
+  // Горячие клавиши.
   ImGuiIO& io = ImGui::GetIO();
-  if (m_menuPage == 0 && !io.WantTextInput) {
-    if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
-      if (!m_hasStartedFlight) {
-        m_loadingScreen.startContinueWarp(contSubtitle);
-        m_audio.playWarpReadyChime();
-        m_hasStartedFlight = true;
-      }
-      requestCloseMenu();
-    } else if (ImGui::IsKeyPressed(ImGuiKey_N)) {
-      m_loadingScreen.startNewGameWarp(uiRu("НАЧИНАЕМ НОВУЮ ЭКСПЕДИЦИЮ", "STARTING A NEW EXPEDITION"));
+  if (m_menuPage == 0 && !io.WantTextInput && !m_exitSequence) {
+    if (ImGui::IsKeyPressed(ImGuiKey_N)) {
       m_audio.playJump();
       m_hasStartedFlight = true;
       startNewAdventure();
@@ -11703,32 +12509,23 @@ void AppGL::drawMainMenuHero(float screenW, float screenH) {
       m_menuPage = 5;
       m_pageTransitionTimer = 0.0f;
       m_audio.playBlip();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_I)) {
+      startIntroPlayback();
+      m_audio.playBlip();
     }
   }
 
-  // 3. Динамическая карточка телеметрии полёта (Flight Briefing HUD)
-  ImGui::Dummy(ImVec2(0.0f, 8.0f));
-  ImGui::SetCursorPosX(leftMargin);
-  drawFlightBriefingCard(hoveredOption, cmdW, curSt);
-
-  // 4. Нижняя строка статуса и подсказок
-  float bottomY = screenH - 34.0f;
-  {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddLine(ImVec2(leftMargin, bottomY - 6.0f), ImVec2(screenW - leftMargin, bottomY - 6.0f),
-                IM_COL32(30, 60, 85, 100), 1.0f);
-  }
-  ImGui::SetCursorPos(ImVec2(leftMargin, bottomY));
-  ImGui::TextColored(menuui::kTextMute, "%s",
-                     uiRu("[ESC] Меню   [W/A/S/D] Полёт   [M] Оррери 3D   [Tab] Бортовой журнал   [F1] Справка",
-                          "[ESC] Menu   [W/A/S/D] Flight   [M] 3D Orrery   [Tab] Ship Journal   [F1] Help"));
-
-  const std::string verTag = std::string("ASTRO-VOYAGER v") + kVersion + uiRu(" // РЕЛЯТИВИСТСКИЙ СИМУЛЯТОР", " // RELATIVISTIC SIMULATOR");
-  ImVec2 verSz = ImGui::CalcTextSize(verTag.c_str());
-  ImGui::SameLine(screenW - verSz.x - leftMargin);
-  ImGui::TextColored(ImVec4(0.24f, 0.58f, 0.76f, 0.85f), "%s", verTag.c_str());
-
+  if (mainMenuFontPushed) ImGui::PopFont();
+  ImGui::SetWindowFontScale(1.0f);
   ImGui::End();
+}
+
+void AppGL::menuGoBack() {
+  const int previous = m_prevMenuPage;
+  m_prevMenuPage = 0;
+  m_menuPage = (previous > 0 && previous != m_menuPage) ? previous : 0;
+  m_pageTransitionTimer = 0.0f;
+  m_audio.playBlip();
 }
 
 void AppGL::drawMenu() {
@@ -11744,16 +12541,19 @@ void AppGL::drawMenu() {
   m_pageTransitionTimer += io.DeltaTime;
   if (m_menuBooting) {
     m_menuBootTimer += io.DeltaTime;
-    if (m_menuBootTimer >= 0.40f) {
+    if (m_menuBootTimer >= 0.20f) {
       m_menuBooting = false;
     }
   }
   if (m_menuClosing) {
     m_menuCloseTimer += io.DeltaTime;
-    if (m_menuCloseTimer >= 0.18f) {
+    if (m_menuCloseTimer >= 0.09f) {
       m_inMenu = false;
       m_menuClosing = false;
       m_menuCloseTimer = 0.0f;
+      if (!m_benchmarkMode && !m_slidesOpen) {
+        startEntryTransitionVideo();
+      }
     }
   }
 
@@ -11779,7 +12579,7 @@ void AppGL::drawMenu() {
   // === Cold Obsidian Console Theme ===: обсидиановое стекло + бирюзовые акценты, без янтарной «радуги»
   const float winBgAlpha = (m_menuPage == 6) ? 0.0f : 0.96f;
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.012f, 0.020f, 0.030f, winBgAlpha));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.82f, 0.86f, 0.88f, 0.92f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.47f, 0.63f, 0.71f, 0.20f));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.07f, 0.14f, 0.22f, 0.85f));
   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.13f, 0.34f, 0.46f, 0.98f));
   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.46f, 0.60f, 1.00f));
@@ -11797,106 +12597,97 @@ void AppGL::drawMenu() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 14.0f));
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
   ImGui::Begin("MainMenu", nullptr, menuFlags);
+  ImGui::SetWindowFontScale(1.06f);
 
   // ==========================================
-  // ВЕРХНЯЯ БЕЛАЯ АЭРОКОСМИЧЕСКАЯ ПЛАШКА (АКТИВНА НА ВСЕХ СТРАНИЦАХ)
+  // ТЁМНАЯ СТЕКЛЯННАЯ ШАПКА (АКТИВНА НА ВСЕХ СТРАНИЦАХ)
   // ==========================================
   {
     ImDrawList* tdl = ImGui::GetWindowDrawList();
     const ImVec2 tpos = ImGui::GetCursorScreenPos();
     const float gw = ImGui::GetContentRegionAvail().x;
-    
-    if (m_menuPage == 6) {
-      tdl->AddRectFilled(ImVec2(tpos.x - 4.0f, tpos.y - 2.0f),
-                         ImVec2(tpos.x + gw + 4.0f, tpos.y + 36.0f),
-                         IM_COL32(6, 12, 18, 235), 4.0f);
-    }
-    
-    // Заклепки / винты по краям плашки
-    tdl->AddCircleFilled(ImVec2(tpos.x + 4.0f, tpos.y + 4.0f), 3.0f, IM_COL32(14, 22, 30, 255));
-    tdl->AddCircle(ImVec2(tpos.x + 4.0f, tpos.y + 4.0f), 3.0f, IM_COL32(90, 150, 180, 220), 8, 1.0f);
-    tdl->AddCircleFilled(ImVec2(tpos.x + gw - 4.0f, tpos.y + 4.0f), 3.0f, IM_COL32(14, 22, 30, 255));
-    tdl->AddCircle(ImVec2(tpos.x + gw - 4.0f, tpos.y + 4.0f), 3.0f, IM_COL32(90, 150, 180, 220), 8, 1.0f);
+    const float headerH = 44.0f;
 
-    // Акцентная бирюзовая полоса шапки
-    tdl->AddLine(ImVec2(tpos.x + 16.0f, tpos.y + 4.0f), ImVec2(tpos.x + gw - 16.0f, tpos.y + 4.0f),
-                 IM_COL32(90, 180, 215, 180), 2.0f);
-    ImGui::Dummy(ImVec2(0.0f, 8.0f));
+    tdl->AddRectFilled(ImVec2(tpos.x - 4.0f, tpos.y - 4.0f),
+                       ImVec2(tpos.x + gw + 4.0f, tpos.y + headerH),
+                       menuui::kNavBg, 5.0f);
+    tdl->AddLine(ImVec2(tpos.x - 4.0f, tpos.y + headerH),
+                 ImVec2(tpos.x + gw + 4.0f, tpos.y + headerH),
+                 menuui::kRuleU32, 1.0f);
 
-    ImGui::TextColored(menuui::kAccent, "[ СМК-01 ]");
-    ImGui::SameLine();
-    ImGui::TextColored(menuui::kText, "ASTRO-VOYAGER");
-    ImGui::SameLine();
-    ImGui::TextColored(menuui::kTextDim, "// %s",
-                       uiRu("МОДУЛЬ ЕГОРКИ", "EGOR MODULE"));
+    // Бренд: акцентный тик, имя модуля и системная подпись.
+    tdl->AddRectFilled(ImVec2(tpos.x + 12.0f, tpos.y + 12.0f),
+                       ImVec2(tpos.x + 14.0f, tpos.y + 30.0f),
+                       menuui::kAccentU32, 1.0f);
+    tdl->AddText(ImVec2(tpos.x + 24.0f, tpos.y + 7.0f),
+                 ImGui::GetColorU32(menuui::kText), "ASTRO-VOYAGER");
+    tdl->AddText(ImVec2(tpos.x + 24.0f, tpos.y + 25.0f),
+                 ImGui::GetColorU32(menuui::kTextMute),
+                 uiRu("СМК-01 // МОДУЛЬ ЕГОРКИ", "SMK-01 // EGOR MODULE"));
 
-    // Аппаратные селекторы страниц в шапке
-    auto drawHeaderTab = [&](const char* label, int pageIdx) {
-      bool active = (m_menuPage == pageIdx);
+    // Вкладки: тихие подписи, активная — подчёркивание, без циановых плашек.
+    auto headerTab = [&](const char* label, int pageIdx) {
+      const ImVec2 ts = ImGui::CalcTextSize(label);
+      const ImVec2 p = ImGui::GetCursorScreenPos();
+      const bool pressed = ImGui::InvisibleButton(label, ImVec2(ts.x + 18.0f, 28.0f));
+      const bool hovered = ImGui::IsItemHovered();
+      const bool active = (m_menuPage == pageIdx) ||
+                          (pageIdx == 5 && (m_menuPage == 2 || m_menuPage == 3 || m_menuPage == 4));
+      const ImU32 col = active ? ImGui::GetColorU32(menuui::kText)
+                               : (hovered ? ImGui::GetColorU32(menuui::kTextDim)
+                                          : ImGui::GetColorU32(menuui::kTextMute));
+      tdl->AddText(ImVec2(p.x + 9.0f, p.y + 6.0f), col, label);
       if (active) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.55f, 0.72f, 0.95f));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.03f, 0.08f, 0.12f, 1.00f));
-      } else {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.06f, 0.12f, 0.19f, 0.70f));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.66f, 0.76f, 0.90f));
+        tdl->AddRectFilled(ImVec2(p.x + 9.0f, p.y + 26.0f),
+                           ImVec2(p.x + ts.x + 9.0f, p.y + 28.0f),
+                           menuui::kAccentU32, 1.0f);
+      } else if (hovered) {
+        tdl->AddRectFilled(ImVec2(p.x + 9.0f, p.y + 27.0f),
+                           ImVec2(p.x + ts.x + 9.0f, p.y + 28.0f),
+                           menuui::alphaOf(menuui::kAccentU32, 90), 1.0f);
       }
-      if (ImGui::Button(label, ImVec2(0.0f, 22.0f))) {
-        if (m_menuPage != pageIdx) {
-          m_menuPage = pageIdx;
-          m_pageTransitionTimer = 0.0f;
-          m_audio.playBlip();
-        }
+      if (pressed && m_menuPage != pageIdx) {
+        m_prevMenuPage = 0;
+        m_menuPage = pageIdx;
+        m_pageTransitionTimer = 0.0f;
+        m_audio.playBlip();
       }
-      ImGui::PopStyleColor(2);
     };
 
-    ImGui::SameLine(gw - 670.0f);
-    drawHeaderTab(uiRu("<< МЕНЮ", "<< MAIN"), 0);
-    ImGui::SameLine();
-    drawHeaderTab(uiRu("02 НАСТРОЙКИ", "02 SETTINGS"), 1);
-    ImGui::SameLine();
-    drawHeaderTab(uiRu("03 СПРАВКА", "03 HELP"), 2);
-    ImGui::SameLine();
-    drawHeaderTab(uiRu("04 ГОЛОСА", "04 VOICES"), 4);
-    ImGui::SameLine();
-    drawHeaderTab(uiRu("05 ВЕРСИЯ", "05 VERSION"), 3);
-    ImGui::SameLine();
-    drawHeaderTab(uiRu("06 МАСТЕРСКАЯ", "06 WORKSHOP"), 6);
+    const char* tabLabels[4] = {
+        uiRu("МЕНЮ", "MAIN"), uiRu("НАСТРОЙКИ", "SETTINGS"),
+        uiRu("АНГАР", "HANGAR"), uiRu("АРХИВ", "ARCHIVE")};
+    const int tabPages[4] = {0, 1, 6, 5};
+    float tabsW = 0.0f;
+    for (int i = 0; i < 4; ++i) {
+      tabsW += ImGui::CalcTextSize(tabLabels[i]).x + 18.0f;
+    }
+    tabsW += 3.0f * 4.0f;
+    ImGui::SetCursorScreenPos(ImVec2(tpos.x + gw - tabsW, tpos.y + 6.0f));
+    for (int i = 0; i < 4; ++i) {
+      if (i > 0) ImGui::SameLine(0.0f, 4.0f);
+      headerTab(tabLabels[i], tabPages[i]);
+    }
 
-    ImGui::Spacing();
+    ImGui::SetCursorScreenPos(ImVec2(tpos.x, tpos.y + headerH + 8.0f));
   }
 
   const float availH = ImGui::GetContentRegionAvail().y;
   // Резервируем место под нижнюю аппаратную планку переключателей
-  const float colAreaH = availH - 46.0f;
+  const float colAreaH = availH - 8.0f;
 
-  m_radarLockTimer += io.DeltaTime;
-  m_pageTransitionTimer += io.DeltaTime;
-  if (m_menuBooting) {
-    m_menuBootTimer += io.DeltaTime;
-    if (m_menuBootTimer >= 0.40f) {
-      m_menuBooting = false;
-    }
-  }
-  if (m_menuClosing) {
-    m_menuCloseTimer += io.DeltaTime;
-    if (m_menuCloseTimer >= 0.18f) {
-      m_inMenu = false;
-      m_menuClosing = false;
-      m_menuCloseTimer = 0.0f;
-    }
-  }
+  const bool workshopPage = (m_menuPage == 6);
+  ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                        workshopPage ? ImVec4(0.0f, 0.0f, 0.0f, 0.0f)
+                                     : ImVec4(0.024f, 0.043f, 0.063f, 0.72f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.47f, 0.63f, 0.71f, 0.16f));
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
 
   if (m_menuPage == 1) {
     if (ImGui::BeginChild("##pageSettings", ImVec2(-1.0f, colAreaH), true)) {
-      ImGui::TextColored(menuui::kAccent, "[ 02 // %s ]",
-                         uiRu("НАСТРОЙКИ", "SETTINGS"));
-      ImGui::SameLine();
-      ImGui::TextColored(menuui::kTextDim, "%s",
-                         uiRu("// Изображение, корабль, управление и звук",
-                              "// Graphics, ship, controls and audio"));
-      ImGui::Separator();
-      ImGui::Spacing();
+      pageHeading(m_headingFont, "02", uiRu("НАСТРОЙКИ", "SETTINGS"),
+                  uiRu("Изображение, корабль, управление и звук",
+                       "Graphics, ship, controls and audio"));
 
       RenderSettings& menuSettings = m_sceneManager->getSettings();
       bool menuChanged = false;
@@ -11904,7 +12695,7 @@ void AppGL::drawMenu() {
       if (ImGui::BeginTabBar("##SettingsTabs", ImGuiTabBarFlags_None)) {
         if (ImGui::BeginTabItem(uiRu("Графика", "Graphics"))) {
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Фон главного меню", "Main menu background"));
+          menuSection(m_headingFont, uiRu("Фон главного меню", "Main menu background"));
           const char* backgroundNames[] = {
               uiRu("Чёрная дыра (анимация)", "Black hole (animated)"),
               uiRu("Голубая лагуна", "Celestial Lagoon"),
@@ -11929,7 +12720,7 @@ void AppGL::drawMenu() {
           }
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Качество графики", "Graphics quality"));
+          menuSection(m_headingFont, uiRu("Качество графики", "Graphics quality"));
           float qBtnW = (ImGui::GetContentRegionAvail().x - 3.0f * ImGui::GetStyle().ItemSpacing.x) / 4.0f;
           if (ImGui::Button("Ultra", ImVec2(qBtnW, 0.0f))) {
             m_sceneManager->applyPreset(PerfPreset::Ultra);
@@ -11972,13 +12763,13 @@ void AppGL::drawMenu() {
           }
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Поверхности планет и атмосфера (v4.3.0)", "Planetary Surfaces & Atmosphere (v4.3.0)"));
+          menuSection(m_headingFont, uiRu("Поверхности планет и атмосфера (v4.3.0)", "Planetary Surfaces & Atmosphere (v4.3.0)"));
           menuChanged |= ImGui::Checkbox(uiRu("LOD-сетка сферы (128x256 полигонов)", "Hi-Res Sphere LOD (128x256 mesh)"), &menuSettings.planetHiResMesh);
           menuChanged |= ImGui::Checkbox(uiRu("Топографический рельеф (FBM Bump Map)", "Topographic Relief (FBM Bump Map)"), &menuSettings.planetRelief);
           menuChanged |= ImGui::Checkbox(uiRu("Рэлеевская атмосфера (Rayleigh-Mie)", "Rayleigh-Mie Atmosphere Scattering"), &menuSettings.planetAtmosphere);
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Трассировка лучей в ОТО (черные дыры)", "Ray tracing (black holes)"));
+          menuSection(m_headingFont, uiRu("Трассировка лучей в ОТО (черные дыры)", "Ray tracing (black holes)"));
           const char* rayNames[] = {"Low", "Med", "Ultra", "Custom"};
           int rayPreset = static_cast<int>(m_sceneManager->getPreset());
           if (ImGui::Combo("Ray quality", &rayPreset, rayNames, 4)) {
@@ -12007,9 +12798,38 @@ void AppGL::drawMenu() {
               ImGui::Checkbox("Sky gravitational redshift", &menuSettings.gravRedshift);
           menuChanged |=
               ImGui::Checkbox("Sky RKF45 adaptive march", &menuSettings.rkf45Adaptive);
+          if (ImGui::SliderFloat(uiRu("Спин Керра (a/M)", "Kerr Spin (a/M)"),
+                                 &menuSettings.kerrSpin, 0.0f, 0.998f, "%.3f")) {
+            menuChanged = true;
+          }
+          if (ImGui::SmallButton("0.00 (Schwarzschild)")) {
+            menuSettings.kerrSpin = 0.0f;
+            menuChanged = true;
+          }
+          ImGui::SameLine();
+          if (ImGui::SmallButton("0.70 (Kerr)")) {
+            menuSettings.kerrSpin = 0.70f;
+            menuChanged = true;
+          }
+          ImGui::SameLine();
+          if (ImGui::SmallButton("0.998 (Gargantua)")) {
+            menuSettings.kerrSpin = 0.998f;
+            menuChanged = true;
+          }
+          if (ImGui::Checkbox(uiRu("Авто-спин Керра по каталогу ЧД",
+                                   "Auto Kerr spin by BH catalog"),
+                              &menuSettings.autoKerrSpin)) {
+            if (menuSettings.autoKerrSpin && m_sceneManager &&
+                m_sceneManager->getCurrentStation() &&
+                m_sceneManager->getCurrentStation()->type == StationType::BlackHole) {
+              menuSettings.kerrSpin = static_cast<float>(
+                  std::clamp(m_sceneManager->getCurrentStation()->params.kerrSpin, 0.0, 0.998));
+            }
+            menuChanged = true;
+          }
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Сглаживание и экспозиция", "Anti-aliasing"));
+          menuSection(m_headingFont, uiRu("Сглаживание и экспозиция", "Anti-aliasing"));
           const char* aaNames[] = {"Off", "FXAA"};
           if (ImGui::Combo("AA mode", &m_aaMode, aaNames, 2)) {
             m_sceneManager->setFxaa(m_aaMode == 1);
@@ -12021,7 +12841,7 @@ void AppGL::drawMenu() {
           }
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Кинематография и цветокоррекция (v4.4.0)", "Cinematography & Color Grading (v4.4.0)"));
+          menuSection(m_headingFont, uiRu("Кинематография и цветокоррекция (v4.4.0)", "Cinematography & Color Grading (v4.4.0)"));
           const char* menuGradeNames[] = {
             uiRu("Линейный / Raw Neutral", "Linear / Raw Neutral"),
             uiRu("Интерстеллар янтарь", "Interstellar Amber"),
@@ -12038,7 +12858,7 @@ void AppGL::drawMenu() {
 
         if (ImGui::BeginTabItem(uiRu("Корабль", "Ship"))) {
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Корпус и двигатели", "Ship"));
+          menuSection(m_headingFont, uiRu("Корпус и двигатели", "Ship"));
           const char* hullNames[] = {ship::kShipStyleNames[0], ship::kShipStyleNames[1],
                                      ship::kShipStyleNames[2], ship::kShipStyleNames[3],
                                      ship::kShipStyleNames[4]};
@@ -12050,7 +12870,7 @@ void AppGL::drawMenu() {
           ImGui::Combo("Engine", &menuSettings.enginePalette, engineNames, 4);
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Интерьер 3D-кокпита (v4.2.0)", "3D Cockpit Interior (v4.2.0)"));
+          menuSection(m_headingFont, uiRu("Интерьер 3D-кокпита (v4.2.0)", "3D Cockpit Interior (v4.2.0)"));
           ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "%s",
                              uiRu("Режим обзора: клавиша [V] переключает Кокпит / Корма / Обзор",
                                   "Camera view: [V] toggles Cockpit / Chase / Overview"));
@@ -12063,7 +12883,7 @@ void AppGL::drawMenu() {
 
         if (ImGui::BeginTabItem(uiRu("Полёт", "Flight"))) {
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Сложность экспедиции", "Game"));
+          menuSection(m_headingFont, uiRu("Сложность экспедиции", "Game"));
           const char* diffNames[] = {"Easy", "Normal", "Hard"};
           ImGui::Combo("Difficulty", &m_difficulty, diffNames, 3);
           const DifficultyTuning menuTune = difficultyTuning(m_difficulty);
@@ -12076,7 +12896,7 @@ void AppGL::drawMenu() {
           ImGui::SetWindowFontScale(1.0f);
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Небесные элементы", "Celestial elements"));
+          menuSection(m_headingFont, uiRu("Небесные элементы", "Celestial elements"));
           menuChanged |= ImGui::Checkbox("Disk", &menuSettings.diskOn);
           menuChanged |= ImGui::Checkbox("Labels", &m_showLabels);
           bool menuOrbits = m_sceneManager->showOrbits();
@@ -12094,7 +12914,7 @@ void AppGL::drawMenu() {
 
         if (ImGui::BeginTabItem(uiRu("Управление и Звук", "Controls & Audio"))) {
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Управление", "Controls"));
+          menuSection(m_headingFont, uiRu("Управление", "Controls"));
           ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.3f, 3.0f,
                              "%.2f");
           ImGui::Checkbox("Invert look Y", &m_invertY);
@@ -12124,7 +12944,26 @@ void AppGL::drawMenu() {
           }
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Геймпад / Контроллер (Steam Deck)", "Gamepad / Controller (Steam Deck)"));
+          menuSection(m_headingFont, uiRu("Горячие клавиши главного меню", "Main menu shortcuts"));
+          const char* menuShortcuts[8][2] = {
+              {"Enter", uiRu("Продолжить", "Continue")},
+              {"N", uiRu("Новая экспедиция", "New expedition")},
+              {"F", uiRu("Свободный полёт", "Free flight")},
+              {"W", uiRu("Ангар моделей", "Model hangar")},
+              {"S", uiRu("Настройки", "Settings")},
+              {"A", uiRu("Архив и кодекс", "Archive & codex")},
+              {"I", uiRu("Повторить интро", "Replay intro")},
+              {"Esc", uiRu("Назад", "Back")},
+          };
+          const float shortcutsX = ImGui::GetCursorPosX();
+          const float shortcutsCol = ImGui::GetContentRegionAvail().x * 0.5f;
+          for (int i = 0; i < 8; ++i) {
+            ImGui::SetCursorPosX(shortcutsX + (i % 2) * shortcutsCol);
+            drawKeyHint(menuShortcuts[i][0], menuShortcuts[i][1]);
+          }
+
+          ImGui::Spacing();
+          menuSection(m_headingFont, uiRu("Геймпад / Контроллер (Steam Deck)", "Gamepad / Controller (Steam Deck)"));
           const bool padConn = m_gamepad.isConnected();
           ImGui::TextColored(padConn ? ImVec4(0.2f, 1.0f, 0.4f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
                              "%s: %s", uiRu("Статус контроллера", "Controller Status"),
@@ -12146,7 +12985,7 @@ void AppGL::drawMenu() {
           }
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Аудиосистема", "View and audio"));
+          menuSection(m_headingFont, uiRu("Аудиосистема", "View and audio"));
           if (ImGui::SliderInt("Volume", &m_audioVolume, 0, 100)) {
             m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
           }
@@ -12181,7 +13020,7 @@ void AppGL::drawMenu() {
           }
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Камера и FOV", "Camera"));
+          menuSection(m_headingFont, uiRu("Камера и FOV", "Camera"));
           menuChanged |= ImGui::SliderFloat("FOV", &menuSettings.fovDegrees, 30.0f,
                                             110.0f, "%.1f deg");
           ImGui::EndTabItem();
@@ -12189,7 +13028,7 @@ void AppGL::drawMenu() {
 
         if (ImGui::BeginTabItem(uiRu("Доступность", "Accessibility"))) {
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Масштабирование интерфейса", "UI Scaling"));
+          menuSection(m_headingFont, uiRu("Масштабирование интерфейса", "UI Scaling"));
           ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.95f, 1.0f), "%s",
                              uiRu("Адаптация для экранов 2K/4K и комфортного чтения",
                                   "Adaptation for 2K/4K displays and readability"));
@@ -12210,7 +13049,7 @@ void AppGL::drawMenu() {
           if (ImGui::Button(uiRu("Сброс", "Reset"), ImVec2(btnW, 0.0f))) { m_uiScale = 1.0f; ImGui::GetIO().FontGlobalScale = 1.0f; }
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Цветовые палитры (Дальтонизм)", "Color Palettes (Colorblind)"));
+          menuSection(m_headingFont, uiRu("Цветовые палитры (Дальтонизм)", "Color Palettes (Colorblind)"));
           const char* palNames[] = {
             "Default (Cyan / Amber)",
             "Protanopia (Blue / Yellow - Red-blind)",
@@ -12236,7 +13075,7 @@ void AppGL::drawMenu() {
           ImGui::NewLine();
 
           ImGui::Spacing();
-          ImGui::SeparatorText(uiRu("Аудио-визуальные сигналы", "Audio-Visual Cues"));
+          menuSection(m_headingFont, uiRu("Аудио-визуальные сигналы", "Audio-Visual Cues"));
           ImGui::Checkbox(uiRu("Звуковой сигнал авионики при сближении со станцией",
                                "Avionics audio cue on docking proximity"), &m_audioProximityCue);
           ImGui::Checkbox(uiRu("Высококонтрастный прицел (увеличенная толщина)",
@@ -12271,178 +13110,185 @@ void AppGL::drawMenu() {
         ImGui::TextColored(ImVec4(0.40f, 0.78f, 0.62f, 1.0f), "%s", m_saveStatus.c_str());
       }
 
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Spacing();
-      if (ImGui::Button(uiRu("<< НАЗАД В ТАКТИЧЕСКИЙ РЕЖИМ", "<< BACK TO TACTICAL CONSOLE"), ImVec2(280.0f, 26.0f))) {
-        m_pageTransitionTimer = 0.0f;
-        m_prevMenuPage = m_menuPage;
-        m_menuPage = 0;
-        m_audio.playBlip();
+      ImGui::Dummy(ImVec2(0.0f, 6.0f));
+      if (drawBackRow(uiRu("Назад в тактический режим", "Back to tactical console"))) {
+        menuGoBack();
       }
     }
     ImGui::EndChild();
   } else if (m_menuPage == 2) {
     if (ImGui::BeginChild("##pageHelp", ImVec2(-1.0f, colAreaH), true)) {
-      ImGui::TextColored(menuui::kAccent, "[ 03 // %s ]",
-                         uiRu("БОРТОВАЯ СПРАВКА И УПРАВЛЕНИЕ", "AVIONICS HELP & CONTROLS"));
-      ImGui::Separator();
-      ImGui::Spacing();
+      pageHeading(m_headingFont, "03", uiRu("БОРТОВАЯ СПРАВКА", "AVIONICS HELP"),
+                  uiRu("Управление, процедуры и горячие клавиши",
+                       "Controls, procedures and hotkeys"));
       drawHelpContent();
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Spacing();
-      if (ImGui::Button(uiRu("<< НАЗАД В ТАКТИЧЕСКИЙ РЕЖИМ", "<< BACK TO TACTICAL CONSOLE"), ImVec2(280.0f, 26.0f))) {
-        m_pageTransitionTimer = 0.0f;
-        m_prevMenuPage = m_menuPage;
-        m_menuPage = 0;
-        m_audio.playBlip();
+      ImGui::Dummy(ImVec2(0.0f, 6.0f));
+      if (drawBackRow(uiRu("Назад в тактический режим", "Back to tactical console"))) {
+        menuGoBack();
       }
     }
     ImGui::EndChild();
   } else if (m_menuPage == 3) {
     if (ImGui::BeginChild("##pageVersion", ImVec2(-1.0f, colAreaH), true)) {
-      ImGui::TextColored(menuui::kAccent,
-                         "ASTRO-VOYAGER // %s v%s",
-                         uiRu("ВЕРСИЯ", "VERSION"), kVersion);
-      ImGui::TextColored(menuui::kTextDim,
-                         "%s", uiRu("Научные исследования планет, спектрометрия, интерстеллар-Zettelkasten и сюжетные финалы",
-                                    "Planetary science exploration, spectrometry, interstellar Zettelkasten & story finales"));
-      ImGui::Separator();
-      ImGui::Spacing();
+      const std::string verSubtitle =
+          std::string("ASTRO-VOYAGER v") + kVersion + " — " +
+          uiRu("наука, спектрометрия, Zettelkasten и сюжетные финалы",
+               "science, spectrometry, Zettelkasten and story finales");
+      pageHeading(m_headingFont, "05", uiRu("ПРИМЕЧАНИЯ К ВЫПУСКУ", "RELEASE NOTES"),
+                  verSubtitle.c_str());
+
+      auto releaseHeading = [&](const char* title) {
+        ImGui::Spacing();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        const float lineH = ImGui::GetTextLineHeight();
+        dl->AddRectFilled(p, ImVec2(p.x + 2.0f, p.y + lineH),
+                          menuui::kAccentU32, 1.0f);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
+        if (m_headingFont) ImGui::PushFont(m_headingFont);
+        ImGui::TextColored(menuui::kAccent, "%s", title);
+        if (m_headingFont) ImGui::PopFont();
+        const float lineY = ImGui::GetCursorScreenPos().y + 2.0f;
+        dl->AddLine(ImVec2(p.x, lineY),
+                    ImVec2(p.x + ImGui::GetContentRegionAvail().x, lineY),
+                    menuui::kHairline, 1.0f);
+        ImGui::Spacing();
+      };
+
+      auto releaseBullet = [&](const char* text) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float baseX = ImGui::GetCursorPosX();
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        dl->AddCircleFilled(ImVec2(p.x + 3.0f, p.y + ImGui::GetTextLineHeight() * 0.45f),
+                            2.0f, menuui::kAccentU32, 12);
+        ImGui::SetCursorPosX(baseX + 14.0f);
+        const float wrapX = baseX + 14.0f +
+                            std::min(ImGui::GetContentRegionAvail().x, 920.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, menuui::kText);
+        ImGui::PushTextWrapPos(wrapX);
+        ImGui::TextWrapped("%s", text);
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+        ImGui::SetCursorPosX(baseX);
+        ImGui::Spacing();
+      };
 
       if (ImGui::BeginTabBar("##PatchNotesTabsTerminal")) {
         if (ImGui::BeginTabItem(uiRu("Что нового (v4.8.0)", "What's New (v4.8.0)"))) {
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                             "%s", uiRu("1. Научные высадки и спектрометрия минералов (Landing & Science)",
-                                        "1. Planetary Landing & Science Spectrometry"));
-          ImGui::BulletText("%s", uiRu("Высадка на поверхность небесных тел (Earth, Mars, Moon, Europa, Titan, Exoplanets).",
-                                       "Surface landing on celestial bodies (Earth, Mars, Moon, Europa, Titan, Exoplanets)."));
-          ImGui::BulletText("%s", uiRu("Рентгенофлуоресцентная (XRF) спектрометрия, нейтронно-гамма анализ и механический пробоотборник грунта.",
-                                       "X-ray fluorescence (XRF) spectrometry, neutron-gamma ray analysis and surface core drill sampling."));
+          releaseHeading(uiRu("01  Научные высадки и спектрометрия минералов",
+                              "01  Planetary Landing & Science Spectrometry"));
+          releaseBullet(uiRu("Высадка на поверхность небесных тел: Earth, Mars, Moon, Europa, Titan и экзопланеты.",
+                             "Surface landing on Earth, Mars, Moon, Europa, Titan and exoplanets."));
+          releaseBullet(uiRu("Рентгенофлуоресцентная спектрометрия, нейтронно-гамма анализ и механический пробоотбор грунта.",
+                             "X-ray fluorescence spectrometry, neutron-gamma analysis and mechanical core sampling."));
 
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                             "%s", uiRu("2. Бортовая база знаний Zettelkasten (Межзвёздный гиперграф)",
-                                        "2. Onboard Zettelkasten Knowledge Base (Interstellar Hypergraph)"));
-          ImGui::BulletText("%s", uiRu("Атомарные карточки знаний с двунаправленными ссылками и отслеживанием цитирований.",
-                                       "Atomic knowledge cards with bidirectional cross-linking and citation tracking."));
-          ImGui::BulletText("%s", uiRu("Миниигра ментального синаптического резонанса для синтеза новых научных концепций.",
-                                       "Synaptic resonance minigame to synthesize novel interdisciplinary astrophysics insights."));
+          releaseHeading(uiRu("02  Бортовая база знаний Zettelkasten",
+                              "02  Onboard Zettelkasten Knowledge Base"));
+          releaseBullet(uiRu("Атомарные карточки знаний с двунаправленными ссылками и отслеживанием цитирований.",
+                             "Atomic knowledge cards with bidirectional links and citation tracking."));
+          releaseBullet(uiRu("Ментальный синаптический резонанс для синтеза новых междисциплинарных научных концепций.",
+                             "Synaptic resonance minigame for synthesizing new interdisciplinary scientific concepts."));
 
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                             "%s", uiRu("3. Калибровка орбитального масштаба (Orbital Scale LOD)",
-                                        "3. Orbital Scale LOD & Station Proportions"));
-          ImGui::BulletText("%s", uiRu("Плавный дистанционный LOD масштаба станций: естественные реалистичные пропорции к Земле и Луне на орбите.",
-                                       "Smooth distance-based station LOD scaling: natural, realistic scale proportions relative to Earth and Moon."));
+          releaseHeading(uiRu("03  Калибровка орбитального масштаба",
+                              "03  Orbital Scale LOD & Station Proportions"));
+          releaseBullet(uiRu("Плавный дистанционный LOD станций с естественными пропорциями относительно Земли и Луны.",
+                             "Smooth distance-based station LOD with natural proportions relative to Earth and Moon."));
 
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                             "%s", uiRu("4. Приоритет сюжетной прогрессии и FUI-интерфейс",
-                                        "4. Narrative Progression Priority & Sci-Fi FUI"));
-          ImGui::BulletText("%s", uiRu("Инженерная карточка текущей директивы экспедиции в главном меню с кнопкой мгновенного варп-прыжка.",
-                                       "Expedition directive card in the main menu with one-click direct warp jump to mission objective."));
-          ImGui::BulletText("%s", uiRu("Высококонтрастные Sci-Fi FUI стили: технические угловые скобы, контрастные рамки и маркеры [*] у целей.",
-                                       "High-contrast Sci-Fi FUI design: technical corner brackets, crisp aerospace borders, and [*] objective markers."));
+          releaseHeading(uiRu("04  Сюжетная прогрессия и FUI-интерфейс",
+                              "04  Narrative Progression & Sci-Fi FUI"));
+          releaseBullet(uiRu("Карточка текущей директивы экспедиции в главном меню с быстрым варп-прыжком к цели.",
+                             "Expedition directive card in the main menu with a direct warp jump to the objective."));
+          releaseBullet(uiRu("Контрастные рамки, технические маркеры и спокойная типографика без визуального шума.",
+                             "Crisp borders, technical markers and calm typography without visual noise."));
 
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f),
-                             "%s", uiRu("5. Семь путей финала человечества (Adventure Finale)",
-                                        "5. Seven Endings for Humanity (Adventure Finale)"));
-          ImGui::BulletText("%s", uiRu("Колония на M13, Дальний горизонт, Возрождение Солнца, Временная петля Sgr A*, Орбитальный Ковчег, Гиперпрорыв Егорки-6 и Пятый Межвселенский Альянс Арсения.",
-                                       "New Home Colony, Far Horizon, Solar Rebirth, Sgr A* Time Loop, Ark Citadel, Egorka-6 Hyper-Breakthrough, and Arseny's Fifth Universe Alliance."));
+          releaseHeading(uiRu("05  Семь путей финала человечества",
+                              "05  Seven Endings for Humanity"));
+          releaseBullet(uiRu("Колония на M13, Дальний горизонт, Возрождение Солнца, Временная петля Sgr A*, Орбитальный Ковчег, Гиперпрорыв Егорки-6 и Пятый Межвселенский Альянс Арсения.",
+                             "New Home Colony, Far Horizon, Solar Rebirth, Sgr A* Time Loop, Ark Citadel, Egorka-6 Hyper-Breakthrough and Arseny's Fifth Universe Alliance."));
           ImGui::EndTabItem();
         }
 
         if (ImGui::BeginTabItem(uiRu("Хронология (v4.5 - v4.7)", "History (v4.5 - v4.7)"))) {
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "v4.7.0 — %s",
-                             uiRu("Экстремальные релятивистские явления", "Extreme Relativistic Phenomena"));
-          ImGui::BulletText("%s", uiRu("Приливное разрушение звезды черной дырой (AT2019qiz TDE) с дебрис-диском и аккреционной вспышкой.",
-                                       "Tidal Disruption Event (AT2019qiz TDE) with stellar debris stream and relativistic accretion flare."));
-          ImGui::BulletText("%s", uiRu("Звездные ясли «Столпы Творения» (M16) с ионизационными фронтами и глобулами EGGs.",
-                                       "Stellar nursery «Pillars of Creation» (M16) with photo-evaporation fronts and evaporating gaseous globules."));
-          ImGui::BulletText("%s", uiRu("Пульсарный ветер Крабовидной туманности с тороидальным магнитным полем и релятивистскими виспами.",
-                                       "Crab Nebula Pulsar Wind Nebula with toroidal magnetic field and synchrotron wisps."));
+          releaseHeading(uiRu("v4.7.0  Экстремальные релятивистские явления",
+                              "v4.7.0  Extreme Relativistic Phenomena"));
+          releaseBullet(uiRu("Приливное разрушение звезды AT2019qiz с дебрис-диском и релятивистской аккреционной вспышкой.",
+                             "Tidal disruption of AT2019qiz with a debris stream and relativistic accretion flare."));
+          releaseBullet(uiRu("Звёздные ясли «Столпы Творения» (M16) с ионизационными фронтами и глобулами EGGs.",
+                             "Pillars of Creation (M16) with photo-evaporation fronts and evaporating gaseous globules."));
+          releaseBullet(uiRu("Пульсарный ветер Крабовидной туманности с тороидальным магнитным полем и релятивистскими виспами.",
+                             "Crab Nebula pulsar wind with a toroidal magnetic field and relativistic synchrotron wisps."));
 
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "v4.6.0 — %s",
-                             uiRu("Астрофизика сверхновых и радиопереговоры", "Astrophysics & Bridge Chatter"));
-          ImGui::BulletText("%s", uiRu("Внегалактическая сверхновая SN 1987A в БМО с тройным люминесцентным кольцом и радиоактивным распадом.",
-                                       "Extragalactic Supernova SN 1987A with triple circumstellar ring system and radioactive decay."));
-          ImGui::BulletText("%s", uiRu("Килоновая GW170817: слияние двойной нейтронной звезды с радиоактивным синтезом тяжелых элементов r-процесса.",
-                                       "Kilonova GW170817: binary neutron star merger with r-process nucleosynthesis lanthanide glow."));
-          ImGui::BulletText("%s", uiRu("Сюжетные радиопереговоры экипажа на мостике при сближении с ключевыми космическими объектами.",
-                                       "Narrative bridge communications and radio chatter on approaching major celestial destinations."));
+          releaseHeading(uiRu("v4.6.0  Астрофизика сверхновых и радиопереговоры",
+                              "v4.6.0  Astrophysics & Bridge Chatter"));
+          releaseBullet(uiRu("Внегалактическая сверхновая SN 1987A с тройным световым кольцом и радиоактивным распадом.",
+                             "Extragalactic Supernova SN 1987A with a triple light ring and radioactive decay."));
+          releaseBullet(uiRu("Килоновая GW170817: слияние нейтронных звёзд и синтез тяжёлых элементов r-процесса.",
+                             "Kilonova GW170817: neutron-star merger and r-process heavy-element synthesis."));
+          releaseBullet(uiRu("Сюжетные радиопереговоры экипажа при сближении с ключевыми космическими объектами.",
+                             "Narrative crew radio chatter when approaching major celestial destinations."));
 
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.35f, 0.90f, 1.0f, 1.0f), "v4.5.0 — %s",
-                             uiRu("Романтическая линия и диалоги", "Story Romance & Dialogues"));
-          ImGui::BulletText("%s", uiRu("Романтические диалоги и воспоминания Егорки в сюжетном журнале и слайдах.",
-                                       "Romantic dialogues and Egorka's personal memories in the story journal and slides."));
+          releaseHeading(uiRu("v4.5.0  Романтическая линия и диалоги",
+                              "v4.5.0  Story Romance & Dialogues"));
+          releaseBullet(uiRu("Романтические диалоги и воспоминания Егорки в сюжетном журнале и слайдах.",
+                             "Romantic dialogues and Egorka's personal memories in the story journal and slides."));
           ImGui::EndTabItem();
         }
 
         if (ImGui::BeginTabItem(uiRu("План версий (Roadmap)", "Milestone Roadmap"))) {
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s",
-                             uiRu("Жизненный цикл релизов Astro Voyager:", "Astro Voyager Release Lifecycle:"));
-          ImGui::BulletText("v1.0 - v4.1: Pre-Alpha (%s)",
-                            uiRu("Физика, чёрные дыры, Солнечная система, сюжетная кампания",
-                                 "Physics, black holes, Solar system, story campaign prototype"));
-          ImGui::BulletText("v4.2 - v4.4: Alpha & Beta (%s)",
-                            uiRu("3D-кокпит, PBR планет, атмосфера, режим кинорежиссёра, грав-волновой интерферометр",
-                                 "3D Cockpit, planetary PBR, atmosphere, cinematography, GW interferometer"));
-          ImGui::BulletText("v4.5 - v4.7: Astrophysics Suite (%s)",
-                            uiRu("Романтика, сверхновые, килоновые, TDE, Столпы Творения, пульсарный ветер",
-                                 "Romance, Supernova SN1987A, Kilonova GW170817, TDE, Pillars of Creation, Crab PWN"));
-          ImGui::BulletText("v4.8.0: Science & Zettelkasten Release (%s)",
-                            uiRu("Научные высадки, XRF-спектрометрия, граф Zettelkasten, 7 финалов",
-                                 "Planetary landings, XRF spectrometry, Zettelkasten graph, 7 endings"));
-          ImGui::BulletText("v5.0.0: Release 1.0 (%s)",
-                            uiRu("Финальный коммерческий AAA-релиз", "Full commercial AAA release"));
+          releaseHeading(uiRu("Жизненный цикл Astro Voyager",
+                              "Astro Voyager Release Lifecycle"));
+          releaseBullet(uiRu("v1.0 - v4.1  Pre-Alpha: физика, чёрные дыры, Солнечная система и прототип сюжетной кампании.",
+                             "v1.0 - v4.1  Pre-Alpha: physics, black holes, Solar system and story campaign prototype."));
+          releaseBullet(uiRu("v4.2 - v4.4  Alpha & Beta: 3D-кокпит, PBR планет, атмосфера, кинорежим и гравитационно-волновой интерферометр.",
+                             "v4.2 - v4.4  Alpha & Beta: 3D cockpit, planetary PBR, atmosphere, cinematography and GW interferometer."));
+          releaseBullet(uiRu("v4.5 - v4.7  Astrophysics Suite: романтика, сверхновые, килоновые, TDE, Столпы Творения и пульсарный ветер.",
+                             "v4.5 - v4.7  Astrophysics Suite: romance, supernovae, kilonovae, TDE, Pillars of Creation and Crab pulsar wind."));
+          releaseBullet(uiRu("v4.8.0  Science & Zettelkasten: научные высадки, XRF-спектрометрия, граф знаний и семь финалов.",
+                             "v4.8.0  Science & Zettelkasten: landings, XRF spectrometry, knowledge graph and seven endings."));
+          releaseBullet(uiRu("v5.0.0  Release 1.0: финальный коммерческий AAA-релиз.",
+                             "v5.0.0  Release 1.0: full commercial AAA release."));
           ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
       }
 
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Spacing();
-      if (ImGui::Button(uiRu("<< НАЗАД В ТАКТИЧЕСКИЙ РЕЖИМ", "<< BACK TO TACTICAL CONSOLE"), ImVec2(280.0f, 26.0f))) {
-        m_pageTransitionTimer = 0.0f;
-        m_prevMenuPage = m_menuPage;
-        m_menuPage = 0;
-        m_audio.playBlip();
+      ImGui::Dummy(ImVec2(0.0f, 6.0f));
+      if (drawBackRow(uiRu("Назад в тактический режим", "Back to tactical console"))) {
+        menuGoBack();
       }
     }
     ImGui::EndChild();
   } else if (m_menuPage == 5) {
     if (ImGui::BeginChild("##pageArchive", ImVec2(-1.0f, colAreaH), true)) {
-      ImGui::TextColored(menuui::kAccent, "[ 06 // %s ]",
-                         uiRu("АРХИВ И МАТЕРИАЛЫ", "ARCHIVE & MATERIALS"));
-      ImGui::SameLine();
-      ImGui::TextColored(menuui::kTextDim, "%s",
-                         uiRu("// Реплики экипажа, бортовая справка и примечания к выпуску",
-                              "// Crew voice lines, avionics help and release notes"));
-      ImGui::Separator();
-      ImGui::Spacing();
+      pageHeading(m_headingFont, "06", uiRu("АРХИВ И КОДЕКС", "ARCHIVE & CODEX"),
+                  uiRu("Журнал, открытия, реплики экипажа, справка и релиз",
+                       "Journal, discoveries, crew voices, help and release notes"));
+
+      auto archiveOverlay = [&](const char* label, const char* hint, bool& openFlag) {
+        const float rowW = ImGui::GetContentRegionAvail().x;
+        if (drawMenuAction(label, ImVec2(rowW, 40.0f), false, hint)) {
+          m_prevMenuPage = 5;
+          openFlag = true;
+          m_audio.playBlip();
+        }
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+      };
 
       auto archiveEntry = [&](const char* label, const char* hint, int pageIdx) {
-        if (ImGui::Button(label, ImVec2(-1.0f, 34.0f))) {
+        const float rowW = ImGui::GetContentRegionAvail().x;
+        if (drawMenuAction(label, ImVec2(rowW, 40.0f), false, hint)) {
           m_prevMenuPage = m_menuPage;
           m_menuPage = pageIdx;
           m_pageTransitionTimer = 0.0f;
           m_audio.playBlip();
         }
-        if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("%s", hint);
-        }
-        ImGui::Spacing();
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
       };
 
+      archiveOverlay(uiRu("БОРТОВОЙ ЖУРНАЛ", "PILOT LOGBOOK"),
+                     uiRu("Хроника экспедиции и открытые сюжетные записи", "Expedition chronicle and unlocked story entries"), m_storyOpen);
+      archiveOverlay(uiRu("КОДЕКС ОТКРЫТИЙ", "DISCOVERY CODEX"),
+                     uiRu("Исследованные объекты, научные выводы и очки исследований", "Catalogued objects, science findings and research points"), m_codexOpen);
       archiveEntry(uiRu("КАТАЛОГ ГОЛОСОВ ЭКИПАЖА", "CREW VOICE ARCHIVE"),
                    uiRu("Реплики Мии, Елены и Егорки с озвучкой", "Mia, Elena and Egorka voice lines"), 4);
       archiveEntry(uiRu("БОРТОВАЯ СПРАВКА И УПРАВЛЕНИЕ", "HELP & FLIGHT CONTROLS"),
@@ -12450,14 +13296,9 @@ void AppGL::drawMenu() {
       archiveEntry(uiRu("ПРИМЕЧАНИЯ К ВЫПУСКУ", "RELEASE NOTES"),
                    uiRu("История изменений и научная база сборки", "Changelog and science baseline"), 3);
 
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Spacing();
-      if (ImGui::Button(uiRu("<< НАЗАД В ГЛАВНОЕ МЕНЮ", "<< BACK TO MAIN MENU"), ImVec2(280.0f, 26.0f))) {
-        m_pageTransitionTimer = 0.0f;
-        m_prevMenuPage = m_menuPage;
-        m_menuPage = 0;
-        m_audio.playBlip();
+      ImGui::Dummy(ImVec2(0.0f, 6.0f));
+      if (drawBackRow(uiRu("Назад в главное меню", "Back to main menu"))) {
+        menuGoBack();
       }
     }
     ImGui::EndChild();
@@ -12473,20 +13314,25 @@ void AppGL::drawMenu() {
       ImGui::Separator();
       ImGui::Spacing();
       if (ImGui::Button("Back", ImVec2(200.0f, 26.0f))) {
-        m_pageTransitionTimer = 0.0f;
-        m_prevMenuPage = m_menuPage;
-        m_menuPage = 0;
+        menuGoBack();
       }
     }
     ImGui::EndChild();
   }
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor(2);
 
   // ==========================================
   // НИЖНЯЯ ПАНЕЛЬ: АППАРАТНЫЕ ТУМБЛЕРЫ И СВЕТОДИОДЫ (АКТИВНА НА ВСЕХ СТРАНИЦАХ)
   // ==========================================
-  ImGui::Dummy(ImVec2(0.0f, 3.0f));
-  ImGui::Separator();
-  ImGui::Dummy(ImVec2(0.0f, 2.0f));
+  ImGui::Dummy(ImVec2(0.0f, 4.0f));
+  {
+    ImDrawList* sdl = ImGui::GetWindowDrawList();
+    const ImVec2 sp = ImGui::GetCursorScreenPos();
+    sdl->AddLine(ImVec2(sp.x, sp.y), ImVec2(sp.x + ImGui::GetContentRegionAvail().x, sp.y),
+                 menuui::kHairline, 1.0f);
+  }
+  ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
   {
     const float barW = ImGui::GetContentRegionAvail().x;
@@ -12539,24 +13385,19 @@ void AppGL::drawMenu() {
     ImVec2 wpos = ImGui::GetWindowPos();
     ImVec2 wsz = ImGui::GetWindowSize();
 
-    // 1. Восемь промышленных болтов по периметру белой рамки
-    const ImVec2 boltOffsets[8] = {
-        ImVec2(10.0f, 10.0f),
-        ImVec2(wsz.x * 0.5f, 10.0f),
-        ImVec2(wsz.x - 10.0f, 10.0f),
-        ImVec2(10.0f, wsz.y * 0.5f),
-        ImVec2(wsz.x - 10.0f, wsz.y * 0.5f),
-        ImVec2(10.0f, wsz.y - 10.0f),
-        ImVec2(wsz.x * 0.5f, wsz.y - 10.0f),
-        ImVec2(wsz.x - 10.0f, wsz.y - 10.0f)
-    };
-    for (const auto& off : boltOffsets) {
-      ImVec2 bp(wpos.x + off.x, wpos.y + off.y);
-      // Внешняя шайба
-      dl->AddCircleFilled(bp, 4.5f, IM_COL32(185, 195, 200, 255));
-      dl->AddCircle(bp, 4.5f, IM_COL32(120, 130, 135, 255), 12, 1.0f);
-      // Углубление под шестигранник
-      dl->AddCircleFilled(bp, 2.5f, IM_COL32(18, 22, 24, 255));
+    // 1. Угловые скобы корпуса вместо белых болтов.
+    const float arm = 18.0f;
+    const ImU32 br = menuui::alphaOf(menuui::kAccentU32, 70);
+    const ImVec2 corners[4] = {
+        ImVec2(wpos.x + 8.0f, wpos.y + 8.0f),
+        ImVec2(wpos.x + wsz.x - 8.0f, wpos.y + 8.0f),
+        ImVec2(wpos.x + 8.0f, wpos.y + wsz.y - 8.0f),
+        ImVec2(wpos.x + wsz.x - 8.0f, wpos.y + wsz.y - 8.0f)};
+    for (int i = 0; i < 4; ++i) {
+      const float sx = (i % 2 == 0) ? 1.0f : -1.0f;
+      const float sy = (i < 2) ? 1.0f : -1.0f;
+      dl->AddLine(corners[i], ImVec2(corners[i].x + arm * sx, corners[i].y), br, 1.2f);
+      dl->AddLine(corners[i], ImVec2(corners[i].x, corners[i].y + arm * sy), br, 1.2f);
     }
 
     // 2. Оптические эффекты CRT (если включены)
@@ -12582,11 +13423,11 @@ void AppGL::drawMenu() {
 
       // Диагональный стеклянный блик (Glass Reflection Sheen)
       dl->AddTriangleFilled(wpos, ImVec2(wpos.x + wsz.x * 0.45f, wpos.y), ImVec2(wpos.x, wpos.y + wsz.y * 0.65f),
-                            IM_COL32(255, 255, 255, 8));
+                            IM_COL32(255, 255, 255, 4));
 
       // Горизонтальные строки развертки CRT (Scanlines) с шагом 4px
       for (float y = wpos.y; y < wpos.y + wsz.y; y += 4.0f) {
-        dl->AddLine(ImVec2(wpos.x, y), ImVec2(wpos.x + wsz.x, y), IM_COL32(0, 0, 0, 16), 1.0f);
+        dl->AddLine(ImVec2(wpos.x, y), ImVec2(wpos.x + wsz.x, y), IM_COL32(0, 0, 0, 8), 1.0f);
       }
     }
 
@@ -12605,6 +13446,8 @@ void AppGL::drawMenu() {
   ImGui::PopStyleColor(14);
   if (fontPushed) ImGui::PopFont();
 
+  if (m_storyOpen) drawStoryPanel();
+  if (m_codexOpen) drawCodex();
   drawPatchNotesModal();
 }
 
@@ -12801,15 +13644,9 @@ void AppGL::drawVoiceCatalogPage(float areaH) {
   const size_t kNumVoiceEntries = sizeof(kVoiceEntries) / sizeof(kVoiceEntries[0]);
 
   if (ImGui::BeginChild("##pageVoiceCatalog", ImVec2(-1.0f, areaH), true)) {
-    // Верхняя заголовочная планка
-    ImGui::TextColored(menuui::kAccent, "[ 04 // %s ]",
-                       uiRu("КАТАЛОГ ГОЛОСОВЫХ РЕПЛИК ЭКИПАЖА", "CREW & AVIONICS VOICE CATALOG"));
-    ImGui::SameLine();
-    ImGui::TextColored(menuui::kTextDim, "%s",
-                       uiRu("// Миа Сато [Пилот], Елена Ростова [Астрофизик], Егорка-6 [Бортинженер], ИИ Аврора",
-                            "// Mia Sato [Pilot], Elena Rostova [Astrophysicist], Egorka-6 [Engineer], AI Aurora"));
-    ImGui::Separator();
-    ImGui::Spacing();
+    pageHeading(m_headingFont, "04", uiRu("КАТАЛОГ ГОЛОСОВ", "VOICE CATALOG"),
+                uiRu("Миа Сато, Елена Ростова, Егорка-6 и ИИ Аврора",
+                     "Mia Sato, Elena Rostova, Egorka-6 and AI Aurora"));
 
     // Панель быстрого управления звуком и статусом
     {
@@ -13015,14 +13852,9 @@ void AppGL::drawVoiceCatalogPage(float areaH) {
     ImGui::EndChild();
 
     // Нижняя кнопка возврата
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-    if (ImGui::Button(uiRu("<< НАЗАД В ТАКТИЧЕСКИЙ РЕЖИМ", "<< BACK TO TACTICAL CONSOLE"), ImVec2(280.0f, 26.0f))) {
-      m_pageTransitionTimer = 0.0f;
-      m_prevMenuPage = m_menuPage;
-      m_menuPage = 0;
-      m_audio.playBlip();
+    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+    if (drawBackRow(uiRu("Назад в тактический режим", "Back to tactical console"))) {
+      menuGoBack();
     }
   }
   ImGui::EndChild();
@@ -13553,6 +14385,7 @@ void AppGL::renderWorkshop3D(int width, int height, double time) {
     m_workshopShader->setUniform3f("u_InvScale", 1.0f, 1.0f, 1.0f);
     m_workshopShader->setUniform1i("u_FlatNormal", 0);
     m_workshopShader->setUniform1f("u_RingSpin", 0.0f);
+    m_workshopShader->setUniform1f("u_EntryPlasma", 0.0f);
     glm::vec3 hullTint(1.0f);
     glm::vec3 accentTint(1.0f);
     if (m_workshopLivery == 1) {
@@ -13662,16 +14495,14 @@ void AppGL::drawWorkshopPage(float colAreaH) {
 
   ImGuiIO& io = ImGui::GetIO();
   if (!io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-    m_menuPage = 0;
-    m_pageTransitionTimer = 0.0f;
-    m_audio.playBlip();
+    menuGoBack();
     return;
   }
 
   // === 1. Левая колонка: Каталог моделей ===
   ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.015f, 0.025f, 0.038f, 0.92f));
   if (ImGui::BeginChild("##WorkshopCatalog", ImVec2(listW, colAreaH), true)) {
-    ImGui::TextColored(menuui::kAccent, "[ 06 // %s ]", uiRu("КАТАЛОГ 3D МОДЕЛЕЙ", "3D ASSET CATALOG"));
+    ImGui::TextColored(menuui::kAccent, "[ 06 // %s ]", uiRu("АНГАР МОДЕЛЕЙ", "MODEL HANGAR"));
     ImGui::TextColored(menuui::kTextDim, "%s", uiRu("// Флот, колонии, станции и астероиды", "// Fleet, colonies, stations"));
     ImGui::Separator();
     ImGui::Spacing();
@@ -13875,7 +14706,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
 
     // Нижняя панель быстрых действий визора
     ImGui::SetCursorPos(ImVec2(10.0f, colAreaH - 34.0f));
-    if (ImGui::Button(uiRu("⟲ Сброс", "⟲ Reset"), ImVec2(75.0f, 24.0f))) {
+    if (ImGui::Button(uiRu("Сброс", "Reset"), ImVec2(75.0f, 24.0f))) {
       m_workshopYaw = 35.0f;
       m_workshopPitch = 18.0f;
       m_workshopPan = glm::vec2(0.0f, 0.0f);
@@ -13909,13 +14740,13 @@ void AppGL::drawWorkshopPage(float colAreaH) {
   if (ImGui::BeginChild("##WorkshopInspector", ImVec2(inspW, colAreaH), true)) {
     const auto& entry = kWorkshopCatalog[m_workshopModelIdx];
 
-    ImGui::TextColored(menuui::kAccent, "[ %s ]", uiRu("СПЕЦИФИКАЦИЯ И ТЕЛЕМЕТРИЯ", "SPECIFICATIONS"));
+    menuSection(m_headingFont, uiRu("СПЕЦИФИКАЦИЯ", "SPECIFICATION"));
     ImGui::TextColored(menuui::kTextDim, "ID: %s // CAT #%d", entry.id, entry.category);
     ImGui::Separator();
     ImGui::Spacing();
 
     // 1. Геометрия
-    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ГЕОМЕТРИЯ МЕША", "MESH GEOMETRY"));
+    menuSection(m_headingFont, uiRu("ГЕОМЕТРИЯ МЕША", "MESH GEOMETRY"));
     ImGui::Text("%s: %u ▲", uiRu("Полигоны", "Triangles"), m_workshopModel.triangleCount());
     ImGui::Text("%s: %u ●", uiRu("Вершины", "Vertices"), m_workshopModel.vertexCount());
     glm::vec3 dims = m_workshopModel.dimensions();
@@ -13926,7 +14757,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Spacing();
 
     // 2. Инженерная телеметрия подсистемы
-    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ТЕЛЕМЕТРИЯ ПОДСИСТЕМЫ", "SUBSYSTEM TELEMETRY"));
+    menuSection(m_headingFont, uiRu("ТЕЛЕМЕТРИЯ ПОДСИСТЕМЫ", "SUBSYSTEM TELEMETRY"));
     if (m_workshopSubsystem == WorkshopSubsystem::Overall) {
       ImGui::TextColored(ImVec4(0.2f, 0.85f, 0.45f, 1.0f), "● %s", uiRu("Общий контур судна активен", "Vessel main contour active"));
       ImGui::Text("%s: %s", uiRu("Назначение", "Class"), uiRu("Экспедиционный FTL-комплекс", "Expedition FTL Vessel"));
@@ -13968,7 +14799,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Spacing();
 
     // 3. Текстуры PBR
-    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("PBR КАРТЫ (24-BIT BMP)", "PBR TEXTURE MAPS"));
+    menuSection(m_headingFont, uiRu("PBR КАРТЫ (24-BIT BMP)", "PBR TEXTURE MAPS"));
     auto drawTexPill = [&](const char* name, unsigned int tex, const char* info) {
       bool ok = (tex != 0);
       ImVec4 col = ok ? ImVec4(0.2f, 0.85f, 0.45f, 1.0f) : ImVec4(0.6f, 0.65f, 0.7f, 0.6f);
@@ -13987,7 +14818,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Spacing();
 
     // 4. Режимы шейдера
-    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("РЕЖИМ ШЕЙДЕРА", "SHADING MODE"));
+    menuSection(m_headingFont, uiRu("РЕЖИМ ШЕЙДЕРА", "SHADING MODE"));
     ImGui::RadioButton(uiRu("PBR Реализм", "PBR Realistic"), &m_workshopRenderMode, 0);
     ImGui::SameLine();
     ImGui::RadioButton(uiRu("Студийная глина", "Studio Clay"), &m_workshopRenderMode, 1);
@@ -14001,7 +14832,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Spacing();
 
     // 5. Ливрея флота и свечение
-    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ЛИВРЕЯ ФЛОТА И СВЕЧЕНИЕ", "FLEET LIVERY & GLOW"));
+    menuSection(m_headingFont, uiRu("ЛИВРЕЯ ФЛОТА И СВЕЧЕНИЕ", "FLEET LIVERY & GLOW"));
     const char* liveryNames[5] = {
       uiRu("Заводская (Factory Spec)", "Factory Spec"),
       uiRu("NASA Classic (Белый / Графит)", "NASA Classic White/Black"),
@@ -14018,7 +14849,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Spacing();
 
     // 6. Освещение и вращение
-    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("СТУДИЙНЫЙ СВЕТ И ПЬЕДЕСТАЛ", "STUDIO LIGHT & TURNTABLE"));
+    menuSection(m_headingFont, uiRu("СТУДИЙНЫЙ СВЕТ И ПЬЕДЕСТАЛ", "STUDIO LIGHT & TURNTABLE"));
     ImGui::SliderFloat(uiRu("Азимут света", "Light Azimuth"), &m_workshopLightAngle, 0.0f, 360.0f, "%.0f°");
     ImGui::SliderFloat(uiRu("Яркость света", "Light Intensity"), &m_workshopLightIntensity, 0.5f, 3.0f, "%.1fx");
     ImGui::SliderFloat(uiRu("Скорость вращ.", "Rotation Speed"), &m_workshopRotateSpeed, 0.0f, 60.0f, "%.0f°/s");
@@ -14028,7 +14859,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Spacing();
 
     // 7. Фон и разнесённый вид
-    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ФОН И РАЗНЕСЁННЫЙ ВИД", "BACKDROP & EXPLODED VIEW"));
+    menuSection(m_headingFont, uiRu("ФОН И РАЗНЕСЁННЫЙ ВИД", "BACKDROP & EXPLODED VIEW"));
     ImGui::Text("%s:", uiRu("Окружение", "Backdrop"));
     if (ImGui::RadioButton(uiRu("Тёмная студия", "Dark Studio"), m_workshopBackdropMode == 0)) {
       m_workshopBackdropMode = 0;
@@ -14058,7 +14889,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Spacing();
 
     // 8. Описание и лор
-    ImGui::TextColored(menuui::kAccent, "// %s", uiRu("ОПИСАНИЕ И НАЗНАЧЕНИЕ", "MISSION ROLE & LORE"));
+    menuSection(m_headingFont, uiRu("ОПИСАНИЕ И НАЗНАЧЕНИЕ", "MISSION ROLE & LORE"));
     ImGui::TextWrapped("%s", uiRu(entry.descRu, entry.descEn));
 
     ImGui::Spacing();
@@ -14066,10 +14897,7 @@ void AppGL::drawWorkshopPage(float colAreaH) {
     ImGui::Spacing();
 
     if (ImGui::Button(uiRu("<< В ГЛАВНОЕ МЕНЮ", "<< BACK TO MAIN MENU"), ImVec2(-1.0f, 26.0f))) {
-      m_pageTransitionTimer = 0.0f;
-      m_prevMenuPage = m_menuPage;
-      m_menuPage = 0;
-      m_audio.playBlip();
+      menuGoBack();
     }
   }
   ImGui::EndChild();
@@ -14232,6 +15060,88 @@ void AppGL::drawWorldLabels() {
 
   // During hyperspace warp transition, hide 3D world labels so they don't clip through tunnel walls:
   if (warpdrive::warpTravelActive()) return;
+
+  // === v5.2.0: Deep Space Emergent Events 3D tactical markers ===
+  if (!m_inMenu) {
+    const float aspectE = displaySize.x / displaySize.y;
+    const float fovE = m_sceneManager->getSettings().fovDegrees;
+    const glm::mat4 projE = glm::perspective(glm::radians(fovE), aspectE, 0.1f, 1e7f);
+    const Vec3 cpE = cam.position;
+    const Vec3 cfE = cam.forward();
+    const Vec3 cuE = cam.up();
+    const glm::vec3 eyeE(static_cast<float>(cpE.x), static_cast<float>(cpE.y), static_cast<float>(cpE.z));
+    const glm::vec3 fwdE(static_cast<float>(cfE.x), static_cast<float>(cfE.y), static_cast<float>(cfE.z));
+    const glm::vec3 upE(static_cast<float>(cuE.x), static_cast<float>(cuE.y), static_cast<float>(cuE.z));
+    const glm::vec3 rightE = glm::normalize(glm::cross(fwdE, upE));
+    const glm::vec3 camUpE = glm::cross(rightE, fwdE);
+    const glm::mat4 mvpE = projE * glm::lookAt(eyeE, eyeE + fwdE, upE);
+    for (const auto& ev : m_spaceEvents.events()) {
+      if (ev.status != SpaceEventStatus::Active || ev.stationId != curSt->id) continue;
+      const glm::vec3 evPosE(static_cast<float>(ev.pos.x),
+                             static_cast<float>(ev.pos.y),
+                             static_cast<float>(ev.pos.z));
+      const glm::vec4 clipE = mvpE * glm::vec4(evPosE, 1.0f);
+      const double dE = std::sqrt(
+          (cpE.x - ev.pos.x) * (cpE.x - ev.pos.x) +
+          (cpE.y - ev.pos.y) * (cpE.y - ev.pos.y) +
+          (cpE.z - ev.pos.z) * (cpE.z - ev.pos.z));
+      const ImU32 mCol = (ev.type == SpaceEventType::RogueAsteroid)
+                             ? IM_COL32(255, 115, 65, 240)
+                             : ((ev.type == SpaceEventType::SosBeacon)
+                                    ? IM_COL32(255, 85, 85, 240)
+                                    : IM_COL32(75, 240, 205, 240));
+      char evLbl[96];
+      std::snprintf(evLbl, sizeof(evLbl), "%s (%.1f u)",
+                    uiRu(ev.titleRu.c_str(), ev.titleEn.c_str()), dE);
+
+      const glm::vec3 ndcE = (clipE.w > 0.001f) ? (glm::vec3(clipE) / clipE.w) : glm::vec3(2.0f);
+      const bool onScreen = (clipE.w > 0.001f) &&
+                            ndcE.x >= -0.95f && ndcE.x <= 0.95f &&
+                            ndcE.y >= -0.95f && ndcE.y <= 0.95f;
+      if (onScreen) {
+        const float sxE = (ndcE.x * 0.5f + 0.5f) * displaySize.x;
+        const float syE = (1.0f - (ndcE.y * 0.5f + 0.5f)) * displaySize.y;
+        drawList->AddQuad(ImVec2(sxE, syE - 8.0f), ImVec2(sxE + 8.0f, syE),
+                          ImVec2(sxE, syE + 8.0f), ImVec2(sxE - 8.0f, syE), mCol, 2.0f);
+        drawList->AddText(font, 13.5f, ImVec2(sxE + 11.0f, syE - 7.0f), mCol, evLbl);
+      } else {
+        const glm::vec3 deltaE = evPosE - eyeE;
+        float dx = glm::dot(deltaE, rightE);
+        float dy = -glm::dot(deltaE, camUpE);
+        const float len2 = dx * dx + dy * dy;
+        if (len2 < 1e-8f) {
+          dx = 0.0f;
+          dy = -1.0f;
+        } else {
+          const float invLen = 1.0f / std::sqrt(len2);
+          dx *= invLen;
+          dy *= invLen;
+        }
+        const float cx = displaySize.x * 0.5f;
+        const float cy = displaySize.y * 0.5f;
+        const float pad = 34.0f;
+        const float maxX = std::max(10.0f, cx - pad);
+        const float maxY = std::max(10.0f, cy - pad);
+        const float tX = (std::abs(dx) > 1e-4f) ? (maxX / std::abs(dx)) : 1e6f;
+        const float tY = (std::abs(dy) > 1e-4f) ? (maxY / std::abs(dy)) : 1e6f;
+        const float tEdge = std::min(tX, tY);
+        const float ex = cx + dx * tEdge;
+        const float ey = cy + dy * tEdge;
+
+        const ImVec2 tip(ex + dx * 8.0f, ey + dy * 8.0f);
+        const ImVec2 baseL(ex - dx * 5.0f - dy * 6.0f, ey - dy * 5.0f + dx * 6.0f);
+        const ImVec2 baseR(ex - dx * 5.0f + dy * 6.0f, ey - dy * 5.0f - dx * 6.0f);
+        drawList->AddTriangleFilled(tip, baseL, baseR, mCol);
+
+        const ImVec2 ts = font->CalcTextSizeA(12.5f, 10000.0f, 0.0f, evLbl);
+        const float tx = std::clamp(ex - dx * (ts.x * 0.5f + 14.0f) - ts.x * 0.5f,
+                                    8.0f, std::max(8.0f, displaySize.x - ts.x - 8.0f));
+        const float ty = std::clamp(ey - dy * 18.0f - ts.y * 0.5f,
+                                    8.0f, std::max(8.0f, displaySize.y - ts.y - 8.0f));
+        drawList->AddText(font, 12.5f, ImVec2(tx, ty), mCol, evLbl);
+      }
+    }
+  }
 
   // === Physics === begin: маркер центра ЧД/квазара рисуем ВСЕГДА
   // (без cull по дистанции/ndc — тело не должно "исчезать" вдали;
@@ -15647,6 +16557,148 @@ int AppGL::captureWorkshopCheck(const std::string& outDir) {
   return 0;
 }
 
+int AppGL::captureIntroCheck(const std::string& outDir) {
+  std::filesystem::create_directories(outDir);
+  AppGL app(1280, 720, true);
+  ImGui::GetIO().IniFilename = nullptr;
+  app.m_menuBooting = false;
+  const float phaseTimes[] = {1.0f, 5.0f, 9.0f, 12.5f, 16.0f, 19.5f};
+  bool ok = true;
+  for (int phase = 0; phase < 6; ++phase) {
+    const float targetTime = phaseTimes[phase];
+    app.m_introDirector.start();
+    const int steps = static_cast<int>(targetTime * 60.0f);
+    for (int i = 0; i < steps; ++i) app.m_introDirector.update(1.0f / 60.0f);
+    app.renderIntroFrame(1280, 720, targetTime);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+    app.m_introDirector.drawHUD(1280.0f, 720.0f, app.m_mainMenuTitleFont, app.m_mainMenuFont);
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    std::vector<unsigned char> pixels(1280u * 720u * 3u);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, 1280, 720, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    size_t nonBlack = 0;
+    for (size_t i = 0; i < pixels.size(); i += 3) {
+      if (pixels[i] > 8 || pixels[i + 1] > 8 || pixels[i + 2] > 8) ++nonBlack;
+    }
+    char filename[64];
+    std::snprintf(filename, sizeof(filename), "intro_%02d.png", phase + 1);
+    ok = app.saveScreenshot(outDir + "/" + filename) && ok;
+    const bool phaseOk = nonBlack > 1000;
+    std::cout << "Intro phase " << phase + 1 << " t=" << targetTime
+              << "s non-black=" << nonBlack << (phaseOk ? " PASS" : " FAIL") << "\n";
+    ok = phaseOk && ok;
+  }
+  return ok ? 0 : 1;
+}
+
+// Кадры выключения игры: меню, просадка питания, схлопывание в щель, луч,
+// точка, чёрный экран. Яркость обязана убывать кадр за кадром, а последний кадр
+// — быть почти чёрным: иначе окно закроется на засвеченном экране.
+int AppGL::captureExitCheck(const std::string& outDir) {
+  s_harnessPinFps = true;
+  std::error_code ec;
+  std::filesystem::create_directories(outDir, ec);
+  std::unique_ptr<AppGL> appPtr;
+  try {
+    appPtr = std::make_unique<AppGL>(1456, 816, false);
+  } catch (...) {
+    std::cerr << "captureExitCheck: window init failed\n";
+    return 1;
+  }
+  AppGL& app = *appPtr;
+  ImGui::GetIO().IniFilename = nullptr;
+  app.m_menuBooting = false;
+  app.m_menuProceduralDisk = false;
+  app.m_inMenu = true;
+  app.m_menuPage = 0;
+
+  struct Shot {
+    float t;
+    const char* file;
+  };
+  const Shot shots[] = {
+      {0.00f, "exit_00_menu.png"},       {0.18f, "exit_01_powerdown.png"},
+      {0.50f, "exit_02_collapse.png"},   {0.70f, "exit_03_slit.png"},
+      {0.86f, "exit_04_beam.png"},       {1.10f, "exit_05_dot.png"},
+      {1.26f, "exit_06_black.png"}};
+  const int shotCount = static_cast<int>(sizeof(shots) / sizeof(shots[0]));
+
+  int w = 0, h = 0;
+  app.m_window->getFramebufferSize(w, h);
+  const double totalPixels = static_cast<double>(w) * h;
+  std::vector<double> brightRatio;
+  bool ok = true;
+  for (int s = 0; s < shotCount; ++s) {
+    app.m_exitSequence = shots[s].t > 0.0f;
+    for (int frame = 0; frame < 3; ++frame) {
+      // drawMenu сам прирабатывает таймер, поэтому выставляем его перед каждым
+      // кадром: иначе за три кадра он перешагивает финал и меню рисуется заново.
+      app.m_exitTimer = shots[s].t;
+      app.m_window->pollEvents();
+      app.renderMenuBackdrop(w, h, 1.0);
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+      app.drawMenu();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      if (s + 1 < shotCount) {
+        app.m_window->swapBuffers();
+      }
+    }
+    std::vector<unsigned char> pixels(static_cast<size_t>(w) * h * 3);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    size_t bright = 0;
+    for (size_t i = 0; i < pixels.size(); i += 3) {
+      if (pixels[i] > 24 || pixels[i + 1] > 24 || pixels[i + 2] > 24) ++bright;
+    }
+    brightRatio.push_back(static_cast<double>(bright) / totalPixels);
+    ok = app.saveScreenshot(outDir + "/" + shots[s].file) && ok;
+  }
+  app.m_exitSequence = false;
+  app.m_exitTimer = 0.0f;
+
+  // Отдельный кадр: курсор над контролом питания — проверяем danger-состояние.
+  ImGui::GetIO().MousePos = ImVec2(120.0f, static_cast<float>(h) - 89.0f);
+  for (int frame = 0; frame < 3; ++frame) {
+    app.m_window->pollEvents();
+    app.renderMenuBackdrop(w, h, 1.0);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    app.drawMenu();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+  }
+  ok = app.saveScreenshot(outDir + "/exit_07_exit_hover.png") && ok;
+  ImGui::GetIO().MousePos = ImVec2(-10000.0f, -10000.0f);
+
+  std::cout << "Exit sequence bright ratio:";
+  for (size_t i = 0; i < brightRatio.size(); ++i) {
+    std::cout << " " << shots[i].file << "=" << brightRatio[i];
+  }
+  std::cout << "\n";
+  // Стройная монотонность тут неожиданна: после схлопывания луч светит плотнее
+  // щели. Проверяем главное — кадр был ярким, после схлопывания экран почти
+  // чёрный и к финалу гаснет ещё сильнее.
+  bool afterCollapseDark = brightRatio.size() == static_cast<size_t>(shotCount);
+  for (int i = 3; i < shotCount && afterCollapseDark; ++i) {
+    if (brightRatio[i] >= 0.05) afterCollapseDark = false;
+  }
+  const bool collapsed = brightRatio[6] < brightRatio[3];
+  const bool dark = brightRatio.back() < 0.002;
+  const bool startedBright = brightRatio[0] > 0.30;
+  std::cout << "Exit sequence: "
+            << ((afterCollapseDark && collapsed && dark && startedBright && ok) ? "PASS" : "FAIL")
+            << ", final-bright=" << brightRatio.back() << ", frames=" << shotCount << "\n";
+  return (afterCollapseDark && collapsed && dark && startedBright && ok) ? 0 : 1;
+}
+
 int AppGL::captureMenuCheck(const std::string& outDir) {
   std::filesystem::create_directories(outDir);
   AppGL app(1280, 720, true);
@@ -15724,13 +16776,40 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
   double renderSeconds = 0.0;
   double maxRenderSeconds = 0.0;
   int rendered = 0;
+  static std::vector<unsigned char> s_menuNoHover(1280 * 720 * 3, 0);
+  static std::vector<unsigned char> s_menuHover(1280 * 720 * 3, 0);
+  size_t menuHoverDiff = 0;
+  bool menuHoverCaptured = false;
   for (int frame = 0; frame < 1020 && !app.m_window->shouldClose(); ++frame) {
     const double time = static_cast<double>(frame) / 60.0;
     if (frame == 300 || frame == 330) app.m_audio.toggleMute();
     if (frame == 340) app.m_audioVolume = 0;
     if (frame == 360) app.m_audioVolume = 70;
-    if (frame == 781) app.m_menuPage = 1;
-    if (frame == 810) {
+    if (frame == 760) app.m_menuPage = 5;
+    if (frame == 772) {
+      app.m_prevMenuPage = 5;
+      app.m_menuPage = 4;
+    }
+    if (frame == 779) {
+      app.menuGoBack();
+      ok = ok && app.m_menuPage == 5 && app.m_prevMenuPage == 0;
+    }
+    if (frame == 781) {
+      app.m_menuPage = 5;
+      app.m_storyOpen = true;
+    }
+    if (frame == 787) {
+      ok = ok && app.closeTopModal() && !app.m_storyOpen && app.m_menuPage == 5;
+    }
+    if (frame == 789) app.m_codexOpen = true;
+    if (frame == 795) {
+      ok = ok && app.closeTopModal() && !app.m_codexOpen && app.m_menuPage == 5;
+    }
+    if (frame == 798) app.m_menuPage = 1;
+    if (frame == 805) app.m_menuPage = 6;
+    if (frame == 814) app.m_menuPage = 2;
+    if (frame == 822) app.m_menuPage = 3;
+    if (frame == 830) {
       app.m_menuPage = 0;
       app.requestCloseMenu();
     }
@@ -15763,34 +16842,29 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
       maxRenderSeconds = std::max(maxRenderSeconds, elapsed);
       ++rendered;
     }
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
     if (frame == 48) {
       ImGui::GetIO().MousePos = ImVec2(-100.0f, -100.0f);
     }
-    if (frame == 50) {
-      ImGui::GetIO().MousePos = ImVec2(100.0f, 210.0f); // Hover over button 01
+    if (frame >= 50 && frame < 57) {
+      ImGui::GetIO().MousePos = ImVec2(100.0f, 180.0f + (frame - 50) * 35.0f);
     }
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
     if (app.m_inMenu) app.drawMenu();
     else app.drawImGui();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    static std::vector<unsigned char> s_menuNoHover(1280 * 720 * 3, 0);
-    static std::vector<unsigned char> s_menuHover(1280 * 720 * 3, 0);
     if (frame == 49) {
       glPixelStorei(GL_PACK_ALIGNMENT, 1);
       glReadPixels(0, 0, 1280, 720, GL_RGB, GL_UNSIGNED_BYTE, s_menuNoHover.data());
     }
-    if (frame == 51) {
+    if (frame >= 51 && frame <= 57) {
       glPixelStorei(GL_PACK_ALIGNMENT, 1);
       glReadPixels(0, 0, 1280, 720, GL_RGB, GL_UNSIGNED_BYTE, s_menuHover.data());
-      ImGui::GetIO().MousePos = ImVec2(-100.0f, -100.0f); // restore mouse position
-
-      // 1. Difference on button 01 area between unhovered and hovered state
       size_t hoverDiff = 0;
-      for (int gy = 470; gy <= 530; ++gy) {
+      for (int gy = 120; gy <= 600; ++gy) {
         for (int gx = 60; gx <= 430; ++gx) {
           size_t idx = (static_cast<size_t>(gy) * 1280 + gx) * 3;
           if (s_menuNoHover[idx] != s_menuHover[idx] ||
@@ -15800,39 +16874,51 @@ int AppGL::captureMenuCheck(const std::string& outDir) {
           }
         }
       }
-      // 2. Flight briefing / telemetry card presence
-      size_t telemetryPixels = 0;
-      for (int gy = 70; gy <= 270; ++gy) {
+      if (hoverDiff > menuHoverDiff) {
+        menuHoverDiff = hoverDiff;
+        menuHoverCaptured = app.saveScreenshot(outDir + "/menu_hover_btn01.png");
+      }
+    }
+    if (frame == 57) {
+      ImGui::GetIO().MousePos = ImVec2(-100.0f, -100.0f);
+      size_t brandPixels = 0;
+      for (int gy = 590; gy <= 680; ++gy) {
         for (int gx = 60; gx <= 430; ++gx) {
           size_t idx = (static_cast<size_t>(gy) * 1280 + gx) * 3;
           if (s_menuHover[idx] > 40 || s_menuHover[idx + 1] > 40 || s_menuHover[idx + 2] > 40) {
-            ++telemetryPixels;
+            ++brandPixels;
           }
         }
       }
-      // 3. Status pills presence
-      size_t statusPillPixels = 0;
-      for (int gy = 660; gy <= 685; ++gy) {
-        for (int gx = 60; gx <= 1220; ++gx) {
+      size_t navPixels = 0;
+      for (int gy = 120; gy <= 590; ++gy) {
+        for (int gx = 60; gx <= 430; ++gx) {
           size_t idx = (static_cast<size_t>(gy) * 1280 + gx) * 3;
           if (s_menuHover[idx] > 40 || s_menuHover[idx + 1] > 40 || s_menuHover[idx + 2] > 40) {
-            ++statusPillPixels;
+            ++navPixels;
           }
         }
       }
-      const bool heroElementsPass = (hoverDiff > 50) && (telemetryPixels > 300) && (statusPillPixels > 100);
-      std::cout << "Menu hero elements: hover-diff=" << hoverDiff
-                << ", telemetry-pixels=" << telemetryPixels
-                << ", status-pill-pixels=" << statusPillPixels
+      const bool heroElementsPass = menuHoverCaptured && (menuHoverDiff > 50) &&
+                                    (brandPixels > 300) && (navPixels > 1000);
+      std::cout << "Menu hero elements: hover-diff=" << menuHoverDiff
+                << ", brand-pixels=" << brandPixels
+                << ", nav-pixels=" << navPixels
                 << (heroElementsPass ? " PASS" : " FAIL") << "\n";
       ok = heroElementsPass && ok;
-      app.saveScreenshot(outDir + "/menu_hover_btn01.png");
     }
     const char* screenshot = nullptr;
     if (frame == 60) screenshot = "menu.png";
     if (frame == 389) screenshot = "loop_before.png";
     if (frame == 390) screenshot = "loop_after.png";
+    if (frame == 766) screenshot = "archive.png";
+    if (frame == 778) screenshot = "voices.png";
+    if (frame == 786) screenshot = "story.png";
+    if (frame == 794) screenshot = "codex.png";
     if (frame == 800) screenshot = "settings.png";
+    if (frame == 812) screenshot = "hangar.png";
+    if (frame == 820) screenshot = "help.png";
+    if (frame == 828) screenshot = "release.png";
     if (frame == 850) screenshot = "flight.png";
     if (frame == 930) screenshot = "menu_4x3.png";
     if (frame == 980) screenshot = "menu_ultrawide.png";
@@ -17785,7 +18871,7 @@ void AppGL::audioEnsureOnFirstInput() {
     }
   }
   if (!any && !m_inMenu) return;
-  m_audio.setMenuActive(m_inMenu);
+  m_audio.setMenuActive(m_inMenu && !m_exitSequence);
   m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
   m_audio.ensureInitialized();
   // Снапшот состояний без триггеров, чтобы старт не давал ложный whoosh.
@@ -17806,7 +18892,7 @@ void AppGL::audioProcessKey() {
 }
 
 void AppGL::audioUpdate(float deltaTime) {
-  m_audio.setMenuActive(m_inMenu);
+  m_audio.setMenuActive(m_inMenu && !m_exitSequence);
   if (!m_audio.isInitialized()) return;
   m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
   m_audio.update(deltaTime);
@@ -19385,6 +20471,7 @@ void AppGL::updateLandingOperations(float deltaTime) {
       m_ship.landedBodyId = nearestBodyId;
       m_currentSurfaceReport = generateSurfaceReport(nearestBodyId);
       m_drillTelem = generateCoreDrillProfile(nearestBodyId, m_currentSurfaceReport.tempK, m_currentSurfaceReport.gravityMps2);
+      m_droneTelem = createReconDroneMission(nearestBodyId);
       m_drillInputActive = false;
       m_drillRetractActive = false;
       m_surfaceReportOpen = true;
@@ -19427,12 +20514,58 @@ void AppGL::updateLandingOperations(float deltaTime) {
       float drillAudioK = (m_drillTelem.state == CoreDrillState::Drilling) ? (m_drillTelem.rpm / 420.0f) :
                           (m_drillTelem.state == CoreDrillState::Retracting) ? 0.35f : 0.0f;
       m_audio.setDrillLevel(drillAudioK, m_drillTelem.motorTorque);
+
+      int droneRp = 0;
+      updateReconDrone(m_droneTelem, deltaTime, true, droneRp);
+      if (droneRp > 0) {
+        m_codex.addResearchPoints(droneRp);
+        m_audio.playBlip();
+      }
+      {
+        const bool droneInAir = (m_droneTelem.state == ReconDroneState::Deploying ||
+                                 m_droneTelem.state == ReconDroneState::Scouting ||
+                                 m_droneTelem.state == ReconDroneState::Returning);
+        std::vector<float> anomXZ;
+        std::vector<bool> anomScanned;
+        anomXZ.reserve(m_droneTelem.anomalies.size() * 2);
+        anomScanned.reserve(m_droneTelem.anomalies.size());
+        for (const auto& a : m_droneTelem.anomalies) {
+          anomXZ.push_back(a.posXKm);
+          anomXZ.push_back(a.posZKm);
+          anomScanned.push_back(a.scanned);
+        }
+        warpdrive::setReconDroneVisual(droneInAir, m_droneTelem.bodyId,
+                                       m_droneTelem.posXKm, m_droneTelem.posZKm,
+                                       m_droneTelem.altitudeM, m_droneTelem.headingDeg,
+                                       anomXZ, anomScanned);
+      }
+      if (m_droneTelem.state == ReconDroneState::DockedComplete && !m_droneTelem.reportLogged) {
+        m_droneTelem.reportLogged = true;
+        std::string zText = formatReconDroneZettel(m_currentSurfaceReport.bodyId,
+                                                   m_currentSurfaceReport.nameRu, m_droneTelem);
+        m_zettelkasten.addCustomNote("Дрон: " + m_currentSurfaceReport.nameRu, zText, "#разведка");
+        m_audio.playEurekaChime();
+        Toast dt;
+        dt.title = uiRu("Дрон вернулся на борт", "Recon Drone Docked");
+        dt.desc = std::string(uiRu("Изучено аномалий: ", "Anomalies scanned: ")) +
+                  std::to_string(m_droneTelem.scannedCount) + "/" +
+                  std::to_string(m_droneTelem.anomalies.size()) + " (+" +
+                  std::to_string(m_droneTelem.totalRpEarned) + " RP)";
+        dt.time = static_cast<float>(glfwGetTime());
+        m_toasts.push_back(dt);
+      }
     } else {
+      int droneRp = 0;
+      updateReconDrone(m_droneTelem, deltaTime, false, droneRp);
+      warpdrive::setReconDroneVisual(false, "", 0.0f, 0.0f, 0.0f, 0.0f, {}, {});
       m_audio.setDrillLevel(0.0f);
       m_drillInputActive = false;
       m_drillRetractActive = false;
     }
   } else {
+    int droneRp = 0;
+    updateReconDrone(m_droneTelem, deltaTime, false, droneRp);
+    warpdrive::setReconDroneVisual(false, "", 0.0f, 0.0f, 0.0f, 0.0f, {}, {});
     m_landingTelem.radarAltM = -1.0f;
     m_landingTelem.surfaceDustK = 0.0f;
     m_landingTelem.isLanded = false;
@@ -19662,6 +20795,82 @@ void AppGL::drawSurfaceReportModal() {
         }
       }
     }
+
+    ImGui::Separator();
+
+    // 4. Автономный дрон-разведчик поверхности (радиус 10 км, Stage 6 / v5.1.0)
+    ImGui::TextColored(ImVec4(0.30f, 0.90f, 0.78f, 1.0f), "%s",
+                       uiRu("⬡ Автономный дрон-разведчик (периметр 10 км)",
+                            "⬡ Autonomous Surface Recon Drone (10 km Perimeter)"));
+
+    ImGui::Columns(2, "droneLayout", false);
+    // Левая колонка: тактический радар 10 км
+    {
+      const float mapSize = 132.0f;
+      ImVec2 p0 = ImGui::GetCursorScreenPos();
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      ImVec2 center(p0.x + mapSize * 0.5f, p0.y + mapSize * 0.5f);
+      float radPx = mapSize * 0.45f;
+      dl->AddCircleFilled(center, radPx, IM_COL32(8, 22, 30, 220), 48);
+      dl->AddCircle(center, radPx, IM_COL32(56, 189, 248, 120), 48, 1.2f);
+      dl->AddCircle(center, radPx * 0.5f, IM_COL32(56, 189, 248, 60), 36, 1.0f);
+      dl->AddLine(ImVec2(center.x - radPx, center.y), ImVec2(center.x + radPx, center.y), IM_COL32(56, 189, 248, 45));
+      dl->AddLine(ImVec2(center.x, center.y - radPx), ImVec2(center.x, center.y + radPx), IM_COL32(56, 189, 248, 45));
+      // Аномалии
+      const float scaleKm = radPx / std::max(m_droneTelem.rangeRadiusKm, 1.0f);
+      for (const auto& a : m_droneTelem.anomalies) {
+        ImVec2 ap(center.x + a.posXKm * scaleKm, center.y + a.posZKm * scaleKm);
+        ImU32 acol = a.scanned ? IM_COL32(52, 211, 153, 255) : IM_COL32(251, 191, 36, 255);
+        dl->AddQuadFilled(ImVec2(ap.x, ap.y - 4.0f), ImVec2(ap.x + 4.0f, ap.y),
+                          ImVec2(ap.x, ap.y + 4.0f), ImVec2(ap.x - 4.0f, ap.y), acol);
+      }
+      // Корабль в центре и дрон
+      dl->AddCircleFilled(center, 3.5f, IM_COL32(226, 232, 240, 255));
+      ImVec2 dp(center.x + m_droneTelem.posXKm * scaleKm, center.y + m_droneTelem.posZKm * scaleKm);
+      dl->AddLine(center, dp, IM_COL32(56, 189, 248, 90), 1.0f);
+      dl->AddCircleFilled(dp, 4.2f, IM_COL32(56, 189, 248, 255));
+      ImGui::Dummy(ImVec2(mapSize, mapSize));
+    }
+    ImGui::NextColumn();
+
+    const char* dStateRu = "В АНГАРЕ";
+    const char* dStateEn = "DOCKED";
+    if (m_droneTelem.state == ReconDroneState::Deploying) {
+      dStateRu = "ОТСТЫКОВКА И ВЗЛЁТ";
+      dStateEn = "DEPLOYING & CLIMBING";
+    } else if (m_droneTelem.state == ReconDroneState::Scouting) {
+      dStateRu = "АВТОНОМНАЯ РАЗВЕДКА";
+      dStateEn = "AUTONOMOUS SCOUTING";
+    } else if (m_droneTelem.state == ReconDroneState::Returning) {
+      dStateRu = "ВОЗВРАТ НА БОРТ";
+      dStateEn = "AUTONOMOUS RTB";
+    } else if (m_droneTelem.state == ReconDroneState::DockedComplete) {
+      dStateRu = "ЭКСПЕДИЦИЯ ЗАВЕРШЕНА";
+      dStateEn = "RECON COMPLETE";
+    }
+    ImGui::Text("%s: %s", uiRu("Статус", "Status"), uiRu(dStateRu, dStateEn));
+    char batBuf[48];
+    std::snprintf(batBuf, sizeof(batBuf), "%.0f%% BAT | %.0f m ALT", m_droneTelem.batteryPct, m_droneTelem.altitudeM);
+    ImGui::ProgressBar(m_droneTelem.batteryPct / 100.0f, ImVec2(-1, 14.0f), batBuf);
+    ImGui::Text("%s: (%.1f, %.1f) km | %d/%zu",
+                uiRu("Координаты", "Pos"), m_droneTelem.posXKm, m_droneTelem.posZKm,
+                m_droneTelem.scannedCount, m_droneTelem.anomalies.size());
+
+    if (m_droneTelem.state == ReconDroneState::Docked || m_droneTelem.state == ReconDroneState::DockedComplete) {
+      if (m_landingTelem.isLanded && m_droneTelem.batteryPct >= 20.0f) {
+        if (ImGui::Button(uiRu("▲ Отстыковать дрон (10 км)", "▲ Deploy Recon Drone (10 km)"), ImVec2(-1, 26.0f))) {
+          if (deployReconDrone(m_droneTelem)) {
+            m_audio.playBlip();
+          }
+        }
+      }
+    } else if (m_droneTelem.state == ReconDroneState::Deploying || m_droneTelem.state == ReconDroneState::Scouting) {
+      if (ImGui::Button(uiRu("▼ Отозвать на корабль", "▼ Recall Drone to Ship"), ImVec2(-1, 26.0f))) {
+        recallReconDrone(m_droneTelem);
+        m_audio.playBlip();
+      }
+    }
+    ImGui::Columns(1);
 
     ImGui::Spacing();
     if (ImGui::Button(uiRu("Закрыть терминал", "Close Terminal"), ImVec2(-1, 28.0f))) {

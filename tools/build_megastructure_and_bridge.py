@@ -586,15 +586,47 @@ def build_megastructure_mesh():
     bpy.context.view_layer.objects.active = mega
     bpy.ops.object.join()
 
-    # Smart unwrap non-torus faces into Q1/Q3/Q4 without disturbing the torus UVs
+    # Bevel + normals first, then apply modifiers and triangulate/clean so
+    # zero-area slivers and un-UV'd bevel faces never leak into the OBJ.
+    bev = mega.modifiers.new(name="Bevel", type='BEVEL')
+    bev.width = 0.004
+    bev.segments = 2
+    bev.limit_method = 'ANGLE'
+    bev.angle_limit = math.radians(35.0)
+    bev.use_clamp_overlap = True
+    bev.harden_normals = True
+
+    wn = mega.modifiers.new(name="WeightedNormal", type='WEIGHTED_NORMAL')
+    wn.keep_sharp = True
+    wn.weight = 80
+
+    tri = mega.modifiers.new(name="Triangulate", type='TRIANGULATE')
+    tri.quad_method = 'BEAUTY'
+    tri.ngon_method = 'BEAUTY'
+
+    bpy.ops.object.select_all(action='DESELECT')
+    mega.select_set(True)
+    bpy.context.view_layer.objects.active = mega
+    for mod_name in ("Bevel", "WeightedNormal", "Triangulate"):
+        bpy.ops.object.modifier_apply(modifier=mod_name)
+
+    # Smart unwrap non-torus faces (including new bevel strips) into Q1/Q3/Q4
+    # while keeping torus Q2 tubular UVs (u >= 0.49, v >= 0.49) untouched.
     bpy.ops.object.mode_set(mode='EDIT')
     bm_join = bmesh.from_edit_mesh(mega.data)
+    bmesh.ops.dissolve_degenerate(bm_join, dist=1e-5)
+    bmesh.ops.triangulate(bm_join, faces=[f for f in bm_join.faces if len(f.verts) > 3],
+                          quad_method='BEAUTY', ngon_method='BEAUTY')
+    tiny_faces = [f for f in bm_join.faces if f.calc_area() < 1e-8]
+    if tiny_faces:
+        bmesh.ops.delete(bm_join, geom=tiny_faces, context='FACES')
     uv_layer = bm_join.loops.layers.uv.verify()
 
     unwrapped_faces = []
     for face in bm_join.faces:
         u_vals = [loop[uv_layer].uv.x for loop in face.loops]
-        if all(u >= 0.49 for u in u_vals):
+        v_vals = [loop[uv_layer].uv.y for loop in face.loops]
+        if all(u >= 0.49 for u in u_vals) and all(v >= 0.49 for v in v_vals):
             continue
         unwrapped_faces.append(face)
 
@@ -619,17 +651,6 @@ def build_megastructure_mesh():
     for poly in mega.data.polygons:
         poly.use_smooth = True
 
-    bev = mega.modifiers.new(name="Bevel", type='BEVEL')
-    bev.width = 0.008
-    bev.segments = 2
-    bev.limit_method = 'ANGLE'
-    bev.angle_limit = math.radians(35.0)
-    bev.harden_normals = True
-
-    wn = mega.modifiers.new(name="WeightedNormal", type='WEIGHTED_NORMAL')
-    wn.keep_sharp = True
-    wn.weight = 80
-
     bpy.ops.object.select_all(action='DESELECT')
     mega.select_set(True)
     bpy.context.view_layer.objects.active = mega
@@ -640,7 +661,7 @@ def build_megastructure_mesh():
     out_obj = os.path.join(MODELS_DIR, "station_megastructure.obj")
     bpy.ops.wm.obj_export(filepath=out_obj, export_selected_objects=True,
                           export_normals=True, export_uv=True, export_materials=False,
-                          export_triangulated_mesh=False, forward_axis='Y', up_axis='Z')
+                          export_triangulated_mesh=True, forward_axis='Y', up_axis='Z')
     print(f"[EXPORT] Megastructure saved: {out_obj} ({len(mega.data.polygons)} polygons)")
     return megastructure
 
@@ -783,8 +804,16 @@ def build_bridge_interior_mesh():
     bridge = bpy.context.active_object
     bridge.name = "BridgeInterior"
 
-    # Smart UV Project
+    # Triangulate & clean before Smart UV Project so all faces have valid UVs and normals
     bpy.ops.object.mode_set(mode='EDIT')
+    bm_br = bmesh.from_edit_mesh(bridge.data)
+    bmesh.ops.dissolve_degenerate(bm_br, dist=1e-5)
+    bmesh.ops.triangulate(bm_br, faces=[f for f in bm_br.faces if len(f.verts) > 3],
+                          quad_method='BEAUTY', ngon_method='BEAUTY')
+    tiny_br = [f for f in bm_br.faces if f.calc_area() < 1e-8]
+    if tiny_br:
+        bmesh.ops.delete(bm_br, geom=tiny_br, context='FACES')
+    bmesh.update_edit_mesh(bridge.data)
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.uv.smart_project(angle_limit=66.0, island_margin=0.02)
     bpy.ops.mesh.normals_make_consistent(inside=False)
@@ -794,9 +823,11 @@ def build_bridge_interior_mesh():
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
     bridge.location = (0, 0, 0)
 
-    # Export OBJ
+    # Export OBJ (triangulated, with UVs and normals)
     out_obj = os.path.join(MODELS_DIR, "bridge_interior.obj")
-    bpy.ops.wm.obj_export(filepath=out_obj, export_selected_objects=True)
+    bpy.ops.wm.obj_export(filepath=out_obj, export_selected_objects=True,
+                          export_normals=True, export_uv=True, export_materials=False,
+                          export_triangulated_mesh=True)
     print(f"[EXPORT] Bridge Interior saved: {out_obj}")
     return bridge
 

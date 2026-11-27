@@ -48,7 +48,8 @@ void printUsage() {
 #ifdef ASTROVOYAGER_ENABLE_GL
   std::cout << " | --gl | --safe | --diagnostics | --screenshot-all [--disk]"
                " | --capture-station <png> | --capture-dragon <png> | --capture-zettel <png>"
-               " | --capture-hud <png> | --capture-terminal <png> | --capture-menu <dir>"
+               " | --capture-hud <png> | --capture-terminal <png> | --capture-menu <dir> | --capture-exit <dir>"
+               " | --capture-intro <dir>"
                " | --capture-earth <dir>"
                " | --capture-fleet <dir>"
                " | --capture-colony <dir>"
@@ -826,6 +827,14 @@ int main(int argc, char** argv) {
   if (arg == "--capture-menu") {
     std::string outDir = (argc > 2) ? argv[2] : "vibe_videos/menu_check";
     return astro::AppGL::captureMenuCheck(outDir);
+  }
+  if (arg == "--capture-exit") {
+    std::string outDir = (argc > 2) ? argv[2] : "vibe_videos/exit_check";
+    return astro::AppGL::captureExitCheck(outDir);
+  }
+  if (arg == "--capture-intro") {
+    std::string outDir = (argc > 2) ? argv[2] : "vibe_videos/intro_check";
+    return astro::AppGL::captureIntroCheck(outDir);
   }
   if (arg == "--capture-workshop") {
     std::string outDir = (argc > 2) ? argv[2] : "docs/screens";

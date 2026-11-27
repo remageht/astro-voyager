@@ -40,6 +40,26 @@ uniform int u_PlanetRelief;
 uniform int u_PlanetAtmosphere;
 uniform sampler2D u_EarthMap;
 uniform int u_HasEarthMap;
+// v5.1.0: Stage 6 Exoplanetary Biomes & Ocean Hydrodynamics
+uniform float u_Terraform;
+uniform vec4 u_Wake;  // xyz = spin-local unit vector under skimming craft, w = intensity 0..1
+
+float oceanGlintGGX(vec3 n, vec3 sunDir, vec3 viewDir, float rough) {
+  vec3 H = normalize(sunDir + viewDir);
+  float NdotH = max(dot(n, H), 0.0);
+  float NdotV = max(dot(n, viewDir), 0.001);
+  float NdotL = max(dot(n, sunDir), 0.001);
+  float a = max(rough, 0.06);
+  float a2 = a * a;
+  float alpha2 = a2 * a2;
+  float denom = NdotH * NdotH * (alpha2 - 1.0) + 1.0;
+  float D = alpha2 / (3.14159265 * max(denom * denom, 1e-5));
+  float F = 0.02 + 0.98 * pow(1.0 - max(dot(viewDir, H), 0.0), 5.0);
+  float k = (a + 1.0);
+  k = (k * k) / 8.0;
+  float G = (NdotL / (NdotL * (1.0 - k) + k)) * (NdotV / (NdotV * (1.0 - k) + k));
+  return (D * F * G) / max(4.0 * NdotV * NdotL, 0.001);
+}
 
 float hash11(float p) {
   return fract(sin(p) * 43758.5453);
@@ -121,6 +141,14 @@ float planetElevation(vec3 sp, int body, int type, float seed) {
     float craters = abs(fbm4(sp * 12.0 + seed * 3.5) - 0.5) * 2.0;
     float fine = fbm3(sp * 34.0 + seed * 9.2);
     h = 0.018 * baseM + 0.014 * craters + 0.005 * fine;
+  } else if (body == 12) {
+    // Hercules-b: basalt ridges & emerald plateaus above sea level
+    float cont = fbm4(sp * 3.8 + seed);
+    float detail = fbm3(sp * 22.0 + seed * 4.1);
+    h = smoothstep(0.47, 0.85, cont) * (0.016 + 0.008 * detail);
+  } else if (body == 13 || body == 14) {
+    float ridge = 1.0 - abs(fbm4(sp * 6.0 + seed * 1.9) - 0.5) * 2.0;
+    h = 0.012 * pow(ridge, 3.0) + 0.004 * fbm3(sp * 24.0 + seed);
   } else if (body == 5 || body == 2) {
     // Moon / Mercury: crater basins and highlands
     float basin = fbm4(sp * 2.5 + seed * 1.7);
@@ -341,6 +369,87 @@ void main() {
       float capNoise = fbm4(sp * 7.5 + u_Seed * 3.7) * 0.06;
       float cap = smoothstep(0.82, 0.90, abs(spN.y) + capNoise);
       albedo = mix(albedo, vec3(0.94, 0.92, 0.90), cap);
+      // v5.1.0: Terraformed Martian oceans, shoreline froth, basalt canyons & green lowlands
+      if (u_Terraform > 0.01) {
+        float seaLevel = mix(0.28, 0.48, clamp(u_Terraform, 0.0, 1.0));
+        float oceanMask = 1.0 - smoothstep(seaLevel - 0.02, seaLevel + 0.02, continents);
+        float shelfMask = (1.0 - smoothstep(seaLevel - 0.09, seaLevel, continents)) * oceanMask;
+        float foamWave = 0.5 + 0.5 * sin(continents * 160.0 - u_Time * 2.2 + fbm3(sp * 24.0) * 6.0);
+        float shoreBand = smoothstep(seaLevel - 0.025, seaLevel, continents) * (1.0 - smoothstep(seaLevel, seaLevel + 0.015, continents));
+        vec3 deepSea = vec3(0.03, 0.16, 0.38);
+        vec3 turquoiseShelf = vec3(0.12, 0.64, 0.72);
+        vec3 waterCol = mix(deepSea, turquoiseShelf, shelfMask * 0.78);
+        waterCol = mix(waterCol, vec3(0.88, 0.95, 0.98), shoreBand * foamWave * 0.75 * u_Terraform);
+        float vegZone = smoothstep(seaLevel, seaLevel + 0.14, continents) * (1.0 - cap) * (1.0 - smoothstep(0.55, 0.85, abs(spN.y)));
+        vec3 floraCol = mix(vec3(0.15, 0.44, 0.22), vec3(0.28, 0.55, 0.26), fbm3(sp * 11.0 + u_Seed));
+        albedo = mix(albedo, floraCol, vegZone * u_Terraform * 0.85);
+        albedo = mix(albedo, waterCol, oceanMask * smoothstep(0.15, 0.55, u_Terraform));
+        land = mix(land, 1.0 - oceanMask, smoothstep(0.15, 0.55, u_Terraform));
+      }
+    } else if (u_Body == 12) {
+      // HERCULES-B: Turquoise coral archipelagos, basalt canyons, emerald continental lowlands & silicate peaks
+      float continents = fbm5(sp * 3.8 + u_Seed) * 0.85 + 0.15 * fbm3(sp * 11.5 + u_Seed * 2.1);
+      float seaLevel = 0.49;
+      land = smoothstep(seaLevel - 0.015, seaLevel + 0.018, continents);
+      float shelf = smoothstep(seaLevel - 0.085, seaLevel, continents) * (1.0 - land);
+      float abyss = 1.0 - smoothstep(seaLevel - 0.16, seaLevel - 0.05, continents);
+      vec3 oceanCol = mix(vec3(0.06, 0.36, 0.54), vec3(0.02, 0.12, 0.30), abyss);
+      oceanCol = mix(oceanCol, vec3(0.10, 0.74, 0.78), shelf * 0.85);
+      // Shoreline surf froth
+      float shoreBand = smoothstep(seaLevel - 0.022, seaLevel, continents) * (1.0 - land);
+      float surfCrest = 0.5 + 0.5 * sin(continents * 180.0 - u_Time * 2.4 + fbm3(sp * 28.0) * 5.0);
+      oceanCol = mix(oceanCol, vec3(0.90, 0.97, 0.99), shoreBand * surfCrest * 0.82);
+      // Continental strata: coastal sand -> emerald vegetation -> basalt highlands -> quartz peaks
+      float latCool = smoothstep(0.55, 0.85, abs(spN.y));
+      vec3 beachCol = vec3(0.76, 0.72, 0.56);
+      vec3 forestCol = mix(vec3(0.12, 0.44, 0.24), vec3(0.24, 0.56, 0.30), fbm3(sp * 14.0 + u_Seed));
+      vec3 canyonCol = vec3(0.32, 0.34, 0.40);
+      vec3 peakCol = vec3(0.84, 0.88, 0.92);
+      vec3 landCol = mix(beachCol, forestCol, smoothstep(seaLevel + 0.015, seaLevel + 0.06, continents));
+      landCol = mix(landCol, canyonCol, smoothstep(0.60, 0.74, continents));
+      landCol = mix(landCol, peakCol, clamp(smoothstep(0.74, 0.86, continents) + latCool * 0.65, 0.0, 1.0));
+      albedo = mix(oceanCol, landCol, land);
+      if (u_Clouds > 0.05) {
+        vec3 sunDirLocal = sunDir;
+        if (u_SpinAngle != 0.0) {
+          float spinC = cos(u_SpinAngle);
+          float spinS = sin(u_SpinAngle);
+          sunDirLocal = vec3(spinC * sunDir.x + spinS * sunDir.z, sunDir.y,
+                             -spinS * sunDir.x + spinC * sunDir.z);
+        }
+        vec3 cp = sp * 4.5 + u_Seed + vec3(u_Time * 0.025, 0.0, 0.0);
+        float cl = fbm4(cp);
+        float clm = smoothstep(0.50, 0.72, cl) * u_Clouds;
+        vec3 sSp = sp - sunDirLocal * 0.024;
+        float sh = smoothstep(0.51, 0.73, fbm4(sSp * 4.5 + u_Seed + vec3(u_Time * 0.025, 0.0, 0.0))) * u_Clouds * 0.38;
+        albedo *= 1.0 - sh * (0.2 + 0.8 * diff);
+        albedo = mix(albedo, vec3(0.95, 0.98, 1.0), clm * 0.82);
+      }
+    } else if (u_Body == 13) {
+      // TITAN: Tholin orange dunes, cryovolcanic plains & dark hydrocarbon methane lakes
+      float basin = fbm4(sp * 3.4 + u_Seed);
+      float duneNoise = fbm3(vec3(sp.x * 18.0, sp.y * 4.0, sp.z * 18.0) + u_Seed * 2.1);
+      float cryo = smoothstep(0.66, 0.78, fbm4(sp * 8.5 + u_Seed * 3.3));
+      float seaLevel = 0.39;
+      land = smoothstep(seaLevel - 0.015, seaLevel + 0.015, basin);
+      vec3 duneCol = mix(u_ColB, u_ColA, duneNoise);
+      duneCol = mix(duneCol, vec3(0.76, 0.72, 0.66), cryo * 0.45);
+      vec3 methaneMare = vec3(0.04, 0.05, 0.07);
+      float froth = 0.5 + 0.5 * sin(basin * 140.0 - u_Time * 1.4);
+      float mareShore = smoothstep(seaLevel - 0.018, seaLevel, basin) * (1.0 - land);
+      methaneMare = mix(methaneMare, vec3(0.45, 0.38, 0.28), mareShore * froth * 0.45);
+      albedo = mix(methaneMare, duneCol, land);
+    } else if (u_Body == 14) {
+      // EUROPA: Fractured glacial shell with reddish-ochre magnesium-sulfate lineae & chaos terrain
+      float iceBase = fbm4(sp * 3.2 + u_Seed);
+      float lineae1 = 1.0 - abs(fbm4(vec3(sp.x * 5.0 + sp.y * 2.0, sp.y * 6.0, sp.z * 5.0) + u_Seed * 1.9) - 0.5) * 2.0;
+      float lineae2 = 1.0 - abs(fbm4(vec3(sp.z * 7.0, sp.x * 3.0 - sp.y * 5.0, sp.y * 4.0) + u_Seed * 3.1) - 0.5) * 2.0;
+      float ridge = pow(max(lineae1, lineae2), 6.0);
+      float chaos = smoothstep(0.60, 0.74, fbm3(sp * 11.0 + u_Seed * 4.7));
+      vec3 glacierCol = mix(vec3(0.76, 0.84, 0.90), vec3(0.95, 0.97, 0.99), iceBase);
+      vec3 saltRidge = vec3(0.56, 0.32, 0.22);
+      albedo = mix(glacierCol, saltRidge, clamp(ridge * 0.85 + chaos * 0.35, 0.0, 0.90));
+      land = 1.0;
     } else if (u_Body == 5) {
       // MOON family (Earth's Moon + Galileans + Titan): maria plains,
       // highlands, two-scale craters, tinted by u_ColA/u_ColB. The Moon def
@@ -422,6 +531,11 @@ void main() {
       albedo *= 1.0 - cr * 0.45;
       float cap = smoothstep(0.80, 0.88, abs(spN.y));
       albedo = mix(albedo, vec3(0.9, 0.93, 0.95), cap);
+      if (u_Terraform > 0.20) {
+        float foam = 0.5 + 0.5 * sin(continents * 150.0 - u_Time * 2.1);
+        float shore = smoothstep(0.45, 0.48, continents) * (1.0 - land);
+        albedo = mix(albedo, vec3(0.86, 0.95, 0.98), shore * foam * 0.70 * clamp(u_Terraform, 0.0, 1.0));
+      }
     }
   } else if (u_Type == 4) {
     albedo = vec3(0.75, 1.0, 0.85);
@@ -494,23 +608,15 @@ void main() {
     float season = 0.5 + 0.5 * sin(u_Time * 0.1);
     dayCol += vec3(0.9, 0.95, 1.0) * spec * capM * (0.4 + 0.6 * season) * day;
     // v3.2.0 / v4.5.0: PBR Cook-Torrance GGX ocean sun glint on water surfaces (F0=0.02)
-    vec3 H = normalize(sunDir + viewDir);
-    float NdotH = max(dot(n, H), 0.0);
-    float NdotV = max(dot(n, viewDir), 0.001);
-    float NdotL = max(dot(n, sunDir), 0.001);
-    float alpha = 0.14 * 0.14;
-    float alpha2 = alpha * alpha;
-    float denom = NdotH * NdotH * (alpha2 - 1.0) + 1.0;
-    float D = alpha2 / (3.14159265 * denom * denom);
-    float F0 = 0.02;
-    float VdotH = max(dot(viewDir, H), 0.0);
-    float F = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
-    float k = (0.14 + 1.0);
-    k = (k * k) / 8.0;
-    float G = (NdotL / (NdotL * (1.0 - k) + k)) * (NdotV / (NdotV * (1.0 - k) + k));
-    float ggx = (D * F * G) / max(4.0 * NdotV * NdotL, 0.001);
+    float ggx = oceanGlintGGX(n, sunDir, viewDir, 0.14);
     float glint = pow(max(dot(rdir, viewDir), 0.0), 90.0);
     dayCol += vec3(0.85, 0.94, 1.0) * (ggx * 2.2 + glint * 0.5) * (1.0 - land) * (1.0 - capM) * day;
+    // v5.1.0: Low-altitude ship hydro wake froth on liquid oceans
+    if (u_Wake.w > 0.01) {
+      float dWake = length(spN - normalize(u_Wake.xyz));
+      float wakeRing = exp(-dWake * 18.0) * (0.55 + 0.45 * sin(dWake * 180.0 - u_Time * 10.0));
+      dayCol += vec3(0.82, 0.95, 1.0) * wakeRing * (1.0 - land) * (1.0 - capM) * u_Wake.w * 0.85 * day;
+    }
     // v3.2.0 night city lights: static warm speckles on the land of the
     // night side (deterministic pattern, no time dependence).
     float cityN = fbm4(sp * 26.0 + u_Seed * 2.0);
@@ -539,21 +645,17 @@ void main() {
     float cc = fbm3(sp * 14.0 + u_Seed);
     float cities = smoothstep(0.62, 0.8, cc) * land;
     col += vec3(1.0, 0.75, 0.42) * cities * night * u_Clouds * 2.2;
-    // Exoplanet ocean GGX glint
-    if (u_Clouds > 0.05) {
-      vec3 H = normalize(sunDir + viewDir);
-      float NdotH = max(dot(n, H), 0.0);
-      float NdotV = max(dot(n, viewDir), 0.001);
-      float NdotL = max(dot(n, sunDir), 0.001);
-      float alpha = 0.16 * 0.16;
-      float alpha2 = alpha * alpha;
-      float denom = NdotH * NdotH * (alpha2 - 1.0) + 1.0;
-      float D = alpha2 / (3.14159265 * denom * denom);
-      float F = 0.02 + 0.98 * pow(1.0 - max(dot(viewDir, H), 0.0), 5.0);
-      float k = 0.18;
-      float G = (NdotL / (NdotL * (1.0 - k) + k)) * (NdotV / (NdotV * (1.0 - k) + k));
-      float ggx = (D * F * G) / max(4.0 * NdotV * NdotL, 0.001);
-      col += vec3(0.85, 0.92, 1.0) * ggx * 1.8 * (1.0 - land) * diff;
+    // Exoplanet / Titan hydrocarbon / terraformed ocean GGX glint & low-alt hydro wake
+    if (u_Clouds > 0.05 || u_Body == 12 || u_Body == 13 || u_Terraform > 0.20) {
+      float seaRough = (u_Body == 13) ? 0.10 : 0.16;
+      float ggx = oceanGlintGGX(n, sunDir, viewDir, seaRough);
+      vec3 glintTint = (u_Body == 13) ? vec3(0.95, 0.72, 0.42) : vec3(0.78, 0.94, 1.0);
+      col += glintTint * ggx * 1.8 * (1.0 - land) * diff;
+      if (u_Wake.w > 0.01) {
+        float dWake = length(spN - normalize(u_Wake.xyz));
+        float wakeRing = exp(-dWake * 18.0) * (0.55 + 0.45 * sin(dWake * 180.0 - u_Time * 10.0));
+        col += vec3(0.84, 0.96, 1.0) * wakeRing * (1.0 - land) * u_Wake.w * (0.25 + 0.75 * diff);
+      }
     }
   }
   if (u_Type == 3) {
@@ -579,6 +681,13 @@ void main() {
       // Earth: luminous sapphire/cyan Rayleigh limb veil.
       rimColor = vec3(0.22, 0.58, 1.15);
       rimGain = 1.45;
+    } else if (u_Body == 12) {
+      rimColor = vec3(0.18, 0.72, 1.05);
+      rimGain = 1.40;
+    } else if (u_Body == 13) {
+      // Titan: dense orange photochemical nitrogen-methane haze
+      rimColor = vec3(1.0, 0.62, 0.24);
+      rimGain = 1.95;
     }
     // v4.3.0 / v4.5.0: Physical Rayleigh & Mie Atmospheric Scattering
     if (u_PlanetAtmosphere == 1) {
@@ -591,7 +700,7 @@ void main() {
       vec3 sunsetColor = (u_Body == 6) ? vec3(0.35, 0.65, 0.95) : vec3(1.0, 0.46, 0.16); // Mars blue sunsets, Earth golden
       vec3 rayleighScatt = rimColor * opticalDepth * rayleighPhase * (0.2 + diff);
       vec3 mieScatt = vec3(1.0, 0.96, 0.88) * opticalDepth * (miePhase * 12.5) * 0.18 * diff;
-      vec3 sunsetScatt = sunsetColor * opticalDepth * termTwi * 0.85;
+      vec3 sunsetScatt = sunsetColor * opticalDepth * termTwi * (0.85 + 0.45 * clamp(u_Clouds, 0.0, 1.0));
       col += (rayleighScatt + mieScatt + sunsetScatt) * rimGain;
     } else {
       float atmRim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
