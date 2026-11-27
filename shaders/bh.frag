@@ -65,6 +65,7 @@ uniform float u_RedshiftK;  // v3.9.0: legacy sky minR proxy (ignored on the phy
 uniform float u_RelK;       // F4/I1: 0 = legacy stylized shifts, 1 = physical invariant
 uniform float u_Rkf45K;  // v3.10.0: RKF45 adaptive march 0/1 (0 = legacy rk4+step law)
 uniform float u_KerrSpin;  // v5.2.0: dimensionless Kerr spin a/M in [0.0, 0.998]; 0 = legacy Schwarzschild
+uniform vec4 u_KerrPrecomp;  // CPU-precomputed (rPlus, rIn, fCam, active>0.5) to avoid per-pixel pow()
 uniform float u_CamDist;  // camera distance in Rs (set by SceneManager; <=0 = far/legacy)
 // v3.9.1 OJ 287 companion BH: silhouette + local weak-field deflection +
 // flare arcs where the companion's orbit crosses the disk sheet.
@@ -445,7 +446,8 @@ void main() {
   // Cartesian march state: position x, velocity v = dx/dLambda, time rate dt.
   float kerrSpin = clamp(u_KerrSpin, 0.0, 0.998);
   bool isKerr = (kerrSpin > 0.001);
-  float rPlus = isKerr ? kerrHorizonRadius(u_Rs, kerrSpin) : u_Rs;
+  bool hasPrecomp = (isKerr && u_KerrPrecomp.w > 0.5);
+  float rPlus = hasPrecomp ? u_KerrPrecomp.x : (isKerr ? kerrHorizonRadius(u_Rs, kerrSpin) : u_Rs);
   float rCapture = isKerr ? max(rPlus * 1.005, 0.51 * u_Rs) : (u_Rs * 1.001);
 
   vec3 x = u_CameraPosition;
@@ -461,7 +463,9 @@ void main() {
   // red. When Kerr spin is active, preserve asymptotic mass M via 2Mr/Sigma.
   float rCam = max(length(u_CameraPosition), rPlus * 1.001);
   float fCam = max(1.0 - u_Rs / rCam, 0.0);
-  if (isKerr) {
+  if (hasPrecomp) {
+    fCam = clamp(u_KerrPrecomp.z, 0.0, 1.0);
+  } else if (isKerr) {
     float cosCam = clamp(u_CameraPosition.y / rCam, -1.0, 1.0);
     float aCam = kerrSpin * (0.5 * u_Rs);
     fCam = clamp(1.0 - (u_Rs * rCam) / max(rCam * rCam + aCam * aCam * cosCam * cosCam, 1e-5),
@@ -476,7 +480,9 @@ void main() {
   // v3.9.1 rIn/rOut: hyperdisk override (0 = legacy 3/7 Rs; Kerr shifts ISCO
   // smoothly inward per Bardeen-Press-Teukolsky when u_KerrSpin > 0).
   float rIn = (u_DiskInK > 0.0) ? u_DiskInK * u_Rs : u_Rs * 3.0;
-  if (isKerr && u_DiskInK <= 0.0) rIn = kerrIscoRadius(u_Rs, kerrSpin);
+  if (isKerr && u_DiskInK <= 0.0) {
+    rIn = hasPrecomp ? u_KerrPrecomp.y : kerrIscoRadius(u_Rs, kerrSpin);
+  }
   float rOut = (u_DiskOutK > 0.0) ? u_DiskOutK * u_Rs : u_Rs * 7.0;
 
   // v3.9.1 OJ 287 companion state (anchored to the harness epoch u_Time

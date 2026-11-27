@@ -54,6 +54,7 @@ struct SaveSettings {
   int menuBackground = 0;            // 0 animated black hole, 1..4 scenic stills
   bool menuProceduralDisk = true;    // v5.1.0: процедурный GPU-шейдер диска по умолчанию (0% CPU)
   float kerrSpin = 0.0f;             // v5.2.0: спин черной дыры Керра a/M (0.0 .. 0.998)
+  bool autoKerrSpin = false;         // v5.2.0: автоматически применять спин Керра из каталога ЧД
 };
 
 struct SaveCustom {

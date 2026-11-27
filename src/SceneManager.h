@@ -43,6 +43,7 @@ struct RenderSettings {
   float filmicVignette = 0.0f;    // 0.0..1.0 smooth lens vignette
   // v5.2.0: Вращающаяся метрика Керра (0.0 = Шварцшильд для детерминированных эталонов, 0.0..0.998 = спин a/M)
   float kerrSpin = 0.0f;
+  bool autoKerrSpin = false;
 };
 
 // User-spawned object (flexible object editor, v3.2.0).

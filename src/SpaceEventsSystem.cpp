@@ -228,7 +228,9 @@ DeepSpaceEvent SpaceEventsManager::createEventForType(SpaceEventType type,
 void SpaceEventsManager::update(double dt, const std::string& stationId, bool activeGameplay) {
   if (!activeGameplay || dt <= 0.0) return;
   const double stepDt = std::min(dt, 0.25);
+  m_scannerCooldownSec = std::max(0.0, m_scannerCooldownSec - stepDt);
 
+  bool transitioned = false;
   for (auto& ev : m_events) {
     if (ev.status != SpaceEventStatus::Active) continue;
     if (!stationId.empty() && ev.stationId != stationId) continue;
@@ -246,12 +248,17 @@ void SpaceEventsManager::update(double dt, const std::string& stationId, bool ac
     if (ev.timeRemainingSec <= 0.0) {
       ev.timeRemainingSec = 0.0;
       ev.status = SpaceEventStatus::Expired;
+      ++m_expiredTotal;
+      transitioned = true;
     } else if (ev.type == SpaceEventType::RogueAsteroid &&
                vecDist(ev.pos, ev.targetPos) < 0.75) {
       ev.timeRemainingSec = 0.0;
       ev.status = SpaceEventStatus::Expired;
+      ++m_expiredTotal;
+      transitioned = true;
     }
   }
+  if (transitioned) trimHistory();
 }
 
 int SpaceEventsManager::ensureSectorEvents(const std::string& stationId, uint64_t seed) {
@@ -272,13 +279,17 @@ int SpaceEventsManager::ensureSectorEvents(const std::string& stationId, uint64_
   return 2;
 }
 
-bool SpaceEventsManager::pingSectorScanner(const std::string& stationId, uint64_t seed) {
+bool SpaceEventsManager::pingSectorScanner(const std::string& stationId,
+                                           uint64_t seed,
+                                           bool ignoreCooldown) {
   const std::string st = stationId.empty() ? "sol" : stationId;
   if (activeCount(st) >= 3) return false;
+  if (!ignoreCooldown && m_scannerCooldownSec > 0.0) return false;
 
   const uint64_t h = splitMix64(seed ^ fnv1a(st) ^ (m_nextSeq * 31337ULL));
   const SpaceEventType type = static_cast<SpaceEventType>(h % 3ULL);
   m_events.push_back(createEventForType(type, st, h));
+  if (!ignoreCooldown) m_scannerCooldownSec = kScannerCooldownSec;
   return true;
 }
 
@@ -368,11 +379,33 @@ bool SpaceEventsManager::engageEvent(const std::string& eventId,
     }
     if (ev.progress >= ev.requiredProgress) {
       ev.status = SpaceEventStatus::Resolved;
+      ++m_resolvedTotal;
       rewardEvent(ev, codex, comms, zettel);
+      trimHistory();
     }
     return true;
   }
   return false;
+}
+
+void SpaceEventsManager::trimHistory() {
+  size_t archived = 0;
+  for (const auto& ev : m_events) {
+    if (ev.status != SpaceEventStatus::Active) ++archived;
+  }
+  if (archived <= kMaxArchivedHistory) return;
+
+  size_t toDrop = archived - kMaxArchivedHistory;
+  std::vector<DeepSpaceEvent> kept;
+  kept.reserve(m_events.size() - toDrop);
+  for (auto& ev : m_events) {
+    if (ev.status != SpaceEventStatus::Active && toDrop > 0) {
+      --toDrop;
+      continue;
+    }
+    kept.push_back(std::move(ev));
+  }
+  m_events = std::move(kept);
 }
 
 int SpaceEventsManager::activeCount(const std::string& stationId) const {
@@ -385,26 +418,14 @@ int SpaceEventsManager::activeCount(const std::string& stationId) const {
   return count;
 }
 
-int SpaceEventsManager::resolvedCount() const {
-  int count = 0;
-  for (const auto& ev : m_events) {
-    if (ev.status == SpaceEventStatus::Resolved) ++count;
-  }
-  return count;
-}
-
-int SpaceEventsManager::expiredCount() const {
-  int count = 0;
-  for (const auto& ev : m_events) {
-    if (ev.status == SpaceEventStatus::Expired) ++count;
-  }
-  return count;
-}
-
 std::string SpaceEventsManager::serialize() const {
   std::ostringstream os;
   os << std::setprecision(10);
-  os << "{\n  \"schema\": 1,\n  \"nextSeq\": " << m_nextSeq << ",\n  \"events\": [\n";
+  os << "{\n  \"schema\": 1,\n  \"nextSeq\": " << m_nextSeq
+     << ",\n  \"scanCd\": " << m_scannerCooldownSec
+     << ",\n  \"resolvedTotal\": " << m_resolvedTotal
+     << ",\n  \"expiredTotal\": " << m_expiredTotal
+     << ",\n  \"events\": [\n";
   for (size_t i = 0; i < m_events.size(); ++i) {
     const auto& ev = m_events[i];
     os << "    {"
@@ -499,12 +520,33 @@ bool SpaceEventsManager::deserialize(const std::string& data) {
 
   m_events = std::move(loaded);
   m_nextSeq = std::max<uint64_t>(nextSeq, m_events.size() + 1);
+  double cdVal = 0.0;
+  m_scannerCooldownSec = extractJsonDouble(data, "scanCd", cdVal)
+                             ? std::clamp(cdVal, 0.0, kScannerCooldownSec)
+                             : 0.0;
+  int resCount = 0;
+  int expCount = 0;
+  for (const auto& ev : m_events) {
+    if (ev.status == SpaceEventStatus::Resolved) ++resCount;
+    else if (ev.status == SpaceEventStatus::Expired) ++expCount;
+  }
+  int savedRes = 0;
+  int savedExp = 0;
+  m_resolvedTotal = extractJsonInt(data, "resolvedTotal", savedRes)
+                        ? std::max(savedRes, resCount)
+                        : resCount;
+  m_expiredTotal = extractJsonInt(data, "expiredTotal", savedExp)
+                       ? std::max(savedExp, expCount)
+                       : expCount;
   return true;
 }
 
 void SpaceEventsManager::clear() {
   m_events.clear();
   m_nextSeq = 1;
+  m_scannerCooldownSec = 0.0;
+  m_resolvedTotal = 0;
+  m_expiredTotal = 0;
 }
 
 }  // namespace astro

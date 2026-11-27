@@ -23,6 +23,7 @@
 #include "AtmosphereSystem.h"
 #include "MissionSystem.h"
 #include "SpaceEventsSystem.h"
+#include "FrameSequencePlayer.h"
 #include "GamepadSystem.h"
 #include "PeopleSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
@@ -442,35 +443,15 @@ class AppGL {
   void renderIntroFrame(int width, int height, double time);
 
   // Pre-rendered cinematic intro stream (res/video/intro/frame_%04d.jpg + audio.wav)
-  bool m_videoIntroActive = false;
-  double m_videoIntroTime = 0.0;
-  int m_videoIntroTotalFrames = 0;
-  int m_videoIntroFrameIdx = -1;
-  bool m_videoIntroAudioPlayed = false;
-  bool m_videoIntroScanned = false;
-  std::string m_videoIntroResolvedDir;
-  unsigned int m_videoIntroTex = 0;
-  int m_videoIntroW = 0;
-  int m_videoIntroH = 0;
+  FrameSequencePlayer m_videoIntroSeq;
   void startIntroPlayback();
   void stopIntroPlayback();
-  bool isIntroPlaying() const { return m_videoIntroActive || m_introDirector.isActive(); }
-  void updateVideoIntroTexture(int frame1Based);
+  bool isIntroPlaying() const { return m_videoIntroSeq.isActive() || m_introDirector.isActive(); }
   void drawVideoIntroOverlay(float screenW, float screenH);
 
   // Pre-rendered ship destruction exit sequence (res/video/exit/frame_%04d.jpg + audio.wav)
-  bool m_exitDestructionActive = false;
-  double m_exitDestructionTime = 0.0;
-  int m_exitDestructionTotalFrames = 0;
-  int m_exitDestructionFrameIdx = -1;
-  bool m_exitDestructionAudioPlayed = false;
-  bool m_exitDestructionScanned = false;
-  std::string m_exitDestructionResolvedDir;
-  unsigned int m_exitDestructionTex = 0;
-  int m_exitDestructionW = 0;
-  int m_exitDestructionH = 0;
+  FrameSequencePlayer m_exitDestructionSeq;
   void startExitDestruction();
-  void updateExitDestructionTexture(int frame1Based);
   void drawExitDestructionOverlay(float screenW, float screenH);
 
   // Real-time 3D Menu-to-Ship Universe-to-Target Transition
@@ -488,19 +469,9 @@ class AppGL {
   void drawEntryFlightHud(float screenW, float screenH);
 
   // Pre-rendered Menu-to-Gameplay entry transition video (res/video/entry/frame_%04d.jpg + audio.wav)
-  bool m_entryVideoActive = false;
-  double m_entryVideoTime = 0.0;
-  int m_entryVideoTotalFrames = 0;
-  int m_entryVideoFrameIdx = -1;
-  bool m_entryVideoAudioPlayed = false;
-  bool m_entryVideoScanned = false;
-  std::string m_entryVideoResolvedDir;
-  unsigned int m_entryVideoTex = 0;
-  int m_entryVideoW = 0;
-  int m_entryVideoH = 0;
+  FrameSequencePlayer m_entryVideoSeq;
   void startEntryTransitionVideo();
   void stopEntryTransitionVideo();
-  void updateEntryVideoTexture(int frame1Based);
   void drawEntryVideoOverlay(float screenW, float screenH);
 
   bool m_hasStartedFlight = false;

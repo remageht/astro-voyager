@@ -933,6 +933,9 @@ void SceneManager::teleportTo(const std::string& stationId, Camera& camera) {
     if (m_preset != PerfPreset::Custom) {
       applyPreset(m_preset);
     }
+    if (m_settings.autoKerrSpin) {
+      m_settings.kerrSpin = static_cast<float>(std::clamp(st->params.kerrSpin, 0.0, 0.998));
+    }
     // v3.9.1: OJ 287 / hyperdisk need a bigger march shell and budget
     // than any preset gives (companion orbit 4.8 Rs needs deflection
     // room; hyperdisk rOut 26 Rs needs shell >= spawn 45+13).
@@ -1129,8 +1132,31 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
     m_bhShader->setUniform1f("u_RelK", m_physicalRel ? 1.0f : 0.0f);
     // v3.10: RKF45 адаптивный шаг марша предметно-LID (0 = legacy rk4+step law).
     m_bhShader->setUniform1f("u_Rkf45K", m_settings.rkf45Adaptive ? 1.0f : 0.0f);
-    // v5.2.0: Спин вращающейся черной дыры Керра a/M (0 = legacy Шварцшильд).
-    m_bhShader->setUniform1f("u_KerrSpin", std::clamp(m_settings.kerrSpin, 0.0f, 0.998f));
+    // v5.2.0: Спин вращающейся черной дыры Керра a/M (0 = legacy Шварцшильд) + CPU прекомпьют.
+    const float spinK = std::clamp(m_settings.kerrSpin, 0.0f, 0.998f);
+    m_bhShader->setUniform1f("u_KerrSpin", spinK);
+    if (spinK > 0.001f) {
+      const double rsD = static_cast<double>(m_settings.rs);
+      const double aD = static_cast<double>(spinK);
+      const double rPlus = 0.5 * rsD * (1.0 + std::sqrt(std::max(1.0 - aD * aD, 0.0)));
+      const double c1 = std::cbrt(std::max(1.0 - aD * aD, 1e-6));
+      const double c2 = std::cbrt(1.0 + aD) + std::cbrt(std::max(1.0 - aD, 1e-6));
+      const double z1 = 1.0 + c1 * c2;
+      const double z2 = std::sqrt(3.0 * aD * aD + z1 * z1);
+      const double rInKerr = 0.5 * rsD *
+          (3.0 + z2 - std::sqrt(std::max((3.0 - z1) * (3.0 + z1 + 2.0 * z2), 0.0)));
+      const double rCam = std::max(
+          std::sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z), rPlus * 1.001);
+      const double cosCam = std::clamp(cp.y / rCam, -1.0, 1.0);
+      const double aCam = aD * 0.5 * rsD;
+      const double fCamKerr = std::clamp(
+          1.0 - (rsD * rCam) / std::max(rCam * rCam + aCam * aCam * cosCam * cosCam, 1e-5),
+          0.0, 1.0);
+      m_bhShader->setUniform4f("u_KerrPrecomp", static_cast<float>(rPlus),
+                               static_cast<float>(rInKerr), static_cast<float>(fCamKerr), 1.0f);
+    } else {
+      m_bhShader->setUniform4f("u_KerrPrecomp", 0.0f, 0.0f, 0.0f, 0.0f);
+    }
     // Close-camera distance in Rs: drives disk-detail smoothing and pole
     // damping in bh.frag (u_CamDist <= 0 means far/legacy on shader side).
     {
@@ -4134,6 +4160,7 @@ void SceneManager::renderIntro(const IntroRenderParams& params, int fbWidth, int
   m_bhShader->setUniform1f("u_RelK", 0.0f);
   m_bhShader->setUniform1f("u_Rkf45K", 0.0f);
   m_bhShader->setUniform1f("u_KerrSpin", 0.0f);
+  m_bhShader->setUniform4f("u_KerrPrecomp", 0.0f, 0.0f, 0.0f, 0.0f);
   m_bhShader->setUniform1f("u_CamDist", static_cast<float>(glm::length(eye) / introRs));
   m_bhShader->setUniform1f("u_CompK", 0.0f);
   m_bhShader->setUniform1f("u_CompRs", 0.0f);
