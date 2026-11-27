@@ -5,9 +5,17 @@
 #include <limits>
 #include <glm/glm.hpp>
 #include "IntroCinematicDirector.h"
+#include "StorySlides.h"
 
 int main() {
   std::cout << "[test_intro_cinematic] Starting unit tests...\n";
+
+  StorySlide legacyVideo;
+  assert(legacyVideo.videoFps == 12.0);
+  StorySlide tourVideo{"", "", 0, "", "res/story/worlds_tour", 30.0};
+  assert(tourVideo.videoDir == "res/story/worlds_tour");
+  assert(tourVideo.videoFps == 30.0);
+  std::cout << "  PASS: Video slide fps defaults and tour override\n";
 
   astro::IntroCinematicDirector dir;
   assert(!dir.isActive());

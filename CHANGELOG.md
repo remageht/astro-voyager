@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 5.1.1 (2026-11-25)
+
+## What's new / Что нового
+
+- EN: Universe Tour & Cinematic Finale:
+  - Added the 13-chapter, 30 fps full-screen Universe Tour preroll with the `Build` music mix and a 12-second 3D cinematic finale.
+  - The finale now holds the colony and wordmark on a true black frame without the legacy Dart pass.
+  - Workshop subsystem buttons are clickable again, models support manual orbit/pan/zoom, and studio lighting is brighter.
+  - Fixed reversed BMP row order for Ark, Warp Bubble and Warp Drive PBR atlases, removing triangular foreign-color artifacts.
+- RU: Тур по Вселенной и кинематографичный финал:
+  - Добавлен полноэкранный преролл из 13 глав на 30 fps с музыкой `Build` и 12-секундным 3D-финалом.
+  - Финальный кадр удерживает колонию и надпись на настоящем чёрном фоне без старого пролёта Dart.
+  - Кнопки подсистем ангара снова работают, модели можно вращать/панорамировать/масштабировать вручную, студийный свет стал ярче.
+  - Исправлен обратный порядок строк BMP для Ark, Warp Bubble и Warp Drive — цветные треугольные артефакты удалены.
+
 ## 5.1.15 (2026-11-23)
 
 ## What's new / Что нового

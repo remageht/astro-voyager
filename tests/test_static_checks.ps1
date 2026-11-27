@@ -822,7 +822,7 @@ Check 'colony capture harness' (((Read-File 'src/main.cpp') -match '--capture-co
 Check 'colony stage and rp saved' (((Read-File 'src/SaveGame.cpp') -match 'colonyStages') -and ((Read-File 'src/SaveGame.cpp') -match 'researchPoints') -and ((Read-File 'tests/test_save.cpp') -match 'colonyStages'))
 $ciStray = (((Read-File '.github/workflows/build.yml') -split "`n") | Where-Object { $_ -match '^[^\s#]' -and $_ -notmatch '^(name|on|permissions|jobs|env|concurrency|defaults):' }).Count
 Check 'ci workflow yaml indent' ($ciStray -eq 0)
-Check 'v5.1.15 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
+Check 'v5.1.1 version sync' (($cmake -match 'project\(astro-voyager VERSION ' + [regex]::Escape($ver)) -and ((Read-File 'src/Version.h') -match 'kVersion = "' + [regex]::Escape($ver) + '"') -and ($catalogJson -match '"version": "' + [regex]::Escape($ver) + '"') -and ((Read-File 'CHANGELOG.md') -match ('## ' + [regex]::Escape($ver))))
 
 # --- Colony 2.0 perks wired into the simulation (not panel text only) ---
 Check 'colony perk warp recharge in sim' ((((Read-File 'src/WarpJump.cpp') -match 'dur\(JumpPhase::Charge\)') -and ($appCpp -match 'colonyWarpRechargeBoost\(m_colonyStages\)')) -and ((($appCpp -match '3\.0f \* warpRechargeScale\(\)') -and ($appCpp -match '2\.0f \* warpRechargeScale\(\)')) -and ($appCpp -match 'm_jump\.dur\(JumpPhase::Cooldown\)')))
@@ -1005,6 +1005,9 @@ if ($hasModelPack) {
     Write-Output 'SKIP: 2 intro mesh and PBR map checks (asset pack not fetched for this ref)'
 }
 Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(std::min\(wallDelta,\s*0\.2f\)\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match 'Повторить интро'))
+Check 'universe tour is a data-driven 30 fps full-screen preroll' (((Read-File 'src/StorySlides.h') -match 'videoFps') -and ((Read-File 'src/StorySlides.cpp') -match 'storyUniverseTourSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'res/story/worlds_tour') -and ($appH -match 'm_slidesPreroll') -and ($appCpp -match 'startUniverseTour') -and ($appCpp -match 'vTime \* sl\.videoFps'))
+Check 'menu renders story overlay before menu or realtime intro' ($appCpp -match '(?s)if \(m_slidesOpen\) \{\s*drawSlidesOverlay\(\);\s*\} else if \(m_introDirector\.isActive\(\)\)')
+Check 'universe tour story assets are complete' ((Test-Path 'res/story/worlds_tour/frame_001.jpg') -and (Test-Path 'res/story/worlds_tour/frame_1274.jpg') -and (Test-Path 'res/story/worlds_tour/audio.wav'))
 Check 'workshop catalog registers bridge_interior and station_megastructure' (($appCpp -match '"bridge_interior"') -and ($appCpp -match '"station_megastructure"'))
 
 # --- Issue #236: 3D Interstellar Ark Starship, Rotating Centrifuge Habitat & Deep Space Flagship Suite (v5.1.15) ---

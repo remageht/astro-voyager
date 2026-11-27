@@ -21,10 +21,11 @@ struct StorySlide {
   // "res/story/paris_peace.jpg"). Non-empty wins over the vector art;
   // the drawing side lazy-loads it into a GL texture (stb_image).
   std::string image;
-  // v4.0: катсцена-слайд: каталог с frame_%03d.jpg (fps=12) + audio.wav.
+  // v4.0: катсцена-слайд: каталог с frame_%03d.jpg + audio.wav.
   // Непустой перекрывает и арт, и фото; слайд играет сам и листается по
   // окончании кадров (Space/Esc работают как раньше).
   std::string videoDir;
+  double videoFps = 12.0;
 };
 
 namespace astro {
@@ -33,6 +34,9 @@ namespace astro {
 // humanity chooses to find a new planet, the expedition sets off (starts
 // at the Solar System station, Earth first).
 const std::vector<StorySlide>& storyIntroSlides();
+
+// Full-screen universe tour and cinematic ending shown before the main menu.
+const std::vector<StorySlide>& storyUniverseTourSlides();
 
 // Shared finish-of-chapter slides; art ids reuse the same table as intro.
 const std::vector<StorySlide>& storyChapterSlides();

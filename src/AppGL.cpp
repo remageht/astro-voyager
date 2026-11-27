@@ -379,7 +379,14 @@ int AppGL::run() {
     m_loadingScreen.update(deltaTime);
     if (m_inMenu && m_loadingScreen.justFinished()) {
       m_loadingScreen.clearFinishedFlag();
-      startIntroPlayback();
+      m_audio.playRadioBeep();
+      const std::string tourFrame =
+          resolveAssetPath("res/story/worlds_tour/frame_001.jpg");
+      if (std::filesystem::exists(tourFrame)) {
+        startUniverseTour();
+      } else {
+        startIntroPlayback();
+      }
     }
 
     // === Cinematic Intro (Pre-rendered MP4 stream or 3D Engine Fallback) ===
@@ -465,7 +472,7 @@ int AppGL::run() {
       GLFWwindow* menuWin = m_window->getNativeWindow();
       if (!m_exitDestructionActive) {
         bool menuEscDown = (glfwGetKey(menuWin, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-        if (menuEscDown && !m_prevEscPressed) {
+        if (menuEscDown && !m_prevEscPressed && !m_slidesOpen) {
           if (!closeTopModal()) {
             if (m_menuPage != 0) {
               menuGoBack();
@@ -476,7 +483,8 @@ int AppGL::run() {
         }
         m_prevEscPressed = menuEscDown;
 
-        if (glfwGetKey(menuWin, GLFW_KEY_I) == GLFW_PRESS && !isIntroPlaying() && !m_loadingScreen.isActive()) {
+        if (glfwGetKey(menuWin, GLFW_KEY_I) == GLFW_PRESS &&
+            !isIntroPlaying() && !m_loadingScreen.isActive() && !m_slidesOpen) {
           startIntroPlayback();
           m_audio.playBlip();
         }
@@ -526,6 +534,8 @@ int AppGL::run() {
         drawExitDestructionOverlay(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
       } else if (m_videoIntroActive) {
         drawVideoIntroOverlay(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
+      } else if (m_slidesOpen) {
+        drawSlidesOverlay();
       } else if (m_introDirector.isActive()) {
         m_introDirector.drawHUD(static_cast<float>(menuFbW), static_cast<float>(menuFbH),
                                 m_mainMenuTitleFont, m_mainMenuFont);
@@ -4675,11 +4685,25 @@ void AppGL::drawConstellationAlignment() {
   if (pushed) ImGui::PopFont();
 }
 
+void AppGL::startUniverseTour() {
+  logLaunch("UNIVERSE TOUR START");
+  m_slidesCurrent = storyUniverseTourSlides();
+  m_slidesIntro = false;
+  m_slidesPreroll = true;
+  m_slidesAdv = false;
+  m_slidesIdx = 0;
+  m_slidesOpen = true;
+  m_inMenu = true;
+  m_slideAnimIdx = -1;
+  invalidateVideoSlide();
+}
+
 void AppGL::startExpeditionIntro() {
   // === Expedition === (v3.5.0): вводные слайды (идут после Play при
   // первой игре); по завершении — высадка в Солнечной системе.
   m_slidesCurrent = storyIntroSlides();
   m_slidesIntro = true;
+  m_slidesPreroll = false;
   m_slidesAdv = false;
   m_slidesIdx = 0;
   m_slidesOpen = true;
@@ -4693,6 +4717,7 @@ void AppGL::startNewAdventure() {
   // save-adventure.json. Экспедиция сбрасывается: главы идут с "Дома".
   m_slidesCurrent = storyPrologueSlides();
   m_slidesIntro = true;
+  m_slidesPreroll = false;
   m_slidesAdv = true;
   m_slidesIdx = 0;
   m_slidesOpen = true;
@@ -4814,6 +4839,7 @@ void AppGL::openChapterSlide(int slideIdx) {
     }
   }
   m_slidesIntro = false;
+  m_slidesPreroll = false;
   m_slidesIdx = 0;
   m_slidesOpen = true;
   m_slideAnimIdx = -1;
@@ -4859,6 +4885,7 @@ void AppGL::openEndingSlide(int choice) {
   m_slidesHead = uiRu(finaleTitleRu(choice).c_str(),
                       finaleTitleEn(choice).c_str());
   m_slidesIntro = false;
+  m_slidesPreroll = false;
   m_slidesIdx = 0;
   m_slidesOpen = true;
   m_slideAnimIdx = -1;
@@ -5152,7 +5179,7 @@ void AppGL::drawSlidesOverlay() {
   }
   // Автолистание: кадры кончились — как если бы нажали Space.
   const bool videoDone = hasVideo && m_videoFrames > 0 &&
-                         vTime * 12.0 >= static_cast<double>(m_videoFrames);
+                         vTime * sl.videoFps >= static_cast<double>(m_videoFrames);
 
   // Auto-advance toggle hotkey (Tab or A)
   if (ImGui::IsKeyPressed(ImGuiKey_Tab, false) || ImGui::IsKeyPressed(ImGuiKey_A, false)) {
@@ -5197,6 +5224,14 @@ void AppGL::drawSlidesOverlay() {
       bodyChars > 0 && textDone &&
       timeSinceDone >= readingDuration;
 
+  if (m_slidesPreroll && (advance || skip || videoDone)) {
+    logLaunch("UNIVERSE TOUR END");
+    m_slidesPreroll = false;
+    m_slidesOpen = false;
+    m_slidesCurrent.clear();
+    invalidateVideoSlide();
+    return;
+  }
   if (m_slidesIntro && (advance || skip || videoDone || autoAdvance)) {
     // Пролог: Space/клик листают, Esc досматривает до конца; конец ==
     // старт миссии (teleport в sol сам завершит главу «Дом»).
@@ -5270,7 +5305,7 @@ void AppGL::drawSlidesOverlay() {
   const ImVec2 artPos((disp.x - artSize) * 0.5f, artTop);
   float textY = artPos.y + artSize + 26.0f;
   if (hasVideo && m_videoFrames > 0) {
-    int fi = static_cast<int>(vTime * 12.0);
+    int fi = static_cast<int>(vTime * sl.videoFps);
     if (fi >= m_videoFrames) fi = m_videoFrames - 1;
     if (fi != m_videoIdx) {
       char buf[512];
@@ -5362,7 +5397,7 @@ void AppGL::drawSlidesOverlay() {
     if (storyImage && storyImage[0] != '\0') uiTex = loadUiTexture(storyImage, &iw, &ih);
 
     if (hasVideo && m_videoFrames > 0) {
-      int fi = static_cast<int>(vTime * 12.0);
+      int fi = static_cast<int>(vTime * sl.videoFps);
       if (fi >= m_videoFrames) fi = m_videoFrames - 1;
       if (fi != m_videoIdx) {
         char buf[512];
@@ -5383,6 +5418,22 @@ void AppGL::drawSlidesOverlay() {
         }
         m_videoIdx = fi;
       }
+    }
+
+    if (m_slidesPreroll) {
+      dl->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(0, 0, 0, 255));
+      if (m_videoTex != 0 && m_videoW > 0 && m_videoH > 0) {
+        const float scale = std::min(disp.x / m_videoW, disp.y / m_videoH);
+        const ImVec2 size(m_videoW * scale, m_videoH * scale);
+        const ImVec2 origin((disp.x - size.x) * 0.5f,
+                            (disp.y - size.y) * 0.5f);
+        dl->AddImage((ImTextureID)(intptr_t)m_videoTex, origin,
+                     ImVec2(origin.x + size.x, origin.y + size.y));
+      }
+      ImGui::End();
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor();
+      return;
     }
 
     const bool videoFrame = hasVideo && m_videoFrames > 0 && m_videoTex != 0;
@@ -17165,8 +17216,11 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
     }
   }
   app.m_videoFrames = 0;  // пересчитать кадры, как в живом запуске
+  const double harnessFps = app.m_slidesCurrent.empty()
+                                ? 12.0
+                                : app.m_slidesCurrent[app.m_slidesIdx].videoFps;
   for (int frame = 0; frame < 3; ++frame) {
-    app.m_slideVStart = ImGui::GetTime() - 60.0 / 12.0;
+    app.m_slideVStart = ImGui::GetTime() - 60.0 / harnessFps;
     app.m_sceneManager->render(app.m_camera, fbWidth, fbHeight, 1.0f);
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -17185,6 +17239,7 @@ int AppGL::captureAllScreenshots(const std::string& outDir, bool diskOn) {
   app.m_slidesCurrent.clear();
   app.m_slidesIdx = 0;
   app.m_slidesAdv = false;
+  app.m_slidesPreroll = false;
   app.invalidateVideoSlide();
 
   // === MenuSky === (v3.5.0): menu.png — hero-вид главного меню (живой
