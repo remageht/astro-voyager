@@ -918,6 +918,23 @@ function Count-ObjFaces($relPath) {
     return $count
 }
 
+function Count-ObjTriangles($relPath) {
+    $p = Join-Path $root $relPath
+    if (-not (Test-Path -LiteralPath $p)) { return 0 }
+    $count = 0
+    $reader = [System.IO.File]::OpenText($p)
+    try {
+        while (($line = $reader.ReadLine()) -ne $null) {
+            if ($line.StartsWith('f ')) {
+                $count += [Math]::Max(0, $line.Split(' ').Count - 3)
+            }
+        }
+    } finally {
+        $reader.Dispose()
+    }
+    return $count
+}
+
 Check 'workshop catalog registers asteroid PBR textures' (($appCpp -match '"res/models/asteroid_1\.obj",\s*"res/models/asteroid"') -and ($appCpp -match '"res/models/asteroid_2\.obj",\s*"res/models/asteroid"') -and ($appCpp -match '"res/models/asteroid_3\.obj",\s*"res/models/asteroid"'))
 Check 'workshop catalog registers probe PBR textures' ($appCpp -match '"res/models/probe\.obj",\s*"res/models/probe"')
 # res/models is gitignored and only reaches the tree through
@@ -1023,11 +1040,23 @@ Check 'workshop catalog registers bridge_interior and station_megastructure' (($
 
 # --- Issue #236: 3D Interstellar Ark Starship, Rotating Centrifuge Habitat & Deep Space Flagship Suite (v5.1.15) ---
 Check 'workshop catalog registers ark_ship and interstellar ark entry' (($appCpp -match '"ark_ship"') -and ($appCpp -match 'Interstellar Ark'))
-$arkBmpWriter = Read-File 'tools/build_interstellar_ark.py'
-Check 'ark BMP writer preserves runtime row order' ($arkBmpWriter -match 'src_row = y \* width \* 3')
-if ($hasModelPack) {
-    Check 'ark ship 3D mesh exceeds 5k polygons' ((Count-ObjFaces 'res/models/ark_ship.obj') -ge 5000)
+$arkGenerator = Read-File 'tools/build_interstellar_ark.py'
+Check 'ark BMP writer preserves runtime row order' ($arkGenerator -match 'src_row = y \* width \* 3')
+Check 'ark remaster uses hollow bell nozzles' (($arkGenerator -match 'def p_bell_nozzle') -and ($arkGenerator -match 'inner\.append') -and ($arkGenerator -match 'Plasma'))
+Check 'ark remaster uses a parabolic dish' (($arkGenerator -match 'def p_dish') -and ($arkGenerator -match 'depth \* t \* t'))
+Check 'ark remaster keeps enclosed dual centrifuges and detailed radiators' (($arkGenerator -match 'Habitat_PressureDrum') -and ($arkGenerator -match 'TechCentrifuge_Drum') -and ($arkGenerator -match 'create_radiator_panel'))
+Check 'ark remaster uses a colony-scale annular pressure drum' (($arkGenerator -match 'def p_annular_cylinder') -and ($arkGenerator -match 'drum_radius = 2\.35') -and ($arkGenerator -match 'Habitat_Dock_') -and ($arkGenerator -match 'Habitat_ServiceHatch'))
+Check 'ark remaster triangulates for the runtime loader' (($arkGenerator -match 'GameTriangulation') -and ($arkGenerator -match 'ngon_method = "BEAUTY"'))
+Check 'ark data maps use linear colorspace' ($arkGenerator -match 'mode in \("ALBEDO", "EMISSIVE"\) else "Non-Color"')
+Check 'ark generator leaves the Voyager relic untouched' ($arkGenerator -cnotmatch 'copyfile\(out_obj, os\.path\.join\(MODELS_DIR, "voyager\.obj"\)\)')
+Check 'ark remaster bakes a 2K PBR set' (($arkGenerator -match 'bake_pbr\(ark, base_path, size=2048\)') -and ($arkGenerator -match 'np\.flipud'))
+Check 'ark scalar PBR passes clear albedo links' (($arkGenerator -match 'link\.to_node == emit') -and ($arkGenerator -match 'links\.remove\(link\)'))
+Check 'ark docking petals avoid collapsing bevels' (($arkGenerator -match 'create_docking_port_apas') -and ($arkGenerator -match 'modifier\.type == "BEVEL"') -and ($arkGenerator -match 'dock\.modifiers\.remove'))
+if (Test-Path (Join-Path $root 'res/models/ark_ship.obj')) {
+    Check 'ark ship remastered mesh exceeds 100k triangles' ((Count-ObjTriangles 'res/models/ark_ship.obj') -ge 100000)
     Check 'ark ship 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/ark_ship.obj')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/ark_ship_emissive.bmp')))
+    Check 'ark remastered showcase exists' (Test-Path (Join-Path $root 'docs/screens/ark_ship_showcase.png'))
+    Check 'ark engine close-up exists' (Test-Path (Join-Path $root 'docs/screens/ark_ship_engines.png'))
 } else {
     Write-Output 'SKIP: ark ship mesh and PBR map checks (asset pack not fetched for this ref)'
 }

@@ -1,4 +1,4 @@
-﻿"""Deterministic Interstellar Ark mesh, PBR bake and Cycles showcase.
+"""Deterministic Interstellar Ark mesh, PBR bake and Cycles showcase.
 
 Run with Blender 5.2:
   blender -b -P tools/build_interstellar_ark.py
