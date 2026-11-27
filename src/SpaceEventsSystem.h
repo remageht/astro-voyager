@@ -52,6 +52,9 @@ struct DeepSpaceEvent {
 
 class SpaceEventsManager {
  public:
+  static constexpr double kScannerCooldownSec = 30.0;
+  static constexpr size_t kMaxArchivedHistory = 24;
+
   // Advance active event kinematics (rogue asteroids / drifting probes) and countdown timers.
   void update(double dt, const std::string& stationId, bool activeGameplay);
 
@@ -60,7 +63,11 @@ class SpaceEventsManager {
   int ensureSectorEvents(const std::string& stationId, uint64_t seed);
 
   // Trigger a deep-space radar ping to spawn an emergent anomaly in the current sector.
-  bool pingSectorScanner(const std::string& stationId, uint64_t seed);
+  // Enforces kScannerCooldownSec unless ignoreCooldown is passed (used in seeded tests).
+  bool pingSectorScanner(const std::string& stationId,
+                         uint64_t seed,
+                         bool ignoreCooldown = false);
+  double scannerCooldownRemaining() const { return m_scannerCooldownSec; }
 
   // Find the nearest active event in stationId (optionally returning Euclidean distance).
   const DeepSpaceEvent* findNearestActive(const Vec3& shipPos,
@@ -77,8 +84,8 @@ class SpaceEventsManager {
                    ZettelGraph* zettel = nullptr);
 
   int activeCount(const std::string& stationId = "") const;
-  int resolvedCount() const;
-  int expiredCount() const;
+  int resolvedCount() const { return m_resolvedTotal; }
+  int expiredCount() const { return m_expiredTotal; }
   int totalEventsCount() const { return static_cast<int>(m_events.size()); }
   const std::vector<DeepSpaceEvent>& events() const { return m_events; }
 
@@ -94,9 +101,13 @@ class SpaceEventsManager {
                    ScienceCodex* codex,
                    BridgeComms* comms,
                    ZettelGraph* zettel);
+  void trimHistory();
 
   std::vector<DeepSpaceEvent> m_events;
   uint64_t m_nextSeq = 1;
+  double m_scannerCooldownSec = 0.0;
+  int m_resolvedTotal = 0;
+  int m_expiredTotal = 0;
 };
 
 }  // namespace astro

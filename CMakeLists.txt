@@ -36,6 +36,7 @@ add_executable(astro-voyager
   src/SpaceEventsSystem.cpp  # === SpaceEventsSystem === (v5.2.0): события глубокого космоса
   src/GamepadSystem.cpp  # === GamepadSystem === (Stage 5 / Release 1.0): интеграция геймпадов и Steam Deck
   src/PeopleSystem.cpp   # === PeopleSystem === (v5.1.12): симуляция людей, колонистов и экипажа
+  src/FrameSequencePlayer.cpp
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -760,6 +761,23 @@ if(TARGET test_intro_cinematic)
   add_test(NAME test_intro_cinematic COMMAND test_intro_cinematic)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_frame_sequence.cpp")
+  add_executable(test_frame_sequence
+    tests/test_frame_sequence.cpp
+    src/FrameSequencePlayer.cpp
+  )
+  target_include_directories(test_frame_sequence PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_frame_sequence PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_frame_sequence PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_frame_sequence)
+  add_test(NAME test_frame_sequence COMMAND test_frame_sequence)
+endif()
+
 # Preserve assert() in tests even in Release configurations (Issue #187).
 # MSVC passes /DNDEBUG by default in Release; /UNDEBUG undefines it.
 # Clang/GCC use -UNDEBUG.
@@ -790,6 +808,7 @@ set(ASTRO_TEST_TARGETS
   test_colony
   test_people
   test_intro_cinematic
+  test_frame_sequence
 )
 foreach(t ${ASTRO_TEST_TARGETS})
   if(TARGET ${t})

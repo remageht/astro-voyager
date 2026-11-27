@@ -19,30 +19,34 @@ int main() {
   assert(mgr.activeCount("sol") == 2);
   assert(mgr.ensureSectorEvents("sol", 12345ULL) == 0);
 
-  // 2. Manual radar ping spawns an additional encounter (up to 3 active per sector).
+  // 2. Manual radar ping spawns an additional encounter and enforces scanner cooldown.
   assert(mgr.pingSectorScanner("sol", 99ULL));
   assert(mgr.activeCount("sol") == 3);
-  assert(!mgr.pingSectorScanner("sol", 101ULL));  // capped at 3 active
+  assert(std::abs(mgr.scannerCooldownRemaining() - astro::SpaceEventsManager::kScannerCooldownSec) < 1e-6);
+  assert(!mgr.pingSectorScanner("sol", 101ULL));  // blocked by cooldown and cap
 
-  // 3. Serialize / deserialize round-trip preserves exact state & coordinates.
+  // 3. Serialize / deserialize round-trip preserves exact state, cooldown, & counters.
   const std::string saved = mgr.serialize();
   astro::SpaceEventsManager loaded;
   assert(loaded.deserialize(saved));
   assert(loaded.activeCount("sol") == 3);
+  assert(std::abs(loaded.scannerCooldownRemaining() - astro::SpaceEventsManager::kScannerCooldownSec) < 1e-3);
   assert(loaded.events()[0].id == mgr.events()[0].id);
   assert(std::abs(loaded.events()[0].pos.x - mgr.events()[0].pos.x) < 1e-6);
 
   // 4. Locate SOS, RogueAsteroid, and RelicProbe behaviors cleanly in fresh manager.
   mgr.clear();
+  assert(std::abs(mgr.scannerCooldownRemaining()) < 1e-6);
   for (uint64_t s = 1; s <= 12; ++s) {
-    mgr.pingSectorScanner("sgra", s * 7919ULL);
+    mgr.pingSectorScanner("sgra", s * 7919ULL, true);
     if (mgr.activeCount("sgra") >= 3) break;
   }
 
   // Ensure every event type works end-to-end across sectors.
   astro::SpaceEventsManager sim;
   for (uint64_t k = 0; k < 24ULL; ++k) {
-    sim.pingSectorScanner(k % 3 == 0 ? "sol" : (k % 3 == 1 ? "alpha" : "m87"), k * 97ULL + 1ULL);
+    sim.pingSectorScanner(k % 3 == 0 ? "sol" : (k % 3 == 1 ? "alpha" : "m87"),
+                          k * 97ULL + 1ULL, true);
   }
 
   bool testedAst = false;
@@ -108,6 +112,32 @@ int main() {
   assert(braceMgr.events().size() == 1);
   assert(braceMgr.events()[0].rewardRP == 210);
   assert(braceMgr.events()[0].descEn == "Text with } brace");
+
+  // 7. Cooldown decay via update() and bounded archived history (kMaxArchivedHistory).
+  astro::SpaceEventsManager cdMgr;
+  assert(cdMgr.pingSectorScanner("sol", 1ULL));
+  assert(!cdMgr.pingSectorScanner("sol", 2ULL));  // on 30s cooldown
+  for (int i = 0; i < 40; ++i) cdMgr.update(0.25, "sol", true);  // -10s
+  assert(std::abs(cdMgr.scannerCooldownRemaining() - 20.0) < 1e-4);
+  assert(!cdMgr.pingSectorScanner("sol", 3ULL));  // still on cooldown
+  for (int i = 0; i < 100; ++i) cdMgr.update(0.25, "sol", true);  // -25s -> clamped to 0
+  assert(cdMgr.scannerCooldownRemaining() == 0.0);
+  assert(cdMgr.pingSectorScanner("sol", 4ULL));  // cooldown expired, spawns 2nd event
+
+  astro::SpaceEventsManager trimMgr;
+  for (uint64_t k = 0; k < 30ULL; ++k) {
+    assert(trimMgr.pingSectorScanner("alpha", 100ULL + k, true));
+    const auto ev = trimMgr.events().back();
+    while (trimMgr.events().back().status == astro::SpaceEventStatus::Active) {
+      assert(trimMgr.engageEvent(ev.id, ev.pos, 2.0, &codex, &comms, &zettel));
+    }
+  }
+  assert(trimMgr.resolvedCount() == 30);
+  assert(trimMgr.totalEventsCount() <= static_cast<int>(astro::SpaceEventsManager::kMaxArchivedHistory));
+  const std::string trimSaved = trimMgr.serialize();
+  astro::SpaceEventsManager trimLoaded;
+  assert(trimLoaded.deserialize(trimSaved));
+  assert(trimLoaded.resolvedCount() == 30);
 
   std::cout << "test_space_events PASSED (resolved=" << sim.resolvedCount()
             << ", expired=" << expMgr.expiredCount() << ")\n";

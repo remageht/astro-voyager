@@ -273,18 +273,9 @@ AppGL::~AppGL() {
   if (m_menuVideoTex != 0) {
     glDeleteTextures(1, &m_menuVideoTex);
   }
-  if (m_videoIntroTex != 0) {
-    glDeleteTextures(1, &m_videoIntroTex);
-    m_videoIntroTex = 0;
-  }
-  if (m_exitDestructionTex != 0) {
-    glDeleteTextures(1, &m_exitDestructionTex);
-    m_exitDestructionTex = 0;
-  }
-  if (m_entryVideoTex != 0) {
-    glDeleteTextures(1, &m_entryVideoTex);
-    m_entryVideoTex = 0;
-  }
+  m_videoIntroSeq.releaseTexture();
+  m_exitDestructionSeq.releaseTexture();
+  m_entryVideoSeq.releaseTexture();
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
@@ -329,7 +320,7 @@ int AppGL::run() {
     }
 
     // === Ship Destruction Exit Sequence (res/video/exit) ===
-    if (m_exitDestructionActive) {
+    if (m_exitDestructionSeq.isActive()) {
       GLFWwindow* win = m_window->getNativeWindow();
       const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
       const bool skipExit =
@@ -339,31 +330,24 @@ int AppGL::run() {
              glfwGetKey(win, GLFW_KEY_KP_ENTER) == GLFW_PRESS ||
              (escDown && !m_prevEscPressed));
       m_prevEscPressed = escDown;
-      if (skipExit) {
-        m_exitDestructionActive = false;
+      bool needAudio = false;
+      int targetFrame = 0;
+      const auto stepRes = skipExit
+          ? FrameSequencePlayer::StepResult::Finished
+          : m_exitDestructionSeq.step(wallDelta, needAudio, targetFrame);
+      if (needAudio) {
+        m_audio.setMusicSuppressed(true);
+        m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
+        m_audio.ensureInitialized();
+        m_audio.playFile(m_exitDestructionSeq.audioPath(), -1.0f);
+      }
+      if (stepRes == FrameSequencePlayer::StepResult::Finished) {
+        m_exitDestructionSeq.stop();
         m_audio.stopFileVoices();
         glfwSetWindowShouldClose(win, GLFW_TRUE);
-      } else {
-        if (!m_exitDestructionAudioPlayed) {
-          m_audio.setMusicSuppressed(true);
-          m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
-          m_audio.ensureInitialized();
-          m_audio.playFile(m_exitDestructionResolvedDir + "/audio.wav", -1.0f);
-          m_exitDestructionAudioPlayed = true;
-          m_exitDestructionTime = 0.0;
-        } else {
-          m_exitDestructionTime += std::min(static_cast<double>(wallDelta), 0.1);
-        }
-        constexpr double kExitVideoFps = 30.0;
-        const int targetFrame =
-            static_cast<int>(m_exitDestructionTime * kExitVideoFps) + 1;
-        if (targetFrame > m_exitDestructionTotalFrames) {
-          m_exitDestructionActive = false;
-          m_audio.stopFileVoices();
-          glfwSetWindowShouldClose(win, GLFW_TRUE);
-        } else if (targetFrame != m_exitDestructionFrameIdx || m_exitDestructionTex == 0) {
-          updateExitDestructionTexture(targetFrame);
-        }
+      } else if (stepRes == FrameSequencePlayer::StepResult::Playing) {
+        m_exitDestructionSeq.uploadFrame(
+            targetFrame, [this](const unsigned char* px, int w, int h) { return uploadRgba(px, w, h); });
       }
     }
 
@@ -391,7 +375,7 @@ int AppGL::run() {
     }
 
     // === Cinematic Intro (Pre-rendered MP4 stream or 3D Engine Fallback) ===
-    if (m_videoIntroActive) {
+    if (m_videoIntroSeq.isActive()) {
       GLFWwindow* win = m_window->getNativeWindow();
       const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
       const bool skipHit =
@@ -403,23 +387,20 @@ int AppGL::run() {
         if (escDown) m_prevEscPressed = true;
         stopIntroPlayback();
       } else {
-        if (!m_videoIntroAudioPlayed) {
+        bool needAudio = false;
+        int targetFrame = 0;
+        const auto stepRes = m_videoIntroSeq.step(wallDelta, needAudio, targetFrame);
+        if (needAudio) {
           m_audio.setMusicSuppressed(true);
           m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
           m_audio.ensureInitialized();
-          m_audio.playFile(m_videoIntroResolvedDir + "/audio.wav", -1.5f);
-          m_videoIntroAudioPlayed = true;
-          m_videoIntroTime = 0.0;
-        } else {
-          m_videoIntroTime += std::min(static_cast<double>(wallDelta), 0.1);
+          m_audio.playFile(m_videoIntroSeq.audioPath(), -1.5f);
         }
-        constexpr double kIntroVideoFps = 30.0;
-        const int targetFrame =
-            static_cast<int>(m_videoIntroTime * kIntroVideoFps) + 1;
-        if (targetFrame > m_videoIntroTotalFrames) {
+        if (stepRes == FrameSequencePlayer::StepResult::Finished) {
           stopIntroPlayback();
-        } else {
-          updateVideoIntroTexture(targetFrame);
+        } else if (stepRes == FrameSequencePlayer::StepResult::Playing) {
+          m_videoIntroSeq.uploadFrame(
+              targetFrame, [this](const unsigned char* px, int w, int h) { return uploadRgba(px, w, h); });
         }
       }
     } else if (m_introDirector.isActive()) {
@@ -471,7 +452,7 @@ int AppGL::run() {
     if (m_inMenu) {
       // Main menu: showcase orbit around the current station, world renders behind.
       GLFWwindow* menuWin = m_window->getNativeWindow();
-      if (!m_exitDestructionActive) {
+      if (!m_exitDestructionSeq.isActive()) {
         bool menuEscDown = (glfwGetKey(menuWin, GLFW_KEY_ESCAPE) == GLFW_PRESS);
         if (menuEscDown && !m_prevEscPressed && !m_slidesOpen) {
           if (!closeTopModal()) {
@@ -498,7 +479,7 @@ int AppGL::run() {
         auto camTgt = m_introDirector.cameraTarget();
         m_camera.position = Vec3(camPos.x, camPos.y, camPos.z);
         computeLookYawPitch(m_camera.position, Vec3(camTgt.x, camTgt.y, camTgt.z), m_camera.yaw, m_camera.pitch);
-      } else if (!m_videoIntroActive) {
+      } else if (!m_videoIntroSeq.isActive()) {
         const Station* menuSt = m_sceneManager->getCurrentStation();
         double menuSpawn = (menuSt ? menuSt->spawnDistanceRs : 20.0);
         float menuRadius = static_cast<float>(menuSpawn * 1.25 + 4.0);
@@ -516,7 +497,7 @@ int AppGL::run() {
         glfwWaitEventsTimeout(0.05);
         continue;
       }
-      if (m_exitDestructionActive || m_videoIntroActive) {
+      if (m_exitDestructionSeq.isActive() || m_videoIntroSeq.isActive()) {
         glViewport(0, 0, menuFbW, menuFbH);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -531,9 +512,9 @@ int AppGL::run() {
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
-      if (m_exitDestructionActive) {
+      if (m_exitDestructionSeq.isActive()) {
         drawExitDestructionOverlay(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
-      } else if (m_videoIntroActive) {
+      } else if (m_videoIntroSeq.isActive()) {
         drawVideoIntroOverlay(static_cast<float>(menuFbW), static_cast<float>(menuFbH));
       } else if (m_slidesOpen) {
         drawSlidesOverlay();
@@ -580,7 +561,7 @@ int AppGL::run() {
     }
 
     // === Pre-rendered Menu-to-Gameplay Transition Video (res/video/entry) ===
-    if (m_entryVideoActive) {
+    if (m_entryVideoSeq.isActive()) {
       GLFWwindow* win = m_window->getNativeWindow();
       const bool escDown = (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS);
       const bool skipEntry =
@@ -592,22 +573,22 @@ int AppGL::run() {
       if (skipEntry) {
         stopEntryTransitionVideo();
       } else {
-        if (!m_entryVideoAudioPlayed) {
+        bool startAudio = false;
+        int targetFrame = 1;
+        const auto stepRes = m_entryVideoSeq.step(static_cast<double>(wallDelta),
+                                                  startAudio, targetFrame);
+        if (startAudio) {
           m_audio.setMusicSuppressed(true);
           m_audio.setVolume(static_cast<float>(m_audioVolume) / 100.0f);
           m_audio.ensureInitialized();
-          m_audio.playFile(m_entryVideoResolvedDir + "/audio.wav", -1.5f);
-          m_entryVideoAudioPlayed = true;
-          m_entryVideoTime = 0.0;
-        } else {
-          m_entryVideoTime += std::min(static_cast<double>(wallDelta), 0.1);
+          m_audio.playFile(m_entryVideoSeq.audioPath(), -1.5f);
         }
-        constexpr double kEntryVideoFps = 30.0;
-        const int targetFrame = static_cast<int>(m_entryVideoTime * kEntryVideoFps) + 1;
-        if (targetFrame > m_entryVideoTotalFrames) {
+        if (stepRes == FrameSequencePlayer::StepResult::Finished) {
           stopEntryTransitionVideo();
-        } else {
-          updateEntryVideoTexture(targetFrame);
+        } else if (stepRes == FrameSequencePlayer::StepResult::Playing) {
+          m_entryVideoSeq.uploadFrame(targetFrame, [this](const unsigned char* px, int w, int h) {
+            return uploadRgba(px, w, h);
+          });
         }
       }
     }
@@ -628,12 +609,12 @@ int AppGL::run() {
 
     // === Physics === begin: столкновения и захват горизонтом.
     Vec3 prevCamPos = m_camera.position;
-    if (!m_captureAnim && !storyActive && !m_entryFlightActive && !m_entryVideoActive) {
+    if (!m_captureAnim && !storyActive && !m_entryFlightActive && !m_entryVideoSeq.isActive()) {
       processInput(deltaTime);
       processMouse();
     }
     const Station* physSt = m_sceneManager->getCurrentStation();
-    if (!m_captureAnim && !storyActive && !m_entryFlightActive && !m_entryVideoActive && physSt &&
+    if (!m_captureAnim && !storyActive && !m_entryFlightActive && !m_entryVideoSeq.isActive() && physSt &&
         physSt->type == StationType::BlackHole) {
       const double rsNow =
           static_cast<double>(m_sceneManager->getSettings().rs);
@@ -859,7 +840,7 @@ int AppGL::run() {
     }
 
     // Render active scene
-    if (m_entryVideoActive) {
+    if (m_entryVideoSeq.isActive()) {
       glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
     } else {
@@ -867,7 +848,7 @@ int AppGL::run() {
     }
 
     // === Diegetic 3D Cockpit === (v4.2.0 Alpha): кабина пилота и HUD от 1-го лица
-    if (m_viewMode == view::ViewMode::Cockpit && !m_inMenu && !m_hideUI && !m_entryFlightActive && !m_entryVideoActive) {
+    if (m_viewMode == view::ViewMode::Cockpit && !m_inMenu && !m_hideUI && !m_entryFlightActive && !m_entryVideoSeq.isActive()) {
       drawCockpit(fbWidth, fbHeight, deltaTime, currentTime);
     }
 
@@ -879,7 +860,7 @@ int AppGL::run() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    if (m_entryVideoActive) {
+    if (m_entryVideoSeq.isActive()) {
       drawEntryVideoOverlay(static_cast<float>(fbWidth), static_cast<float>(fbHeight));
     } else if (m_entryFlightActive) {
       drawEntryFlightHud(static_cast<float>(fbWidth), static_cast<float>(fbHeight));
@@ -8503,10 +8484,21 @@ void AppGL::drawUnifiedShipTerminal() {
                          uiRu("РАДАР СОБЫТИЙ ГЛУБОКОГО КОСМОСА:", "DEEP SPACE EVENT RADAR:"),
                          m_spaceEvents.activeCount(curStId));
       ImGui::SameLine();
-      if (ImGui::SmallButton(uiRu("Пинг радара", "Ping Scanner"))) {
-        m_spaceEvents.pingSectorScanner(curStId, static_cast<uint64_t>(glfwGetTime() * 1000.0) + 17ULL);
-        m_audio.playBlip();
-        saveSpaceEventsFileNow();
+      const double pingCd = m_spaceEvents.scannerCooldownRemaining();
+      char pingLbl[64];
+      if (pingCd > 0.5) {
+        std::snprintf(pingLbl, sizeof(pingLbl), "%s (%.0fs)",
+                      uiRu("Пинг радара", "Ping Scanner"), std::ceil(pingCd));
+        ImGui::BeginDisabled();
+        ImGui::SmallButton(pingLbl);
+        ImGui::EndDisabled();
+      } else {
+        if (ImGui::SmallButton(uiRu("Пинг радара", "Ping Scanner"))) {
+          if (m_spaceEvents.pingSectorScanner(curStId, static_cast<uint64_t>(glfwGetTime() * 1000.0) + 17ULL)) {
+            m_audio.playBlip();
+            saveSpaceEventsFileNow();
+          }
+        }
       }
       ImGui::BeginChild("##SpaceEventsChild", ImVec2(0.0f, 130.0f), true);
       bool anySectorEvent = false;
@@ -10794,6 +10786,7 @@ void AppGL::applySaveSettings(const SaveSettings& s) {
   rs.shipReflections = s.shipReflections;
   rs.enginePalette = std::min(std::max(s.enginePalette, 0), 3);
   rs.kerrSpin = std::clamp(s.kerrSpin, 0.0f, 0.998f);
+  rs.autoKerrSpin = s.autoKerrSpin;
   if (preset == 3) {
     if (s.renderScale > 0.0f) rs.rs = s.renderScale;
     if (s.shellRadius > 0.0f) rs.shellRadius = s.shellRadius;
@@ -10911,6 +10904,7 @@ void AppGL::saveProfileNow(bool quiet) {
   st.shipReflections = rsNow.shipReflections;
   st.enginePalette = rsNow.enginePalette;
   st.kerrSpin = std::clamp(rsNow.kerrSpin, 0.0f, 0.998f);
+  st.autoKerrSpin = rsNow.autoKerrSpin;
   if (st.perfPreset == static_cast<int>(PerfPreset::Custom)) {
     // Кастомный рейтмарчинг; sentinel 0 означает «параметр не менялся».
     st.renderScale = rsNow.rs;
@@ -11711,9 +11705,9 @@ void AppGL::requestCloseMenu() {
 }
 
 void AppGL::requestAppExit() {
-  if (m_exitDestructionActive || m_exitSequence) return;
+  if (m_exitDestructionSeq.isActive() || m_exitSequence) return;
   startExitDestruction();
-  if (m_exitDestructionActive) return;
+  if (m_exitDestructionSeq.isActive()) return;
   m_exitSequence = true;
   m_exitTimer = 0.0f;
   m_audio.playJump();  // разряд питания: синус 200->30 Гц
@@ -11883,46 +11877,6 @@ void AppGL::renderMenuBackdrop(int width, int height, double time) {
 
 namespace {
 
-int scanVideoSequenceDir(const std::string& resolvedProbe, std::string& outDir) {
-  std::error_code ec;
-  if (!std::filesystem::exists(resolvedProbe, ec)) return 0;
-  outDir = std::filesystem::path(resolvedProbe).parent_path().string();
-  int count = 0;
-  for (int i = 1; i <= 3600; ++i) {
-    char fname[32];
-    std::snprintf(fname, sizeof(fname), "frame_%04d.jpg", i);
-    if (!std::filesystem::exists(std::filesystem::path(outDir) / fname, ec)) break;
-    count = i;
-  }
-  return count;
-}
-
-bool uploadVideoFrameJpg(const std::string& dir, int frame1Based, int& ioFrameIdx,
-                         unsigned int& ioTex, int& ioW, int& ioH,
-                         const std::function<unsigned int(const unsigned char*, int, int)>& uploader) {
-  if (frame1Based <= 0) return false;
-  if (frame1Based == ioFrameIdx && ioTex != 0) return true;
-  char fname[32];
-  std::snprintf(fname, sizeof(fname), "frame_%04d.jpg", frame1Based);
-  const std::string path = (std::filesystem::path(dir) / fname).string();
-  int w = 0, h = 0;
-  unsigned char* px = stbi_load(path.c_str(), &w, &h, nullptr, 4);
-  if (!px) return false;
-  if (ioTex == 0 || w != ioW || h != ioH) {
-    if (ioTex != 0) glDeleteTextures(1, &ioTex);
-    ioTex = uploader(px, w, h);
-    ioW = w;
-    ioH = h;
-  } else {
-    glBindTexture(GL_TEXTURE_2D, ioTex);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px);
-  }
-  stbi_image_free(px);
-  ioFrameIdx = frame1Based;
-  return true;
-}
-
 void drawFullscreenVideoFrame(unsigned int tex, int texW, int texH,
                               float screenW, float screenH) {
   ImDrawList* bgDl = ImGui::GetBackgroundDrawList();
@@ -11947,31 +11901,14 @@ void drawFullscreenVideoFrame(unsigned int tex, int texW, int texH,
 
 }  // namespace
 
-void AppGL::updateExitDestructionTexture(int frame1Based) {
-  if (frame1Based > m_exitDestructionTotalFrames) return;
-  uploadVideoFrameJpg(m_exitDestructionResolvedDir, frame1Based,
-                      m_exitDestructionFrameIdx, m_exitDestructionTex,
-                      m_exitDestructionW, m_exitDestructionH,
-                      [this](const unsigned char* px, int w, int h) {
-                        return uploadRgba(px, w, h);
-                      });
-}
-
 void AppGL::startIntroPlayback() {
-  if (!m_videoIntroScanned) {
-    m_videoIntroScanned = true;
-    m_videoIntroTotalFrames = scanVideoSequenceDir(
-        resolveAssetPath("res/video/intro/frame_0001.jpg"), m_videoIntroResolvedDir);
-  }
-
-  if (m_videoIntroTotalFrames > 0) {
+  const std::string probe = resolveAssetPath("res/video/intro/frame_0001.jpg");
+  if (m_videoIntroSeq.start(probe, 30.0)) {
     m_audio.stopFileVoices();
     m_audio.setMusicSuppressed(true);
-    m_videoIntroActive = true;
-    m_videoIntroTime = 0.0;
-    m_videoIntroFrameIdx = -1;
-    m_videoIntroAudioPlayed = false;
-    updateVideoIntroTexture(1);
+    m_videoIntroSeq.uploadFrame(1, [this](const unsigned char* px, int w, int h) {
+      return uploadRgba(px, w, h);
+    });
   } else {
     m_audio.playRadioBeep();
     m_introDirector.start();
@@ -11979,29 +11916,20 @@ void AppGL::startIntroPlayback() {
 }
 
 void AppGL::stopIntroPlayback() {
-  if (!m_videoIntroActive) return;
-  m_videoIntroActive = false;
-  m_videoIntroAudioPlayed = false;
+  if (!m_videoIntroSeq.isActive()) return;
+  m_videoIntroSeq.stop();
   m_audio.stopFileVoices();
   m_audio.setMusicSuppressed(false);
 }
 
-void AppGL::updateVideoIntroTexture(int frame1Based) {
-  if (frame1Based > m_videoIntroTotalFrames) return;
-  uploadVideoFrameJpg(m_videoIntroResolvedDir, frame1Based,
-                      m_videoIntroFrameIdx, m_videoIntroTex,
-                      m_videoIntroW, m_videoIntroH,
-                      [this](const unsigned char* px, int w, int h) {
-                        return uploadRgba(px, w, h);
-                      });
-}
-
 void AppGL::drawVideoIntroOverlay(float screenW, float screenH) {
-  drawFullscreenVideoFrame(m_videoIntroTex, m_videoIntroW, m_videoIntroH, screenW, screenH);
+  drawFullscreenVideoFrame(m_videoIntroSeq.textureId(), m_videoIntroSeq.width(),
+                           m_videoIntroSeq.height(), screenW, screenH);
   ImDrawList* bgDl = ImGui::GetBackgroundDrawList();
   if (!bgDl) return;
 
-  const float fade = m_videoIntroTime < 0.8 ? static_cast<float>(m_videoIntroTime / 0.8) : 1.0f;
+  const double tIntro = m_videoIntroSeq.elapsed();
+  const float fade = tIntro < 0.8 ? static_cast<float>(tIntro / 0.8) : 1.0f;
   const int alpha = static_cast<int>(175.0f * std::clamp(fade, 0.0f, 1.0f));
   ImFont* font = m_mainMenuFont ? m_mainMenuFont : ImGui::GetFont();
   const float fontSize = std::clamp(screenH * 0.019f, 13.0f, 18.0f);
@@ -12015,31 +11943,26 @@ void AppGL::drawVideoIntroOverlay(float screenW, float screenH) {
 }
 
 void AppGL::startExitDestruction() {
-  if (!m_exitDestructionScanned) {
-    m_exitDestructionScanned = true;
-    m_exitDestructionTotalFrames = scanVideoSequenceDir(
-        resolveAssetPath("res/video/exit/frame_0001.jpg"), m_exitDestructionResolvedDir);
-  }
-  if (m_exitDestructionTotalFrames > 0) {
+  const std::string probe = resolveAssetPath("res/video/exit/frame_0001.jpg");
+  if (m_exitDestructionSeq.start(probe, 30.0)) {
     m_audio.stopFileVoices();
     m_audio.setMusicSuppressed(true);
-    m_exitDestructionActive = true;
-    m_exitDestructionTime = 0.0;
-    m_exitDestructionFrameIdx = -1;
-    m_exitDestructionAudioPlayed = false;
-    updateExitDestructionTexture(1);
+    m_exitDestructionSeq.uploadFrame(1, [this](const unsigned char* px, int w, int h) {
+      return uploadRgba(px, w, h);
+    });
   }
 }
 
 void AppGL::drawExitDestructionOverlay(float screenW, float screenH) {
-  drawFullscreenVideoFrame(m_exitDestructionTex, m_exitDestructionW, m_exitDestructionH,
-                           screenW, screenH);
+  drawFullscreenVideoFrame(m_exitDestructionSeq.textureId(), m_exitDestructionSeq.width(),
+                           m_exitDestructionSeq.height(), screenW, screenH);
   ImDrawList* fgDl = ImGui::GetForegroundDrawList();
   if (!fgDl) return;
 
-  const float fadeIn = std::clamp(static_cast<float>(m_exitDestructionTime / 0.35), 0.0f, 1.0f);
-  const float fadeOut = (m_exitDestructionTime > 3.2)
-      ? std::clamp(static_cast<float>((3.95 - m_exitDestructionTime) / 0.75), 0.0f, 1.0f)
+  const double tExit = m_exitDestructionSeq.elapsed();
+  const float fadeIn = std::clamp(static_cast<float>(tExit / 0.35), 0.0f, 1.0f);
+  const float fadeOut = (tExit > 3.2)
+      ? std::clamp(static_cast<float>((3.95 - tExit) / 0.75), 0.0f, 1.0f)
       : 1.0f;
   const float alphaK = fadeIn * fadeOut;
   ImFont* font = m_mainMenuFont ? m_mainMenuFont : ImGui::GetFont();
@@ -12064,47 +11987,25 @@ void AppGL::drawExitDestructionOverlay(float screenW, float screenH) {
                 IM_COL32(220, 190, 190, static_cast<int>(170.0f * alphaK)), hint);
 }
 
-void AppGL::updateEntryVideoTexture(int frame1Based) {
-  if (frame1Based > m_entryVideoTotalFrames) return;
-  uploadVideoFrameJpg(m_entryVideoResolvedDir, frame1Based,
-                      m_entryVideoFrameIdx, m_entryVideoTex,
-                      m_entryVideoW, m_entryVideoH,
-                      [this](const unsigned char* px, int w, int h) {
-                        return uploadRgba(px, w, h);
-                      });
-}
-
 void AppGL::startEntryTransitionVideo() {
-  if (!m_entryVideoScanned) {
-    m_entryVideoScanned = true;
-    m_entryVideoTotalFrames = scanVideoSequenceDir(
-        resolveAssetPath("res/video/entry/frame_0001.jpg"), m_entryVideoResolvedDir);
-  }
   const Station* st = m_sceneManager ? m_sceneManager->getCurrentStation() : nullptr;
   m_entryTargetLabel = st ? st->name : "SOL";
+  const std::string probe = resolveAssetPath("res/video/entry/frame_0001.jpg");
 
-  if (m_entryVideoTotalFrames > 0) {
+  if (m_entryVideoSeq.start(probe, 30.0)) {
     m_audio.stopFileVoices();
     m_audio.setMusicSuppressed(true);
-    m_entryVideoActive = true;
-    m_entryVideoTime = 0.0;
-    m_entryVideoFrameIdx = -1;
-    m_entryVideoAudioPlayed = false;
-    uploadVideoFrameJpg(m_entryVideoResolvedDir, 1,
-                        m_entryVideoFrameIdx, m_entryVideoTex,
-                        m_entryVideoW, m_entryVideoH,
-                        [this](const unsigned char* px, int w, int h) {
-                          return uploadRgba(px, w, h);
-                        });
+    m_entryVideoSeq.uploadFrame(1, [this](const unsigned char* px, int w, int h) {
+      return uploadRgba(px, w, h);
+    });
   } else {
     startEntryFlight();
   }
 }
 
 void AppGL::stopEntryTransitionVideo() {
-  if (!m_entryVideoActive) return;
-  m_entryVideoActive = false;
-  m_entryVideoAudioPlayed = false;
+  if (!m_entryVideoSeq.isActive()) return;
+  m_entryVideoSeq.stop();
   m_audio.stopFileVoices();
   m_audio.setMusicSuppressed(false);
   m_audio.playWarpReadyChime();
@@ -12113,12 +12014,14 @@ void AppGL::stopEntryTransitionVideo() {
 }
 
 void AppGL::drawEntryVideoOverlay(float screenW, float screenH) {
-  drawFullscreenVideoFrame(m_entryVideoTex, m_entryVideoW, m_entryVideoH, screenW, screenH);
+  drawFullscreenVideoFrame(m_entryVideoSeq.textureId(), m_entryVideoSeq.width(),
+                           m_entryVideoSeq.height(), screenW, screenH);
   ImDrawList* fg = ImGui::GetForegroundDrawList();
   if (!fg) return;
 
   const float u = std::clamp(
-      static_cast<float>(m_entryVideoTime / std::max(m_entryVideoTotalFrames / 30.0, 0.1)),
+      static_cast<float>(m_entryVideoSeq.elapsed() /
+                         std::max(m_entryVideoSeq.durationSec(), 0.1)),
       0.0f, 1.0f);
   const float alphaK = (u < 0.10f) ? (u / 0.10f) : ((u > 0.86f) ? ((1.0f - u) / 0.14f) : 1.0f);
   const int aText = static_cast<int>(220.0f * std::clamp(alphaK, 0.0f, 1.0f));
@@ -12911,6 +12814,17 @@ void AppGL::drawMenu() {
           ImGui::SameLine();
           if (ImGui::SmallButton("0.998 (Gargantua)")) {
             menuSettings.kerrSpin = 0.998f;
+            menuChanged = true;
+          }
+          if (ImGui::Checkbox(uiRu("Авто-спин Керра по каталогу ЧД",
+                                   "Auto Kerr spin by BH catalog"),
+                              &menuSettings.autoKerrSpin)) {
+            if (menuSettings.autoKerrSpin && m_sceneManager &&
+                m_sceneManager->getCurrentStation() &&
+                m_sceneManager->getCurrentStation()->type == StationType::BlackHole) {
+              menuSettings.kerrSpin = static_cast<float>(
+                  std::clamp(m_sceneManager->getCurrentStation()->params.kerrSpin, 0.0, 0.998));
+            }
             menuChanged = true;
           }
 
@@ -15158,17 +15072,15 @@ void AppGL::drawWorldLabels() {
     const glm::vec3 eyeE(static_cast<float>(cpE.x), static_cast<float>(cpE.y), static_cast<float>(cpE.z));
     const glm::vec3 fwdE(static_cast<float>(cfE.x), static_cast<float>(cfE.y), static_cast<float>(cfE.z));
     const glm::vec3 upE(static_cast<float>(cuE.x), static_cast<float>(cuE.y), static_cast<float>(cuE.z));
+    const glm::vec3 rightE = glm::normalize(glm::cross(fwdE, upE));
+    const glm::vec3 camUpE = glm::cross(rightE, fwdE);
     const glm::mat4 mvpE = projE * glm::lookAt(eyeE, eyeE + fwdE, upE);
     for (const auto& ev : m_spaceEvents.events()) {
       if (ev.status != SpaceEventStatus::Active || ev.stationId != curSt->id) continue;
-      const glm::vec4 clipE = mvpE * glm::vec4(static_cast<float>(ev.pos.x),
-                                               static_cast<float>(ev.pos.y),
-                                               static_cast<float>(ev.pos.z), 1.0f);
-      if (clipE.w <= 0.001f) continue;
-      const glm::vec3 ndcE = glm::vec3(clipE) / clipE.w;
-      if (ndcE.x < -0.98f || ndcE.x > 0.98f || ndcE.y < -0.98f || ndcE.y > 0.98f) continue;
-      const float sxE = (ndcE.x * 0.5f + 0.5f) * displaySize.x;
-      const float syE = (1.0f - (ndcE.y * 0.5f + 0.5f)) * displaySize.y;
+      const glm::vec3 evPosE(static_cast<float>(ev.pos.x),
+                             static_cast<float>(ev.pos.y),
+                             static_cast<float>(ev.pos.z));
+      const glm::vec4 clipE = mvpE * glm::vec4(evPosE, 1.0f);
       const double dE = std::sqrt(
           (cpE.x - ev.pos.x) * (cpE.x - ev.pos.x) +
           (cpE.y - ev.pos.y) * (cpE.y - ev.pos.y) +
@@ -15178,12 +15090,56 @@ void AppGL::drawWorldLabels() {
                              : ((ev.type == SpaceEventType::SosBeacon)
                                     ? IM_COL32(255, 85, 85, 240)
                                     : IM_COL32(75, 240, 205, 240));
-      drawList->AddQuad(ImVec2(sxE, syE - 8.0f), ImVec2(sxE + 8.0f, syE),
-                        ImVec2(sxE, syE + 8.0f), ImVec2(sxE - 8.0f, syE), mCol, 2.0f);
       char evLbl[96];
       std::snprintf(evLbl, sizeof(evLbl), "%s (%.1f u)",
                     uiRu(ev.titleRu.c_str(), ev.titleEn.c_str()), dE);
-      drawList->AddText(font, 13.5f, ImVec2(sxE + 11.0f, syE - 7.0f), mCol, evLbl);
+
+      const glm::vec3 ndcE = (clipE.w > 0.001f) ? (glm::vec3(clipE) / clipE.w) : glm::vec3(2.0f);
+      const bool onScreen = (clipE.w > 0.001f) &&
+                            ndcE.x >= -0.95f && ndcE.x <= 0.95f &&
+                            ndcE.y >= -0.95f && ndcE.y <= 0.95f;
+      if (onScreen) {
+        const float sxE = (ndcE.x * 0.5f + 0.5f) * displaySize.x;
+        const float syE = (1.0f - (ndcE.y * 0.5f + 0.5f)) * displaySize.y;
+        drawList->AddQuad(ImVec2(sxE, syE - 8.0f), ImVec2(sxE + 8.0f, syE),
+                          ImVec2(sxE, syE + 8.0f), ImVec2(sxE - 8.0f, syE), mCol, 2.0f);
+        drawList->AddText(font, 13.5f, ImVec2(sxE + 11.0f, syE - 7.0f), mCol, evLbl);
+      } else {
+        const glm::vec3 deltaE = evPosE - eyeE;
+        float dx = glm::dot(deltaE, rightE);
+        float dy = -glm::dot(deltaE, camUpE);
+        const float len2 = dx * dx + dy * dy;
+        if (len2 < 1e-8f) {
+          dx = 0.0f;
+          dy = -1.0f;
+        } else {
+          const float invLen = 1.0f / std::sqrt(len2);
+          dx *= invLen;
+          dy *= invLen;
+        }
+        const float cx = displaySize.x * 0.5f;
+        const float cy = displaySize.y * 0.5f;
+        const float pad = 34.0f;
+        const float maxX = std::max(10.0f, cx - pad);
+        const float maxY = std::max(10.0f, cy - pad);
+        const float tX = (std::abs(dx) > 1e-4f) ? (maxX / std::abs(dx)) : 1e6f;
+        const float tY = (std::abs(dy) > 1e-4f) ? (maxY / std::abs(dy)) : 1e6f;
+        const float tEdge = std::min(tX, tY);
+        const float ex = cx + dx * tEdge;
+        const float ey = cy + dy * tEdge;
+
+        const ImVec2 tip(ex + dx * 8.0f, ey + dy * 8.0f);
+        const ImVec2 baseL(ex - dx * 5.0f - dy * 6.0f, ey - dy * 5.0f + dx * 6.0f);
+        const ImVec2 baseR(ex - dx * 5.0f + dy * 6.0f, ey - dy * 5.0f - dx * 6.0f);
+        drawList->AddTriangleFilled(tip, baseL, baseR, mCol);
+
+        const ImVec2 ts = font->CalcTextSizeA(12.5f, 10000.0f, 0.0f, evLbl);
+        const float tx = std::clamp(ex - dx * (ts.x * 0.5f + 14.0f) - ts.x * 0.5f,
+                                    8.0f, std::max(8.0f, displaySize.x - ts.x - 8.0f));
+        const float ty = std::clamp(ey - dy * 18.0f - ts.y * 0.5f,
+                                    8.0f, std::max(8.0f, displaySize.y - ts.y - 8.0f));
+        drawList->AddText(font, 12.5f, ImVec2(tx, ty), mCol, evLbl);
+      }
     }
   }
 
