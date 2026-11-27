@@ -1,5 +1,6 @@
 /build/
 /build-gl/
+/build-ringship/
 /.vscode/
 .env
 # Local heavy assets (like blackHole): never commit HDR
@@ -18,6 +19,7 @@ INTERNAL.md
 # Model hull assets regenerate from the FBX via tools/fbx_ship_export.mjs:
 # the decimated .obj (covered by *.obj) and its BMP texture set.
 res/models/*.bmp
+res/models/*.meta
 .vs/
 x64/
 Debug/
