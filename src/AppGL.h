@@ -22,6 +22,7 @@
 #include "BenchmarkSystem.h"
 #include "AtmosphereSystem.h"
 #include "MissionSystem.h"
+#include "SpaceEventsSystem.h"
 #include "GamepadSystem.h"
 #include "PeopleSystem.h"
 // === WarpJump === (агент J: чистая логика катсцены, без GL; include рядом
@@ -74,6 +75,8 @@ class AppGL {
   static int captureHudCheck(const std::string& outPath);
   static int captureTerminalCheck(const std::string& outPath);
   static int captureMenuCheck(const std::string& outDir);
+  static int captureExitCheck(const std::string& outDir);
+  static int captureIntroCheck(const std::string& outDir);
   static int captureWorkshopCheck(const std::string& outDir);
   static int captureEarthCheck(const std::string& outDir);
 
@@ -91,9 +94,9 @@ class AppGL {
   void processMouse();
   void drawImGui();
   void drawMenu();
+  void menuGoBack();
   void drawMainMenuHero(float screenW, float screenH);
   void drawMainMenuBackground(float screenW, float screenH);
-  void drawFlightBriefingCard(int hoveredOption, float cardW, const Station* curSt);
   void drawVoiceCatalogPage(float areaH);
   void drawWorkshopPage(float colAreaH);
   void renderWorkshop3D(int width, int height, double time);
@@ -405,6 +408,10 @@ class AppGL {
   float m_menuBootTimer = 0.0f;
   bool m_menuClosing = false;
   float m_menuCloseTimer = 0.0f;
+  // v5.2.4: кинематографичное выключение по «Выходу» (до закрытия окна)
+  bool m_exitSequence = false;
+  float m_exitTimer = 0.0f;
+  void requestAppExit();
   float m_pageTransitionTimer = 1.0f;
   float m_togglePosWarp = 1.0f;
   float m_togglePosShield = 0.0f;
@@ -429,9 +436,73 @@ class AppGL {
   bool m_menuVideoTried = false;
   double m_menuVideoStart = -1.0;
   unsigned int m_menuDiskMaskTex = 0;
-  bool m_menuProceduralDisk = true;
+  bool m_menuProceduralDisk = false;
   unsigned int updateMenuVideo(double time);
   void renderMenuBackdrop(int width, int height, double time);
+  void renderIntroFrame(int width, int height, double time);
+
+  // Pre-rendered cinematic intro stream (res/video/intro/frame_%04d.jpg + audio.wav)
+  bool m_videoIntroActive = false;
+  double m_videoIntroTime = 0.0;
+  int m_videoIntroTotalFrames = 0;
+  int m_videoIntroFrameIdx = -1;
+  bool m_videoIntroAudioPlayed = false;
+  bool m_videoIntroScanned = false;
+  std::string m_videoIntroResolvedDir;
+  unsigned int m_videoIntroTex = 0;
+  int m_videoIntroW = 0;
+  int m_videoIntroH = 0;
+  void startIntroPlayback();
+  void stopIntroPlayback();
+  bool isIntroPlaying() const { return m_videoIntroActive || m_introDirector.isActive(); }
+  void updateVideoIntroTexture(int frame1Based);
+  void drawVideoIntroOverlay(float screenW, float screenH);
+
+  // Pre-rendered ship destruction exit sequence (res/video/exit/frame_%04d.jpg + audio.wav)
+  bool m_exitDestructionActive = false;
+  double m_exitDestructionTime = 0.0;
+  int m_exitDestructionTotalFrames = 0;
+  int m_exitDestructionFrameIdx = -1;
+  bool m_exitDestructionAudioPlayed = false;
+  bool m_exitDestructionScanned = false;
+  std::string m_exitDestructionResolvedDir;
+  unsigned int m_exitDestructionTex = 0;
+  int m_exitDestructionW = 0;
+  int m_exitDestructionH = 0;
+  void startExitDestruction();
+  void updateExitDestructionTexture(int frame1Based);
+  void drawExitDestructionOverlay(float screenW, float screenH);
+
+  // Real-time 3D Menu-to-Ship Universe-to-Target Transition
+  bool m_entryFlightActive = false;
+  float m_entryFlightTime = 0.0f;
+  float m_entryFlightDuration = 3.8f;
+  Vec3 m_entryEndPos{0.0, 0.0, 0.0};
+  double m_entryEndYaw = 0.0;
+  double m_entryEndPitch = 0.0;
+  float m_entryEndFov = 60.0f;
+  std::string m_entryTargetLabel;
+  void startEntryFlight();
+  void stopEntryFlight(bool snapToTarget = true);
+  void updateEntryFlight(float deltaTime);
+  void drawEntryFlightHud(float screenW, float screenH);
+
+  // Pre-rendered Menu-to-Gameplay entry transition video (res/video/entry/frame_%04d.jpg + audio.wav)
+  bool m_entryVideoActive = false;
+  double m_entryVideoTime = 0.0;
+  int m_entryVideoTotalFrames = 0;
+  int m_entryVideoFrameIdx = -1;
+  bool m_entryVideoAudioPlayed = false;
+  bool m_entryVideoScanned = false;
+  std::string m_entryVideoResolvedDir;
+  unsigned int m_entryVideoTex = 0;
+  int m_entryVideoW = 0;
+  int m_entryVideoH = 0;
+  void startEntryTransitionVideo();
+  void stopEntryTransitionVideo();
+  void updateEntryVideoTexture(int frame1Based);
+  void drawEntryVideoOverlay(float screenW, float screenH);
+
   bool m_hasStartedFlight = false;
   void requestCloseMenu();
 
@@ -525,6 +596,10 @@ class AppGL {
   ScienceCodex m_codex;
   BridgeComms m_bridgeComms;
   MissionManager m_missions;
+  SpaceEventsManager m_spaceEvents;
+  void loadSpaceEventsFileNow();
+  void saveSpaceEventsFileNow();
+  void drawSpaceEventHud();
   // === Gamepad & Steam Deck === (Stage 5 / Release 1.0)
   GamepadSystem m_gamepad;
   void processGamepadInput(double dt);
@@ -535,6 +610,7 @@ class AppGL {
   LandingTelemetry m_landingTelem;
   SurfaceReport m_currentSurfaceReport;
   CoreDrillTelemetry m_drillTelem;
+  ReconDroneTelemetry m_droneTelem;
   bool m_surfaceReportOpen = false;
   bool m_drillInputActive = false;
   bool m_drillRetractActive = false;
@@ -557,9 +633,12 @@ class AppGL {
   std::set<std::string> m_trophyKnown;
   // Баннер финиша тура (4с).
   float m_finishT = -10.0f;
-  // Шрифт с кириллицей для русских строк (дефолтный шрифт не трогаем,
-  // иначе поплывут эталонные скриншоты). nullptr = fallback на дефолт.
+  // Шрифты интерфейса с кириллицей: основной для текста и semi-bold для заголовков.
   struct ImFont* m_cineFont = nullptr;
+  struct ImFont* m_headingFont = nullptr;
+  struct ImFont* m_mainMenuFont = nullptr;
+  struct ImFont* m_mainMenuTitleFont = nullptr;
+  struct ImFont* m_mainMenuTaglineFont = nullptr;
   void startCineTour();
   void stopCineTour();
   void tourTeleport(const std::string& id);
@@ -959,6 +1038,12 @@ float dockProjDistVisual();
 float rcsVisualTimer();
 int rcsVisualMask();
 const std::string& activeDockIdVisual();
+// v5.1.0: External atmospheric entry heating & 3D autonomous recon drone visuals
+void setEntryPlasma(float k);
+float entryPlasma();
+void setReconDroneVisual(bool active, const std::string& bodyId,
+                         float posXKm, float posZKm, float altitudeM, float headingDeg,
+                         const std::vector<float>& anomXZ, const std::vector<bool>& anomScanned);
 }  // namespace warpdrive
 
 }  // namespace astro

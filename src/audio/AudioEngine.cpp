@@ -550,6 +550,18 @@ void AudioEngine::playFile(const std::string& path, float db) {
   m_voices.push_back(std::move(v));
 }
 
+void AudioEngine::stopFileVoices() {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  for (auto it = m_voices.begin(); it != m_voices.end(); ) {
+    if (it->type == VoiceType::File) {
+      retireVoicePcm(it->pcm);
+      it = m_voices.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
 // v5.5.0: Голосовой аннонсер бортового ИИ (Егорка-6)
 static const char* egorkaCueFilename(AudioEngine::EgorkaVoiceCue cue) {
   switch (cue) {
@@ -1155,12 +1167,13 @@ void AudioEngine::renderFrames(float* out, unsigned frames) {
     }
 
     // Preserve cassette phase and leave UI/voice SFX outside the crossfade.
-    const float gameplay = music + rumble + engine + drone + atmoRoar +
+    const float musicMul = m_musicSuppressed.load() ? 0.0f : 1.0f;
+    const float gameplay = music * musicMul + rumble + engine + drone + atmoRoar +
                            radioStaticSound + drillSound;
     float mixL = ((gameplay + tapeL + weatherSoundL) * gameGain +
-                  ambientL * menuGain + sfxL) * vol;
+                  ambientL * menuGain * musicMul + sfxL) * vol;
     float mixR = ((gameplay + tapeR + weatherSoundR) * gameGain +
-                  ambientR * menuGain + sfxR) * vol;
+                  ambientR * menuGain * musicMul + sfxR) * vol;
     mixL = std::tanh(mixL * 1.1f);
     mixR = std::tanh(mixR * 1.1f);
     out[i * 2 + 0] = mixL;

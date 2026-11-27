@@ -77,6 +77,22 @@ std::string executableDir(const char* argv0) {
 // «прислать лог»), потом %LOCALAPPDATA% / ~/.local/share, потом рабочий
 // каталог (установленная игра в Program Files пишет только туда, куда
 // разрешено, — поэтому fallback'и важны).
+std::string safeEnvVar(const char* name) {
+#if defined(_MSC_VER)
+  char* buf = nullptr;
+  size_t len = 0;
+  if (_dupenv_s(&buf, &len, name) == 0 && buf) {
+    std::string out(buf);
+    std::free(buf);
+    return out;
+  }
+  return std::string();
+#else
+  const char* v = std::getenv(name);
+  return v ? std::string(v) : std::string();
+#endif
+}
+
 std::string writableLogDir(const char* argv0) {
   std::error_code ec;
   const std::string exeDir = executableDir(argv0);
@@ -93,13 +109,15 @@ std::string writableLogDir(const char* argv0) {
     std::filesystem::remove(probe, ec);
   }
 #ifdef _WIN32
-  if (const char* local = std::getenv("LOCALAPPDATA")) {
+  const std::string local = safeEnvVar("LOCALAPPDATA");
+  if (!local.empty()) {
     const std::filesystem::path dir = std::filesystem::path(local) / "astro-voyager";
     std::filesystem::create_directories(dir, ec);
     if (!ec) return dir.string();
   }
 #else
-  if (const char* home = std::getenv("HOME")) {
+  const std::string home = safeEnvVar("HOME");
+  if (!home.empty()) {
     const std::filesystem::path dir =
         std::filesystem::path(home) / ".local" / "share" / "astro-voyager";
     std::filesystem::create_directories(dir, ec);
@@ -122,7 +140,20 @@ void initLaunchLog(const char* argv0) {
     g_logPath = path.string();
     const std::time_t now = std::time(nullptr);
     char stamp[32] = {0};
-    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+    std::tm tmLocal{};
+#if defined(_MSC_VER)
+    if (localtime_s(&tmLocal, &now) == 0) {
+      std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &tmLocal);
+    }
+#elif defined(_POSIX_VERSION)
+    if (localtime_r(&now, &tmLocal)) {
+      std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &tmLocal);
+    }
+#else
+    if (const std::tm* pTm = std::localtime(&now)) {
+      std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", pTm);
+    }
+#endif
     g_log << "---- astro-voyager launch " << stamp << " ----\n";
     g_log.flush();
   }
