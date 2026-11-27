@@ -9,6 +9,7 @@
 #include <cfloat>
 #include <ctime>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <random>
 #include <sstream>
