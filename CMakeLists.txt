@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(astro-voyager VERSION 5.1.15 LANGUAGES CXX)
+project(astro-voyager VERSION 5.1.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,8 +33,10 @@ add_executable(astro-voyager
   src/BenchmarkSystem.cpp  # === BenchmarkSystem === (Stage 4): перф-бенчмарк
   src/AtmosphereSystem.cpp  # === AtmosphereSystem === (Stage 5): вход в атмосферу
   src/MissionSystem.cpp  # === MissionSystem === (Stage 7 / Roadmap #5): процедурный генератор миссий
+  src/SpaceEventsSystem.cpp  # === SpaceEventsSystem === (v5.2.0): события глубокого космоса
   src/GamepadSystem.cpp  # === GamepadSystem === (Stage 5 / Release 1.0): интеграция геймпадов и Steam Deck
   src/PeopleSystem.cpp   # === PeopleSystem === (v5.1.12): симуляция людей, колонистов и экипажа
+  src/FrameSequencePlayer.cpp
 )
 
 target_include_directories(astro-voyager PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -370,8 +372,12 @@ if(ASTROVOYAGER_ENABLE_GL)
     target_link_libraries(astro-voyager PRIVATE
       "${CMAKE_SOURCE_DIR}/Dependencies/GLEW/lib/Release/x64/glew32s.lib"
       opengl32
+      dwmapi
     )
     target_compile_definitions(astro-voyager PRIVATE GLEW_STATIC)
+    if(MSVC)
+      target_link_options(astro-voyager PRIVATE /NODEFAULTLIB:LIBCMT)
+    endif()
   elseif(APPLE)
     # === macOS GL (v3.4.0) ===: системный OpenGL 3.3 core без GLEW —
     # функции линкуются из OpenGL.framework (src/GLCompat.h даёт no-op
@@ -604,6 +610,25 @@ if(TARGET test_mission)
   add_test(NAME test_mission COMMAND test_mission)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_space_events.cpp")
+  add_executable(test_space_events
+    tests/test_space_events.cpp
+    src/SpaceEventsSystem.cpp
+    src/ScienceSystem.cpp
+    src/Zettelkasten.cpp
+  )
+  target_include_directories(test_space_events PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_space_events PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_space_events PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_space_events)
+  add_test(NAME test_space_events COMMAND test_space_events)
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_gamepad.cpp")
   add_executable(test_gamepad
     tests/test_gamepad.cpp
@@ -736,6 +761,23 @@ if(TARGET test_intro_cinematic)
   add_test(NAME test_intro_cinematic COMMAND test_intro_cinematic)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/test_frame_sequence.cpp")
+  add_executable(test_frame_sequence
+    tests/test_frame_sequence.cpp
+    src/FrameSequencePlayer.cpp
+  )
+  target_include_directories(test_frame_sequence PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  if(MSVC)
+    target_compile_options(test_frame_sequence PRIVATE /W4 /permissive- /utf-8)
+  else()
+    target_compile_options(test_frame_sequence PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
+
+if(TARGET test_frame_sequence)
+  add_test(NAME test_frame_sequence COMMAND test_frame_sequence)
+endif()
+
 # Preserve assert() in tests even in Release configurations (Issue #187).
 # MSVC passes /DNDEBUG by default in Release; /UNDEBUG undefines it.
 # Clang/GCC use -UNDEBUG.
@@ -760,11 +802,13 @@ set(ASTRO_TEST_TARGETS
   test_benchmark
   test_atmosphere
   test_mission
+  test_space_events
   test_gamepad
   test_loading
   test_colony
   test_people
   test_intro_cinematic
+  test_frame_sequence
 )
 foreach(t ${ASTRO_TEST_TARGETS})
   if(TARGET ${t})

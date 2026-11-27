@@ -5,6 +5,21 @@
 - EN: Ring Ship MCP remaster — the approved Blender-MCP prototype was reproduced in the versioned generator. The hull is broader and more mechanical, with side armor fairings, vented panels, service hatches, fasteners, cable runs, segmented 24-clamp warp rings, two static mounts per ring, larger canopy and a ribbed stern engine cluster. The main and six auxiliary engines now use hollow bell nozzles with fluted cooling walls, dark inner chambers, heat-tinted lips and recessed plasma cores. Explicit triangulation yields 102,094 triangles and 71,975 vertices at 0.829×0.829×2.320; the five 2048×2048 PBR maps and showcase are rebaked.
 - RU: Ремастер Ring Ship через MCP — утверждённый прототип воспроизведён версионируемым генератором. Корпус стал шире и механичнее: боковые броневые обтекатели, вентили, сервисные люки, болты, кабели, сегментированные кольца с 24 хомутами, по два статических пилона на кольцо, увеличенная кабина и ребристая корма. Главный и шесть вспомогательных двигателей получили полые колоколообразные сопла с ребристыми охлаждающими каналами, тёмной внутренней камерой, теплоокрашенными кромками и утопленными плазменными ядрами. Явная триангуляция даёт 102 094 треугольника и 71 975 вершин при габарите 0.829×0.829×2.320; пять PBR-карт 2048×2048 и витрина перезапечены.
 
+## 5.1.1 (2026-11-25)
+
+## What's new / Что нового
+
+- EN: Universe Tour & Cinematic Finale:
+  - Added the 13-chapter, 30 fps full-screen Universe Tour preroll with the `Build` music mix and a 12-second 3D cinematic finale.
+  - The finale now holds the colony and wordmark on a true black frame without the legacy Dart pass.
+  - Workshop subsystem buttons are clickable again, models support manual orbit/pan/zoom, and studio lighting is brighter.
+  - Fixed reversed BMP row order for Ark, Warp Bubble and Warp Drive PBR atlases, removing triangular foreign-color artifacts.
+- RU: Тур по Вселенной и кинематографичный финал:
+  - Добавлен полноэкранный преролл из 13 глав на 30 fps с музыкой `Build` и 12-секундным 3D-финалом.
+  - Финальный кадр удерживает колонию и надпись на настоящем чёрном фоне без старого пролёта Dart.
+  - Кнопки подсистем ангара снова работают, модели можно вращать/панорамировать/масштабировать вручную, студийный свет стал ярче.
+  - Исправлен обратный порядок строк BMP для Ark, Warp Bubble и Warp Drive — цветные треугольные артефакты удалены.
+
 ## 5.1.15 (2026-11-23)
 
 ## What's new / Что нового

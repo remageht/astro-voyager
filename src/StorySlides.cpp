@@ -758,6 +758,23 @@ const std::vector<StorySlide>& storyPrologueSlides() {
   return slides;
 }
 
+const char* storyArtImage(int art) {
+  switch (art) {
+    case 0: return "res/story/cinematic/expedition_00_mia_stars.png";
+    case 1: return "res/story/cinematic/expedition_01_academy.png";
+    case 2: return "res/story/cinematic/expedition_02_dimming_sun.png";
+    case 3: return "res/story/cinematic/expedition_03_cities_dark.png";
+    case 4: return "res/story/cinematic/expedition_04_bridge.png";
+    case 5: return "res/story/cinematic/expedition_05_launch.png";
+    case 6: return "res/story/cinematic/expedition_06_photon_ring.png";
+    case 7: return "res/story/cinematic/story_07_relativistic_jet.png";
+    case 8: return "res/story/cinematic/story_08_quasar.png";
+    case 9: return "res/story/cinematic/story_09_cluster.png";
+    case 10: return "res/story/cinematic/story_10_colony.png";
+    default: return nullptr;
+  }
+}
+
 void drawStoryArt(ImDrawList* dl, int art, const ImVec2& pos, float size) {
   if (!dl || size <= 0.0f) return;
   switch (art) {
