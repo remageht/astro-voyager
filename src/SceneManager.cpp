@@ -2353,7 +2353,8 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                                        float customMetal, float customRough,
                                        const glm::vec3& emOverride, float keyMult = 16.5f,
                                        float isStationPbr = 1.0f,
-                                       const glm::vec3& keyDir = glm::vec3(0.55f, 0.45f, 0.70f)) {
+                                       const glm::vec3& keyDir = glm::vec3(0.55f, 0.45f, 0.70f),
+                                       float contactGround = 0.0f) {
           if (!siteModel || !siteModel->ready() || !s_shipShader) return;
           const glm::vec3 stKeyDir = glm::normalize(keyDir);
           s_shipShader->bind();
@@ -2382,6 +2383,7 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           s_shipShader->setUniform3f("u_AccentTint", glm::vec3(1.0f));
           s_shipShader->setUniform3f("u_EmissiveTint", glm::vec3(1.0f));
           s_shipShader->setUniform1f("u_StationPbr", isStationPbr);
+          s_shipShader->setUniform1f("u_ContactGround", contactGround);
           s_shipShader->setUniform1f("u_HullWear", -1.0f);
           s_shipShader->setUniform1f("u_EntryPlasma", 0.0f);
           s_shipShader->setUniform1f("u_Metal", customMetal);
@@ -3515,8 +3517,6 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
           // refineries, pads, the power plant that fits that world and, later,
           // data campuses. Layout is a golden-angle spiral from the site anchor,
           // so the same stage always produces the same settlement.
-          const glm::mat4 ownUpToY(glm::rotate(glm::mat4(1.0f), -1.5707963f,
-                                               glm::vec3(1.0f, 0.0f, 0.0f)));
           auto colonyAsset = [&](const std::string& key) -> ObjModel* {
             for (int i = 0; i < kColonyAssetCount; ++i)
               if (key == kColonyAssets[i].key) return &s_colonyAssetModels[i];
@@ -3556,6 +3556,15 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
             const glm::vec3 tangentV(frame.tangentV[0], frame.tangentV[1], frame.tangentV[2]);
 
             const auto plan = colonyBuildPlan(site.id, stage);
+            bool hasPowerGrid = false;
+            for (const auto& entry : plan)
+              if (entry.first == "powerline") hasPowerGrid = true;
+            auto isPowerSource = [](const std::string& key) {
+              return key == "nuclear" || key == "thermal" || key == "hydro" ||
+                     key == "diesel" || key == "inverter" || key == "solar" ||
+                     key == "wind";
+            };
+            std::vector<std::pair<glm::vec3, glm::vec3>> powerSources;
             int placed = 0;
             for (const auto& entry : plan) {
               ObjModel* model = colonyAsset(entry.first);
@@ -3571,7 +3580,11 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 const glm::vec3 dir = glm::normalize(
                     anchor * std::cos(theta) +
                     (tangentU * std::cos(phi) + tangentV * std::sin(phi)) * std::sin(theta));
-                const glm::vec3 foot = planetPos + dir * (planetRadius - worldSize * 0.16f);
+                const glm::vec3 foot = planetPos + dir * (planetRadius - worldSize * 0.05f);
+                const glm::vec3 lightDir = site.stationId == "sol"
+                    ? glm::normalize(-planetPos) : dir;
+                if (isPowerSource(entry.first) && powerSources.size() < 3)
+                  powerSources.emplace_back(foot, dir);
 
                 const float camDist = glm::length(eye - foot);
                 // A civilization capital holds 80+ meshes; past this range the
@@ -3593,10 +3606,45 @@ void SceneManager::render(const Camera& camera, int fbWidth, int fbHeight, float
                 align[1] = glm::vec4(by, 0.0f);
                 align[2] = glm::vec4(dir, 0.0f);
 
-                const glm::mat4 m = glm::translate(glm::mat4(1.0f), foot) * align * ownUpToY *
+                const glm::mat4 m = glm::translate(glm::mat4(1.0f), foot) * align *
                                     glm::rotate(glm::mat4(1.0f), phi, glm::vec3(0.0f, 0.0f, 1.0f)) *
                                     glm::scale(glm::mat4(1.0f), glm::vec3(eff));
-                drawStationObjModel(model, m, 0.62f, 0.42f, glm::vec3(0.0f));
+                drawStationObjModel(model, m, 0.62f, 0.42f, glm::vec3(0.0f),
+                                    8.0f, 1.0f, lightDir, 1.0f);
+              }
+            }
+
+            ObjModel* powerline = colonyAsset("powerline");
+            float lineFootprint = 0.0f, lineLength = 1.0f;
+            if (hasPowerGrid && powerline && powerline->ready() &&
+                colonyAssetSize("powerline", lineFootprint, lineLength)) {
+              const float lineWorldSize = planetRadius * lineFootprint;
+              const glm::vec3 centerFoot =
+                  planetPos + anchor * (planetRadius - lineWorldSize * 0.05f);
+              for (const auto& source : powerSources) {
+                const glm::vec3 sourceDir = glm::normalize(source.first - planetPos);
+                const glm::vec3 midDir = glm::normalize(sourceDir + anchor);
+                glm::vec3 forward = anchor - sourceDir * glm::dot(anchor, sourceDir);
+                if (glm::length(forward) < 1e-5f) continue;
+                forward = glm::normalize(forward);
+                const glm::vec3 side = glm::normalize(glm::cross(midDir, forward));
+                const glm::vec3 midFoot =
+                    planetPos + midDir * (planetRadius + 0.002f);
+                if (glm::length(eye - midFoot) > 0.32f) continue;
+                const float span = glm::distance(centerFoot, source.first);
+                if (span < lineWorldSize * 0.35f) continue;
+                const float eff = span / lineLength;
+                glm::mat4 align(1.0f);
+                align[0] = glm::vec4(forward, 0.0f);
+                align[1] = glm::vec4(side, 0.0f);
+                align[2] = glm::vec4(midDir, 0.0f);
+                const glm::mat4 lineModel =
+                    glm::translate(glm::mat4(1.0f), midFoot) * align *
+                    glm::scale(glm::mat4(1.0f), glm::vec3(eff));
+                const glm::vec3 lightDir = site.stationId == "sol"
+                    ? glm::normalize(-planetPos) : midDir;
+                drawStationObjModel(powerline, lineModel, 0.62f, 0.42f,
+                                    glm::vec3(0.0f), 8.0f, 1.0f, lightDir, 1.0f);
               }
             }
           }
