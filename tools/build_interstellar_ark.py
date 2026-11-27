@@ -678,6 +678,16 @@ def build_ark():
     triangulate.ngon_method = "BEAUTY"
     bpy.context.view_layer.objects.active = ark
     bpy.ops.object.modifier_apply(modifier=triangulate.name)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bm_ark = bmesh.from_edit_mesh(ark.data)
+    bmesh.ops.dissolve_degenerate(bm_ark, dist=1e-5)
+    tiny_ark = [f for f in bm_ark.faces if f.calc_area() < 1e-8]
+    if tiny_ark:
+        bmesh.ops.delete(bm_ark, geom=tiny_ark, context="FACES")
+    bmesh.update_edit_mesh(ark.data)
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
     polygons = len(ark.data.polygons)
     vertices = len(ark.data.vertices)
     print(f"[MESH] {vertices} vertices, {polygons} faces")

@@ -45,14 +45,14 @@ void main() {
     if (u_HasDiskVideo != 0) {
       color = mix(color, texture(u_DiskVideo, imageUv).rgb, diskMask);
     } else {
-      vec2 delta = (imageUv - vec2(0.505, 0.505)) * vec2(u_BgAspect, 1.0);
+      vec2 delta = (imageUv - vec2(0.645, 0.48)) * vec2(u_BgAspect, 1.0);
       float radius = length(delta);
       float angle = atan(delta.y, delta.x);
       float timePhase = mod(u_Time, 24.0) * (6.28318530718 / 24.0);
-      float flowPhase = angle * 7.0 + radius * 54.0 - timePhase * 5.0;
-      float plasma = pow(0.5 + 0.5 * sin(flowPhase), 2.2);
-      color *= 1.0 + (plasma - 0.35) * 0.22 * diskMask;
-      color += vec3(1.0, 0.52, 0.16) * (0.075 * plasma * diskMask);
+      float flowPhase = angle * 5.0 + radius * 32.0 - timePhase * 4.0;
+      float plasma = pow(0.5 + 0.5 * sin(flowPhase), 1.8);
+      color *= 1.0 + (plasma - 0.45) * 0.10 * diskMask;
+      color += vec3(1.0, 0.56, 0.20) * (0.04 * plasma * diskMask);
     }
   }
 

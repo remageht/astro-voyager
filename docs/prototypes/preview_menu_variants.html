@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Astro Voyager — главное меню: три варианта</title>
+<style>
+  /* ============================================================
+     Песочница. Один замороженный кадр (res/textures/main_menu_bg.jpg),
+     три варианта вёрстки рейла. Файл одноразовый, в сборку не входит.
+     ============================================================ */
+  :root{
+    --plate: url("../../res/textures/main_menu_bg.jpg");
+    --accent: 111,211,232;
+    --text: 240,248,252;
+    --dim: 184,201,217;
+    --mute: 158,179,196;
+    --action: 214,228,238;
+    --sub: 176,198,214;
+    --bg: #05070c;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:#c8d6e2;font:14px/1.5 "Segoe UI",system-ui,sans-serif;padding:28px 32px 64px}
+  h1{font-size:19px;font-weight:600;letter-spacing:.02em;color:#e8f1f7}
+  .lede{color:#8ea4b6;max-width:70ch;margin:6px 0 26px}
+  .lede b{color:#cfe2ef;font-weight:600}
+
+  .sheet{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start}
+  .card{width:100%;max-width:980px}
+  .card h2{font-size:14px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9fb6c8;margin-bottom:4px}
+  .card h2 span{color:rgb(var(--accent))}
+  .card .tag{font-size:12px;color:#6d8496;margin-bottom:10px}
+  .frame{position:relative;width:100%;aspect-ratio:1456/816;overflow:hidden;border:1px solid #16222e;border-radius:6px;background:#000;cursor:zoom-in}
+  .notes{margin-top:10px;font-size:12.5px;color:#8ea4b6}
+  .notes li{margin:2px 0 2px 16px}
+  .notes li::marker{color:#3d566b}
+
+  /* стенд 1456x816, масштабируется под карточку */
+  .stage{position:absolute;top:0;left:0;width:1456px;height:816px;transform-origin:0 0;
+         font-family:"Segoe UI Variable Display","Segoe UI Semilight","Segoe UI",system-ui,sans-serif;
+         font-weight:300;-webkit-font-smoothing:antialiased}
+  .stage .ph{position:absolute;inset:0;background-image:var(--plate);background-size:cover;background-position:center}
+
+  .band-top,.band-bot,.band-right{position:absolute;pointer-events:none}
+  .band-top{left:440px;right:0;top:0;height:110px;background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,0))}
+  .band-bot{left:440px;right:0;bottom:0;height:110px;background:linear-gradient(0deg,rgba(0,0,0,.43),rgba(0,0,0,0))}
+  .band-right{right:0;top:0;bottom:0;width:110px;background:linear-gradient(270deg,rgba(0,0,0,.31),rgba(0,0,0,0))}
+
+  .rail{position:absolute;left:0;top:0;bottom:0;pointer-events:none}
+  /* A: как в движке — сплошная стена 0..344, линейное затухание 344..512 */
+  .v-a .rail{width:512px;background:linear-gradient(90deg,rgb(6,10,16) 0 344px,rgba(6,10,16,0) 512px)}
+
+  .col{position:absolute;left:44px;top:0;width:352px}
+  .mark{position:absolute;left:0;width:2px;border-radius:1px}
+
+  .kicker{display:flex;align-items:center;gap:10px;color:rgb(var(--accent));font-size:21.6px;letter-spacing:3.2px}
+  .kicker i{display:block;width:22px;height:2px;background:rgb(var(--accent))}
+  .title{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:55px;letter-spacing:.3px;
+         color:rgb(var(--text));text-shadow:0 1px 0 rgba(0,0,0,.7),0 -1px 0 rgba(255,255,255,.11)}
+  .tagline{font-family:Georgia,serif;font-style:italic;font-size:17px;color:rgb(var(--dim));line-height:1.32}
+
+  .sec{position:absolute;left:0;width:352px;display:flex;align-items:center;gap:12px;
+       color:rgb(var(--mute));font-size:24.8px;letter-spacing:1.1px;line-height:1}
+  .sec::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.078)}
+  /* C: линейка фиксированной длины, правый край рейла не гребёнка */
+  .v-c .sec::after{flex:0 0 28px;background:rgba(var(--accent),.30)}
+
+  .row{position:absolute;left:0;width:352px;height:40px;display:flex;align-items:center;
+       padding-left:16px;color:rgb(var(--action));font-size:21.6px;line-height:1;
+       border-radius:4px;transition:transform .12s ease,color .12s ease}
+  .row:hover{background:rgba(14,25,36,.92)}
+  .row .tick{top:9px;bottom:9px;background:rgba(var(--accent),0);transition:background .12s ease}
+  .row:hover .tick{background:rgb(var(--accent))}
+  .row .chev{position:absolute;right:16px;width:8px;height:8px;border-right:1.2px solid rgba(var(--accent),0);
+             border-bottom:1.2px solid rgba(var(--accent),0);transform:rotate(-45deg);transition:border-color .12s ease}
+  .row:hover .chev{border-color:rgba(var(--accent),.71)}
+  .row.is-focus{background:rgba(14,25,36,.92)}
+  .row.is-focus .tick{background:rgb(var(--accent))}
+  .row.is-focus .chev{border-color:rgba(var(--accent),.71)}
+
+  /* A: у «Выхода» свой язык выделения — рамка-бокс */
+  .v-a .exit{height:36px;background:rgba(8,16,26,.86);border:1px solid rgba(120,160,180,.165);
+             color:rgb(var(--sub));padding-left:15px}
+  .v-a .exit.is-focus{border-color:rgba(var(--accent),.82);background:rgba(14,25,36,.92);color:#d6f5fc}
+  .v-a .exit .tick,.v-a .exit .chev{display:none}
+
+  .link{position:absolute;left:0;width:352px;font-size:21.6px;color:rgb(var(--sub));line-height:24px;cursor:default}
+  .link:hover{color:rgb(var(--accent))}
+
+  .ver{position:absolute;color:rgb(var(--mute));font-size:21.6px;line-height:1}
+
+  /* ---------- B: минимальная правка ---------- */
+  .v-b .rail{width:512px;background:linear-gradient(90deg,rgb(6,10,16) 0 344px,rgba(6,10,16,0) 512px)}
+  .v-b .cont{position:absolute;left:0;width:352px}
+  .v-b .cont .lbl{font-size:24px;color:rgb(var(--text));line-height:1}
+  .v-b .cont .sub{margin-top:7px;font-size:14px;color:rgb(var(--sub));letter-spacing:.2px;line-height:1}
+  .v-b .cont .tick{background:rgb(var(--accent));top:0;height:52px}
+  .v-b .cont .rule{position:absolute;left:0;top:78px;width:36px;height:1px;background:rgba(var(--accent),.45)}
+  .v-b .exit{background:transparent;border:0;color:rgb(var(--sub))}
+  .v-b .exit.is-focus{background:rgba(14,25,36,.92);color:rgb(224,122,106)}
+  .v-b .exit.is-focus .tick{background:rgb(224,122,106)}
+  .v-b .footrule{position:absolute;left:0;width:352px;height:1px;background:rgba(255,255,255,.078)}
+
+  /* ---------- C: полная ---------- */
+  /* Только линейные остановки: радиальная градиентная эллипс-граница читалась как дуга */
+  .v-c .rail{width:1260px;
+    background:
+      linear-gradient(180deg, rgba(3,6,11,.26) 0 140px, rgba(3,6,11,0) 420px),
+      linear-gradient(90deg, rgba(4,7,12,.96) 0 260px, rgba(4,7,12,.84) 420px,
+                                rgba(4,7,12,.62) 580px, rgba(4,7,12,.40) 740px,
+                                rgba(4,7,12,.24) 900px, rgba(4,7,12,.13) 1060px,
+                                rgba(4,7,12,.05) 1180px, rgba(4,7,12,0) 1260px)}
+  .v-c .cta{position:absolute;left:0;width:352px;height:76px;border-radius:4px;
+            background:linear-gradient(90deg,rgba(var(--accent),.17),rgba(var(--accent),.05));
+            border:1px solid rgba(var(--accent),.42);
+            padding-left:18px;display:flex;flex-direction:column;justify-content:center;gap:5px;
+            transition:background .12s ease,border-color .12s ease}
+  .v-c .cta:hover{background:linear-gradient(90deg,rgba(var(--accent),.24),rgba(var(--accent),.09));border-color:rgb(var(--accent))}
+  .v-c .cta .tick{top:10px;bottom:10px;background:rgb(var(--accent))}
+  .v-c .cta .lbl{font-size:22px;color:#d6f5fc;line-height:1}
+  .v-c .cta .sub{font-size:14.5px;color:rgb(var(--sub));line-height:1}
+  .v-c .cta .chev{position:absolute;right:18px;width:10px;height:10px;border-right:1.6px solid rgb(var(--accent));
+                  border-bottom:1.6px solid rgb(var(--accent));transform:rotate(-45deg)}
+  .v-c .row:hover{transform:translateX(2px)}
+  .v-c .exit{background:transparent;border:0;color:rgb(var(--sub))}
+  .v-c .exit.is-focus{background:rgba(14,25,36,.92);color:rgb(224,122,106)}
+  .v-c .exit.is-focus .tick{background:rgb(224,122,106)}
+  .v-c .colophon{position:absolute;left:44px;width:352px}
+  .v-c .colophon .ln{height:1px;background:rgba(255,255,255,.09)}
+  .v-c .colophon .bar{display:flex;align-items:baseline;justify-content:space-between;margin-top:12px}
+  .v-c .colophon .ver{position:static;font-size:15px}
+  .v-c .quiet{display:flex;gap:22px}
+  .v-c .quiet a{font-size:15px;color:rgba(var(--sub),.78);text-decoration:none;letter-spacing:.2px}
+  .v-c .quiet a:hover{color:rgb(var(--accent))}
+  .v-c .quiet a.danger:hover{color:rgb(224,122,106)}
+
+  /* полноэкранный просмотр */
+  .lightbox{position:fixed;inset:0;background:rgba(2,4,7,.94);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+  .lightbox.on{display:flex}
+  .lightbox .wrap{position:relative;width:1456px;height:816px;max-width:100%;overflow:hidden;border-radius:6px}
+  .lightbox .wrap .stage{transform:scale(var(--k,1))}
+  .lightbox .cap{position:absolute;left:0;bottom:-30px;color:#9fb6c8;font-size:13px}
+  .hint{font-size:12px;color:#5f7688;margin-top:22px}
+</style>
+</head>
+<body>
+  <h1>Главное меню — три варианта на одном кадре</h1>
+  <p class="lede">Один и тот же замороженный кадр <b>res/textures/main_menu_bg.jpg</b>, 1456×816, константы из <b>drawMainMenuHero</b> (рейл 440, отступ 44, сетка 352). Наводите мышью — состояния наведения живые. Во всех трёх вариантах фокус клавиатуры стоит на «Выходе», чтобы разница языков выделения была видна. Клик по карточке — полный размер.</p>
+
+  <div class="sheet">
+
+    <!-- ================= A ================= -->
+    <section class="card">
+      <h2>A · <span>Сейчас</span></h2>
+      <p class="tag">Реплика текущего рендера</p>
+      <div class="frame" data-zoom>
+        <div class="stage v-a">
+          <div class="ph"></div>
+          <div class="rail"></div>
+          <div class="band-top"></div><div class="band-bot"></div><div class="band-right"></div>
+          <div class="col">
+            <div class="kicker" style="position:absolute;left:32px;top:46px"><i></i>ASTRO</div>
+            <div class="title" style="position:absolute;top:76px">VOYAGER</div>
+            <div class="tagline" style="position:absolute;top:136px;width:352px">Путешествие сквозь релятивистскую вселенную</div>
+
+            <div style="position:absolute;left:0;top:184px;width:352px;height:64px">
+              <div class="mark" style="top:8px;bottom:8px;background:rgba(var(--accent),.47)"></div>
+              <div style="position:absolute;left:14px;top:1px;font-size:22px;color:rgb(var(--text));line-height:1">Продолжить</div>
+              <div style="position:absolute;left:14px;top:31px;font-size:14.5px;color:rgb(var(--sub));line-height:1">Sgr A* · последнее сохранение</div>
+            </div>
+
+            <div class="sec" style="top:272px">ПОЛЁТ</div>
+            <div class="row" style="top:305px"><div class="tick mark"></div>Новая экспедиция<div class="chev"></div></div>
+            <div class="row" style="top:349px"><div class="tick mark"></div>Свободный полёт<div class="chev"></div></div>
+
+            <div class="sec" style="top:397px">ИССЛЕДОВАНИЕ</div>
+            <div class="row" style="top:429px"><div class="tick mark"></div>Ангар моделей<div class="chev"></div></div>
+            <div class="row" style="top:473px"><div class="tick mark"></div>Архив и кодекс<div class="chev"></div></div>
+
+            <div class="sec" style="top:521px">СИСТЕМА</div>
+            <div class="row" style="top:553px"><div class="tick mark"></div>Настройки<div class="chev"></div></div>
+
+            <div class="link" style="top:602px">Повторить интро</div>
+            <div class="row exit is-focus" style="top:634px">Выход</div>
+            <div class="ver" style="top:782px;left:auto;right:0">v5.1.15</div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li>Точка отсчёта: два языка выделения (тикет слева у строк, рамка-бокс у «Выхода»), «Повторить интро» и «Выход» вне категорий, шов рейла по яркой части диска.</li>
+      </ul>
+    </section>
+
+    <!-- ================= B ================= -->
+    <section class="card">
+      <h2>B · <span>Минимальная правка</span></h2>
+      <p class="tag">Только выделения и ритм · структура и вёрстка рейла не тронуты</p>
+      <div class="frame" data-zoom>
+        <div class="stage v-b">
+          <div class="ph"></div>
+          <div class="rail"></div>
+          <div class="band-top"></div><div class="band-bot"></div><div class="band-right"></div>
+          <div class="col">
+            <div class="kicker" style="position:absolute;left:32px;top:46px"><i></i>ASTRO</div>
+            <div class="title" style="position:absolute;top:76px">VOYAGER</div>
+            <div class="tagline" style="position:absolute;top:136px;width:352px;text-wrap:balance">Путешествие сквозь релятивистскую вселенную</div>
+
+            <div class="cont" style="top:188px">
+              <div class="mark tick"></div>
+              <div class="lbl" style="padding-left:16px">Продолжить</div>
+              <div class="sub" style="padding-left:16px">Sgr A* · последнее сохранение</div>
+              <div class="rule"></div>
+            </div>
+
+            <div class="sec" style="top:300px">ПОЛЁТ</div>
+            <div class="row" style="top:334px"><div class="tick mark"></div>Новая экспедиция<div class="chev"></div></div>
+            <div class="row" style="top:378px"><div class="tick mark"></div>Свободный полёт<div class="chev"></div></div>
+
+            <div class="sec" style="top:430px">ИССЛЕДОВАНИЕ</div>
+            <div class="row" style="top:464px"><div class="tick mark"></div>Ангар моделей<div class="chev"></div></div>
+            <div class="row" style="top:508px"><div class="tick mark"></div>Архив и кодекс<div class="chev"></div></div>
+
+            <div class="sec" style="top:560px">СИСТЕМА</div>
+            <div class="row" style="top:594px"><div class="tick mark"></div>Настройки<div class="chev"></div></div>
+
+            <div class="sec" style="top:646px">ПРОЧЕЕ</div>
+            <div class="row" style="top:680px"><div class="tick mark"></div>Повторить интро<div class="chev"></div></div>
+            <div class="row exit is-focus" style="top:724px"><div class="tick mark"></div>Выход<div class="chev"></div></div>
+
+            <div class="footrule" style="top:772px"></div>
+            <div class="ver" style="top:786px;left:auto;right:0;font-size:15px">v5.1.15</div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li>Один язык выделения: тикет + подложка + шеврон. Рамка-бокс убрана везде; фокус на «Выходе» подсвечивает его красным статусным цветом, а не бирюзовым акцентом действия.</li>
+        <li>«Продолжить» отделено от заголовков секций размером (24 px) и короткой линейкой — иерархия без превращения в кнопку.</li>
+        <li>Ритм выровнен: 26 px перед заголовком секции, 8 px после, шаг строки 44 px. Нижние два пункта получили свою секцию «ПРОЧЕЕ» — список больше не обрывается.</li>
+        <li>Версия прижата к волосяной линии футера, девиз переносится сбалансированно («вселенную» не уносит одну строку).</li>
+      </ul>
+    </section>
+
+    <!-- ================= C ================= -->
+    <section class="card">
+      <h2>C · <span>Полная</span></h2>
+      <p class="tag">CTA + мягкая виньетка + колофон</p>
+      <div class="frame" data-zoom>
+        <div class="stage v-c">
+          <div class="ph"></div>
+          <div class="rail"></div>
+          <div class="band-top"></div><div class="band-bot"></div><div class="band-right"></div>
+          <div class="col">
+            <div class="kicker" style="position:absolute;left:32px;top:46px"><i></i>ASTRO</div>
+            <div class="title" style="position:absolute;top:76px">VOYAGER</div>
+            <div class="tagline" style="position:absolute;top:136px;width:352px;text-wrap:balance">Путешествие сквозь релятивистскую вселенную</div>
+
+            <div class="cta" style="top:190px">
+              <div class="mark tick"></div>
+              <div class="lbl">Продолжить</div>
+              <div class="sub">Sgr A* · последнее сохранение</div>
+              <div class="chev"></div>
+            </div>
+
+            <div class="sec" style="top:300px">ПОЛЁТ</div>
+            <div class="row" style="top:334px"><div class="tick mark"></div>Новая экспедиция<div class="chev"></div></div>
+            <div class="row" style="top:378px"><div class="tick mark"></div>Свободный полёт<div class="chev"></div></div>
+
+            <div class="sec" style="top:430px">ИССЛЕДОВАНИЕ</div>
+            <div class="row" style="top:464px"><div class="tick mark"></div>Ангар моделей<div class="chev"></div></div>
+            <div class="row" style="top:508px"><div class="tick mark"></div>Архив и кодекс<div class="chev"></div></div>
+
+            <div class="sec" style="top:560px">СИСТЕМА</div>
+            <div class="row" style="top:594px"><div class="tick mark"></div>Настройки<div class="chev"></div></div>
+
+            <div class="colophon" style="top:742px">
+              <div class="ln"></div>
+              <div class="bar">
+                <div class="ver">v5.1.15</div>
+                <div class="quiet">
+                  <a href="#" onclick="return false">Повторить интро</a>
+                  <a class="danger" href="#" onclick="return false">Выход</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li>«Продолжить» — настоящее главное действие: залитая бирюзой панель с тикетом и шевроном; всё остальное остаётся тихими строками. Один язык выделения, как в B.</li>
+        <li>Шов рейла убран: восьмиостановочное плавное затухание рейла до 1260 px вместо линейной стены 344→512. Диск больше не обрезан вертикальной границей.</li>
+        <li>Линейки у заголовков секций коротки и фиксированы (28 px) — правый край колонки перестаёт быть гребёнкой разной длины.</li>
+        <li>«Повторить интро» и «Выход» уходят из навигационного списка в нижний колофон вместе с версией: список заканчивается на «Настройках» и не выглядит оборванным.</li>
+      </ul>
+    </section>
+  </div>
+
+  <p class="hint">B меняет только стили отрисовки строк; C трогает форму рейла (виньетка), добавляет primary-панель и нижний колофон — это правки в drawMainMenuHero и в блок рейла.</p>
+
+  <div class="lightbox" id="lb"><div class="wrap" id="lbw"></div></div>
+
+<script>
+  function fit(){
+    document.querySelectorAll('.card .frame').forEach(f=>{
+      const k=f.clientWidth/1456;
+      f.querySelector('.stage').style.transform='scale('+k+')';
+    });
+    const lb=document.getElementById('lbw');
+    if(document.getElementById('lb').classList.contains('on')){
+      lb.style.setProperty('--k', Math.min(1,(window.innerWidth-48)/1456, (window.innerHeight-96)/816));
+    }
+  }
+  addEventListener('resize',fit); fit();
+
+  document.querySelectorAll('[data-zoom]').forEach(f=>{
+    f.addEventListener('click',()=>{
+      const lb=document.getElementById('lb'), wrap=document.getElementById('lbw');
+      wrap.innerHTML='';
+      const s=f.querySelector('.stage').cloneNode(true);
+      s.style.transform='scale(var(--k,1))';
+      wrap.appendChild(s);
+      wrap.style.width='1456px'; wrap.style.height='816px';
+      wrap.style.maxWidth='100%'; wrap.style.aspectRatio='1456/816';
+      wrap.style.position='relative'; wrap.style.overflow='hidden';
+      lb.classList.add('on'); fit();
+    });
+  });
+  document.getElementById('lb').addEventListener('click',e=>{
+    if(e.target.id==='lb') document.getElementById('lb').classList.remove('on');
+  });
+  addEventListener('keydown',e=>{ if(e.key==='Escape') document.getElementById('lb').classList.remove('on'); });
+</script>
+</body>
+</html>

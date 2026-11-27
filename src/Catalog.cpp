@@ -9,7 +9,7 @@ const std::vector<Station>& builtinCatalog() {
       // v3.6.0: последнее поле — distanceLy (св. годы от Солнца, упрощённо).
       {"sgra", StationType::BlackHole, "Sgr A*",
        "Galactic center black hole. Schwarzschild lensing, Rs=1.0.", 10.0,
-       {1.0, 30.0, 0.05, 600}, 1.05, 40.0, 26000.0},
+       {1.0, 30.0, 0.05, 600, 0.90}, 1.05, 40.0, 26000.0},
       {"qso-3c273", StationType::Quasar, "3C 273",
        "Bright quasar: disk + jets + glow billboard.", 25.0, {}, 2.0, 15.0,
        2.44e9},
@@ -29,13 +29,13 @@ const std::vector<Station>& builtinCatalog() {
        "Sun + 8 planets + Moon, rings, belt. Orbital fleet: Aurora Ring Station, Gateway Shipyard, SpaceX Crew Dragon, Soyuz MS-25, Webb Observatory, O'Neill ring colony and solar sail; Perseverance on Mars, Artemis lander at the Moon, Voyager 1 relic in the Kuiper belt.", 70.0, {}, 0.0, 0.0, 0.0},
       {"m87", StationType::BlackHole, "M87*",
        "Supermassive black hole with relativistic jet.", 14.0,
-       {1.5, 30.0, 0.05, 600}, 1.575, 60.0, 53.5e6},
+       {1.5, 30.0, 0.05, 600, 0.94}, 1.575, 60.0, 53.5e6},
       // v3.9.1: OJ 287 binaryальный SMBH (companion pierces the disk twice
       // per orbit, flares); shellRadius/maxSteps re-pinned by id in
       // teleportTo because applyPreset overwrites params.
       {"oj287", StationType::BlackHole, "OJ 287",
        "Binary supermassive black hole: giant disk, companion punches the disk twice per orbit.", 16.0,
-       {1.0, 60.0, 0.06, 900}, 1.05, 120.0, 3.5e9},
+       {1.0, 60.0, 0.06, 900, 0.72}, 1.05, 120.0, 3.5e9},
       // v3.9.1: hyperdisk - disk far bigger than the hole itself
       // (rOut 26 Rs at spawn 45 Rs).
       {"hyperdisk", StationType::BlackHole, "Hyperdisk",

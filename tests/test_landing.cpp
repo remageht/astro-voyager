@@ -367,6 +367,100 @@ int main() {
     }
   }
 
-  std::cout << "All 12 LandingSystem tests passed successfully!\n";
+  // Test 13: Recon drone mission anomalies stay within 10 km perimeter
+  {
+    ReconDroneTelemetry herc = createReconDroneMission("hercules-b");
+    if (herc.anomalies.size() < 4 || herc.rangeRadiusKm != 10.0f) {
+      std::cerr << "Test 13 failed: Expected >= 4 anomalies with 10 km range\n";
+      return 1;
+    }
+    for (const auto& a : herc.anomalies) {
+      if (a.distanceKm > herc.rangeRadiusKm || a.rpReward <= 0) {
+        std::cerr << "Test 13 failed: Anomaly outside 10 km perimeter or zero reward\n";
+        return 1;
+      }
+    }
+  }
+
+  // Test 14: Recon drone undocking, full autonomous patrol, and return-to-ship cycle
+  {
+    ReconDroneTelemetry drone = createReconDroneMission("mars");
+    if (!deployReconDrone(drone) || drone.state != ReconDroneState::Deploying) {
+      std::cerr << "Test 14 failed: Drone must undock into Deploying state\n";
+      return 1;
+    }
+
+    int totalRp = 0;
+    bool observedScouting = false;
+    bool observedReturning = false;
+    for (int step = 0; step < 800; ++step) {
+      int stepRp = 0;
+      updateReconDrone(drone, 0.25f, true, stepRp);
+      totalRp += stepRp;
+      if (drone.state == ReconDroneState::Scouting) observedScouting = true;
+      if (drone.state == ReconDroneState::Returning) observedReturning = true;
+      const float r = std::sqrt(drone.posXKm * drone.posXKm + drone.posZKm * drone.posZKm);
+      if (r > drone.rangeRadiusKm + 0.01f) {
+        std::cerr << "Test 14 failed: Drone exceeded 10 km range radius (r=" << r << ")\n";
+        return 1;
+      }
+      if (drone.state == ReconDroneState::DockedComplete) break;
+    }
+
+    if (!observedScouting || !observedReturning || drone.state != ReconDroneState::DockedComplete) {
+      std::cerr << "Test 14 failed: Drone must complete undock->scout->return->dock cycle (state="
+                << static_cast<int>(drone.state) << ")\n";
+      return 1;
+    }
+    if (drone.scannedCount != static_cast<int>(drone.anomalies.size()) || totalRp <= 0) {
+      std::cerr << "Test 14 failed: Drone must scan all anomalies and earn RP\n";
+      return 1;
+    }
+    if (std::abs(drone.posXKm) > 0.01f || std::abs(drone.posZKm) > 0.01f || drone.altitudeM != 0.0f) {
+      std::cerr << "Test 14 failed: Docked drone must rest at origin (0,0,0)\n";
+      return 1;
+    }
+  }
+
+  // Test 15: Recon drone manual recall & low-battery failsafe return
+  {
+    ReconDroneTelemetry drone = createReconDroneMission("titan");
+    deployReconDrone(drone);
+    int stepRp = 0;
+    for (int i = 0; i < 20; ++i) updateReconDrone(drone, 0.25f, true, stepRp);
+    recallReconDrone(drone);
+    if (drone.state != ReconDroneState::Returning) {
+      std::cerr << "Test 15 failed: Manual recall must trigger Returning state\n";
+      return 1;
+    }
+
+    ReconDroneTelemetry lowBat = createReconDroneMission("europa");
+    deployReconDrone(lowBat);
+    for (int i = 0; i < 20; ++i) updateReconDrone(lowBat, 0.25f, true, stepRp);
+    lowBat.batteryPct = 24.0f;
+    updateReconDrone(lowBat, 0.25f, true, stepRp);
+    if (lowBat.state != ReconDroneState::Returning) {
+      std::cerr << "Test 15 failed: Low battery <= 25% must force Returning state\n";
+      return 1;
+    }
+  }
+
+  // Test 16: Recon drone Zettelkasten report generation
+  {
+    ReconDroneTelemetry drone = createReconDroneMission("hercules-b");
+    drone.scannedCount = 4;
+    drone.distanceTraveledKm = 28.4f;
+    drone.totalRpEarned = 485;
+    drone.anomalies[0].scanned = true;
+    std::string note = formatReconDroneZettel("hercules-b", "Геркулес b", drone);
+    if (note.find("Отчёт автономного дрона-разведчика (10 км)") == std::string::npos ||
+        note.find("`hercules-b`") == std::string::npos ||
+        note.find("+485") == std::string::npos) {
+      std::cerr << "Test 16 failed: Recon drone Zettel format missing expected metadata\n";
+      return 1;
+    }
+  }
+
+  std::cout << "All 16 LandingSystem tests passed successfully!\n";
   return 0;
 }

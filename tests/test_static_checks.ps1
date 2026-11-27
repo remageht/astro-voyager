@@ -317,8 +317,23 @@ Check 'story journal test wired' (($cmake -match 'tests/test_story\.cpp') -and (
 # --- v3.5.0 expedition pass ---
 Check 'expedition core module' (((Read-File 'src/Expedition.h') -match 'class ExpeditionState') -and ((Read-File 'src/Expedition.cpp') -match 'expeditionChapters') -and ($cmake -match 'src/Expedition\.cpp'))
 Check 'expedition slides module' (((Read-File 'src/StorySlides.h') -match 'storyIntroSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'drawStoryArt') -and ($cmake -match 'src/StorySlides\.cpp'))
+$cinematicStoryArt = @(
+  'res/story/cinematic/expedition_00_mia_stars.png',
+  'res/story/cinematic/expedition_01_academy.png',
+  'res/story/cinematic/expedition_02_dimming_sun.png',
+  'res/story/cinematic/expedition_03_cities_dark.png',
+  'res/story/cinematic/expedition_04_bridge.png',
+  'res/story/cinematic/expedition_05_launch.png',
+  'res/story/cinematic/expedition_06_photon_ring.png',
+  'res/story/cinematic/story_07_relativistic_jet.png',
+  'res/story/cinematic/story_08_quasar.png',
+  'res/story/cinematic/story_09_cluster.png',
+  'res/story/cinematic/story_10_colony.png'
+)
+Check 'cinematic story art set is complete' (($cinematicStoryArt.Count -eq 11) -and (@($cinematicStoryArt | Where-Object { -not (Test-Path (Join-Path $root $_)) }).Count -eq 0))
+Check 'story slides prefer cinematic art with vector fallback' (($appCpp -match 'storyArtImage\(sl\.art\)') -and ((Read-File 'src/StorySlides.cpp') -match 'story_10_colony\.png'))
 Check 'expedition play hook' (($appCpp -match 'startExpeditionIntro') -and ($appCpp -match 'startNewAdventure'))
-Check 'free flight button' ($appCpp -match 'FREE FLIGHT')
+Check 'free flight button' ($appCpp -match '(?i)free flight')
 Check 'expedition map key N' (($appCpp -match 'm_keyMap') -and ($appCpp -match 'm_expeditionMapOpen'))
 Check 'expedition test wired' (($cmake -match 'tests/test_expedition\.cpp') -and ($cmake -match 'add_test\(NAME test_expedition'))
 Check 'adventure finale branch' (($appCpp -match 'drawFinaleChoice') -and ((Read-File 'src/Expedition.h') -match 'finaleChoice') -and ((Read-File 'src/Expedition.cpp') -match 'kFinaleHorizon') -and ((Read-File 'src/StorySlides.cpp') -match 'far horizon ending'))
@@ -698,7 +713,15 @@ Check 'egorka_voice_player.html removed from root' (-not (Test-Path (Join-Path $
 Check 'preview_hud.html moved to docs/prototypes' ((-not (Test-Path (Join-Path $root 'preview_hud.html'))) -and (Test-Path (Join-Path $root 'docs/prototypes/preview_hud.html')))
 Check 'AppGL has drawVoiceCatalogPage declaration' ((Read-File 'src/AppGL.h') -match 'void drawVoiceCatalogPage\(float areaH\)')
 Check 'AppGL implements drawVoiceCatalogPage' ($appCpp -match 'void AppGL::drawVoiceCatalogPage\(float areaH\)')
-Check 'AppGL drawMenu header has voice catalog tab' ($appCpp -match '04 VOICES')
+Check 'AppGL archive groups voice catalog, help and release notes' (($appCpp -match 'АРХИВ И КОДЕКС') -and ($appCpp -match 'КАТАЛОГ ГОЛОСОВ ЭКИПАЖА') -and ($appCpp -match 'БОРТОВАЯ СПРАВКА И УПРАВЛЕНИЕ') -and ($appCpp -match 'ПРИМЕЧАНИЯ К ВЫПУСКУ'))
+Check 'menu back navigation uses parent page stack' ($appCpp -match 'void AppGL::menuGoBack')
+Check 'archive overlays remain above the menu' (($appCpp -match 'if \(m_storyOpen\) drawStoryPanel\(\);') -and ($appCpp -match 'if \(m_codexOpen\) drawCodex\(\);'))
+Check 'menu escape closes overlays before back navigation' ($appCpp -match 'if \(!closeTopModal\(\)\)')
+Check 'menu typography pairs readable body and technical heading fonts' (($appCpp -match 'segoeui\.ttf') -and ($appCpp -match 'bahnschrift\.ttf') -and ((Read-File 'src/AppGL.h') -match 'm_headingFont'))
+Check 'main menu uses cinematic serif display and italic tagline fonts' (($appCpp -match 'georgiab\.ttf') -and ($appCpp -match 'georgiai\.ttf') -and ($appCpp -match 'segoeuisl\.ttf') -and ((Read-File 'src/AppGL.h') -match 'm_mainMenuTitleFont') -and ((Read-File 'src/AppGL.h') -match 'm_mainMenuTaglineFont'))
+Check 'release notes use wrapped high contrast text' (($appCpp -match 'auto releaseHeading') -and ($appCpp -match 'auto releaseBullet') -and ($appCpp -match 'PushTextWrapPos\(wrapX\)'))
+Check 'settings and hangar use grouped technical sections' (($appCpp -match 'menuSection\(m_headingFont, uiRu\("Фон главного меню"') -and ($appCpp -match 'menuSection\(m_headingFont, uiRu\("СПЕЦИФИКАЦИЯ"'))
+Check 'main menu keeps only the save subtitle' (($appCpp -match 'const std::string contSubtitle') -and ($appCpp -notmatch 'ТЕКУЩАЯ ЭКСПЕДИЦИЯ'))
 Check 'AudioEngine has isEgorkaVoicePlaying' ($audioH -match 'bool isEgorkaVoicePlaying\(\)')
 Check 'AudioEngine has currentEgorkaVoiceCue' ($audioH -match 'int currentEgorkaVoiceCue\(\)')
 Check 'main menu background texture exists' (Test-Path (Join-Path $root 'res/textures/main_menu_bg.jpg'))
@@ -729,7 +752,7 @@ Check 'menu backgrounds are owned outside the UI texture cache' (($appCpp -match
 Check 'AppGL loads and binds the disk mask on texture unit 2' (($menuAppH -match '\bm_menuDiskMaskTex\b') -and ($appCpp -match 'res/textures/main_menu_disk_mask\.png') -and ($appCpp -match 'setUniform1i\("u_DiskMask", 2\)') -and ($appCpp -match 'glActiveTexture\s*\(\s*GL_TEXTURE2\s*\)') -and ($appCpp -match 'glBindTexture\s*\(\s*GL_TEXTURE_2D\s*,\s*m_menuDiskMaskTex\s*\)'))
 Check 'AppGL drawMainMenuBackground has shaderActive check' ($appCpp -match 'const bool shaderActive = \(m_menuSkyShader && m_menuSkyQuad\);')
 Check 'render_menu_warp_ship script exists' ((-not (Test-Path (Join-Path $root 'blender/scripts/render_menu_warp_ship.py'))) -or (Test-Path (Join-Path $root 'blender/scripts/render_menu_warp_ship.py')) -or (Test-Path (Join-Path $root 'res/textures/main_menu_disk_mask.png')))
-Check 'AppGL drawMainMenuHero draws read-only status pills' ($appCpp -match 'Пилюли только для чтения')
+Check 'AppGL drawMainMenuHero fades the rail and makes continue the primary action' (($appCpp -match 'kRailStops') -and ($appCpp -match 'drawMenuAction\(contLabel') -and ($appCpp -notmatch 'railSolidW'))
 Check 'AppGL drawMainMenuHero no longer clutters with heroGlassHud' (-not ($appCpp -match 'heroGlassHud'))
 Check 'Window constructor disables AUTO_ICONIFY' ((Read-File 'src/Window.cpp') -match 'GLFW_AUTO_ICONIFY, GLFW_FALSE')
 Check 'Window destructor hides window and polls events before destroy' ((Read-File 'src/Window.cpp') -match 'glfwHideWindow\(m_window\);\s*glfwPollEvents\(\);\s*glfwDestroyWindow\(m_window\);')
@@ -745,7 +768,14 @@ Check 'native menu regression samples five phases over the 6.5 second loop' (($m
 Check 'native menu regression logs motion, outside-mask and exact loop differences' (($menuCapture -match 'quarter-difference') -and ($menuCapture -match 'outside-mask') -and ($menuCapture -match 'loop-difference') -and ($menuCapture -match '\bquarterDifference\s*>\s*1000\b') -and ($menuCapture -match '\bloopDifference\s*==\s*0\b'))
 Check 'native menu regression verifies scenic motion, ship immobility and repeat selection' (($menuCapture -match 'ship-changed') -and ($menuCapture -match 'Repeat selection') -and ($menuCapture -match '\boutsideMask\s*==\s*0\b') -and ($menuCapture -match '\bshipChanged\s*==\s*0\b') -and ($menuCapture -match '\brepeatChecks\s*==\s*10\b'))
 Check 'menu backdrop and disk mask retain aspect-ratio cover crop' (($menuFrag -match 'uniform\s+float\s+u_BgAspect\s*;') -and ($menuFrag -match '\bvec2\s+coverScale\s*=') -and ($menuFrag -match '\bimageUv\s*=[^;]*\bcoverScale\b') -and ($menuFrag -match 'texture\s*\(\s*u_BgTex\s*,\s*imageUv\s*\)'))
-Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenuActive\(m_inMenu\)')
+Check 'menu ambient follows application state' ($appCpp -match 'm_audio\.setMenuActive\(m_inMenu(?: && !m_exitSequence)?\)')
+
+# --- v5.2.4: нижний системный блок меню и power-down перед закрытием окна ---
+$menuHero = [regex]::Match($appCpp, '(?s)void\s+AppGL::drawMainMenuHero\([^)]*\)\s*\{.*?\r?\n\}').Value
+Check 'menu exit control is a danger-styled system action' (($menuHero -match 'drawPowerGlyph') -and ($menuHero -match 'menuui::kDanger'))
+Check 'menu hero hands the exit over to the power-down sequence' (($menuHero -match 'requestAppExit\(\)') -and ($menuHero -notmatch 'glfwSetWindowShouldClose'))
+Check 'power-down sequence runs to the dot before the window closes' (($appCpp -match 'void\s+drawPowerDownSequence') -and ($appCpp -match 'm_exitTimer >= kPowerDownSeconds') -and ($appCpp -match 'glfwSetWindowShouldClose'))
+Check 'native exit regression captures the power-down frames' (($appCpp -match 'AppGL::captureExitCheck') -and ((Read-File 'src/main.cpp') -match '--capture-exit') -and ($appCpp -match 'exit_06_black\.png'))
 
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
 Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and (($sceneCpp -match 'colonySurfaceFrame') -or ($sceneCpp -match 'colonyAnchorNormal'))) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
@@ -840,9 +870,12 @@ Check 'dreadnought captured in hud harness' (($appCpp -match 'ship_dreadnought\.
 Check 'dreadnought documented' (($readme -match 'Mining Dreadnought \(4\)') -and ($readme -match 'mining_dreadnought_showcase\.png'))
 
 # --- Issue #198: Main menu tactical button hotkeys, centralized accent, and hover gate ---
-Check 'menu tactical cut button defines unique hotkey badges' (($appCpp -match '\[ENTER\]') -and ($appCpp -match '\[N\]') -and ($appCpp -match '\[F\]') -and ($appCpp -match '\[S\]') -and ($appCpp -match '\[A\]') -and ($appCpp -match '\[ESC\]'))
-Check 'menu UI centralizes accent color in menuui::kAccentU32' ($appCpp -match '(const|constexpr)\s+ImU32\s+kAccentU32\s*=\s*IM_COL32\(\s*56\s*,\s*189\s*,\s*248\s*,\s*255\s*\);')
-Check 'menu status pills avoid duplicating warp briefing line' (($appCpp -match 'СИСТЕМЫ: НОМИНАЛ') -and ($appCpp -notmatch 'ПРИВОД: ГОТОВ 100%'))
+Check 'menu keyboard shortcuts remain wired' (($appCpp -match 'SetItemDefaultFocus') -and ($appCpp -match 'ImGuiKey_N') -and ($appCpp -match 'ImGuiKey_F') -and ($appCpp -match 'ImGuiKey_S') -and ($appCpp -match 'ImGuiKey_A') -and ($appCpp -match 'GLFW_KEY_I'))
+Check 'menu UI centralizes accent color in menuui::kAccentU32' (($appCpp -match '(const|constexpr)\s+ImU32\s+kAccentU32\s*=\s*IM_COL32\(') -and ($appCpp -match '(?s)accentAlpha\(int a\).*kAccentU32'))
+Check 'menu status avoids duplicating warp briefing line' (($appCpp -match 'contSubtitle') -and ($appCpp -notmatch 'drawFlightBriefingCard') -and ($appCpp -notmatch 'CURRENT EXPEDITION'))
+Check 'main menu section labels are enlarged and tracked' ($appCpp -match 'labelSize = ImGui::GetFontSize\(\) \* 1\.15f')
+Check 'menu timers advance once per frame' ([regex]::Matches($appCpp, 'm_radarLockTimer \+= io\.DeltaTime').Count -eq 1)
+Check 'CRT timelines retain real-time pacing after single timer update' (($appCpp -match 'if \(t >= 0\.10f\) return;') -and ($appCpp -match 'm_menuBootTimer >= 0\.20f') -and ($appCpp -match 'm_menuCloseTimer >= 0\.09f'))
 Check 'captureMenuCheck verifies interactive button hover and hero elements' (($appCpp -match 'Menu hero elements: hover-diff=') -and ($appCpp -match 'menu_hover_btn01\.png'))
 
 # --- Issue #202: Tier 1 diegetic flight HUD telemetry and peripheral vitals arcs ---
@@ -952,7 +985,7 @@ $typesH = Read-File 'src/Types.h'
 $zettelH = Read-File 'src/Zettelkasten.h'
 $zettelCpp = Read-File 'src/Zettelkasten.cpp'
 
-Check 'AppGL renders poetic menu motto and prologue directives' (($appCpp -match 'Distance is not a wall') -and ($appCpp -match 'CASIMIR KEY & COORDS') -and ($appCpp -match 'FACTOR 9 // FIRST WARP') -and ($appCpp -match 'PILOT LOGBOOK & ARCHIVE'))
+Check 'AppGL renders clear menu descriptor and archive entry' (($appCpp -match 'A journey through(?:\\n)?\s*a relativistic universe') -and ($appCpp -match 'Pilot logbook'))
 Check 'AudioEngine declares EgorkaVoiceDensity enum and getters' (($audioH -match 'enum class EgorkaVoiceDensity') -and ($audioH -match 'CriticalOnly') -and ($audioH -match 'setEgorkaVoiceDensity') -and ($audioH -match 'egorkaVoiceDensity'))
 Check 'AudioEngine and AppGL wire voice density filtering and UI combo' (($audioCpp -match 'm_egorkaVoiceDensity\.load\(\)') -and ($appCpp -match 'Egorka Voice Density') -and ($appCpp -match 'Critical Only'))
 Check 'Zettelkasten defines and discovers Pilot Logbook Day 1 Factor 9 note' (($zettelH -match 'kNotePilotLogDay1\s*=\s*"z_pilot_log_day1"') -and ($zettelCpp -match 'kNotePilotLogDay1') -and ($zettelCpp -match 'Day 1\. Factor 9') -and ($zettelCpp -match 'discoverSeed\(kNotePilotLogDay1\)'))
@@ -976,7 +1009,11 @@ $introH = Read-File 'src/IntroCinematicDirector.h'
 $introCpp = Read-File 'src/IntroCinematicDirector.cpp'
 
 Check 'IntroCinematicDirector.h declares IntroPhase and spline director' (($introH -match 'enum class IntroPhase') -and ($introH -match 'VoidDrift') -and ($introH -match 'WarpBurst') -and ($introH -match 'MegastructureReveal') -and ($introH -match 'BridgeEnter') -and ($introH -match 'TitleGlory') -and ($introH -match 'class IntroCinematicDirector'))
-Check 'IntroCinematicDirector.cpp implements Catmull-Rom spline and drawHUD' (($introCpp -match 'catmullRom') -and ($introCpp -match 'evaluateSpline') -and ($introCpp -match 'drawHUD') -and ($introCpp -match 'ASTRO - VOYAGER') -and ($introCpp -match 'consumeWarpBoomTrigger'))
+Check 'IntroCinematicDirector.cpp implements time-aware Hermite spline and drawHUD' (($introCpp -match 'hermite') -and ($introCpp -match 'evaluateSpline') -and ($introCpp -match 'drawHUD') -and ($introCpp -match 'TitleGlory') -and ($introCpp -match 'consumeWarpBoomTrigger'))
+Check 'intro camera avoids stop-start easing and high-frequency drift' (($introCpp -match 'Time-aware central tangents') -and ($introCpp -notmatch 'driftX') -and ($introCpp -notmatch 'm_camRoll \+= std::sin'))
+Check 'SceneManager implements dedicated 3D intro renderer' (($sceneH -match 'void renderIntro') -and ($sceneCpp -match 'void SceneManager::renderIntro') -and ($sceneCpp -match 'res/models/warp_ship\.obj') -and ($sceneCpp -match 'res/models/station_megastructure\.obj') -and ($sceneCpp -match 'res/models/bridge_interior\.obj'))
+Check 'AppGL routes active intro through 3D renderer' (($appCpp -match 'renderIntroFrame') -and ($appCpp -match 'm_sceneManager->renderIntro'))
+Check 'AppGL exposes six-phase intro capture and CLI' (($appCpp -match 'int AppGL::captureIntroCheck') -and ($appCpp -match 'intro_%02d\.png') -and ((Read-File 'src/main.cpp') -match '--capture-intro'))
 Check 'test_intro_cinematic registered in CMakeLists and ASTRO_TEST_TARGETS' (($cmakeTxt -match 'test_intro_cinematic') -and (Test-Path 'tests/test_intro_cinematic.cpp'))
 if ($hasModelPack) {
     Check 'orbital megastructure 3D mesh and PBR textures exist' ((Test-Path (Join-Path $root 'res/models/station_megastructure.obj')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_albedo.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_normal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_rough.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_metal.bmp')) -and (Test-Path (Join-Path $root 'res/models/station_megastructure_emissive.bmp')))
@@ -984,7 +1021,7 @@ if ($hasModelPack) {
 } else {
     Write-Output 'SKIP: 2 intro mesh and PBR map checks (asset pack not fetched for this ref)'
 }
-Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(deltaTime\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match '3D-ЗАСТАВКА \(ИНТРО\)'))
+Check 'AppGL declares and wires IntroCinematicDirector and replay button' (($appH -match 'IntroCinematicDirector m_introDirector;') -and ($appCpp -match 'm_introDirector\.start\(\)') -and ($appCpp -match 'm_introDirector\.update\(std::min\(wallDelta,\s*0\.2f\)\)') -and ($appCpp -match 'm_introDirector\.drawHUD') -and ($appCpp -match 'Повторить интро'))
 Check 'universe tour is a data-driven 30 fps full-screen preroll' (((Read-File 'src/StorySlides.h') -match 'videoFps') -and ((Read-File 'src/StorySlides.cpp') -match 'storyUniverseTourSlides') -and ((Read-File 'src/StorySlides.cpp') -match 'res/story/worlds_tour') -and ($appH -match 'm_slidesPreroll') -and ($appCpp -match 'startUniverseTour') -and ($appCpp -match 'vTime \* sl\.videoFps'))
 Check 'menu renders story overlay before menu or realtime intro' ($appCpp -match '(?s)if \(m_slidesOpen\) \{\s*drawSlidesOverlay\(\);\s*\} else if \(m_introDirector\.isActive\(\)\)')
 Check 'universe tour story assets are complete' ((Test-Path 'res/story/worlds_tour/frame_001.jpg') -and (Test-Path 'res/story/worlds_tour/frame_1274.jpg') -and (Test-Path 'res/story/worlds_tour/audio.wav'))
@@ -1012,6 +1049,30 @@ if (Test-Path (Join-Path $root 'res/models/ark_ship.obj')) {
 } else {
     Write-Output 'SKIP: ark ship mesh and PBR map checks (asset pack not fetched for this ref)'
 }
+
+# --- Stage 6 (v5.1.0): Exoplanetary Biomes, Ocean Hydrodynamics, Autonomous 10km Drone & CI Resilience (#241) ---
+$planetFrag = Read-File 'shaders/planet.frag'
+$shipFrag = Read-File 'shaders/ship.frag'
+$landH = Read-File 'src/LandingSystem.h'
+$landCpp = Read-File 'src/LandingSystem.cpp'
+$solarCpp = Read-File 'src/SolarSystem.cpp'
+$buildYml = Read-File '.github/workflows/build.yml'
+Check 'planet shader defines u_Terraform, u_Wake and shared oceanGlintGGX' (($planetFrag -match 'uniform float u_Terraform;') -and ($planetFrag -match 'uniform vec4 u_Wake;') -and ($planetFrag -match 'float oceanGlintGGX\('))
+Check 'planet shader implements Hercules-b, Titan and Europa biomes' (($planetFrag -match 'u_Body == 12') -and ($planetFrag -match 'u_Body == 13') -and ($planetFrag -match 'u_Body == 14') -and ($solarCpp -match 'd\.detail = 13') -and ($solarCpp -match 'd\.detail = 14'))
+Check 'SceneManager passes u_Terraform, u_Wake and Hercules-b biome id 12' (($sceneCpp -match 'setUniform1f\("u_Terraform"') -and ($sceneCpp -match 'setUniform4f\("u_Wake"') -and ($sceneCpp -match 'drawPlanet\(hbPos, 0\.22, 2, 12,'))
+Check 'LandingSystem implements autonomous 10km recon drone state machine' (($landH -match 'enum class ReconDroneState') -and ($landH -match 'createReconDroneMission') -and ($landCpp -match 'deployReconDrone') -and ($landCpp -match 'updateReconDrone') -and ($landCpp -match 'formatReconDroneZettel'))
+Check 'AppGL integrates recon drone radar UI and Zettelkasten telemetry' (($appH -match 'ReconDroneTelemetry m_droneTelem;') -and ($appCpp -match 'createReconDroneMission') -and ($appCpp -match 'updateReconDrone') -and ($appCpp -match '10 km Perimeter'))
+Check 'ship shader renders 3rd-person re-entry plasma sheath and SceneManager draws 3D recon drone' ((($shipFrag -match 'uniform float u_EntryPlasma;') -and ($sceneCpp -match 'setEntryPlasma')) -and (($sceneCpp -match 'g_reconVisual\.active') -and ($appCpp -match 'setReconDroneVisual')))
+Check 'build.yml hardens macOS arm64 provisioning against outage (#241)' (($buildYml -match 'fail-fast:\s*false') -and ($buildYml -match 'continue-on-error:') -and ($buildYml -match 'build-macos-gl'))
+
+# --- v5.2.0: Kerr Rotating Black Hole (Ergosphere + Frame-Dragging) & Deep Space Emergent Events ---
+$eventsH = Read-File 'src/SpaceEventsSystem.h'
+$eventsCpp = Read-File 'src/SpaceEventsSystem.cpp'
+Check 'bh shader implements Kerr spin, ergosphere, Bardeen ISCO and Lense-Thirring frame-dragging' (($bh -match 'uniform float u_KerrSpin;') -and ($bh -match 'kerrErgoRadius\(') -and ($bh -match 'kerrIscoRadius\(') -and ($bh -match 'kerrOmegaLt\(') -and ($bh -match 'cartKerrAccel\('))
+Check 'RenderSettings, SaveSettings, SceneManager and AppGL expose u_KerrSpin controls' (($sceneH -match 'float kerrSpin = 0\.0f;') -and ($saveH -match 'float kerrSpin = 0\.0f;') -and ($sceneCpp -match 'setUniform1f\("u_KerrSpin"') -and ($appCpp -match 'Kerr Spin \(a/M\)'))
+Check 'SpaceEventsSystem declares emergent SOS, rogue asteroid and relic probe encounters' (($eventsH -match 'enum class SpaceEventType') -and ($eventsH -match 'SosBeacon') -and ($eventsH -match 'RogueAsteroid') -and ($eventsH -match 'RelicProbe') -and ($eventsH -match 'class SpaceEventsManager'))
+Check 'SpaceEventsSystem implements physics drift, deflection, persistence and test_space_events' (($eventsCpp -match 'ensureSectorEvents') -and ($eventsCpp -match 'engageEvent') -and ($eventsCpp -match 'serialize') -and ($cmakeTxt -match 'test_space_events') -and (Test-Path 'tests/test_space_events.cpp'))
+Check 'SceneManager and AppGL render 3D space events, HUD alerts and radar controls' (($sceneCpp -match 'g_spaceEventVisuals') -and ($appCpp -match 'setSpaceEventVisuals') -and ($appCpp -match 'drawSpaceEventHud') -and ($appCpp -match 'Ping Scanner'))
 
 if ($script:fail -gt 0) { Write-Output ''; Write-Output ($script:fail.ToString() + ' check(s) FAILED'); exit 1 }
 Write-Output ''

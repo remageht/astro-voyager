@@ -64,6 +64,8 @@ uniform float u_BandK;  // milky-way band gain (default 1.0; sgra 1.7)
 uniform float u_RedshiftK;  // v3.9.0: legacy sky minR proxy (ignored on the physical path)
 uniform float u_RelK;       // F4/I1: 0 = legacy stylized shifts, 1 = physical invariant
 uniform float u_Rkf45K;  // v3.10.0: RKF45 adaptive march 0/1 (0 = legacy rk4+step law)
+uniform float u_KerrSpin;  // v5.2.0: dimensionless Kerr spin a/M in [0.0, 0.998]; 0 = legacy Schwarzschild
+uniform vec4 u_KerrPrecomp;  // CPU-precomputed (rPlus, rIn, fCam, active>0.5) to avoid per-pixel pow()
 uniform float u_CamDist;  // camera distance in Rs (set by SceneManager; <=0 = far/legacy)
 // v3.9.1 OJ 287 companion BH: silhouette + local weak-field deflection +
 // flare arcs where the companion's orbit crosses the disk sheet.
@@ -146,6 +148,86 @@ void cartRk4(float h, inout vec3 x, inout vec3 v, inout float dt, float rs) {
   vec3 x4 = x + h * v3;
   vec3 v4 = v + h * a3;
   cartAccel(x4, v4, dt + h * d3, rs, a4, d4);
+  x += (h / 6.0) * (v + 2.0 * v2 + 2.0 * v3 + v4);
+  v += (h / 6.0) * (a1 + 2.0 * a2 + 2.0 * a3 + a4);
+  dt += (h / 6.0) * (d1 + 2.0 * d2 + 2.0 * d3 + d4);
+}
+// === v5.2.0: Rotating Kerr metric helpers (active only when u_KerrSpin > 0.001) ===
+float kerrHorizonRadius(float rs, float aStar) {
+  float aS = clamp(aStar, 0.0, 0.998);
+  return 0.5 * rs * (1.0 + sqrt(max(1.0 - aS * aS, 0.0)));
+}
+float kerrErgoRadius(float rs, float aStar, float cosTheta) {
+  float aS = clamp(aStar, 0.0, 0.998);
+  return 0.5 * rs * (1.0 + sqrt(max(1.0 - aS * aS * cosTheta * cosTheta, 0.0)));
+}
+// Exact Bardeen-Press-Teukolsky prograde ISCO radius; equals 3*Rs at aStar = 0.
+float kerrIscoRadius(float rs, float aStar) {
+  float aS = clamp(aStar, 0.0, 0.998);
+  float c1 = pow(max(1.0 - aS * aS, 1e-6), 1.0 / 3.0);
+  float c2 = pow(1.0 + aS, 1.0 / 3.0) + pow(max(1.0 - aS, 1e-6), 1.0 / 3.0);
+  float z1 = 1.0 + c1 * c2;
+  float z2 = sqrt(3.0 * aS * aS + z1 * z1);
+  float rad = max((3.0 - z1) * (3.0 + z1 + 2.0 * z2), 0.0);
+  return 0.5 * rs * (3.0 + z2 - sqrt(rad));
+}
+float kerrOmegaLt(float r, float cosTheta, float rs, float aStar) {
+  float m = 0.5 * rs;
+  float a = aStar * m;
+  float r2 = r * r;
+  float a2 = a * a;
+  float sin2 = max(1.0 - cosTheta * cosTheta, 0.0);
+  float delta = r2 - rs * r + a2;
+  float denom = max((r2 + a2) * (r2 + a2) - a2 * delta * sin2, 1e-5);
+  return (rs * a * r) / denom;
+}
+float kerrNullDt(vec3 x, vec3 v, float rs, float rPlus) {
+  float r = max(length(x), 1e-6);
+  float q = max(r - rPlus, 1e-4 * rPlus);
+  float f = q / r;
+  float rn = dot(x, v) / r;
+  float spatial = dot(v, v) + (rPlus / q) * rn * rn;
+  return sqrt(max(spatial / max(f, 1e-5), 0.0));
+}
+void cartKerrAccel(vec3 x, vec3 v, float dt, float rs, float aStar, float rPlus,
+                   out vec3 aOut, out float ddt) {
+  float r = max(length(x), 1e-6);
+  float q = max(r - rPlus, 1e-4 * rPlus);
+  float rn = dot(x, v) / r;
+  float trans = dot(v, v) - rn * rn;
+  float cosT = clamp(x.y / r, -1.0, 1.0);
+  float spinM = aStar * (0.5 * rs);
+  float rEff = sqrt(r * r + spinM * spinM * cosT * cosT);
+  float r2 = rEff * rEff;
+  float r3 = r2 * rEff;
+  float r4 = r3 * rEff;
+  // Spin-orbit effective barrier modulation: prograde rays graze closer (D-shaped shadow).
+  vec3 phiTan = vec3(-x.z, 0.0, x.x);
+  float rho = length(x.xz);
+  float vLen = max(length(v), 1e-4);
+  float proAlign = (rho > 1e-4) ? clamp(dot(-v, phiTan) / (vLen * rho), -1.0, 1.0) : 0.0;
+  float nearK = clamp(rs / max(r, 0.45 * rs), 0.0, 1.6);
+  float spinOrbit = clamp(1.0 - 0.52 * aStar * proAlign * nearK, 0.36, 1.72);
+  float s = trans / r3 + q * dt * dt / (2.0 * r4) - rn * rn / (2.0 * r2 * q);
+  float omega = kerrOmegaLt(r, cosT, rs, aStar);
+  vec3 dragAccel = (omega * dt * 1.45) * vec3(-v.z, 0.0, v.x);
+  aOut = (-rs * spinOrbit * s) * x + dragAccel;
+  ddt = -(rPlus / (r * q)) * dt * rn;
+}
+void cartKerrRk4(float h, inout vec3 x, inout vec3 v, inout float dt,
+                 float rs, float aStar, float rPlus) {
+  vec3 a1, a2, a3, a4;
+  float d1, d2, d3, d4;
+  cartKerrAccel(x, v, dt, rs, aStar, rPlus, a1, d1);
+  vec3 x2 = x + (0.5 * h) * v;
+  vec3 v2 = v + (0.5 * h) * a1;
+  cartKerrAccel(x2, v2, dt + 0.5 * h * d1, rs, aStar, rPlus, a2, d2);
+  vec3 x3 = x + (0.5 * h) * v2;
+  vec3 v3 = v + (0.5 * h) * a2;
+  cartKerrAccel(x3, v3, dt + 0.5 * h * d2, rs, aStar, rPlus, a3, d3);
+  vec3 x4 = x + h * v3;
+  vec3 v4 = v + h * a3;
+  cartKerrAccel(x4, v4, dt + h * d3, rs, aStar, rPlus, a4, d4);
   x += (h / 6.0) * (v + 2.0 * v2 + 2.0 * v3 + v4);
   v += (h / 6.0) * (a1 + 2.0 * a2 + 2.0 * a3 + a4);
   dt += (h / 6.0) * (d1 + 2.0 * d2 + 2.0 * d3 + d4);
@@ -362,28 +444,45 @@ void main() {
   vec3 dir = normalize(u_CameraForward + ndc.x * th_ * u_CameraRight +
                        ndc.y * th_ * u_CameraUp);
   // Cartesian march state: position x, velocity v = dx/dLambda, time rate dt.
+  float kerrSpin = clamp(u_KerrSpin, 0.0, 0.998);
+  bool isKerr = (kerrSpin > 0.001);
+  bool hasPrecomp = (isKerr && u_KerrPrecomp.w > 0.5);
+  float rPlus = hasPrecomp ? u_KerrPrecomp.x : (isKerr ? kerrHorizonRadius(u_Rs, kerrSpin) : u_Rs);
+  float rCapture = isKerr ? max(rPlus * 1.005, 0.51 * u_Rs) : (u_Rs * 1.001);
+
   vec3 x = u_CameraPosition;
   vec3 v = dir;
   float r = length(x);
-  float dt = nullDt(x, v, u_Rs);
+  float dt = isKerr ? kerrNullDt(x, v, u_Rs, rPlus) : nullDt(x, v, u_Rs);
   vec3 fb = dir;
   vec3 accumColor = vec3(0.0);
   float accumAlpha = 0.0;
 
   // Gravitational redshift of the static observer: light arriving from a
   // far source is dimmed by sqrt(fCam) and its spectrum is stretched towards
-  // red. There is no full darkness at the clamp (fCam = 0 remains visible).
-  float rCam = max(length(u_CameraPosition), u_Rs * 1.001);
+  // red. When Kerr spin is active, preserve asymptotic mass M via 2Mr/Sigma.
+  float rCam = max(length(u_CameraPosition), rPlus * 1.001);
   float fCam = max(1.0 - u_Rs / rCam, 0.0);
+  if (hasPrecomp) {
+    fCam = clamp(u_KerrPrecomp.z, 0.0, 1.0);
+  } else if (isKerr) {
+    float cosCam = clamp(u_CameraPosition.y / rCam, -1.0, 1.0);
+    float aCam = kerrSpin * (0.5 * u_Rs);
+    fCam = clamp(1.0 - (u_Rs * rCam) / max(rCam * rCam + aCam * aCam * cosCam * cosCam, 1e-5),
+                 0.0, 1.0);
+  }
   float fCamSqrt = max(sqrt(fCam), 0.0);
   vec3 camRedden = vec3(1.0 / max(fCamSqrt, 0.2));
 
   // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - the glow
   // below is a stylized photon-ring visualization at the photon sphere.
   float minR = 1e30;
-  // v3.9.1 rIn/rOut: hyperdisk override (0 = legacy 3/7 Rs; the ISCO value
-  // itself is untouched - only the station-specific multipliers move).
+  // v3.9.1 rIn/rOut: hyperdisk override (0 = legacy 3/7 Rs; Kerr shifts ISCO
+  // smoothly inward per Bardeen-Press-Teukolsky when u_KerrSpin > 0).
   float rIn = (u_DiskInK > 0.0) ? u_DiskInK * u_Rs : u_Rs * 3.0;
+  if (isKerr && u_DiskInK <= 0.0) {
+    rIn = hasPrecomp ? u_KerrPrecomp.y : kerrIscoRadius(u_Rs, kerrSpin);
+  }
   float rOut = (u_DiskOutK > 0.0) ? u_DiskOutK * u_Rs : u_Rs * 7.0;
 
   // v3.9.1 OJ 287 companion state (anchored to the harness epoch u_Time
@@ -416,12 +515,24 @@ void main() {
 
   for (int i = 0; i < ABSOLUTE_MAX_STEPS; i++) {
     if (i >= u_MaxSteps) break;
-    if (r <= u_Rs * 1.001) break;
+    if (isKerr) {
+      if (r <= rCapture) break;
+    } else {
+      if (r <= u_Rs * 1.001) break;
+    }
     if (r >= u_ShellRadius) break;
     vec3 xPrev = x;
-    float q = max(r - u_Rs, 1e-4 * u_Rs);
+    float q = max(r - rPlus, 1e-4 * rPlus);
     float hUse;
-    if (u_Rkf45K > 0.5) {
+    if (isKerr) {
+      hUse = clamp(kStep * q * sqrt(r), hMin, hMax);
+      if (r > 4.5 * u_Rs && dot(x, v) > 0.0) {
+        float farFactor = 1.0 + 0.38 * smoothstep(4.5 * u_Rs, 9.0 * u_Rs, r);
+        hUse = min(hUse * farFactor, hMax);
+      }
+      cartKerrRk4(hUse, x, v, dt, u_Rs, kerrSpin, rPlus);
+      dt = kerrNullDt(x, v, u_Rs, rPlus);
+    } else if (u_Rkf45K > 0.5) {
       if (hCur <= 0.0) hCur = clamp(kStep * q * sqrt(r), hMin, hMax);
       float hNext;
       cartRkf45(hCur, RKF45_TOL, x, v, dt, u_Rs, hNext);
@@ -440,7 +551,9 @@ void main() {
       cartRk4(hUse, x, v, dt, u_Rs);
     }
     float hAdapt = hUse;
-    projectNull(x, v, dt, u_Rs);
+    if (!isKerr) {
+      projectNull(x, v, dt, u_Rs);
+    }
     r = length(x);
     if (r < minR) minR = r;
     // v3.9.1 companion BH: closest approach + weak-field radial transverse
@@ -470,12 +583,17 @@ void main() {
         float rDisk = length(xDisk);
         float phiDisk = atan(xDisk.z, xDisk.x);
         if (rDisk >= rIn && rDisk <= rOut) {
-          float fDisk = max(1.0 - u_Rs / rDisk, 0.0001);
+          float fDisk = isKerr
+                            ? clamp(1.0 - rPlus / max(rDisk, rPlus * 1.02), 0.015, 1.0)
+                            : max(1.0 - u_Rs / rDisk, 0.0001);
 
-          // Exact Keplerian angular velocity Omega = sqrt(M/r^3), M = Rs/2.
-          // Local static-frame orbital speed beta = r*Omega/sqrt(fDisk);
-          // at ISCO beta = 0.5 exactly.
-          float beta = sqrt(0.5 * u_Rs / (rDisk * fDisk));
+          // Exact Keplerian angular velocity (prograde Kerr when spinning).
+          float mGrav = 0.5 * u_Rs;
+          float aKerr = kerrSpin * mGrav;
+          float omegaKerr = sqrt(mGrav) / (pow(max(rDisk, 0.05), 1.5) + aKerr * sqrt(mGrav));
+          float beta = isKerr
+                           ? clamp(rDisk * omegaKerr / sqrt(fDisk), 0.0, 0.88)
+                           : sqrt(0.5 * u_Rs / (rDisk * fDisk));
           float gamma = 1.0 / sqrt(max(1.0 - beta * beta, 0.0001));
           vec3 vDir = vec3(-sin(phiDisk), 0.0, cos(phiDisk));
 
@@ -530,7 +648,9 @@ void main() {
           // so the reference frame is deterministic. Beaming geometry above
           // (vDir, g, g4) uses the UNROTATED phiDisk, so the approaching-side
           // asymmetry stays fixed in space and the doppler gate holds.
-          float omega = sqrt(0.5 * u_Rs / (rDisk * rDisk * rDisk));
+          float omega = isKerr
+                            ? sqrt(0.5 * u_Rs) / (pow(max(rDisk, 0.05), 1.5) + kerrSpin * 0.5 * u_Rs * sqrt(0.5 * u_Rs))
+                            : sqrt(0.5 * u_Rs / (rDisk * rDisk * rDisk));
           float phAdv = omega * (u_Time - 1.0) * KEPLER_TIME_K;
           vec2 tuv = vec2(log(max(rDisk, 0.001)) * 2.5, phiDisk * 1.5 - phAdv);
           float warp = diskFbm(tuv + vec2(0.31, 0.17));
@@ -698,9 +818,28 @@ void main() {
         accumColor += (1.0 - accumAlpha) * lobeCol * float(u_JetOn);
       }
     }
+
+    // v5.2.0 Volumetric Kerr Ergosphere Magnetosphere (r_+ < r < r_ergo(theta)):
+    // sheared electric blue-cyan frame-dragging plasma concentrated near the equator.
+    if (isKerr && kerrSpin > 0.05) {
+      float cosE = clamp(x.y / max(r, 1e-5), -1.0, 1.0);
+      float rErgo = kerrErgoRadius(u_Rs, kerrSpin, cosE);
+      if (r > rPlus * 1.02 && r < rErgo * 1.18) {
+        float spanE = max(rErgo * 1.18 - rPlus, 0.08 * u_Rs);
+        float shellW = smoothstep(0.0, 0.25, (r - rPlus) / spanE) *
+                       (1.0 - smoothstep(0.35, 1.0, (r - rPlus) / spanE));
+        float eqW = pow(max(1.0 - cosE * cosE, 0.0), 1.4);
+        float phiE = atan(x.z, x.x);
+        float omE = kerrOmegaLt(r, cosE, u_Rs, kerrSpin);
+        float wisp = 0.65 + 0.35 * sin(phiE * 4.0 - u_Time * (1.8 + 4.5 * omE * u_Rs) + r * 3.0);
+        vec3 ergoCol = mix(vec3(0.24, 0.56, 1.0), vec3(0.55, 0.78, 1.0), shellW) *
+                       (kerrSpin * shellW * eqW * wisp * 0.026 * (hAdapt / 0.125));
+        accumColor += (1.0 - accumAlpha) * ergoCol;
+      }
+    }
   }
 
-  if (compCaptured || r <= u_Rs * 1.001) {
+  if (compCaptured || r <= rCapture) {
     // Captured rays carry foreground emission (disk/jet accumulated before horizon crossing);
     // where nothing was accumulated (accumColor == 0), the horizon remains pure black shadow.
     if (u_DiskOn == 1) {
@@ -740,7 +879,13 @@ void main() {
     // (sgra accumulates nothing, so its disk-off frame is unchanged).
     // Capture branch above stays black: the hole absorbs light.
     vec3 col = (u_DiskOn == 1) ? accumColor + (1.0 - accumAlpha) * sky : sky + accumColor;
-    float ringQ = (minR - 1.5 * u_Rs) / (0.055 * u_Rs);
+    float rPhTarget = 1.5 * u_Rs;
+    if (isKerr) {
+      float proFrac = clamp(dot(normalize(cross(u_CameraPosition, dir) + vec3(1e-6)), vec3(0.0, 1.0, 0.0)), -1.0, 1.0);
+      float kerrPh = mix(1.95 * u_Rs, max(rPlus * 1.18, 0.65 * u_Rs), 0.5 + 0.5 * proFrac);
+      rPhTarget = mix(1.5 * u_Rs, kerrPh, kerrSpin);
+    }
+    float ringQ = (minR - rPhTarget) / (0.055 * u_Rs);
     float ring = exp(-ringQ * ringQ);
     // NOTE: Schwarzschild has no true ergosphere (Kerr feature) - stylized
     // photon-ring visualization. Shimmer uses the exit azimuth as honest
@@ -757,17 +902,18 @@ void main() {
     col += ringCol * ring * (3.0 * u_BHRingK);
     // Secondary photon sub-ring: thinner, fainter, just outside primary.
     // Pure minR profile — radially symmetric, beaming untouched.
-    float ring2Q = (minR - 1.5 * u_Rs - 0.10 * u_Rs) / (0.028 * u_Rs);
+    float ring2Q = (minR - rPhTarget - 0.10 * u_Rs) / (0.028 * u_Rs);
     float ring2 = exp(-ring2Q * ring2Q);
     ring2 *= shimmer * breath;
     col += vec3(0.92, 0.95, 1.0) * ring2 * (0.7 * u_BHRingK);
     // Tertiary sub-ring (n=3): hairline, dimmer, just outside secondary.
     // Same minR-profile discipline: radially symmetric, beaming untouched.
-    float ring3Q = (minR - 1.5 * u_Rs - 0.16 * u_Rs) / (0.016 * u_Rs);
+    float ring3Q = (minR - rPhTarget - 0.16 * u_Rs) / (0.016 * u_Rs);
     float ring3 = exp(-ring3Q * ring3Q);
     ring3 *= shimmer * breath;
     col += vec3(0.88, 0.93, 1.0) * ring3 * (0.35 * u_BHRingK);
-    float eglowQ = (minR - u_Rs) / (0.5 * u_Rs);
+    float eglowCenter = isKerr ? mix(u_Rs, rPlus, kerrSpin) : u_Rs;
+    float eglowQ = (minR - eglowCenter) / (0.5 * u_Rs);
     float eglow = exp(-eglowQ * eglowQ) * step(minR, 3.0 * u_Rs);
     // Whitened and dimmed: the glow hugs the rim instead of spreading gold.
     col += vec3(1.0, 0.75, 0.55) * eglow * 0.22;
