@@ -776,6 +776,8 @@ Check 'menu exit control is a danger-styled system action' (($menuHero -match 'd
 Check 'menu hero hands the exit over to the power-down sequence' (($menuHero -match 'requestAppExit\(\)') -and ($menuHero -notmatch 'glfwSetWindowShouldClose'))
 Check 'power-down sequence runs to the dot before the window closes' (($appCpp -match 'void\s+drawPowerDownSequence') -and ($appCpp -match 'm_exitTimer >= kPowerDownSeconds') -and ($appCpp -match 'glfwSetWindowShouldClose'))
 Check 'native exit regression captures the power-down frames' (($appCpp -match 'AppGL::captureExitCheck') -and ((Read-File 'src/main.cpp') -match '--capture-exit') -and ($appCpp -match 'exit_06_black\.png'))
+Check 'menu exit selects five per-background departure sequences' (($appCpp -match 'res/video/exit_blackhole/frame_0001\.jpg') -and ($appCpp -match 'res/video/exit_lagoon/frame_0001\.jpg') -and ($appCpp -match 'res/video/exit_crimson/frame_0001\.jpg') -and ($appCpp -match 'res/video/exit_emerald/frame_0001\.jpg') -and ($appCpp -match 'res/video/exit_violet/frame_0001\.jpg') -and ($appCpp -match 'std::clamp\(m_menuBackground, 0, 4\)'))
+Check 'menu exit keeps the legacy sequence as a missing-asset fallback' (($appCpp -match 'res/video/exit/frame_0001\.jpg') -and ($appCpp -match 'std::filesystem::exists\(selected,\s*ec\)\)?\s*\?\s*selected\s*:\s*fallback'))
 
 # --- v5.0.5 colony development stages, infrastructure and terraforming ---
 Check 'colony stage plan' ((($sceneCpp -match 'colonyBuildPlan') -and (($sceneCpp -match 'colonySurfaceFrame') -or ($sceneCpp -match 'colonyAnchorNormal'))) -and ((Read-File 'src/ColonySystem.cpp') -match 'kColonyStageCount'))
