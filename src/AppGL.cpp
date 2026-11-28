@@ -11943,7 +11943,18 @@ void AppGL::drawVideoIntroOverlay(float screenW, float screenH) {
 }
 
 void AppGL::startExitDestruction() {
-  const std::string probe = resolveAssetPath("res/video/exit/frame_0001.jpg");
+  static constexpr const char* kExitSequences[] = {
+      "res/video/exit_blackhole/frame_0001.jpg",
+      "res/video/exit_lagoon/frame_0001.jpg",
+      "res/video/exit_crimson/frame_0001.jpg",
+      "res/video/exit_emerald/frame_0001.jpg",
+      "res/video/exit_violet/frame_0001.jpg"};
+  const int background = std::clamp(m_menuBackground, 0, 4);
+  const std::string selected = resolveAssetPath(kExitSequences[background]);
+  const std::string fallback = resolveAssetPath("res/video/exit/frame_0001.jpg");
+  std::error_code ec;
+  const std::string probe =
+      (!selected.empty() && std::filesystem::exists(selected, ec)) ? selected : fallback;
   if (m_exitDestructionSeq.start(probe, 30.0)) {
     m_audio.stopFileVoices();
     m_audio.setMusicSuppressed(true);
@@ -11967,24 +11978,12 @@ void AppGL::drawExitDestructionOverlay(float screenW, float screenH) {
   const float alphaK = fadeIn * fadeOut;
   ImFont* font = m_mainMenuFont ? m_mainMenuFont : ImGui::GetFont();
   const float fontSize = std::clamp(screenH * 0.019f, 13.0f, 18.0f);
-  const char* warn = uiRu("КРИТИЧЕСКИЙ СБОЙ // ПОГЛОЩЕНИЕ ГОРИЗОНТОМ СОБЫТИЙ",
-                          "CRITICAL BREACH // EVENT HORIZON COLLAPSE");
-  const ImVec2 wsz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, warn);
-  const ImVec2 wpos(28.0f, 24.0f);
-  fgDl->AddRectFilled(ImVec2(wpos.x - 10.0f, wpos.y - 6.0f),
-                      ImVec2(wpos.x + wsz.x + 12.0f, wpos.y + wsz.y + 6.0f),
-                      IM_COL32(24, 6, 8, static_cast<int>(165.0f * alphaK)), 4.0f);
-  fgDl->AddRectFilled(ImVec2(wpos.x - 10.0f, wpos.y - 6.0f),
-                      ImVec2(wpos.x - 7.0f, wpos.y + wsz.y + 6.0f),
-                      IM_COL32(255, 78, 56, static_cast<int>(230.0f * alphaK)), 1.0f);
-  fgDl->AddText(font, fontSize, wpos,
-                IM_COL32(255, 198, 188, static_cast<int>(235.0f * alphaK)), warn);
 
   const char* hint = uiRu("[ ПРОБЕЛ / ESC : ВЫЙТИ СЕЙЧАС ]", "[ SPACE / ESC : EXIT NOW ]");
   const ImVec2 hsz = font->CalcTextSizeA(fontSize, 10000.0f, 0.0f, hint);
   const ImVec2 hpos(screenW - hsz.x - 28.0f, screenH - hsz.y - 22.0f);
   fgDl->AddText(font, fontSize, hpos,
-                IM_COL32(220, 190, 190, static_cast<int>(170.0f * alphaK)), hint);
+                IM_COL32(220, 225, 232, static_cast<int>(170.0f * alphaK)), hint);
 }
 
 void AppGL::startEntryTransitionVideo() {
